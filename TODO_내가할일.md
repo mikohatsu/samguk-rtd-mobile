@@ -17,12 +17,12 @@ AI 도구 중 Claude가 대신 설치·연결할 수 없는 것만 모았습니�
 - [ ] 음악: Suno / Udio — 유료 요금제에서만 상업 이용 가능. 쓰실 거면 가입 후 알려 주세요.
 - [ ] 효과음·목소리: ElevenLabs — 무료는 비상업. 상업 이용은 유료.
 
-## 0. GitHub 연결 (git은 지금 이 PC 안에만 있음)
-- [ ] github.com에서 본인 계정으로 **비공개(private)** 저장소를 하나 만들기(예: `samguk-rtd-mobile`, README 없이 빈 저장소)
-- [ ] 이 폴더에서 아래 두 줄 실행. 처음 push할 때 브라우저 로그인 창이 뜹니다.
-  - `F:\Git\cmd\git.exe remote add origin https://github.com/<계정>/samguk-rtd-mobile.git`
-  - `F:\Git\cmd\git.exe push -u origin main`
-- 연결되면 Mac이 없어도 GitHub Actions(맥 빌드 서버)로 iOS 빌드를 돌릴 수 있습니다.
+## 0. 갤럭시에 시험용 APK 깔기
+- [ ] 폰 브라우저에서 GitHub(mikohatsu)에 로그인 → https://github.com/mikohatsu/samguk-rtd-mobile/releases/tag/android-latest → `sangokurtd-test.apk` 받기
+  (또는 이 PC의 `dist\sangokurtd-test.apk`를 카톡·USB로 옮기기)
+- [ ] 설치할 때 "출처를 알 수 없는 앱 설치 허용"을 켜야 합니다. Play 프로텍트 경고가 뜨면 "무시하고 설치".
+- 새 버전은 GitHub에 올릴 때마다 자동으로 다시 만들어져 같은 주소에 덮어씁니다(약 3~4분).
+- 덮어 설치가 "앱이 설치되지 않았습니다"로 실패하면 서명 키가 바뀐 것이니 기존 앱을 지우고 다시 설치하세요.
 
 ## 0-1. iOS 앱으로 내보내기 (자세한 순서는 MAC_HANDOFF.md)
 - [ ] Apple Developer Program 가입(연 12,800엔) — 본인 인증 필요

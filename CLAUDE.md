@@ -57,6 +57,11 @@
 | 18-account | 계정 |
 | 19-title | 시작 화면 |
 
+## GitHub·안드로이드
+- 저장소: https://github.com/mikohatsu/samguk-rtd-mobile (비공개, `gh` CLI가 mikohatsu로 로그인돼 있음). 배포할 때 `git push origin main`도 같이 한다.
+- main에 올리면 GitHub Actions(`.github/workflows/android-apk.yml`)가 시험용 APK를 만들어 Releases `android-latest`에 덮어쓴다. 받기: `gh release download android-latest -R mikohatsu/samguk-rtd-mobile -D dist --clobber`
+- `android/` = Capacitor 안드로이드 프로젝트(가로 고정, AdMob 시험용 앱 ID). 플레이스토어에는 올리지 않는다(디버그 서명).
+
 ## 배포(서버)
 ```
 tar -czf x.tgz <바뀐 파일들>
