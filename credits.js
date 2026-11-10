@@ -28,7 +28,11 @@
     ['IBM Plex Sans KR', 'Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"'],
     ['Noto Serif KR', 'Copyright 2012 Google Inc. All Rights Reserved.'],
     ['Yuji Boku', 'Copyright 2021 The Yuji Project Authors (https://github.com/Kinutafontfactory/Yuji)'],
+    ['Dela Gothic One', 'Copyright 2020 The Dela Gothic Project Authors (https://github.com/syakuzen/DelaGothic)'],
+    ['Zen Antique', 'Copyright 2021 The Zen Antique Project Authors (https://github.com/googlefonts/zen-antique)'],
   ];
+  // OFL이 아닌 무료 글꼴(일본어 붓글씨)
+  const FONT_FREE = '衡山毛筆フォント — 青柳衡山 (https://opentype.jp/kouzanmouhitufont.htm)';
   const CC0 = [
     'artisticdude — Swishes Sound Pack, RPG Sound Pack (OpenGameArt.org)',
     'remaxim — 3 Melee sounds (OpenGameArt.org)',
@@ -57,7 +61,7 @@
   function html() {
     let h = `<h3>${t('music')}</h3><ul>` + MUSIC.map((m) => `<li>"${esc(m)}" Kevin MacLeod (incompetech.com)</li>`).join('') + `</ul><p><small>${esc(BY4)}<br>${t('musicNote')}</small></p>`;
     h += `<h3>${t('icons')}</h3><p>Lorc, Delapouite — game-icons.net</p><p><small>Licensed under CC BY 3.0 — https://creativecommons.org/licenses/by/3.0/<br>${t('iconsNote')}</small></p>`;
-    h += `<h3>${t('fonts')}</h3><ul>` + FONTS.map(([n, c]) => `<li>${esc(n)}<br><small>${esc(c)}</small></li>`).join('') + `</ul><p><small>SIL Open Font License, Version 1.1 — https://openfontlicense.org</small></p><details><summary>${t('full')} (OFL 1.1)</summary><pre>${esc(OFL)}</pre></details>`;
+    h += `<h3>${t('fonts')}</h3><ul>` + FONTS.map(([n, c]) => `<li>${esc(n)}<br><small>${esc(c)}</small></li>`).join('') + `</ul><p><small>SIL Open Font License, Version 1.1 — https://openfontlicense.org</small></p><p>${esc(FONT_FREE)}</p><details><summary>${t('full')} (OFL 1.1)</summary><pre>${esc(OFL)}</pre></details>`;
     h += `<h3>${t('oss')}</h3><ul>` + OSS.map(([n, c]) => `<li>${esc(n)}<br><small>${esc(c)}</small></li>`).join('') + `</ul><details><summary>${t('full')} (MIT)</summary><pre>${esc(MIT)}</pre></details>`;
     h += `<h3>${t('sfx')}</h3><ul>` + CC0.map((s) => `<li>${esc(s)}</li>`).join('') + '</ul>';
     h += `<h3>${t('art')}</h3><p>${t('artNote')}</p><p><small>${t('disc')}</small></p>`;

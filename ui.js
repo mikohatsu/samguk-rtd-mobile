@@ -1681,7 +1681,7 @@
       }
       // 한글 부제: 양옆 선과 함께
       const kr = Math.min(1, Math.max(0, (T0 - 3.2) * 3));
-      if (kr > 0) {
+      if (kr > 0 && I.lang !== 'ja') { // 일본어는 위의 큰 한자(神話·不滅)와 같은 글자라 생략
         c.save(); c.translate(rx, ry + 112); c.textAlign = 'center'; c.textBaseline = 'middle'; c.globalAlpha = fade * kr;
         c.font = '700 50px "Gowun Batang", serif'; const label = rank.split('').join('  ');
         c.shadowColor = '#000'; c.shadowBlur = 8; c.fillStyle = C.soft; c.fillText(label, 0, 0); c.shadowBlur = 0;
@@ -1701,15 +1701,19 @@
       }
       const k2 = ease((T0 - 4.2) / 0.18);
       if (T0 > 4.2) {
-        if (k2 >= 1) slamOnce(p, 'ko', true);
+        // 일본어는 한자 이름이 곧 이름이라 아래에 한 번 더 쓰지 않는다
+        const dup = I.lang === 'ja' || d.name === hz;
+        if (k2 >= 1 && !dup) slamOnce(p, 'ko', true);
         const s2 = 1.9 - 0.9 * k2;
+        if (!dup) {
         c.save(); c.translate(rx, ry + 308); c.scale(s2, s2); c.textAlign = 'center'; c.textBaseline = 'middle';
         c.globalAlpha = fade * k2; c.shadowColor = '#000'; c.shadowBlur = 12; c.fillStyle = C.soft; c.font = '400 76px "Black Han Sans", sans-serif'; c.fillText(d.name, 0, 0);
         c.restore();
+        }
         const k3 = Math.min(1, (T0 - 4.45) * 3);
         if (k3 > 0) {
           c.globalAlpha = fade * k3; c.textAlign = 'center'; c.fillStyle = '#d8c8a8'; c.font = '700 26px "Gowun Batang", serif';
-          c.fillText(`${d.title || ''}${p.who ? '  ·  ' + I.t('whoseGeneral', { w: p.who }) : ''}`, rx, ry + 378);
+          c.fillText(`${d.title || ''}${p.who ? '  ·  ' + I.t('whoseGeneral', { w: p.who }) : ''}`, rx, ry + (dup ? 300 : 378));
         }
       }
     }
@@ -1837,15 +1841,15 @@
   // 터치 기기: 라인 길(또는 결투장)이 화면에 꽉 차게 맞춘다. 바깥 여백(업적 깃발 등)은 손가락으로 끌어서 본다.
   function resetCam() {
     const B = S.base, r = g && g.phase !== 'wave' && g.fight && !S.laneView ? ARENA : ROAD, pad = 24;
-    const z = B && S.coarse ? Math.min(B.sw / (r.x1 - r.x0 + pad * 2), B.sh / (r.y1 - r.y0 + pad * 2)) / B.s0 : 1;
-    S.cam = { z, x: S.coarse ? (r.x0 + r.x1) / 2 : W / 2, y: S.coarse ? (r.y0 + r.y1) / 2 : H / 2 };
+    // 터치 기기도 맵 전체가 보이는 배율(가장 축소한 화면)로 고정한다. 손가락 확대·축소는 막았다(10-input).
+    S.cam = { z: 1, x: W / 2, y: H / 2 };
     applyCam();
   }
   function applyCam() {
     const B = S.base;
     if (!B) return;
     const c = S.cam;
-    c.z = Math.max(1, Math.min(3.2, c.z));
+    c.z = S.coarse ? 1 : Math.max(1, Math.min(3.2, c.z));
     const s = B.s0 * c.z, vw = B.sw / s, vh = B.sh / s;
     c.x = vw >= W ? W / 2 : Math.max(vw / 2, Math.min(W - vw / 2, c.x));
     c.y = vh >= H ? H / 2 : Math.max(vh / 2, Math.min(H - vh / 2, c.y));
@@ -1883,7 +1887,8 @@
     S.camHold = performance.now() + 2500;
   };
   const panBy = (sx, sy, dx, dy) => { const k = S.base.s0 * S.cam.z; S.cam.x = sx - dx / k; S.cam.y = sy - dy / k; applyCam(); S.camHold = performance.now() + 2500; };
-  view.addEventListener('wheel', (e) => { if (!g) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, S.cam.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
+  // 터치 기기는 확대·축소를 막는다(가장 축소한 화면으로 고정). 마우스 휠 확대는 PC에서만.
+  view.addEventListener('wheel', (e) => { if (!g) return; e.preventDefault(); if (S.coarse) return; zoomAt(e.clientX, e.clientY, S.cam.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
   const ptrs = new Map();
   let pinch = null, touch = null;
   const cancelTouch = () => { if (touch && touch.lp) clearTimeout(touch.lp); touch = null; };
@@ -1984,7 +1989,7 @@
     if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinch && ptrs.size >= 2) {
       const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      zoomAt(pinch.mx, pinch.my, pinch.z * (d / pinch.d));
+      if (!S.coarse) zoomAt(pinch.mx, pinch.my, pinch.z * (d / pinch.d));
       const k = S.base.s0 * S.cam.z; S.cam.x -= (mx - pinch.mx) / k; S.cam.y -= (my - pinch.my) / k; applyCam();
       pinch.mx = mx; pinch.my = my; pinch.z = S.cam.z; pinch.d = d;
       return;
@@ -2226,6 +2231,7 @@
       h += `<div class="h">${t('sound')}</div><div class="row"><div>${t('sfx')}</div><button class="toggle" data-act="vol" data-arg="sfx" type="button">${Math.round(Snd.state.sfx * 100)}%</button></div>`;
       h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplay')}</button></div>`;
       h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
+      h += `<div class="row"><div>${t('version')}</div><div>v${window.RTD_VERSION || '?'}</div></div>`;
       h += `<div class="row"><div>${t('bgm')}</div><button class="toggle" data-act="vol" data-arg="bgm" type="button">${Math.round(Snd.state.bgm * 100)}%</button></div>`;
     } else if (S.tab === 'war') {
       h = '';
@@ -3333,6 +3339,7 @@ ${view.width}×${view.height} · ${Q.level}${bots.length ? ' · AI ' + bots.leng
       h += `<div class="row"><div>${t('bgm')}</div><button class="toggle" data-act="vol" data-arg="bgm" type="button">${Math.round(Snd.state.bgm * 100)}%</button></div>`;
       h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplay')}</button></div>`;
       h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
+      h += `<div class="row"><div>${t('version')}</div><div>v${window.RTD_VERSION || '?'}</div></div>`;
       return `<div class="setlist">${h}</div>`;
     };
     const repaintMap = () => { sizeMap(); };

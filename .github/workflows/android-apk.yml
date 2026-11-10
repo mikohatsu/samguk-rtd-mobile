@@ -30,12 +30,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      # 디버그 서명 키를 계속 같은 것으로 써야 새 APK를 기존 앱 위에 덮어 깔 수 있다(키가 바뀌면 지우고 다시 깔아야 함)
-      - name: Restore debug keystore
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: debug-keystore-v1
+      # 서명 키는 android/app/debug.keystore(저장소에 있음)를 쓴다. 항상 같은 키라 기존 앱 위에 업데이트로 깔린다.
       - run: npm ci
       - run: npm run build
       - run: npx cap sync android

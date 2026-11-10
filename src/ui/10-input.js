@@ -19,7 +19,8 @@
     S.camHold = performance.now() + 2500;
   };
   const panBy = (sx, sy, dx, dy) => { const k = S.base.s0 * S.cam.z; S.cam.x = sx - dx / k; S.cam.y = sy - dy / k; applyCam(); S.camHold = performance.now() + 2500; };
-  view.addEventListener('wheel', (e) => { if (!g) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, S.cam.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
+  // 터치 기기는 확대·축소를 막는다(가장 축소한 화면으로 고정). 마우스 휠 확대는 PC에서만.
+  view.addEventListener('wheel', (e) => { if (!g) return; e.preventDefault(); if (S.coarse) return; zoomAt(e.clientX, e.clientY, S.cam.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
   const ptrs = new Map();
   let pinch = null, touch = null;
   const cancelTouch = () => { if (touch && touch.lp) clearTimeout(touch.lp); touch = null; };
@@ -120,7 +121,7 @@
     if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinch && ptrs.size >= 2) {
       const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      zoomAt(pinch.mx, pinch.my, pinch.z * (d / pinch.d));
+      if (!S.coarse) zoomAt(pinch.mx, pinch.my, pinch.z * (d / pinch.d));
       const k = S.base.s0 * S.cam.z; S.cam.x -= (mx - pinch.mx) / k; S.cam.y -= (my - pinch.my) / k; applyCam();
       pinch.mx = mx; pinch.my = my; pinch.z = S.cam.z; pinch.d = d;
       return;

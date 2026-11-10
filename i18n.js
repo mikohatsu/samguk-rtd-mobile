@@ -47,7 +47,7 @@
     autoOn: ['자동 켬', '自動ON', 'Auto on', '自动开'], autoOff: ['자동 끔', '自動OFF', 'Auto off', '自动关'], autoToastOn: ['1~3성 자동 정렬·합성 켬', '★1〜3 自動整列・合成ON', 'Auto sort & combine (★1–3) on', '1~3星自动整理与合成 开'], autoToastOff: ['1~3성 자동 정렬·합성 끔', '★1〜3 自動整列・合成OFF', 'Auto sort & combine (★1–3) off', '1~3星自动整理与合成 关'],
     speed: ['배속 ×{n}', '速度 ×{n}', 'Speed ×{n}', '速度 ×{n}'],
     gfx: ['화질', '画質', 'Graphics', '画质'], gfxRow: ['그래픽', 'グラフィック', 'Quality', '画面'], gfxHint: ['낮을수록 배터리·발열이 줄어듭니다', '低いほどバッテリーと発熱を抑えます', 'Lower saves battery and heat', '越低越省电、越不发热'], high: ['높음', '高', 'High', '高'], mid: ['보통', '中', 'Medium', '中'], low: ['낮음', '低', 'Low', '低'],
-    fps30: ['30fps 제한', '30fps制限', 'Limit to 30fps', '限制30帧'], fps30Hint: ['배터리 절약', '省電力', 'Saves battery', '省电'], view: ['보기', '表示', 'View', '查看'], perfShow: ['성능 표시', '性能表示', 'Show performance', '显示性能'], perfShowHint: ['초당 프레임·처리 시간', 'FPS・処理時間', 'FPS and frame time', '帧率与耗时'], on: ['켜짐', 'ON', 'On', '开'], off: ['꺼짐', 'OFF', 'Off', '关'],
+    fps30: ['30fps 제한', '30fps制限', 'Limit to 30fps', '限制30帧'], fps30Hint: ['배터리 절약', '省電力', 'Saves battery', '省电'], view: ['보기', '表示', 'View', '查看'], version: ['버전', 'バージョン', 'Version', '版本'], perfShow: ['성능 표시', '性能表示', 'Show performance', '显示性能'], perfShowHint: ['초당 프레임·처리 시간', 'FPS・処理時間', 'FPS and frame time', '帧率与耗时'], on: ['켜짐', 'ON', 'On', '开'], off: ['꺼짐', 'OFF', 'Off', '关'],
     language: ['언어', '言語', 'Language', '语言'], sound: ['소리', 'サウンド', 'Sound', '声音'], sfx: ['효과음', '効果音', 'Sound effects', '音效'], bgm: ['배경음', 'BGM', 'Music', '背景音乐'], autoSection: ['자동 정렬·합성', '自動整列・合成', 'Auto sort & combine', '自动整理与合成'],
     move: ['이동', '移動', 'Move', '移动'], attack: ['공격 이동', '攻撃移動', 'Attack-move', '攻击移动'], focus: ['점사', '集中攻撃', 'Focus', '集火'], disband: ['해산', '解散', 'Disband', '解散'], use: ['사용', '使用', 'Use', '使用'], dash: ['이동기', '移動技', 'Dash', '位移'], deselect: ['선택 해제', '選択解除', 'Deselect', '取消选择'], stop: ['정지', '停止', 'Stop', '停止'],
     moveDesc: ['선택한 유닛을 누른 곳으로 옮깁니다.', '選んだユニットを押した場所へ移動します。', 'Move selected units to the tapped spot.', '把选中单位移到点击处。'], attackDesc: ['가는 길에 만나는 적을 공격하며 이동합니다.', '途中の敵を攻撃しながら移動します。', 'Move while attacking enemies on the way.', '边移动边攻击途中的敌人。'], focusDesc: ['중간보스·보스를 우선 공격합니다.', '中ボス・ボスを優先して攻撃します。', 'Prioritize mid-bosses and bosses.', '优先攻击中首领与首领。'], disbandDesc: ['1성 유닛을 금화로 바꿉니다.', '★1ユニットを金貨に換えます。', 'Turn a ★1 unit into gold.', '把1星单位换成金币。'], deselectDesc: ['선택을 풉니다.', '選択を解除します。', 'Clear the selection.', '取消选择。'],
@@ -400,6 +400,17 @@
   }
   function setLang(k) { try { localStorage.setItem('rtd-lang', k); } catch (e) { /* 저장 불가 */ } location.reload(); }
   const skillText = lang !== 'ko' && root.RTD_I18N_DATA ? root.RTD_I18N_DATA.SK[lang] : null;
+  // 일본어: 한국어 글꼴에는 가나·일본 한자가 없어 밋밋한 기본 글꼴로 나온다. 같은 글꼴 이름에 일본어 글꼴(가나·한자 범위만)을 덧붙여
+  // 굵은 제목·붓글씨·명조가 일본어에서도 같은 분위기로 나오게 한다. 파일은 fonts/ja-*.woff2 (scripts/build-jafont.py, 모두 OFL).
+  if (lang === 'ja' && typeof document !== 'undefined') {
+    // 굵기는 원래 글꼴에 있는 굵기와 똑같이 적어야 한다(범위로 적으면 브라우저가 원래 글꼴만 골라 덧붙인 쪽을 안 쓴다)
+    const map = [['Black Han Sans', 'ja-display', 400], ['East Sea Dokdo', 'ja-brush', 400], ['Gowun Batang', 'ja-serif', 400], ['Gowun Batang', 'ja-serif', 700], ['Noto Serif KR', 'ja-serif', 700], ['Noto Serif KR', 'ja-serif', 900]];
+    const st = document.createElement('style');
+    st.textContent = map.map(([fam, f, w]) => `@font-face{font-family:"${fam}";src:url(fonts/${f}.woff2) format("woff2");font-weight:${w};font-display:swap;unicode-range:U+3000-30FF,U+4E00-9FFF,U+FF00-FFEF}`).join('');
+    document.head.appendChild(st);
+    // 캔버스는 글꼴을 기다려 주지 않으므로 미리 불러 둔다
+    if (document.fonts && document.fonts.load) map.forEach(([fam, f, w]) => document.fonts.load(`${w} 20px "${fam}"`, 'あ三').catch(() => {}));
+  }
   root.RTD_I18N = { lang, LANGS, t, localizeTheme, applyDom, setLang, skillText };
   if (root.RTD_THEME) localizeTheme(root.RTD_THEME);
 })(typeof window !== 'undefined' ? window : globalThis);

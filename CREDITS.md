@@ -34,6 +34,8 @@
 ## 글꼴 — SIL Open Font License 1.1 (저작권 문구와 라이선스를 함께 배포해야 함)
 - Google Fonts에서 받은 부분 파일(fonts/*.woff2). 저작권 문구와 라이선스 전문은 fonts/OFL.txt와 게임 안 크레딧 화면에 있다.
   - Black Han Sans, East Sea Dokdo, Gowun Batang, IBM Plex Sans KR, Noto Serif KR, Yuji Boku
+  - 일본어용(fonts/ja-display.woff2, ja-serif.woff2): Dela Gothic One, Zen Antique — 게임에 쓰는 글자만 남긴 부분 파일(scripts/build-jafont.py)
+- 일본어 붓글씨(fonts/ja-brush.woff2): **衡山毛筆フォント**(青柳衡山 作) — OFL 아님. 배포처 안내: 무료, 상업 이용 가능·제한 없음(https://opentype.jp/kouzanmouhitufont.htm, 2026-11-11 확인). 크레딧 화면에 감사 표시.
 - 글꼴 파일만 따로 팔 수 없다(게임에 넣어 배포·판매하는 것은 허용).
 
 ## 앱 라이브러리 (앱에 들어가 배포됨)
@@ -51,5 +53,5 @@
 - 한계: AI 생성물은 나라에 따라 저작권 보호를 못 받을 수 있고(남이 베껴도 막기 어려움), 독점권도 보장되지 않는다. 알아볼 수 있는 실존 인물·타사 캐릭터·상표가 들어가면 Canva가 권리를 보장해 주지 않는다.
 
 ## 아직 남은 것 (출시 전)
-- 안드로이드 앱 아이콘·시작 화면이 Capacitor 기본 그림이다 → 자체 그림으로 교체.
+- (완료 2026-11-11) 앱 아이콘·시작 화면: Canva AI로 만든 art_src/app_icon.png에서 scripts/build-icons.py로 안드로이드·iOS용을 만든다.
 - 일본 스토어 문구에서 "三国志"는 설명·키워드에만 쓰고, 앱 이름에는 쓰지 않는다(코에이테크모의 등록 상표 "三國志"와 혼동을 피하기 위해. 현재 이름 "三国ランダムディフェンス"는 해당 없음).

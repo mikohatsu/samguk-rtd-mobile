@@ -31,15 +31,15 @@
   // 터치 기기: 라인 길(또는 결투장)이 화면에 꽉 차게 맞춘다. 바깥 여백(업적 깃발 등)은 손가락으로 끌어서 본다.
   function resetCam() {
     const B = S.base, r = g && g.phase !== 'wave' && g.fight && !S.laneView ? ARENA : ROAD, pad = 24;
-    const z = B && S.coarse ? Math.min(B.sw / (r.x1 - r.x0 + pad * 2), B.sh / (r.y1 - r.y0 + pad * 2)) / B.s0 : 1;
-    S.cam = { z, x: S.coarse ? (r.x0 + r.x1) / 2 : W / 2, y: S.coarse ? (r.y0 + r.y1) / 2 : H / 2 };
+    // 터치 기기도 맵 전체가 보이는 배율(가장 축소한 화면)로 고정한다. 손가락 확대·축소는 막았다(10-input).
+    S.cam = { z: 1, x: W / 2, y: H / 2 };
     applyCam();
   }
   function applyCam() {
     const B = S.base;
     if (!B) return;
     const c = S.cam;
-    c.z = Math.max(1, Math.min(3.2, c.z));
+    c.z = S.coarse ? 1 : Math.max(1, Math.min(3.2, c.z));
     const s = B.s0 * c.z, vw = B.sw / s, vh = B.sh / s;
     c.x = vw >= W ? W / 2 : Math.max(vw / 2, Math.min(W - vw / 2, c.x));
     c.y = vh >= H ? H / 2 : Math.max(vh / 2, Math.min(H - vh / 2, c.y));

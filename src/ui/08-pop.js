@@ -340,7 +340,7 @@
       }
       // 한글 부제: 양옆 선과 함께
       const kr = Math.min(1, Math.max(0, (T0 - 3.2) * 3));
-      if (kr > 0) {
+      if (kr > 0 && I.lang !== 'ja') { // 일본어는 위의 큰 한자(神話·不滅)와 같은 글자라 생략
         c.save(); c.translate(rx, ry + 112); c.textAlign = 'center'; c.textBaseline = 'middle'; c.globalAlpha = fade * kr;
         c.font = '700 50px "Gowun Batang", serif'; const label = rank.split('').join('  ');
         c.shadowColor = '#000'; c.shadowBlur = 8; c.fillStyle = C.soft; c.fillText(label, 0, 0); c.shadowBlur = 0;
@@ -360,15 +360,19 @@
       }
       const k2 = ease((T0 - 4.2) / 0.18);
       if (T0 > 4.2) {
-        if (k2 >= 1) slamOnce(p, 'ko', true);
+        // 일본어는 한자 이름이 곧 이름이라 아래에 한 번 더 쓰지 않는다
+        const dup = I.lang === 'ja' || d.name === hz;
+        if (k2 >= 1 && !dup) slamOnce(p, 'ko', true);
         const s2 = 1.9 - 0.9 * k2;
+        if (!dup) {
         c.save(); c.translate(rx, ry + 308); c.scale(s2, s2); c.textAlign = 'center'; c.textBaseline = 'middle';
         c.globalAlpha = fade * k2; c.shadowColor = '#000'; c.shadowBlur = 12; c.fillStyle = C.soft; c.font = '400 76px "Black Han Sans", sans-serif'; c.fillText(d.name, 0, 0);
         c.restore();
+        }
         const k3 = Math.min(1, (T0 - 4.45) * 3);
         if (k3 > 0) {
           c.globalAlpha = fade * k3; c.textAlign = 'center'; c.fillStyle = '#d8c8a8'; c.font = '700 26px "Gowun Batang", serif';
-          c.fillText(`${d.title || ''}${p.who ? '  ·  ' + I.t('whoseGeneral', { w: p.who }) : ''}`, rx, ry + 378);
+          c.fillText(`${d.title || ''}${p.who ? '  ·  ' + I.t('whoseGeneral', { w: p.who }) : ''}`, rx, ry + (dup ? 300 : 378));
         }
       }
     }

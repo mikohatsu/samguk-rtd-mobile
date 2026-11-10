@@ -6,6 +6,10 @@ Gowun Batang     — Copyright 2021 The Gowun Batang Project Authors (https://gi
 IBM Plex Sans KR — Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
 Noto Serif KR    — Copyright 2012 Google Inc. All Rights Reserved.
 Yuji Boku        — Copyright 2021 The Yuji Project Authors (https://github.com/Kinutafontfactory/Yuji)
+Dela Gothic One  — Copyright 2020 The Dela Gothic Project Authors (https://github.com/syakuzen/DelaGothic)   [ja-display.woff2]
+Zen Antique      — Copyright 2021 The Zen Antique Project Authors (https://github.com/googlefonts/zen-antique)  [ja-serif.woff2]
+
+(ja-brush.woff2는 OFL이 아니다: 衡山毛筆フォント, 青柳衡山 作. 무료·상업 이용 제한 없음. https://opentype.jp/kouzanmouhitufont.htm)
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
 http://scripts.sil.org/OFL
