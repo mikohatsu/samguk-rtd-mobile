@@ -51,6 +51,28 @@
     setInterval(() => { if (g && g.mode === 'multi' && performance.now() - last > 240) tick(performance.now(), 1); }, 250);
   }
   let lastDraw = 0;
+  // 성능 표시(설정에서 켠다): 초당 프레임, 가장 길었던 프레임 간격, 계산·그리기 시간, 화면에 있는 것의 수.
+  // 그리기 시간은 명령을 내보내는 데 든 시간이라, 그래픽 칩이 실제로 칠하는 시간은 '프레임'과 '최장'으로 본다.
+  const PF = { n: 0, t0: 0, sim: 0, draw: 0, worst: 0, prev: 0 };
+  function perfMark(now, p0, p1) {
+    const el = $('perf');
+    if (!Q.perf) { if (el && !el.hidden) el.hidden = true; return; }
+    const p2 = performance.now();
+    PF.n++; PF.sim += p1 - p0; PF.draw += p2 - p1;
+    if (PF.prev) PF.worst = Math.max(PF.worst, now - PF.prev);
+    PF.prev = now;
+    if (!PF.t0) PF.t0 = now;
+    if (now - PF.t0 < 500) return;
+    const fps = (PF.n * 1000) / (now - PF.t0), f = g.fight;
+    // 글자는 언어와 상관없는 약어: U 유닛, E 적, HZ 장판, FX 연출
+    const things = inBoss() && f ? `HZ ${f.hazards.length} · FX ${S.vfx.length + g.fx.length}` : `U ${g.units.length} · E ${g.enemies.length} · FX ${g.fx.length}`;
+    el.hidden = false;
+    el.textContent = `${fps.toFixed(0)}fps · max ${PF.worst.toFixed(0)}ms
+sim ${(PF.sim / PF.n).toFixed(1)} · draw ${(PF.draw / PF.n).toFixed(1)}ms
+${things}
+${view.width}×${view.height} · ${Q.level}${bots.length ? ' · AI ' + bots.length : ''}${net && !bots.length ? ' · NET' : ''}`;
+    PF.n = 0; PF.t0 = now; PF.sim = 0; PF.draw = 0; PF.worst = 0;
+  }
   function loop(now) {
     requestAnimationFrame(loop);
     if (!g) return;
@@ -59,8 +81,11 @@
     // 120Hz 화면에서도 60번만 그린다(두 배로 그려 봐야 발열·끊김만 늘어난다)
     if (now - lastDraw < 14) return;
     lastDraw = now;
+    const p0 = Q.perf ? performance.now() : 0;
     tick(now, 0.1);
+    const p1 = Q.perf ? performance.now() : 0;
     render(now);
+    perfMark(now, p0, p1);
     if (S.saveOn && now - (S.saveT || 0) > 10000) { S.saveT = now; saveGame(); }
     if (now - lastDom > 180 || needs) {
       lastDom = now; needs = false;

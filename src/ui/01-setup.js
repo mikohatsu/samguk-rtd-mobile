@@ -10,7 +10,7 @@
     let s = {};
     try { s = JSON.parse(localStorage.getItem('rtd-gfx') || '{}') || {}; } catch (e) { s = {}; }
     const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-    return { level: ['high', 'mid', 'low'].includes(s.level) ? s.level : coarse ? 'mid' : 'high', fps30: !!s.fps30, coarse };
+    return { level: ['high', 'mid', 'low'].includes(s.level) ? s.level : coarse ? 'mid' : 'high', fps30: !!s.fps30, perf: !!s.perf, coarse };
   })();
   const qDpr = () => (Q.level === 'high' ? 2 : Q.level === 'mid' ? 1.5 : 1);
   const qPart = () => (Q.level === 'high' ? 1 : Q.level === 'mid' ? 0.6 : 0.35);
@@ -24,7 +24,7 @@
       const cap = Q.level === 'mid' && !Q.coarse ? 6 : 0;
       Object.defineProperty(ctx, 'shadowBlur', { configurable: true, get() { return BLUR.get.call(this); }, set(v) { BLUR.set.call(this, Math.min(v, cap)); } });
     }
-    try { localStorage.setItem('rtd-gfx', JSON.stringify({ level: Q.level, fps30: Q.fps30 })); } catch (e) { /* 저장 못 해도 이번 판은 그대로 */ }
+    try { localStorage.setItem('rtd-gfx', JSON.stringify({ level: Q.level, fps30: Q.fps30, perf: Q.perf })); } catch (e) { /* 저장 못 해도 이번 판은 그대로 */ }
   }
   applyQuality();
   // 매 프레임 만들던 빛 그라디언트를 색별로 한 번만 그려 두고 찍는다

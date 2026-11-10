@@ -88,6 +88,7 @@
       h = `<div class="h">${t('language')}</div><div class="row"><div class="zones">${I.LANGS.map(([k, n]) => `<button class="zb ${I.lang === k ? 'on' : ''}" data-act="langSet" data-arg="${k}" type="button">${n}</button>`).join('')}</div></div>`;
       h += `<div class="h">${t('gfx')}</div><div class="row"><div>${t('gfxRow')} <small>${t('gfxHint')}</small></div><div class="zones">${ql.map(([k, l]) => `<button class="zb ${Q.level === k ? 'on' : ''}" data-act="gfx" data-arg="${k}" type="button">${l}</button>`).join('')}</div></div>`;
       h += `<div class="row"><div>${t('fps30')} <small>${t('fps30Hint')}</small></div><button class="toggle ${Q.fps30 ? 'on' : ''}" data-act="fps30" type="button">${Q.fps30 ? t('on') : t('off')}</button></div>`;
+      h += `<div class="row"><div>${t('perfShow')} <small>${t('perfShowHint')}</small></div><button class="toggle ${Q.perf ? 'on' : ''}" data-act="perf" type="button">${Q.perf ? t('on') : t('off')}</button></div>`;
       h += `<div class="h">${t('autoSection')}</div>` + az('t1', I.t('autoT1')) + az('t2', I.t('autoT2')) + az('t3', I.t('autoT3')) + az('t45', I.t('autoT45')) + tg('sell', I.t('autoSell'));
       h += `<div class="h">${t('sound')}</div><div class="row"><div>${t('sfx')}</div><button class="toggle" data-act="vol" data-arg="sfx" type="button">${Math.round(Snd.state.sfx * 100)}%</button></div>`;
       h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplay')}</button></div>`;

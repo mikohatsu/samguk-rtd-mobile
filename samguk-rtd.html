@@ -438,6 +438,8 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 #joy { position: absolute; z-index: 2; left: calc(var(--sl, 0px) + 44px); bottom: calc(var(--sb) + 64px); width: 132px; height: 132px; border-radius: 50%; touch-action: none;
   background: radial-gradient(circle, rgba(255, 240, 210, .08) 0%, rgba(255, 240, 210, .16) 62%, rgba(255, 240, 210, .04) 64%); border: 2px solid rgba(255, 235, 200, .38); }
 #joy[hidden] { display: none; }
+#perf { position: absolute; z-index: 7; top: calc(var(--st) + 4px); left: 50%; transform: translateX(-50%); padding: 3px 8px; border-radius: 6px; background: rgba(0, 0, 0, .62); color: #b8ffb0; font: 600 11px/1.35 ui-monospace, Menlo, Consolas, monospace; white-space: pre; text-align: center; pointer-events: none; }
+#perf[hidden] { display: none; }
 /* 라인에서 유닛을 골랐을 때: 조이스틱은 왼쪽 아래 구석, 선택 창은 그 오른쪽으로 비켜난다 */
 #stage.lanejoy #joy { bottom: calc(var(--sb) + 10px); left: calc(var(--sl, 0px) + 28px); z-index: 5; }
 #stage.lanejoy #selbar { left: calc(var(--sl, 0px) + 176px); transform: none; width: calc(100% - var(--sl, 0px) - 176px - 74px); }
@@ -673,6 +675,7 @@ html:not([lang=ko]) .rkf { font: 900 22px/1 "Hiragino Mincho ProN", "Yu Mincho",
     <button id="bossbtn" class="btn" data-act="laneView" type="button" hidden></button>
     <div id="skillbar" hidden></div>
     <div id="joy" hidden><i></i></div>
+    <div id="perf" hidden></div>
     <div id="selbar" hidden><div id="info" data-act="selExp"></div><div id="cmds"></div><div id="recipes"></div></div>
     <div id="overlay"></div>
   </div>

@@ -10,6 +10,7 @@
     else if (a === 'langSet') { if (arg !== I.lang) { try { localStorage.setItem('rtd-lang', arg); } catch (e) { /* 저장 불가 */ } toast(I.LANGS.find(([k]) => k === arg)[1] + ' — ' + t('toTitle'), 'good'); } }
     else if (a === 'gfx') { if (Q.level !== arg) { Q.level = arg; applyQuality(); sizeMap(); if (g) fit(); } }
     else if (a === 'fps30') { Q.fps30 = !Q.fps30; applyQuality(); }
+    else if (a === 'perf') { Q.perf = !Q.perf; applyQuality(); }
     else if (a === 'desel') { setSel([]); S.dropSel = null; S.rsel = null; setMode(null); }
     else if (a === 'amove') { if (inBoss() || S.sel.length) setMode('amove'); }
     else if (a === 'modeMove') { if (inBoss() || S.sel.length) setMode('move'); }
