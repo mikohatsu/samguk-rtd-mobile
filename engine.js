@@ -673,6 +673,18 @@
         const o = u.order, rng = this.range(u.def);
         // 타워처럼 사거리 안의 적만 때리고, 벗어나면 쫓아가지 않는다
         if (u.target && (u.target.hp <= 0 || !this.enemies.includes(u.target) || dist(u.x, u.y, u.target.x, u.target.y) > rng)) u.target = null;
+        // 조이스틱 직접 이동(모바일 라인): 고른 유닛을 조이스틱 방향으로 움직인다. 움직이는 동안은 공격하지 않고, 놓으면 그 자리를 지킨다.
+        const J = this.laneJoy;
+        if (J && u.owner === this.me.idx && J.ids.has(u.id)) {
+          const jm = Math.hypot(J.x, J.y);
+          if (jm > 0.18) {
+            u.slot = null; u.order = { t: 'hold' }; u.target = null;
+            const s = speed * Math.min(1, jm) * dt;
+            u.x = clamp(u.x + (J.x / jm) * s, INNER.x0, INNER.x1); u.y = clamp(u.y + (J.y / jm) * s, INNER.y0, INNER.y1);
+            u.face = Math.atan2(J.y, J.x); u.moveT = 0.12;
+            continue;
+          }
+        }
         if (o.t === 'move') { if (this.moveTo(u, o.x, o.y, speed, dt)) u.order = { t: o.after || 'idle' }; continue; }
         if (o.t === 'focus' && u.scan <= 0) {
           u.scan = 0.05;

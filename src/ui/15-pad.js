@@ -118,7 +118,10 @@
   }
   // 매 프레임: 조이스틱·공격 버튼 상태를 지금 고른 장수에 넘긴다
   function padTick() {
-    const c = g && g.phase === 'boss' ? g.active() : null;
+    if (!g) return;
+    // 라인: 고른 유닛들을 조이스틱 방향으로 직접 움직인다(다중 선택도 대형 그대로 함께 움직인다)
+    g.laneJoy = PAD.lane && PAD.jv && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv.x, y: PAD.jv.y } : null;
+    const c = g.phase === 'boss' && !S.laneView ? g.active() : null;
     if (!c) return;
     g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
     c.joy = PAD.jv;
@@ -133,7 +136,15 @@
     const bar = $('skillbar'), joy = $('joy'), c = inBoss() && g.phase === 'boss' ? g.active() : null;
     padInit();
     g.manual = !!c;
-    if (!c) { if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; joy.hidden = true; PAD.jv = null; PAD.atk = null; PAD.aim = null; } return; }
+    // 라인에서는 터치 기기에서 유닛을 고르면 조이스틱만 띄운다(공격·스킬 버튼 없음, 유닛은 사거리 안의 적을 알아서 친다)
+    const lane = !c && !!S.coarse && laneOn() && !viewedPeer() && !g.over && S.sel.length > 0;
+    PAD.lane = lane;
+    $('stage').classList.toggle('lanejoy', lane);
+    if (!c) {
+      if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; PAD.atk = null; PAD.aim = null; }
+      if (joy.hidden === lane) { joy.hidden = !lane; if (!lane) { PAD.jv = null; PAD.joy = null; joy.classList.remove('on'); joy.querySelector('i').style.transform = ''; } }
+      return;
+    }
     const sk = c.def.sk || [], heal = g.healLeft(), dash = c.def.tier >= g.R.dashMinTier;
     const key = c.uid + ':' + sk.length + ':' + dash + ':' + (heal == null ? 'n' : 'h');
     if (bar.dataset.k !== key) {
@@ -156,7 +167,8 @@
     if (heal != null) cds.push([heal > 0 ? 0 : 1, 1]);
     bar._cells.forEach((el, i) => {
       const [left, max] = cds[i] || [0, 1], p = left > 0 ? Math.min(1, left / max) : 0;
-      el.querySelector('.cd').style.setProperty('--p', `${(p * 100).toFixed(1)}%`);
+      const pv = `${Math.round(p * 50) * 2}%`; // 2% 단위로만 바꿔 불필요한 다시 그리기를 줄인다
+      if (el._p !== pv) { el._p = pv; el.querySelector('.cd').style.setProperty('--p', pv); }
       const sec = el.querySelector('.sec'), txt = left > 0 && max > 1 ? String(Math.ceil(left)) : '';
       if (sec.textContent !== txt) sec.textContent = txt;
       const was = el.dataset.cd === '1', now = p > 0;

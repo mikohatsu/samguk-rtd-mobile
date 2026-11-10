@@ -2,7 +2,7 @@
     const c = ctx;
     c.drawImage(mapCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
     drawFlags(c);
-    for (const p of S.pings) { p.t += 1 / 60; c.strokeStyle = p.c; c.globalAlpha = 1 - p.t / 0.5; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, 8 + p.t * 40, 0, 7); c.stroke(); c.globalAlpha = 1; }
+    for (const p of S.pings) { p.t += S.fdt; c.strokeStyle = p.c; c.globalAlpha = 1 - p.t / 0.5; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, 8 + p.t * 40, 0, 7); c.stroke(); c.globalAlpha = 1; }
     S.pings = S.pings.filter((p) => p.t < 0.5);
     for (const e of g.enemies) {
       if (e.mid) {

@@ -56,6 +56,8 @@
     if (!g) return;
     // 30fps 제한: 배터리·발열용. 시뮬레이션은 흐른 시간만큼 따라잡는다.
     if (Q.fps30 && now - lastDraw < 30) return;
+    // 120Hz 화면에서도 60번만 그린다(두 배로 그려 봐야 발열·끊김만 늘어난다)
+    if (now - lastDraw < 14) return;
     lastDraw = now;
     tick(now, 0.1);
     render(now);
@@ -99,7 +101,7 @@
     let autoPref = true; try { autoPref = localStorage.getItem('rtd-auto') !== '0'; } catch (e) { /* 저장 불가 */ }
     const tutOn = !!(window.RTD_TUT && S.saveOn && !opt.snap && window.RTD_TUT.maybeStart({ get g() { return g; }, S, t: I.t, onSkip: () => { autoOnAll(); toast(t('autoToastOn'), 'good'); dirty(); } }));
     if (!opt.snap && !tutOn && autoPref) autoOnAll();
-    window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
+    window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); }, tick, render, dom: () => { renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
     view.focus({ preventScroll: true });
     last = performance.now();
   }

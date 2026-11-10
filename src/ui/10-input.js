@@ -28,7 +28,8 @@
     if (inBoss()) {
       const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 50);
       if (i >= 0) g.selectChamp(i);
-      else if (g.active()) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.arenaChase(tg); else g.arenaMove(m.x, m.y, false); }
+      // 터치로는 이동하지 않는다(이동은 조이스틱). 적을 톡 치면 그 적을 노리기만 한다.
+      else if (g.active()) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.active().tgt = tg; }
       dirty(); return;
     }
     if (!laneOn()) return;
@@ -65,7 +66,8 @@
     const f = g.phase === 'wave' ? flagAt(m) : null;
     if (f) { showFlag(f, e); setTimeout(() => showFlag(null), 2600); return; }
     // 빈 곳: 고른 게 있으면 그리로 '공격하며 이동'(가는 길에 사거리 안의 적이 있으면 멈춰서 때린다), 없으면 아무것도 안 함
-    if (S.sel.length || S.dropSel) rightClick(m, 'amove');
+    // 터치: 유닛은 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
+    if (S.dropSel && !S.sel.length) rightClick(m, 'amove');
   }
   function boxSelect(d) {
     const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);

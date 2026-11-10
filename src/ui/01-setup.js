@@ -20,7 +20,8 @@
   function applyQuality() {
     if (Q.level === 'high') delete ctx.shadowBlur;
     else {
-      const cap = Q.level === 'mid' ? 6 : 0;
+      // 휴대폰(터치 기기)은 보통 화질에서도 끈다: 번짐 하나하나가 흐림 연산이라 안드로이드에서 프레임이 크게 떨어진다
+      const cap = Q.level === 'mid' && !Q.coarse ? 6 : 0;
       Object.defineProperty(ctx, 'shadowBlur', { configurable: true, get() { return BLUR.get.call(this); }, set(v) { BLUR.set.call(this, Math.min(v, cap)); } });
     }
     try { localStorage.setItem('rtd-gfx', JSON.stringify({ level: Q.level, fps30: Q.fps30 })); } catch (e) { /* 저장 못 해도 이번 판은 그대로 */ }
@@ -55,5 +56,5 @@
   let g = null, net = null, speed = 1;
   const Art = window.RTD_ART, Snd = window.RTD_AUDIO;
   const I = window.RTD_I18N, t = I.t;
-  const S = { sel: [], dropSel: null, groups: {}, cmdMode: null, drag: null, mouse: { x: W / 2, y: H / 2 }, tab: 'upgrade', pick: [], cut: null, banner: null, pattern: null, ticket: null, dmg: [], pings: [], lastClick: { t: 0, id: 0 }, scale: 1, bossIntro: null };
+  const S = { sel: [], dropSel: null, groups: {}, cmdMode: null, drag: null, mouse: { x: W / 2, y: H / 2 }, tab: 'upgrade', pick: [], cut: null, banner: null, pattern: null, ticket: null, dmg: [], pings: [], lastClick: { t: 0, id: 0 }, scale: 1, bossIntro: null, fdt: 1 / 60, f60: 1 };
 

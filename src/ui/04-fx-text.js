@@ -62,7 +62,7 @@
     c.textAlign = 'center';
     const us = uiS();
     for (let i = S.dmg.length - 1; i >= 0; i--) {
-      const d = S.dmg[i]; d.t += 1 / 60;
+      const d = S.dmg[i]; d.t += S.fdt;
       if (d.proc) {
         // 패시브 발동 글자: 튀어나오듯 커졌다가 떠오르며 사라진다
         if (d.t > 1.1) { S.dmg.splice(i, 1); continue; }
@@ -147,7 +147,20 @@
     c.strokeText('DEFENSE', x + 2, y + 100); c.fillText('DEFENSE', x + 2, y + 100);
     c.restore();
   }
+  // 깃발 28개는 글자·도형이 많아 매 프레임 그리면 무겁다. 달성 상태가 바뀔 때만 다시 그려 두고 한 장으로 찍는다.
+  let flagCv = null, flagKey = '';
   function drawFlags(c) {
+    const key = Object.keys(g.me.done).join() + '|' + g.mode + g.party + '|' + (I.lang || '');
+    if (flagKey !== key || !flagCv) {
+      flagKey = key;
+      if (!flagCv) { flagCv = document.createElement('canvas'); flagCv.width = 220; flagCv.height = H; }
+      const x = flagCv.getContext('2d');
+      x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, 220, H); x.translate(-(W - 205), 0);
+      paintFlags(x);
+    }
+    c.drawImage(flagCv, W - 205, 0);
+  }
+  function paintFlags(c) {
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
     c.font = '400 34px "Black Han Sans", sans-serif'; c.strokeStyle = 'rgba(32, 21, 12, .85)'; c.lineWidth = 6;
     c.strokeText(I.t('ach'), W - 98, 38); c.fillStyle = '#e6c578'; c.fillText(I.t('ach'), W - 98, 38);

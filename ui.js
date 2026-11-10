@@ -21,7 +21,8 @@
   function applyQuality() {
     if (Q.level === 'high') delete ctx.shadowBlur;
     else {
-      const cap = Q.level === 'mid' ? 6 : 0;
+      // 휴대폰(터치 기기)은 보통 화질에서도 끈다: 번짐 하나하나가 흐림 연산이라 안드로이드에서 프레임이 크게 떨어진다
+      const cap = Q.level === 'mid' && !Q.coarse ? 6 : 0;
       Object.defineProperty(ctx, 'shadowBlur', { configurable: true, get() { return BLUR.get.call(this); }, set(v) { BLUR.set.call(this, Math.min(v, cap)); } });
     }
     try { localStorage.setItem('rtd-gfx', JSON.stringify({ level: Q.level, fps30: Q.fps30 })); } catch (e) { /* 저장 못 해도 이번 판은 그대로 */ }
@@ -56,7 +57,7 @@
   let g = null, net = null, speed = 1;
   const Art = window.RTD_ART, Snd = window.RTD_AUDIO;
   const I = window.RTD_I18N, t = I.t;
-  const S = { sel: [], dropSel: null, groups: {}, cmdMode: null, drag: null, mouse: { x: W / 2, y: H / 2 }, tab: 'upgrade', pick: [], cut: null, banner: null, pattern: null, ticket: null, dmg: [], pings: [], lastClick: { t: 0, id: 0 }, scale: 1, bossIntro: null };
+  const S = { sel: [], dropSel: null, groups: {}, cmdMode: null, drag: null, mouse: { x: W / 2, y: H / 2 }, tab: 'upgrade', pick: [], cut: null, banner: null, pattern: null, ticket: null, dmg: [], pings: [], lastClick: { t: 0, id: 0 }, scale: 1, bossIntro: null, fdt: 1 / 60, f60: 1 };
 
   // ---- 전장 배경: 먹으로 그린 군사 지도 ----
   const OVER = { x: 1200, y: 600 };
@@ -352,7 +353,7 @@
     c.textAlign = 'center';
     const us = uiS();
     for (let i = S.dmg.length - 1; i >= 0; i--) {
-      const d = S.dmg[i]; d.t += 1 / 60;
+      const d = S.dmg[i]; d.t += S.fdt;
       if (d.proc) {
         // 패시브 발동 글자: 튀어나오듯 커졌다가 떠오르며 사라진다
         if (d.t > 1.1) { S.dmg.splice(i, 1); continue; }
@@ -437,7 +438,20 @@
     c.strokeText('DEFENSE', x + 2, y + 100); c.fillText('DEFENSE', x + 2, y + 100);
     c.restore();
   }
+  // 깃발 28개는 글자·도형이 많아 매 프레임 그리면 무겁다. 달성 상태가 바뀔 때만 다시 그려 두고 한 장으로 찍는다.
+  let flagCv = null, flagKey = '';
   function drawFlags(c) {
+    const key = Object.keys(g.me.done).join() + '|' + g.mode + g.party + '|' + (I.lang || '');
+    if (flagKey !== key || !flagCv) {
+      flagKey = key;
+      if (!flagCv) { flagCv = document.createElement('canvas'); flagCv.width = 220; flagCv.height = H; }
+      const x = flagCv.getContext('2d');
+      x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, 220, H); x.translate(-(W - 205), 0);
+      paintFlags(x);
+    }
+    c.drawImage(flagCv, W - 205, 0);
+  }
+  function paintFlags(c) {
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
     c.font = '400 34px "Black Han Sans", sans-serif'; c.strokeStyle = 'rgba(32, 21, 12, .85)'; c.lineWidth = 6;
     c.strokeText(I.t('ach'), W - 98, 38); c.fillStyle = '#e6c578'; c.fillText(I.t('ach'), W - 98, 38);
@@ -541,7 +555,7 @@
     const c = ctx;
     c.drawImage(mapCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
     drawFlags(c);
-    for (const p of S.pings) { p.t += 1 / 60; c.strokeStyle = p.c; c.globalAlpha = 1 - p.t / 0.5; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, 8 + p.t * 40, 0, 7); c.stroke(); c.globalAlpha = 1; }
+    for (const p of S.pings) { p.t += S.fdt; c.strokeStyle = p.c; c.globalAlpha = 1 - p.t / 0.5; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, 8 + p.t * 40, 0, 7); c.stroke(); c.globalAlpha = 1; }
     S.pings = S.pings.filter((p) => p.t < 0.5);
     for (const e of g.enemies) {
       if (e.mid) {
@@ -930,7 +944,7 @@
   }
   // 착탄 효과·날아가는 물체 그리기(매 프레임)
   function drawVfx(c) {
-    const dt = 1 / 60;
+    const dt = S.fdt;
     for (let i = S.vfx.length - 1; i >= 0; i--) {
       const v = S.vfx[i];
       v.t += dt;
@@ -1131,22 +1145,39 @@
   const CHAMP_R = 40, BOSS_S = 1.25;
   function drawBossAt(c, x, y, t, flash) {
     const f = g.fight, bd = Art.facing(S.bossFace ?? Math.PI / 2), bMove = S.bossMove;
-    if (flash) c.filter = 'brightness(1.8)';
-    Art.drawSprite(c, Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, bd.v, bMove ? (Math.sin(t * 10) > 0 ? 1 : 2) : 0), x, y - 56 * (BOSS_S - 1), 200 * BOSS_S, bd.flip, 0, flash ? 0.96 : 1);
-    c.filter = 'none';
+    const im = Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, bd.v, bMove ? (Math.sin(t * 10) > 0 ? 1 : 2) : 0);
+    Art.drawSprite(c, im, x, y - 56 * (BOSS_S - 1), 200 * BOSS_S, bd.flip, 0, flash ? 0.96 : 1);
+    // 번쩍임은 캔버스 필터(brightness) 대신 같은 그림을 한 번 더 밝게 얹는다(필터는 휴대폰에서 매우 느리다)
+    if (flash) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.7; Art.drawSprite(c, im, x, y - 56 * (BOSS_S - 1), 200 * BOSS_S, bd.flip, 0, 0.96); c.restore(); }
+  }
+  // 전장 바닥은 판마다 한 번만 그려 두고 찍는다(매 프레임 화면 전체에 그라디언트·무늬·그라디언트를 세 번 덧칠하던 것)
+  let arenaCv = null, arenaKey = '';
+  function arenaFloor(c, a) {
+    const key = a.motif + a.ground + a.sky + qMap() + (Art.img('tex_' + a.motif) ? 1 : 0);
+    if (arenaKey !== key) {
+      arenaKey = key;
+      if (!arenaCv) arenaCv = document.createElement('canvas');
+      const q = qMap(), w = W + OVER.x * 2, h = H + OVER.y * 2;
+      arenaCv.width = Math.round(w * q); arenaCv.height = Math.round(h * q);
+      const x = arenaCv.getContext('2d');
+      x.setTransform(q, 0, 0, q, OVER.x * q, OVER.y * q);
+      const gr = x.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 1300);
+      gr.addColorStop(0, a.ground); gr.addColorStop(1, a.sky);
+      x.fillStyle = gr; x.fillRect(-OVER.x, -OVER.y, w, h);
+      // 바닥이 유닛·장판보다 튀지 않게 채도와 밝기를 낮추고(타일에 미리 구움) 경기장 색을 얇게 덮는다
+      const floor = tilePat(x, 'tex_' + a.motif, 1.2, 'saturate(0.45) brightness(0.62) contrast(0.85)');
+      arenaCv._tex = !!floor;
+      if (floor) {
+        x.fillStyle = floor; x.fillRect(-OVER.x, -OVER.y, w, h);
+        x.fillStyle = gr; x.globalAlpha = 0.4; x.fillRect(-OVER.x, -OVER.y, w, h); x.globalAlpha = 1;
+      }
+    }
+    c.drawImage(arenaCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    return arenaCv._tex;
   }
   function drawArena(t) {
     const c = ctx, f = g.fight, a = f.def.arena, b = f.boss;
-    const gr = c.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 1300);
-    gr.addColorStop(0, a.ground); gr.addColorStop(1, a.sky);
-    c.fillStyle = gr; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
-    // 바닥이 유닛·장판보다 튀지 않게 채도와 밝기를 낮추고(타일에 미리 구움) 경기장 색을 얇게 덮는다
-    const floor = tilePat(c, 'tex_' + a.motif, 1.2, 'saturate(0.45) brightness(0.62) contrast(0.85)');
-    if (floor) {
-      c.fillStyle = floor; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
-      c.fillStyle = gr; c.globalAlpha = 0.4; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); c.globalAlpha = 1;
-    }
-    else drawMotif(c, a.motif, '#f0e0c0', t);
+    if (!arenaFloor(c, a)) drawMotif(c, a.motif, '#f0e0c0', t);
     c.strokeStyle = f.def.fx + '66'; c.lineWidth = 3; c.strokeRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
     f.hazards.forEach((h) => drawHazard(c, h));
     drawRaid(c, t);
@@ -1172,13 +1203,13 @@
       if (ac) { const a = Math.atan2(b.y - ac.y, b.x - ac.x); hr.ax = Math.cos(a); hr.ay = Math.sin(a); }
       hr.k = Math.min(1.4, hr.k + 0.55 + Math.min(0.6, dmg / (b.mhp * 0.02))); hr.num += dmg;
     }
-    hr.hp = b.hp; hr.k *= 0.8;
-    hr.numT += 1 / 60;
+    hr.hp = b.hp; hr.k *= Math.pow(0.8, S.f60);
+    hr.numT += S.fdt;
     if (hr.num > 0 && hr.numT > 0.14) { if (S.dmg.length < 50) S.dmg.push({ x: b.x + (Math.random() - 0.5) * 70, y: b.y - 96, v: Math.round(hr.num), t: 0, hit: true }); hr.num = 0; hr.numT = 0; }
     let wind = 0;
     f.hazards.forEach((h) => { if (!h.own && h.t < h.delay) wind = Math.max(wind, h.t / Math.max(0.01, h.delay)); });
     if (hr.wind > 0.85 && wind < 0.2) { hr.slam = 1; S.shake = Math.max(S.shake || 0, 0.55); }
-    hr.wind = wind; hr.slam *= 0.86;
+    hr.wind = wind; hr.slam *= Math.pow(0.86, S.f60);
     const wk = Math.pow(wind, 1.5), push = hr.k * 16;
     const bx = b.x + hr.ax * push, by = b.y + hr.ay * push * 0.6 - wk * 18 + hr.slam * 10 - 56 * (BOSS_S - 1);
     const sy = (1 - hr.k * 0.08) * (1 + wk * 0.08) * (1 - hr.slam * 0.1), sc = 200 * BOSS_S * (1 + hr.k * 0.04 + wk * 0.06 + hr.slam * 0.05);
@@ -1256,7 +1287,7 @@
       if (!o.def) return;
       // 동료 유닛은 위치 변화로 방향을 맞춘다
       const pv = (S.ghostPos = S.ghostPos || {})[o.name] || { x: o.x, y: o.y, moveT: 0, face: Math.PI / 2, def: o.def, id: 1 };
-      if (Math.hypot(o.x - pv.x, o.y - pv.y) > 0.3) { pv.face = Math.atan2(o.y - pv.y, o.x - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - 1 / 60);
+      if (Math.hypot(o.x - pv.x, o.y - pv.y) > 0.3) { pv.face = Math.atan2(o.y - pv.y, o.x - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
       pv.x = o.x; pv.y = o.y; S.ghostPos[o.name] = pv;
       c.globalAlpha = 0.85; piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf(pv, t, CHAMP_R) }); c.globalAlpha = 1;
       bar(c, o.x, o.y - 78, 72, 6, o.hpf, '#7fd4ff');
@@ -1291,7 +1322,7 @@
       }
       if (M.objs.some((o) => o.k === 'clone')) { c.fillStyle = '#fff'; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.fillText(I.t('clones'), W / 2, 176); }
       if (S.pattern && S.pattern.t > 0) {
-        S.pattern.t -= 1 / 60;
+        S.pattern.t -= S.fdt;
         c.fillStyle = f.def.fx; c.font = '400 38px "Black Han Sans", sans-serif'; c.globalAlpha = Math.min(1, S.pattern.t * 2); c.fillText(S.pattern.name, W / 2, 124); c.globalAlpha = 1;
       }
       c.restore();
@@ -1765,7 +1796,7 @@
   function drawBanner() {
     const b = S.banner, c = ctx;
     if (!b) return;
-    b.t -= 1 / 60;
+    b.t -= S.fdt;
     if (b.t <= 0) { S.banner = null; return; }
     c.globalAlpha = Math.min(1, b.t * 2); c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillStyle = 'rgba(15,10,8,.7)'; c.fillRect(W / 2 - 300, 170, 600, 86);
@@ -1775,20 +1806,22 @@
   }
   function render(now) {
     const t = now / 1000;
-    S.shake = Math.max(0, (S.shake || 0) - 0.06);
+    // 프레임 간격: 화면 주사율(60·120Hz)이나 렉과 상관없이 연출 속도가 같도록 모든 감쇠·타이머가 이 값을 쓴다
+    const dt = Math.min(0.1, Math.max(0.001, (now - (S.lastNow || now - 16)) / 1000)); S.lastNow = now;
+    S.fdt = dt; S.f60 = dt * 60;
+    S.shake = Math.max(0, (S.shake || 0) - 0.06 * S.f60);
     const sx = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale, sy = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale;
     const ph = g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');
     if (S.camPh !== ph) { S.camPh = ph; resetCam(); }
-    if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) { const ac = g.active(); if (ac) { S.cam.x += (ac.x - S.cam.x) * 0.1; S.cam.y += (ac.y - S.cam.y) * 0.1; } }
+    if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) { const ac = g.active(); if (ac) { const ck = 1 - Math.pow(0.9, S.f60); S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ac.y - S.cam.y) * ck; } }
     applyCam();
     ctx.setTransform(S.scale, 0, 0, S.scale, S.ox + sx, S.oy + sy);
     // 강타 카메라 펀치: 보스 쪽으로 순간 확대했다 돌아온다
-    if (S.punch > 0.02 && g.fight && g.phase === 'boss') { const p = 1 + S.punch * 0.035, fx = g.fight.boss.x, fy = g.fight.boss.y; ctx.translate(fx, fy); ctx.scale(p, p); ctx.translate(-fx, -fy); S.punch *= 0.82; } else S.punch = 0;
+    if (S.punch > 0.02 && g.fight && g.phase === 'boss') { const p = 1 + S.punch * 0.035, fx = g.fight.boss.x, fy = g.fight.boss.y; ctx.translate(fx, fy); ctx.scale(p, p); ctx.translate(-fx, -fy); S.punch *= Math.pow(0.82, S.f60); } else S.punch = 0;
     const watching = viewedPeer();
     if (net) net.setWatch(watching ? watching.id : null);
     if (g.fight && g.phase !== 'wave' && !laneOn()) drawArena(t); else if (watching) drawRemoteLane(t, watching); else drawLane(t);
     drawText(ctx); drawBanner();
-    const dt = Math.min(0.1, (now - (S.lastNow || now)) / 1000); S.lastNow = now;
     drawPop(ctx, t, dt);
   }
   // 화면 배율: 작은 화면(폰)은 1배 그대로 두고 큰 화면만 키운다. 맵은 카메라로 따로 확대한다.
@@ -1859,7 +1892,8 @@
     if (inBoss()) {
       const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 50);
       if (i >= 0) g.selectChamp(i);
-      else if (g.active()) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.arenaChase(tg); else g.arenaMove(m.x, m.y, false); }
+      // 터치로는 이동하지 않는다(이동은 조이스틱). 적을 톡 치면 그 적을 노리기만 한다.
+      else if (g.active()) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.active().tgt = tg; }
       dirty(); return;
     }
     if (!laneOn()) return;
@@ -1896,7 +1930,8 @@
     const f = g.phase === 'wave' ? flagAt(m) : null;
     if (f) { showFlag(f, e); setTimeout(() => showFlag(null), 2600); return; }
     // 빈 곳: 고른 게 있으면 그리로 '공격하며 이동'(가는 길에 사거리 안의 적이 있으면 멈춰서 때린다), 없으면 아무것도 안 함
-    if (S.sel.length || S.dropSel) rightClick(m, 'amove');
+    // 터치: 유닛은 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
+    if (S.dropSel && !S.sel.length) rightClick(m, 'amove');
   }
   function boxSelect(d) {
     const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
@@ -2687,7 +2722,10 @@
   }
   // 매 프레임: 조이스틱·공격 버튼 상태를 지금 고른 장수에 넘긴다
   function padTick() {
-    const c = g && g.phase === 'boss' ? g.active() : null;
+    if (!g) return;
+    // 라인: 고른 유닛들을 조이스틱 방향으로 직접 움직인다(다중 선택도 대형 그대로 함께 움직인다)
+    g.laneJoy = PAD.lane && PAD.jv && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv.x, y: PAD.jv.y } : null;
+    const c = g.phase === 'boss' && !S.laneView ? g.active() : null;
     if (!c) return;
     g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
     c.joy = PAD.jv;
@@ -2702,7 +2740,15 @@
     const bar = $('skillbar'), joy = $('joy'), c = inBoss() && g.phase === 'boss' ? g.active() : null;
     padInit();
     g.manual = !!c;
-    if (!c) { if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; joy.hidden = true; PAD.jv = null; PAD.atk = null; PAD.aim = null; } return; }
+    // 라인에서는 터치 기기에서 유닛을 고르면 조이스틱만 띄운다(공격·스킬 버튼 없음, 유닛은 사거리 안의 적을 알아서 친다)
+    const lane = !c && !!S.coarse && laneOn() && !viewedPeer() && !g.over && S.sel.length > 0;
+    PAD.lane = lane;
+    $('stage').classList.toggle('lanejoy', lane);
+    if (!c) {
+      if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; PAD.atk = null; PAD.aim = null; }
+      if (joy.hidden === lane) { joy.hidden = !lane; if (!lane) { PAD.jv = null; PAD.joy = null; joy.classList.remove('on'); joy.querySelector('i').style.transform = ''; } }
+      return;
+    }
     const sk = c.def.sk || [], heal = g.healLeft(), dash = c.def.tier >= g.R.dashMinTier;
     const key = c.uid + ':' + sk.length + ':' + dash + ':' + (heal == null ? 'n' : 'h');
     if (bar.dataset.k !== key) {
@@ -2725,7 +2771,8 @@
     if (heal != null) cds.push([heal > 0 ? 0 : 1, 1]);
     bar._cells.forEach((el, i) => {
       const [left, max] = cds[i] || [0, 1], p = left > 0 ? Math.min(1, left / max) : 0;
-      el.querySelector('.cd').style.setProperty('--p', `${(p * 100).toFixed(1)}%`);
+      const pv = `${Math.round(p * 50) * 2}%`; // 2% 단위로만 바꿔 불필요한 다시 그리기를 줄인다
+      if (el._p !== pv) { el._p = pv; el.querySelector('.cd').style.setProperty('--p', pv); }
       const sec = el.querySelector('.sec'), txt = left > 0 && max > 1 ? String(Math.ceil(left)) : '';
       if (sec.textContent !== txt) sec.textContent = txt;
       const was = el.dataset.cd === '1', now = p > 0;
@@ -2954,6 +3001,8 @@
     if (!g) return;
     // 30fps 제한: 배터리·발열용. 시뮬레이션은 흐른 시간만큼 따라잡는다.
     if (Q.fps30 && now - lastDraw < 30) return;
+    // 120Hz 화면에서도 60번만 그린다(두 배로 그려 봐야 발열·끊김만 늘어난다)
+    if (now - lastDraw < 14) return;
     lastDraw = now;
     tick(now, 0.1);
     render(now);
@@ -2997,7 +3046,7 @@
     let autoPref = true; try { autoPref = localStorage.getItem('rtd-auto') !== '0'; } catch (e) { /* 저장 불가 */ }
     const tutOn = !!(window.RTD_TUT && S.saveOn && !opt.snap && window.RTD_TUT.maybeStart({ get g() { return g; }, S, t: I.t, onSkip: () => { autoOnAll(); toast(t('autoToastOn'), 'good'); dirty(); } }));
     if (!opt.snap && !tutOn && autoPref) autoOnAll();
-    window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
+    window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); }, tick, render, dom: () => { renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
     view.focus({ preventScroll: true });
     last = performance.now();
   }

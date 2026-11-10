@@ -425,18 +425,22 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 #skillbar { left: auto; right: calc(var(--sr) + 18px); bottom: calc(var(--sb) + 18px); transform: none; width: 92px; height: 92px; display: block; gap: 0; }
 #skillbar .sk { position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; margin: -31px 0 0 -31px; transform: translate(var(--x, 0), var(--y, 0)); border-radius: 50%; touch-action: none;
   background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--c) 30%, transparent) 0%, rgba(12, 8, 5, .28) 75%); border: 2px solid color-mix(in srgb, var(--c) 75%, transparent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--c) 35%, transparent); font-size: 27px; color: rgba(255, 255, 255, .92); backdrop-filter: blur(1.5px); }
+  box-shadow: 0 0 8px color-mix(in srgb, var(--c) 35%, transparent); font-size: 27px; color: rgba(255, 255, 255, .92); }
 #skillbar .sk .cd { border-radius: 50%; background: conic-gradient(rgba(8,5,3,.62) var(--p), transparent 0); }
 #skillbar .sk .nm { bottom: -15px; font-size: 10px; opacity: .85; }
 #skillbar .sk.on { transform: translate(var(--x, 0), var(--y, 0)) scale(1.12); border-color: #fff; box-shadow: 0 0 14px var(--c); }
 #skillbar .sk.atk { width: 92px; height: 92px; margin: -46px 0 0 -46px; font-size: 38px; background: radial-gradient(circle at 50% 40%, rgba(255, 176, 112, .38) 0%, rgba(12, 8, 5, .3) 75%); }
 #skillbar .sk.atk .nm { bottom: -16px; }
-#skillbar .sk .skic { width: 58%; height: 58%; fill: rgba(255, 255, 255, .95); filter: drop-shadow(0 0 4px var(--c)) drop-shadow(0 1px 1px #000); pointer-events: none; }
+/* 버튼 위 흐림·그림자 필터는 쓰지 않는다: 매 프레임 바뀌는 전장 위에 얹히면 휴대폰에서 프레임이 크게 떨어진다 */
+#skillbar .sk .skic { width: 58%; height: 58%; fill: rgba(255, 255, 255, .95); stroke: rgba(0, 0, 0, .55); stroke-width: 10px; paint-order: stroke; pointer-events: none; }
 #skillbar .sk.atk .skic { width: 56%; height: 56%; }
 #skillbar .sk[data-cd="1"] .skic { fill: rgba(255, 255, 255, .55); }
 #joy { position: absolute; z-index: 2; left: calc(var(--sl, 0px) + 44px); bottom: calc(var(--sb) + 64px); width: 132px; height: 132px; border-radius: 50%; touch-action: none;
   background: radial-gradient(circle, rgba(255, 240, 210, .08) 0%, rgba(255, 240, 210, .16) 62%, rgba(255, 240, 210, .04) 64%); border: 2px solid rgba(255, 235, 200, .38); }
 #joy[hidden] { display: none; }
+/* 라인에서 유닛을 골랐을 때: 조이스틱은 왼쪽 아래 구석, 선택 창은 그 오른쪽으로 비켜난다 */
+#stage.lanejoy #joy { bottom: calc(var(--sb) + 10px); left: calc(var(--sl, 0px) + 28px); z-index: 5; }
+#stage.lanejoy #selbar { left: calc(var(--sl, 0px) + 176px); transform: none; width: calc(100% - var(--sl, 0px) - 176px - 74px); }
 #joy i { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: radial-gradient(circle at 45% 38%, rgba(255, 246, 225, .7), rgba(200, 170, 120, .45)); box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none; }
 #joy.on { border-color: rgba(255, 235, 200, .65); }
 #bossbtn { top: calc(var(--st) + 48px); bottom: auto; right: var(--sr); left: auto; transform: none; min-height: 38px; }

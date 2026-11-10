@@ -231,7 +231,7 @@
   }
   // 착탄 효과·날아가는 물체 그리기(매 프레임)
   function drawVfx(c) {
-    const dt = 1 / 60;
+    const dt = S.fdt;
     for (let i = S.vfx.length - 1; i >= 0; i--) {
       const v = S.vfx[i];
       v.t += dt;

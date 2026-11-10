@@ -129,20 +129,32 @@
     }
     return P;
   }
-  // 조각을 한 장으로 합친 뒤 기존 그림처럼 진한 외곽선을 두른다(작업용 캔버스 2장을 돌려 쓴다)
+  // 조각을 한 장으로 합친 뒤 기존 그림처럼 진한 외곽선을 두른다.
+  // 합성은 무겁다(캔버스 3장을 오가며 10번 넘게 그림). 그래서 동작을 몇 장의 프레임으로 끊어(대기 12·걷기 10·공격/스킬 12·피격 4)
+  // 한 번 만든 프레임은 저장해 두고, 그 뒤로는 그림 한 장 찍는 값으로 그린다. 저장량이 넘치면 오래 안 쓴 것부터 버린다.
   const PAD = 90;
   let work = null, sil = null;
   function canv(w, h) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; return cv; }
-  // c: 캔버스, x,y: 기존 그림과 같은 기준점, size: 기존 그림 크기(r*3.7과 같은 기준), flip: 좌우 반전, st.view: 'f' 앞 / 's' 옆(기본)
-  function draw(c, id, x, y, size, flip, st) {
-    st = st || {}; id = res(id);
-    const v = st.view || 's', RG = RIGS[id], R = RG && RG.views[v];
-    if (!R || !has(id, v) || typeof document === 'undefined') return false;
-    const key = id + '_' + v, P = poseFor(R, Object.assign({}, st, { view: v }), RG.kind);
-    const W = R.w + PAD * 2, H = R.h + PAD * 2;
-    if (!work || work.width < W || work.height < H) { work = canv(Math.max(W, work ? work.width : 0), Math.max(H, work ? work.height : 0)); sil = canv(work.width, work.height); }
+  const cache = new Map(); let cachePx = 0;
+  const CACHE_MAX = 10e6; // 저장할 픽셀 수 상한(약 40MB)
+  const TAU = Math.PI * 2;
+  // 동작 상태를 프레임 번호로 끊는다: [저장 키, 그 프레임의 상태]
+  function quant(st, v) {
+    const s = st.state || 'idle';
+    if (s === 'walk') { const n = 10, i = Math.floor((((st.t || 0) * 9) / TAU % 1 + 1) % 1 * n); return ['w' + i, { state: 'walk', view: v, t: (i / n) * TAU / 9 }]; }
+    if (s === 'attack' || s === 'skill') { const n = 12, i = Math.max(0, Math.min(n, Math.round((st.p || 0) * n))); return [s[0] + (st.act || '') + i, { state: s, act: st.act, view: v, p: i / n, t: 0 }]; }
+    if (s === 'hurt') { const n = 4, i = Math.max(1, Math.min(n, Math.round((st.k || 0) * n))); return ['h' + i, { state: 'hurt', view: v, k: i / n, t: 0 }]; }
+    const n = 12, i = Math.floor((((st.t || 0) * 2.6) / TAU % 1 + 1) % 1 * n);
+    return ['i' + i, { state: 'idle', view: v, t: (i / n) * TAU / 2.6 }];
+  }
+  // 한 프레임 합성: q = 해상도 배율(화면에 그려질 크기에 맞춰 0.2~1)
+  function compose(key, R, kind, st, q) {
+    const P = poseFor(R, st, kind);
+    const W = R.w + PAD * 2, H = R.h + PAD * 2, wp = Math.ceil(W * q), hp = Math.ceil(H * q);
+    if (!work || work.width < wp || work.height < hp) { work = canv(Math.max(wp, work ? work.width : 0), Math.max(hp, work ? work.height : 0)); sil = canv(work.width, work.height); }
     const w = work.getContext('2d');
-    w.setTransform(1, 0, 0, 1, 0, 0); w.clearRect(0, 0, work.width, work.height);
+    w.setTransform(1, 0, 0, 1, 0, 0); w.globalCompositeOperation = 'source-over'; w.globalAlpha = 1; w.clearRect(0, 0, work.width, work.height);
+    w.setTransform(q, 0, 0, q, 0, 0);
     w.translate(PAD + P.bx, PAD + P.by);
     // 몸 전체: 발 기준으로 숨쉬기, 엉덩이 기준으로 기울이기
     const fx = R.w / 2, fy = R.h;
@@ -164,16 +176,37 @@
     // 외곽선용 실루엣
     const sc = sil.getContext('2d');
     sc.setTransform(1, 0, 0, 1, 0, 0); sc.globalCompositeOperation = 'source-over'; sc.clearRect(0, 0, sil.width, sil.height);
-    sc.drawImage(work, 0, 0); sc.globalCompositeOperation = 'source-in'; sc.fillStyle = '#140c06'; sc.fillRect(0, 0, sil.width, sil.height);
+    sc.drawImage(work, 0, 0); sc.globalCompositeOperation = 'source-in'; sc.fillStyle = '#140c06'; sc.fillRect(0, 0, wp, hp);
+    // 기존 그림과 같은 외곽선: 152칸 기준 3px
+    const k = Math.min(122 / R.h, 144 / R.w), ol = (3 / k) * q;
+    const out = canv(wp, hp), o = out.getContext('2d');
+    for (let a = 0; a < 8; a++) o.drawImage(sil, 0, 0, wp, hp, Math.cos((a * Math.PI) / 4) * ol, Math.sin((a * Math.PI) / 4) * ol, wp, hp);
+    o.drawImage(work, 0, 0, wp, hp, 0, 0, wp, hp);
+    return out;
+  }
+  // c: 캔버스, x,y: 기존 그림과 같은 기준점, size: 기존 그림 크기(r*3.7과 같은 기준), flip: 좌우 반전, st.view: 'f' 앞 / 's' 옆(기본)
+  function draw(c, id, x, y, size, flip, st) {
+    st = st || {}; id = res(id);
+    const v = st.view || 's', RG = RIGS[id], R = RG && RG.views[v];
+    if (!R || !has(id, v) || typeof document === 'undefined') return false;
     // 기존 그림과 같은 배치: 152칸에 높이 122(또는 폭 144)로 맞추고 발끝을 134에 둔다
-    const k = Math.min(122 / R.h, 144 / R.w), s = (k * size) / 152, ol = 3 / k;
+    const k = Math.min(122 / R.h, 144 / R.w), s = (k * size) / 152, fx = R.w / 2, fy = R.h;
+    // 화면에 실제로 그려질 배율에 맞춰 저장 해상도를 고른다(작게 그릴 유닛을 크게 저장하지 않는다)
+    const m = c.getTransform ? c.getTransform() : null, eff = s * (m ? Math.hypot(m.a, m.b) : 1);
+    const q = Math.max(0.2, Math.min(1, Math.ceil(eff * 5) / 5));
+    const [fk, qs] = quant(st, v), ck = id + '_' + v + '|' + fk + '|' + q;
+    let cv = cache.get(ck);
+    if (cv) { cache.delete(ck); cache.set(ck, cv); }
+    else {
+      cv = compose(id + '_' + v, R, RG.kind, qs, q);
+      cache.set(ck, cv); cachePx += cv.width * cv.height;
+      while (cachePx > CACHE_MAX && cache.size > 1) { const old = cache.keys().next().value, oc = cache.get(old); cachePx -= oc.width * oc.height; oc.width = oc.height = 0; cache.delete(old); }
+    }
     c.save();
     c.translate(x, y + size * (134 / 152 - 0.6));
     if (st.state === 'dead') { const d = ease(st.k || 0); c.globalAlpha *= 1 - d * 0.6; c.rotate((flip ? 1 : -1) * d * 1.35); }
     c.scale(flip ? -s : s, s);
-    c.translate(-fx - PAD, -fy - PAD);
-    for (let a = 0; a < 8; a++) c.drawImage(sil, Math.cos((a * Math.PI) / 4) * ol, Math.sin((a * Math.PI) / 4) * ol);
-    c.drawImage(work, 0, 0);
+    c.drawImage(cv, -fx - PAD, -fy - PAD, R.w + PAD * 2, R.h + PAD * 2);
     c.restore();
     return true;
   }
@@ -181,5 +214,5 @@
   const ACT = { nova: 'omni', rings: 'omni', spread: 'omni', safe: 'omni', gates: 'omni', gaze: 'omni',
     fan: 'aim', cross: 'aim', sweep: 'aim', charge: 'aim', line: 'aim', dash: 'aim' };
   const actOf = (gen) => ACT[gen] || 'raise';
-  root.RTD_RIG = { has, draw, actOf, list: () => Object.keys(RIGS) };
+  root.RTD_RIG = { has, draw, actOf, list: () => Object.keys(RIGS), cacheInfo: () => ({ n: cache.size, px: cachePx }) };
 })(typeof window !== 'undefined' ? window : globalThis);

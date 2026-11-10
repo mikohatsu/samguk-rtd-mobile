@@ -455,7 +455,7 @@
   function drawBanner() {
     const b = S.banner, c = ctx;
     if (!b) return;
-    b.t -= 1 / 60;
+    b.t -= S.fdt;
     if (b.t <= 0) { S.banner = null; return; }
     c.globalAlpha = Math.min(1, b.t * 2); c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillStyle = 'rgba(15,10,8,.7)'; c.fillRect(W / 2 - 300, 170, 600, 86);

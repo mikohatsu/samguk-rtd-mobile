@@ -1,21 +1,38 @@
   function drawBossAt(c, x, y, t, flash) {
     const f = g.fight, bd = Art.facing(S.bossFace ?? Math.PI / 2), bMove = S.bossMove;
-    if (flash) c.filter = 'brightness(1.8)';
-    Art.drawSprite(c, Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, bd.v, bMove ? (Math.sin(t * 10) > 0 ? 1 : 2) : 0), x, y - 56 * (BOSS_S - 1), 200 * BOSS_S, bd.flip, 0, flash ? 0.96 : 1);
-    c.filter = 'none';
+    const im = Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, bd.v, bMove ? (Math.sin(t * 10) > 0 ? 1 : 2) : 0);
+    Art.drawSprite(c, im, x, y - 56 * (BOSS_S - 1), 200 * BOSS_S, bd.flip, 0, flash ? 0.96 : 1);
+    // 번쩍임은 캔버스 필터(brightness) 대신 같은 그림을 한 번 더 밝게 얹는다(필터는 휴대폰에서 매우 느리다)
+    if (flash) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.7; Art.drawSprite(c, im, x, y - 56 * (BOSS_S - 1), 200 * BOSS_S, bd.flip, 0, 0.96); c.restore(); }
+  }
+  // 전장 바닥은 판마다 한 번만 그려 두고 찍는다(매 프레임 화면 전체에 그라디언트·무늬·그라디언트를 세 번 덧칠하던 것)
+  let arenaCv = null, arenaKey = '';
+  function arenaFloor(c, a) {
+    const key = a.motif + a.ground + a.sky + qMap() + (Art.img('tex_' + a.motif) ? 1 : 0);
+    if (arenaKey !== key) {
+      arenaKey = key;
+      if (!arenaCv) arenaCv = document.createElement('canvas');
+      const q = qMap(), w = W + OVER.x * 2, h = H + OVER.y * 2;
+      arenaCv.width = Math.round(w * q); arenaCv.height = Math.round(h * q);
+      const x = arenaCv.getContext('2d');
+      x.setTransform(q, 0, 0, q, OVER.x * q, OVER.y * q);
+      const gr = x.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 1300);
+      gr.addColorStop(0, a.ground); gr.addColorStop(1, a.sky);
+      x.fillStyle = gr; x.fillRect(-OVER.x, -OVER.y, w, h);
+      // 바닥이 유닛·장판보다 튀지 않게 채도와 밝기를 낮추고(타일에 미리 구움) 경기장 색을 얇게 덮는다
+      const floor = tilePat(x, 'tex_' + a.motif, 1.2, 'saturate(0.45) brightness(0.62) contrast(0.85)');
+      arenaCv._tex = !!floor;
+      if (floor) {
+        x.fillStyle = floor; x.fillRect(-OVER.x, -OVER.y, w, h);
+        x.fillStyle = gr; x.globalAlpha = 0.4; x.fillRect(-OVER.x, -OVER.y, w, h); x.globalAlpha = 1;
+      }
+    }
+    c.drawImage(arenaCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    return arenaCv._tex;
   }
   function drawArena(t) {
     const c = ctx, f = g.fight, a = f.def.arena, b = f.boss;
-    const gr = c.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 1300);
-    gr.addColorStop(0, a.ground); gr.addColorStop(1, a.sky);
-    c.fillStyle = gr; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
-    // 바닥이 유닛·장판보다 튀지 않게 채도와 밝기를 낮추고(타일에 미리 구움) 경기장 색을 얇게 덮는다
-    const floor = tilePat(c, 'tex_' + a.motif, 1.2, 'saturate(0.45) brightness(0.62) contrast(0.85)');
-    if (floor) {
-      c.fillStyle = floor; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
-      c.fillStyle = gr; c.globalAlpha = 0.4; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); c.globalAlpha = 1;
-    }
-    else drawMotif(c, a.motif, '#f0e0c0', t);
+    if (!arenaFloor(c, a)) drawMotif(c, a.motif, '#f0e0c0', t);
     c.strokeStyle = f.def.fx + '66'; c.lineWidth = 3; c.strokeRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
     f.hazards.forEach((h) => drawHazard(c, h));
     drawRaid(c, t);
@@ -41,13 +58,13 @@
       if (ac) { const a = Math.atan2(b.y - ac.y, b.x - ac.x); hr.ax = Math.cos(a); hr.ay = Math.sin(a); }
       hr.k = Math.min(1.4, hr.k + 0.55 + Math.min(0.6, dmg / (b.mhp * 0.02))); hr.num += dmg;
     }
-    hr.hp = b.hp; hr.k *= 0.8;
-    hr.numT += 1 / 60;
+    hr.hp = b.hp; hr.k *= Math.pow(0.8, S.f60);
+    hr.numT += S.fdt;
     if (hr.num > 0 && hr.numT > 0.14) { if (S.dmg.length < 50) S.dmg.push({ x: b.x + (Math.random() - 0.5) * 70, y: b.y - 96, v: Math.round(hr.num), t: 0, hit: true }); hr.num = 0; hr.numT = 0; }
     let wind = 0;
     f.hazards.forEach((h) => { if (!h.own && h.t < h.delay) wind = Math.max(wind, h.t / Math.max(0.01, h.delay)); });
     if (hr.wind > 0.85 && wind < 0.2) { hr.slam = 1; S.shake = Math.max(S.shake || 0, 0.55); }
-    hr.wind = wind; hr.slam *= 0.86;
+    hr.wind = wind; hr.slam *= Math.pow(0.86, S.f60);
     const wk = Math.pow(wind, 1.5), push = hr.k * 16;
     const bx = b.x + hr.ax * push, by = b.y + hr.ay * push * 0.6 - wk * 18 + hr.slam * 10 - 56 * (BOSS_S - 1);
     const sy = (1 - hr.k * 0.08) * (1 + wk * 0.08) * (1 - hr.slam * 0.1), sc = 200 * BOSS_S * (1 + hr.k * 0.04 + wk * 0.06 + hr.slam * 0.05);
@@ -125,7 +142,7 @@
       if (!o.def) return;
       // 동료 유닛은 위치 변화로 방향을 맞춘다
       const pv = (S.ghostPos = S.ghostPos || {})[o.name] || { x: o.x, y: o.y, moveT: 0, face: Math.PI / 2, def: o.def, id: 1 };
-      if (Math.hypot(o.x - pv.x, o.y - pv.y) > 0.3) { pv.face = Math.atan2(o.y - pv.y, o.x - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - 1 / 60);
+      if (Math.hypot(o.x - pv.x, o.y - pv.y) > 0.3) { pv.face = Math.atan2(o.y - pv.y, o.x - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
       pv.x = o.x; pv.y = o.y; S.ghostPos[o.name] = pv;
       c.globalAlpha = 0.85; piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf(pv, t, CHAMP_R) }); c.globalAlpha = 1;
       bar(c, o.x, o.y - 78, 72, 6, o.hpf, '#7fd4ff');
@@ -160,7 +177,7 @@
       }
       if (M.objs.some((o) => o.k === 'clone')) { c.fillStyle = '#fff'; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.fillText(I.t('clones'), W / 2, 176); }
       if (S.pattern && S.pattern.t > 0) {
-        S.pattern.t -= 1 / 60;
+        S.pattern.t -= S.fdt;
         c.fillStyle = f.def.fx; c.font = '400 38px "Black Han Sans", sans-serif'; c.globalAlpha = Math.min(1, S.pattern.t * 2); c.fillText(S.pattern.name, W / 2, 124); c.globalAlpha = 1;
       }
       c.restore();

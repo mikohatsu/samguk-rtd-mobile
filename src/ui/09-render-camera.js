@@ -1,19 +1,21 @@
   function render(now) {
     const t = now / 1000;
-    S.shake = Math.max(0, (S.shake || 0) - 0.06);
+    // 프레임 간격: 화면 주사율(60·120Hz)이나 렉과 상관없이 연출 속도가 같도록 모든 감쇠·타이머가 이 값을 쓴다
+    const dt = Math.min(0.1, Math.max(0.001, (now - (S.lastNow || now - 16)) / 1000)); S.lastNow = now;
+    S.fdt = dt; S.f60 = dt * 60;
+    S.shake = Math.max(0, (S.shake || 0) - 0.06 * S.f60);
     const sx = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale, sy = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale;
     const ph = g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');
     if (S.camPh !== ph) { S.camPh = ph; resetCam(); }
-    if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) { const ac = g.active(); if (ac) { S.cam.x += (ac.x - S.cam.x) * 0.1; S.cam.y += (ac.y - S.cam.y) * 0.1; } }
+    if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) { const ac = g.active(); if (ac) { const ck = 1 - Math.pow(0.9, S.f60); S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ac.y - S.cam.y) * ck; } }
     applyCam();
     ctx.setTransform(S.scale, 0, 0, S.scale, S.ox + sx, S.oy + sy);
     // 강타 카메라 펀치: 보스 쪽으로 순간 확대했다 돌아온다
-    if (S.punch > 0.02 && g.fight && g.phase === 'boss') { const p = 1 + S.punch * 0.035, fx = g.fight.boss.x, fy = g.fight.boss.y; ctx.translate(fx, fy); ctx.scale(p, p); ctx.translate(-fx, -fy); S.punch *= 0.82; } else S.punch = 0;
+    if (S.punch > 0.02 && g.fight && g.phase === 'boss') { const p = 1 + S.punch * 0.035, fx = g.fight.boss.x, fy = g.fight.boss.y; ctx.translate(fx, fy); ctx.scale(p, p); ctx.translate(-fx, -fy); S.punch *= Math.pow(0.82, S.f60); } else S.punch = 0;
     const watching = viewedPeer();
     if (net) net.setWatch(watching ? watching.id : null);
     if (g.fight && g.phase !== 'wave' && !laneOn()) drawArena(t); else if (watching) drawRemoteLane(t, watching); else drawLane(t);
     drawText(ctx); drawBanner();
-    const dt = Math.min(0.1, (now - (S.lastNow || now)) / 1000); S.lastNow = now;
     drawPop(ctx, t, dt);
   }
   // 화면 배율: 작은 화면(폰)은 1배 그대로 두고 큰 화면만 키운다. 맵은 카메라로 따로 확대한다.
