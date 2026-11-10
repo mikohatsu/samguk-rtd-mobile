@@ -1,4 +1,4 @@
-// 소리 파일 없이 Web Audio로 합성한다. 브라우저 정책상 시작 버튼을 누른 뒤에 켜진다.
+// 무기·타격·스킬 소리는 녹음된 효과음(sfxdata.js), 나머지(알림·북·배경 장단)는 Web Audio 합성. 브라우저 정책상 시작 버튼을 누른 뒤에 켜진다.
 (function (root) {
   let ac = null, master = null, sfxBus = null, bgmBus = null, bgmTimer = null, step = 0, noteIdx = 4, boss = false;
   const last = {}, st = { sfx: 0.6, bgm: 0.35 };
@@ -34,24 +34,58 @@
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(opt.bus || sfxBus); s.start(t, Math.random() * 0.7); s.stop(t + dur + 0.02);
   }
+  // 녹음된 효과음(sfxdata.js, OpenGameArt CC0): 무기 종류별 묶음에서 하나를 골라 높낮이를 조금씩 바꿔 튼다.
+  // 데이터가 없거나 아직 준비 전이면 false를 돌려 아래의 합성음을 쓴다.
+  const bufs = {};
+  function buffers(name) {
+    if (bufs[name]) return bufs[name];
+    const D = root.RTD_SFX_DATA, list = D && D.clips[name];
+    if (!ac || !list) return null;
+    return (bufs[name] = list.map((b64) => {
+      const bin = atob(b64), n = bin.length >> 1, buf = ac.createBuffer(1, n, D.sr), ch = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) { const v = bin.charCodeAt(i * 2) | (bin.charCodeAt(i * 2 + 1) << 8); ch[i] = (v >= 32768 ? v - 65536 : v) / 32768; }
+      return buf;
+    }));
+  }
+  function sample(name, vol, opt) {
+    const list = buffers(name);
+    if (!list || !list.length) return false;
+    opt = opt || {};
+    const t = ac.currentTime + (opt.at || 0), s = ac.createBufferSource(), g = ac.createGain();
+    s.buffer = list[(Math.random() * list.length) | 0];
+    s.playbackRate.value = (opt.rate || 1) * (0.93 + Math.random() * 0.14);
+    g.gain.value = vol;
+    s.connect(g); g.connect(sfxBus); s.start(t);
+    return true;
+  }
+  // 묵직함을 더하는 낮은 '쿵'(큰 무기·타격에 겹친다)
+  const thump = (f, vol, at) => tone(f, 0.12, 'sine', vol, { to: f * 0.45, at: at || 0 });
   const SFX = {
-    bow() { tone(520, 0.08, 'triangle', 0.12, { to: 200 }); noise(0.09, 2600, 0.06); },
-    crossbow() { tone(300, 0.06, 'square', 0.07, { to: 120 }); noise(0.05, 3000, 0.08); },
-    sword() { noise(0.1, 2400, 0.1, { to: 5200 }); tone(1500, 0.05, 'sine', 0.04); },
-    twin() { SFX.sword(); noise(0.08, 3000, 0.08, { at: 0.05, to: 6000 }); },
-    spear() { noise(0.09, 900, 0.12, { to: 2400 }); },
+    // 활·쇠뇌: 시위 튕기는 소리 + 화살 바람 소리
+    bow() { tone(520, 0.08, 'triangle', 0.1, { to: 200 }); if (!sample('bow', 0.55, { rate: 1.15 })) noise(0.09, 2600, 0.06); },
+    crossbow() { tone(300, 0.06, 'square', 0.07, { to: 120 }); if (!sample('bow', 0.6, { rate: 0.9 })) noise(0.05, 3000, 0.08); },
+    // 검: 날카로운 베기
+    sword() { if (!sample('sword', 0.5)) { noise(0.1, 2400, 0.1, { to: 5200 }); tone(1500, 0.05, 'sine', 0.04); } },
+    twin() { SFX.sword(); if (!sample('sword', 0.4, { at: 0.07, rate: 1.12 })) noise(0.08, 3000, 0.08, { at: 0.05, to: 6000 }); },
+    dagger() { if (!sample('dagger', 0.45, { rate: 1.1 })) noise(0.06, 3800, 0.08, { to: 6500 }); },
+    // 창: 찌르는 바람 소리
+    spear() { if (!sample('spear', 0.6, { rate: 1.1 })) noise(0.09, 900, 0.12, { to: 2400 }); },
     lance() { SFX.spear(); },
-    serpent() { noise(0.13, 700, 0.14, { to: 2800 }); },
-    halberd() { noise(0.16, 500, 0.15, { to: 3000 }); tone(220, 0.1, 'triangle', 0.08, { to: 90 }); },
-    guandao() { SFX.halberd(); tone(880, 0.12, 'sine', 0.04); },
-    axe() { noise(0.1, 500, 0.13); tone(150, 0.1, 'triangle', 0.09, { to: 70 }); },
-    mace() { SFX.axe(); },
-    shield() { tone(190, 0.08, 'square', 0.07, { to: 90 }); noise(0.05, 1200, 0.06); },
-    fan() { noise(0.2, 700, 0.09, { to: 1800 }); },
-    thunder() { noise(0.16, 3500, 0.13, { to: 500 }); },
-    flame() { noise(0.18, 500, 0.1, { to: 1400 }); },
-    dagger() { noise(0.06, 3800, 0.08, { to: 6500 }); },
-    staff() { tone(780, 0.12, 'sine', 0.06, { to: 1100 }); },
+    serpent() { if (!sample('spear', 0.65, { rate: 0.9 })) noise(0.13, 700, 0.14, { to: 2800 }); },
+    // 극·언월도: 길고 무거운 베기 + 낮은 울림
+    halberd() { if (!sample('heavy', 0.55)) noise(0.16, 500, 0.15, { to: 3000 }); thump(170, 0.1, 0.04); },
+    guandao() { if (!sample('heavy', 0.6, { rate: 0.9 })) noise(0.16, 500, 0.15, { to: 3000 }); thump(140, 0.13, 0.05); },
+    // 도끼·철퇴: 둔탁한 타격
+    axe() { if (!sample('blunt', 0.6)) noise(0.1, 500, 0.13); thump(150, 0.12); },
+    mace() { if (!sample('blunt', 0.65, { rate: 0.88 })) noise(0.1, 500, 0.13); thump(120, 0.14); },
+    shield() { if (!sample('shield', 0.5)) { tone(190, 0.08, 'square', 0.07, { to: 90 }); noise(0.05, 1200, 0.06); } thump(180, 0.08); },
+    // 책사: 주문 소리(부채는 바람, 벼락은 날카롭게, 불은 낮게)
+    fan() { if (!sample('magic', 0.32, { rate: 1.25 })) noise(0.2, 700, 0.09, { to: 1800 }); },
+    thunder() { if (!sample('magic', 0.34, { rate: 1.5 })) noise(0.16, 3500, 0.13, { to: 500 }); noise(0.1, 3500, 0.06, { to: 600 }); },
+    flame() { if (!sample('magic', 0.34, { rate: 0.8 })) noise(0.18, 500, 0.1, { to: 1400 }); },
+    staff() { if (!sample('magic', 0.3)) tone(780, 0.12, 'sine', 0.06, { to: 1100 }); },
+    // 강타가 꽂힐 때: 쇠 부딪히는 소리 + 낮은 쿵
+    hit() { if (!sample('clash', 0.5)) noise(0.06, 2600, 0.1); thump(110, 0.2); },
     round() { for (let i = 0; i < 3; i++) { tone(90, 0.18, 'sine', 0.3, { at: i * 0.16, to: 50 }); noise(0.05, 300, 0.1, { at: i * 0.16 }); } },
     combine() { [440, 554, 659].forEach((f, i) => tone(f, 0.18, 'triangle', 0.13, { at: i * 0.06 })); },
     craft() { [392, 523, 659, 784].forEach((f, i) => tone(f, 0.3, 'triangle', 0.15, { at: i * 0.08 })); },
@@ -63,7 +97,7 @@
     boom() { noise(0.26, 260, 0.2, { type: 'lowpass', to: 70 }); tone(70, 0.22, 'sine', 0.22, { to: 36 }); },
     hurt() { tone(170, 0.14, 'sawtooth', 0.1, { to: 70 }); },
     dead() { tone(220, 0.5, 'sawtooth', 0.12, { to: 50 }); },
-    skill() { noise(0.28, 900, 0.12, { to: 3400 }); tone(330, 0.3, 'sawtooth', 0.08, { to: 880 }); },
+    skill() { if (!sample('skill', 0.5)) { noise(0.28, 900, 0.12, { to: 3400 }); tone(330, 0.3, 'sawtooth', 0.08, { to: 880 }); } },
     dash() { noise(0.16, 1400, 0.1, { to: 400 }); },
     chest() { [587, 698, 880].forEach((f, i) => tone(f, 0.16, 'square', 0.05, { at: i * 0.05 })); },
     life() { tone(247, 0.25, 'square', 0.1, { to: 165 }); },

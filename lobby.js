@@ -169,6 +169,10 @@
       const i = DIFFS.indexOf(b.dataset.v), open = diffOpen(b.dataset.v, 0);
       b.classList.toggle('lock', !open); b.disabled = !open;
       b.title = open ? '' : L('locked', { a: dname(DIFFS[i - 1]) });
+      // 잠긴 난이도는 무엇을 깨면 열리는지 버튼 안에 글로 보여 준다(터치 화면에서는 title이 안 보인다)
+      let lk = b.querySelector('.lk');
+      if (!open) { if (!lk) { lk = document.createElement('em'); lk.className = 'lk'; b.appendChild(lk); } lk.textContent = '🔒 ' + L('locked', { a: dname(DIFFS[i - 1]) }); }
+      else if (lk) lk.remove();
     });
     const p = prog();
     document.querySelectorAll('#mutlv button[data-v]').forEach((b) => { const n = +b.dataset.v, open = n === 0 || n <= p.nmx + 1; b.disabled = !open; b.title = open ? '' : L('lockedMut', { n: n - 1 }); });

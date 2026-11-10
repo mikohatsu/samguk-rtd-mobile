@@ -38,7 +38,8 @@
     box.addEventListener('pointerdown', (e) => {
       const b = e.target.closest('[data-tut]'); if (!b) return;
       e.preventDefault(); e.stopPropagation();
-      if (b.dataset.tut === 'skip') finish(); else advance();
+      // 건너뛰면 자동 배치를 켜 준다(안 켜면 유닛이 성 안에 서서 아무것도 못 하고 진다)
+      if (b.dataset.tut === 'skip') { const c = ctx; finish(); if (c && c.onSkip) c.onSkip(); } else advance();
     });
   }
   function hide() { if (box) { box.hidden = true; ring.hidden = true; } if (ctx) ctx.S.tutHold = false; shownKey = ''; }

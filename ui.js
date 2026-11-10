@@ -595,7 +595,8 @@
     }
     const sel = new Set(S.sel);
     for (const u of g.units) {
-      const r = (15 + Math.min(u.def.tier, 10) * 0.8) * 1.3;
+      // 라인 유닛 크기(등급이 높을수록 큼). 폰에서 알아보기 쉽게 15% 키웠다(1.3 → 1.5). 정렬 칸 간격(42)은 그대로라 줄 세우면 살짝 겹친다.
+      const r = (15 + Math.min(u.def.tier, 10) * 0.8) * 1.5;
       if (sel.has(u.id)) { c.strokeStyle = '#7dff8e'; c.lineWidth = 2; c.beginPath(); c.ellipse(u.x, u.y + 3, r + 7, r + 4, 0, 0, 7); c.stroke(); }
       const away = g.inFight(u);
       if (away) c.globalAlpha = 0.35;
@@ -1125,10 +1126,12 @@
       c.restore();
     }
   }
+  // 보스전 그림 크기: 장수 반지름(기존 31)과 보스 배율(기존 1). 동작이 잘 보이게 키웠다. 판정(사거리·장판)은 그대로다.
+  const CHAMP_R = 40, BOSS_S = 1.25;
   function drawBossAt(c, x, y, t, flash) {
     const f = g.fight, bd = Art.facing(S.bossFace ?? Math.PI / 2), bMove = S.bossMove;
     if (flash) c.filter = 'brightness(1.8)';
-    Art.drawSprite(c, Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, bd.v, bMove ? (Math.sin(t * 10) > 0 ? 1 : 2) : 0), x, y, 200, bd.flip, 0, flash ? 0.96 : 1);
+    Art.drawSprite(c, Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, bd.v, bMove ? (Math.sin(t * 10) > 0 ? 1 : 2) : 0), x, y - 56 * (BOSS_S - 1), 200 * BOSS_S, bd.flip, 0, flash ? 0.96 : 1);
     c.filter = 'none';
   }
   function drawArena(t) {
@@ -1151,8 +1154,8 @@
     if (!M.hide) {
     if (b.charge) { c.fillStyle = f.def.fx + '55'; c.beginPath(); c.arc(b.x, b.y, 86, 0, 7); c.fill(); }
     if (M.ctr > 0) { c.save(); c.globalAlpha = 0.5 + Math.sin(t * 20) * 0.3; c.fillStyle = '#4aa8ff'; c.beginPath(); c.arc(b.x, b.y, 110, 0, 7); c.fill(); c.restore(); }
-    c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(b.x, b.y + 62, 62, 20, 0, 0, 7); c.fill();
-    c.strokeStyle = f.def.fx; c.lineWidth = 4; c.beginPath(); c.ellipse(b.x, b.y + 62, 62, 20, 0, 0, 7); c.stroke();
+    c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(b.x, b.y + 62, 62 * BOSS_S, 20 * BOSS_S, 0, 0, 7); c.fill();
+    c.strokeStyle = f.def.fx; c.lineWidth = 4; c.beginPath(); c.ellipse(b.x, b.y + 62, 62 * BOSS_S, 20 * BOSS_S, 0, 0, 7); c.stroke();
     // 게임은 1초에 30번 움직이고 화면은 그보다 자주 그려서, 프레임마다 '움직임'만 보면 걷기·서기가 번갈아 덜덜 떨린다.
     // 마지막으로 움직인 뒤 0.15초까지는 걷는 중으로 본다.
     const bdx = b.x - (S.bossX ?? b.x), bdy = b.y - (S.bossY ?? b.y), moved = Math.hypot(bdx, bdy) > 0.3;
@@ -1176,8 +1179,8 @@
     if (hr.wind > 0.85 && wind < 0.2) { hr.slam = 1; S.shake = Math.max(S.shake || 0, 0.55); }
     hr.wind = wind; hr.slam *= 0.86;
     const wk = Math.pow(wind, 1.5), push = hr.k * 16;
-    const bx = b.x + hr.ax * push, by = b.y + hr.ay * push * 0.6 - wk * 18 + hr.slam * 10;
-    const sy = (1 - hr.k * 0.08) * (1 + wk * 0.08) * (1 - hr.slam * 0.1), sc = 200 * (1 + hr.k * 0.04 + wk * 0.06 + hr.slam * 0.05);
+    const bx = b.x + hr.ax * push, by = b.y + hr.ay * push * 0.6 - wk * 18 + hr.slam * 10 - 56 * (BOSS_S - 1);
+    const sy = (1 - hr.k * 0.08) * (1 + wk * 0.08) * (1 - hr.slam * 0.1), sc = 200 * BOSS_S * (1 + hr.k * 0.04 + wk * 0.06 + hr.slam * 0.05);
     const bImg = Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, bd.v, bMove ? (Math.sin(t * 10) > 0 ? 1 : 2) : 0);
     // 힘 모으기: 붉은 기운이 몸에 맺힌다
     if (wk > 0.05) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = wk * 0.5; c.drawImage(glowSprite('w' + f.def.fx, [[0, f.def.fx + 'cc'], [0.6, f.def.fx + '44'], [1, f.def.fx + '00']]), bx - 130, by - 150, 260, 260); c.restore(); }
@@ -1232,20 +1235,20 @@
     f.champs.forEach((u) => {
       if (u.dead || u.bench) return;
       if (u === act) {
-        c.strokeStyle = '#7dff8e'; c.lineWidth = 2; c.beginPath(); c.ellipse(u.x, u.y + 4, 36, 30, 0, 0, 7); c.stroke();
+        c.strokeStyle = '#7dff8e'; c.lineWidth = 2; c.beginPath(); c.ellipse(u.x, u.y + 6, 46, 38, 0, 0, 7); c.stroke();
         c.strokeStyle = 'rgba(125,255,142,.2)'; c.lineWidth = 1; c.beginPath(); c.arc(u.x, u.y, g.range(u.def) + 40, 0, 7); c.stroke();
         if (u.move) { c.strokeStyle = 'rgba(125,255,142,.5)'; c.beginPath(); c.moveTo(u.x, u.y); c.lineTo(u.tx, u.ty); c.stroke(); }
       }
       drawBuffs(c, u, t);
       // 맞으면 보스 반대쪽으로 튕겨 밀린다(그림만, 위치는 그대로)
       const kb = Math.max(0, (u.hurt || 0) / 0.2), ka = Math.atan2(u.y - b.y, u.x - b.x), kx = u.x + Math.cos(ka) * kb * 12, ky = u.y + Math.sin(ka) * kb * 8;
-      if (u.hurt > 0) { c.fillStyle = `rgba(255,60,40,${0.45 * kb})`; c.beginPath(); c.arc(kx, ky, 34, 0, 7); c.fill(); }
+      if (u.hurt > 0) { c.fillStyle = `rgba(255,60,40,${0.45 * kb})`; c.beginPath(); c.arc(kx, ky, 44, 0, 7); c.fill(); }
       // 조각 애니메이션 동작 상태: 공격(atkT 0.24)·스킬(0.36 이상)은 시작할 때의 길이로 구분, 맞으면 피격, 움직이면 걷기
       if ((u.atkT || 0) > (u._atkPrev || 0) + 0.01) u._atkMax = u.atkT;
       u._atkPrev = u.atkT || 0;
       const rs = u.atkT > 0 ? { state: (u._atkMax || 0) >= 0.3 ? 'skill' : 'attack', p: 1 - u.atkT / (u._atkMax || 0.24), t } : kb > 0.05 ? { state: 'hurt', k: kb, t } : { state: u.move || u.moveT > 0 ? 'walk' : 'idle', t };
-      piece(c, kx, ky, 31, u.def, t, u.owner === 1, { pose: poseOf(u, t, 31), rig: rs });
-      bar(c, u.x, u.y - 62, 62, 6, u.hp / u.mhp, u.hp / u.mhp < 0.3 ? '#ff6a50' : '#7ed08c');
+      piece(c, kx, ky, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf(u, t, CHAMP_R), rig: rs });
+      bar(c, u.x, u.y - 80, 76, 7, u.hp / u.mhp, u.hp / u.mhp < 0.3 ? '#ff6a50' : '#7ed08c');
     });
     drawAim(c);
     Object.values(f.ghosts).forEach((o) => {
@@ -1254,9 +1257,9 @@
       const pv = (S.ghostPos = S.ghostPos || {})[o.name] || { x: o.x, y: o.y, moveT: 0, face: Math.PI / 2, def: o.def, id: 1 };
       if (Math.hypot(o.x - pv.x, o.y - pv.y) > 0.3) { pv.face = Math.atan2(o.y - pv.y, o.x - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - 1 / 60);
       pv.x = o.x; pv.y = o.y; S.ghostPos[o.name] = pv;
-      c.globalAlpha = 0.85; piece(c, o.x, o.y, 31, o.def, t, true, { pose: poseOf(pv, t, 31) }); c.globalAlpha = 1;
-      bar(c, o.x, o.y - 60, 58, 5, o.hpf, '#7fd4ff');
-      c.fillStyle = '#d8f0ff'; c.font = '500 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText(o.name || '', o.x, o.y + 40);
+      c.globalAlpha = 0.85; piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf(pv, t, CHAMP_R) }); c.globalAlpha = 1;
+      bar(c, o.x, o.y - 78, 72, 6, o.hpf, '#7fd4ff');
+      c.fillStyle = '#d8f0ff'; c.font = '500 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText(o.name || '', o.x, o.y + 52);
     });
     drawVfx(c);
     drawFx(c);
@@ -2011,7 +2014,7 @@
     if (a === 'tab') { S.tab = arg; S.drawer = arg; }
     else if (a === 'drawer') { if (S.drawer === arg) S.drawer = null; else { S.drawer = arg; S.tab = arg; } }
     else if (a === 'drawerClose') S.drawer = null;
-    else if (a === 'autoAll') { const on = !['t1', 't2', 't3'].every((k) => p.auto[k]); ['t1', 't2', 't3'].forEach((k) => g.setAuto(p, k, on)); toast(on ? t('autoToastOn') : t('autoToastOff'), on ? 'good' : ''); }
+    else if (a === 'autoAll') { const on = !['t1', 't2', 't3'].every((k) => p.auto[k]); ['t1', 't2', 't3'].forEach((k) => g.setAuto(p, k, on)); try { localStorage.setItem('rtd-auto', on ? '1' : '0'); } catch (e) { /* 저장 불가 */ } toast(on ? t('autoToastOn') : t('autoToastOff'), on ? 'good' : ''); }
     else if (a === 'selExp') S.selExp = !S.selExp;
     else if (a === 'langSet') { if (arg !== I.lang) { try { localStorage.setItem('rtd-lang', arg); } catch (e) { /* 저장 불가 */ } toast(I.LANGS.find(([k]) => k === arg)[1] + ' — ' + t('toTitle'), 'good'); } }
     else if (a === 'gfx') { if (Q.level !== arg) { Q.level = arg; applyQuality(); sizeMap(); if (g) fit(); } }
@@ -2859,7 +2862,7 @@
         if (S.dmg.length < 40) S.dmg.push({ x: e.x + (typeof e.v === 'number' && g.phase === 'boss' ? (Math.random() - 0.5) * 90 : 0), y: e.y - (typeof e.v === 'number' && g.phase === 'boss' ? Math.random() * 30 : 0), v: e.v, big: e.big != null ? e.big : g.phase === 'boss', t: 0 });
         // 보스전 강타: 짧게 멈칫(혼자 할 때만 실제로 시간이 멈춤) + 카메라가 순간 다가감
         // 스킬 이름 글자(문자열)는 타격이 아니므로 멈칫하지 않는다(치료·강화 스킬에도 화면이 멈칫하던 문제)
-        if (g.phase === 'boss' && typeof e.v === 'number') { if (!net) S.hitStop = 0.07; S.punch = 1; S.shake = Math.max(S.shake || 0, 0.5); if (navigator.vibrate && e.big !== false) navigator.vibrate(10); }
+        if (g.phase === 'boss' && typeof e.v === 'number') { if (!net) S.hitStop = 0.07; S.punch = 1; S.shake = Math.max(S.shake || 0, 0.5); Snd.play('hit', 90); if (navigator.vibrate && e.big !== false) navigator.vibrate(10); }
       }
       else if (e.type === 'proc') {
         // 패시브 발동: 이름을 크게 띄우고 유닛·대상에 터지는 효과
@@ -2987,7 +2990,12 @@
     Snd.init();
     S.tutHold = false;
     // 첫 오프라인 혼자 하기(이어하기 제외)에서 튜토리얼
-    if (window.RTD_TUT && S.saveOn && !opt.snap) window.RTD_TUT.maybeStart({ get g() { return g; }, S, t: I.t });
+    // 자동 배치(1~3성 자동 합성·정렬)는 기본으로 켠다. 직접 끈 사람은 그 선택을 기억한다('rtd-auto').
+    // 튜토리얼 판은 자동 버튼을 가르치려고 꺼 둔 채 시작하고, 건너뛰면 켠다.
+    const autoOnAll = () => ['t1', 't2', 't3'].forEach((k) => g.setAuto(g.me, k, true));
+    let autoPref = true; try { autoPref = localStorage.getItem('rtd-auto') !== '0'; } catch (e) { /* 저장 불가 */ }
+    const tutOn = !!(window.RTD_TUT && S.saveOn && !opt.snap && window.RTD_TUT.maybeStart({ get g() { return g; }, S, t: I.t, onSkip: () => { autoOnAll(); toast(t('autoToastOn'), 'good'); dirty(); } }));
+    if (!opt.snap && !tutOn && autoPref) autoOnAll();
     window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
     view.focus({ preventScroll: true });
     last = performance.now();
