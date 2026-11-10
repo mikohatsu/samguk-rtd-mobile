@@ -10,3 +10,6 @@ ios/App/App/public/
 # OS
 Thumbs.db
 .DS_Store
+
+# 내려받은 빌드 결과
+dist/
