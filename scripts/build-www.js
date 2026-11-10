@@ -14,7 +14,7 @@ const copyDir = (d) => {
     if (fs.statSync(s).isDirectory()) copyDir(path.join(d, f)); else fs.copyFileSync(s, path.join(out, d, f));
   });
 };
-['gfx', 'fonts'].forEach(copyDir);
+['gfx', 'fonts', 'bgm'].forEach(copyDir);
 // 빠진 스크립트가 없는지: html이 부르는 src가 모두 있어야 한다
 const html = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
 const miss = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]).filter((s) => !/^https?:/.test(s) && !fs.existsSync(path.join(out, s)));

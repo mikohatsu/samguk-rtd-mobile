@@ -307,9 +307,9 @@ async function handle(req, res, url, query) {
 }
 
 // ---------- 정적 파일 ----------
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.json': 'application/json', '.css': 'text/css; charset=utf-8' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.json': 'application/json', '.css': 'text/css; charset=utf-8', '.mp3': 'audio/mpeg' };
 const PAGES = { '/': 'samguk-rtd.html', '/privacy': 'legal/privacy.html', '/terms': 'legal/terms.html' };
-const SAFE = /^\/(samguk-rtd\.html|[a-z0-9-]+\.js|gfx\/[A-Za-z0-9_]+\.(png|jpg|js)|fonts\/[A-Za-z0-9_-]+\.woff2|fonts\/fonts\.css|legal\/[a-z-]+\.html|i18n\/[a-z]{2}\.js)$/;
+const SAFE = /^\/(samguk-rtd\.html|[a-z0-9-]+\.js|gfx\/[A-Za-z0-9_]+\.(png|jpg|js)|fonts\/[A-Za-z0-9_-]+\.woff2|fonts\/fonts\.css|legal\/[a-z-]+\.html|i18n\/[a-z]{2}\.js|bgm\/[a-z_]+\.mp3)$/;
 const fileCache = new Map();
 function load(file, cb) {
   const full = path.join(ROOT, file);
@@ -319,7 +319,7 @@ function load(file, cb) {
     if (hit && hit.mtime === st.mtimeMs) return cb(null, hit);
     fs.readFile(full, (err2, data) => {
       if (err2) return cb(err2);
-      const ent = { mtime: st.mtimeMs, data, gz: /\.(png|jpg|woff2)$/.test(file) ? null : zlib.gzipSync(data), etag: '"' + st.size.toString(36) + '-' + Math.floor(st.mtimeMs).toString(36) + '"' };
+      const ent = { mtime: st.mtimeMs, data, gz: /\.(png|jpg|woff2|mp3)$/.test(file) ? null : zlib.gzipSync(data), etag: '"' + st.size.toString(36) + '-' + Math.floor(st.mtimeMs).toString(36) + '"' };
       fileCache.set(file, ent);
       cb(null, ent);
     });
@@ -335,6 +335,18 @@ const server = http.createServer((req, res) => {
     if (err) { res.writeHead(404); res.end('not found'); return; }
     const head = { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': query && /(^|&)v=/.test(query) ? 'public, max-age=31536000, immutable' : 'no-cache', ETag: ent.etag, Vary: 'Accept-Encoding' };
     if (req.headers['if-none-match'] === ent.etag) { res.writeHead(304, head); res.end(); return; }
+    // 배경음(mp3): 구간 요청(Range)에 답한다. 사파리는 구간 요청이 안 되면 소리를 틀지 않는다.
+    if (/\.mp3$/.test(file)) {
+      head['Accept-Ranges'] = 'bytes';
+      const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || ''), size = ent.data.length;
+      if (m && (m[1] || m[2])) {
+        const a = m[1] ? +m[1] : Math.max(0, size - +m[2]), b = m[1] && m[2] ? Math.min(+m[2], size - 1) : size - 1;
+        if (a > b || a >= size) { res.writeHead(416, { 'Content-Range': `bytes */${size}` }); res.end(); return; }
+        head['Content-Range'] = `bytes ${a}-${b}/${size}`; head['Content-Length'] = b - a + 1;
+        res.writeHead(206, head); res.end(ent.data.subarray(a, b + 1)); return;
+      }
+      head['Content-Length'] = size;
+    }
     if (ent.gz && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) { head['Content-Encoding'] = 'gzip'; res.writeHead(200, head); res.end(ent.gz); return; }
     res.writeHead(200, head); res.end(ent.data);
   });

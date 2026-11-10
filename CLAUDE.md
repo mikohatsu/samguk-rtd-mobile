@@ -11,7 +11,7 @@
 ## 고칠 때
 - **화면 코드는 `src/ui/*.js` 조각을 고친다. `ui.js`는 자동 생성 파일**이다 → 고친 뒤 `npm run ui`.
 - `npm run build` = ui.js 생성 + 앱용 `www/` 복사. 새 js 파일을 만들면 `scripts/build-www.js` 목록과 `samguk-rtd.html`의 script 태그에 추가.
-- 서버가 내주는 파일 규칙: 루트의 `*.js`, `gfx/이름.(png|jpg|js)`(하위 폴더 금지), `fonts/*.woff2`.
+- 서버가 내주는 파일 규칙: 루트의 `*.js`, `gfx/이름.(png|jpg|js)`(하위 폴더 금지), `fonts/*.woff2`, `bgm/이름.mp3`. `server/app.js`를 고치면 VM에서 `sudo systemctl restart rtd-online`.
 - 변경은 git 커밋으로 남긴다(git은 F:\Git\cmd, PATH에 없으면 직접 경로).
 
 ## 파일 지도
@@ -25,7 +25,7 @@
 | `rig.js` | 조각 애니메이션(기존 SD 그림을 몸통·무기로 잘라 움직임). 그림은 `gfx/rig_*` |
 | `art.js` | 스프라이트·이펙트 그림 불러오기(`fxAnim` = 프레임 애니메이션 이펙트 `gfx/fxa_*`) |
 | `skillfx.js` | 스킬 전용 연출 |
-| `audio.js` / `sfxdata.js` | 소리. 무기 효과음은 녹음 샘플(sfxdata.js, `scripts/build-sfx.py`로 생성) |
+| `audio.js` / `sfxdata.js` / `bgm/` | 소리. 배경음은 `bgm/*.mp3`(라인 5곡 섞어 틀기, 보스전 2곡. `scripts/build-bgm.py`), 무기 효과음은 녹음 샘플(sfxdata.js, `scripts/build-sfx.py`) |
 | `lobby.js` | 시작 단계(위저드)·전적·난이도 잠금·스킨 |
 | `net.js` | 협동 통신 |
 | `i18n.js` / `i18n-data.js` | 4개 언어 문구 |

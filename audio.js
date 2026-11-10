@@ -1,11 +1,17 @@
-// 무기·타격·스킬 소리는 녹음된 효과음(sfxdata.js), 나머지(알림·북·배경 장단)는 Web Audio 합성. 브라우저 정책상 시작 버튼을 누른 뒤에 켜진다.
+// 배경음은 녹음된 곡(bgm/*.mp3, Kevin MacLeod CC BY 4.0), 무기·타격·스킬 소리는 녹음된 효과음(sfxdata.js), 알림·북 소리는 Web Audio 합성. 브라우저 정책상 시작 버튼을 누른 뒤에 켜진다.
 (function (root) {
   let ac = null, master = null, sfxBus = null, bgmBus = null, bgmTimer = null, step = 0, noteIdx = 4, boss = false;
   const last = {}, st = { sfx: 0.6, bgm: 0.35 };
   const SCALE = [146.83, 174.61, 196, 220, 261.63, 293.66, 349.23, 392, 440, 523.25]; // 라단조 5음계
 
   function init() {
-    if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+    if (ac) {
+      if (ac.state === 'suspended') ac.resume();
+      // 처음 재생이 막혔으면(자동 재생 제한) 화면을 누를 때 다시 튼다
+      const m = mus[boss ? 'boss' : 'lane'];
+      if (m && m.el.paused && st.bgm > 0 && !hiddenNow) { const pr = m.el.play(); if (pr && pr.catch) pr.catch(() => {}); }
+      return;
+    }
     const AC = root.AudioContext || root.webkitAudioContext;
     if (!AC) return;
     ac = new AC();
@@ -127,11 +133,75 @@
     }
     if (s === 0) tone(SCALE[boss ? 0 : 3] / 2, 1.7, 'sawtooth', 0.035, b);
   }
-  function startBgm() { clearInterval(bgmTimer); bgmTimer = setInterval(beat, boss ? 170 : 270); }
+  // ---- 녹음된 배경음 ----
+  // 라인: 5곡을 섞어 차례로 튼다(한 바퀴 돌 때까지 같은 곡이 다시 나오지 않는다). 보스전: 2곡을 번갈아 튼다.
+  // 보스전이 끝나면 라인 곡은 멈췄던 자리에서 이어진다. 곡 파일을 못 읽으면 예전 합성 장단으로 대신한다.
+  const LIST = { lane: ['lane_shenyang', 'lane_eastminster', 'lane_tearoots', 'lane_opium', 'lane_dragon'], boss: ['boss_lord', 'boss_drums'] };
+  const MUS_GAIN = 1.6, queue = { lane: [], boss: [] }, lastOf = {};
+  let mus = { lane: null, boss: null }, musOk = typeof Audio !== 'undefined';
+  function nextName(kind) {
+    if (!queue[kind].length) {
+      const q = LIST[kind].slice();
+      for (let i = q.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [q[i], q[j]] = [q[j], q[i]]; }
+      if (q.length > 1 && q[0] === lastOf[kind]) q.push(q.shift());
+      queue[kind] = q;
+    }
+    return (lastOf[kind] = queue[kind].shift());
+  }
+  function fade(m, to, sec) {
+    const t = ac.currentTime;
+    m.g.gain.cancelScheduledValues(t); m.g.gain.setValueAtTime(m.g.gain.value, t); m.g.gain.linearRampToValueAtTime(to, t + sec);
+  }
+  function newTrack(kind) {
+    const el = new Audio('bgm/' + nextName(kind) + '.mp3'), g = ac.createGain(), m = { el, g, kind };
+    el.preload = 'auto'; g.gain.value = 0;
+    ac.createMediaElementSource(el).connect(g); g.connect(bgmBus);
+    // 곡이 끝나면 다음 곡으로
+    el.addEventListener('ended', () => { if (mus[kind] === m) { mus[kind] = null; if ((boss ? 'boss' : 'lane') === kind) music(); } });
+    el.addEventListener('error', () => { if (mus[kind] === m) { mus[kind] = null; musOk = false; startBgm(); } });
+    return m;
+  }
+  // 지금 상황(라인/보스전)에 맞는 곡을 틀고, 다른 쪽 곡은 서서히 줄여 멈춘다
+  function music() {
+    if (!ac || !musOk) return false;
+    const kind = boss ? 'boss' : 'lane', other = boss ? 'lane' : 'boss';
+    const o = mus[other];
+    if (o) {
+      fade(o, 0, 0.8);
+      // 보스 곡은 끝내고(다음 보스전은 다른 곡), 라인 곡은 멈춰 두었다가 이어 튼다
+      setTimeout(() => { if (mus[other] !== o || (boss ? 'boss' : 'lane') === other) return; o.el.pause(); if (other === 'boss') { mus.boss = null; o.el.removeAttribute('src'); } }, 900);
+    }
+    let m = mus[kind];
+    if (!m) m = mus[kind] = newTrack(kind);
+    if (st.bgm > 0 && !hiddenNow) { const pr = m.el.play(); if (pr && pr.catch) pr.catch(() => {}); }
+    fade(m, MUS_GAIN, 1.5);
+    return true;
+  }
+  let hiddenNow = false;
+  function startBgm() {
+    clearInterval(bgmTimer); bgmTimer = null;
+    if (music()) return;
+    bgmTimer = setInterval(beat, boss ? 170 : 270);
+  }
+  // 앱을 내리면 소리를 멈추고, 돌아오면 이어 튼다
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
+    hiddenNow = document.hidden;
+    if (!ac) return;
+    const m = mus[boss ? 'boss' : 'lane'];
+    if (hiddenNow) { if (m) m.el.pause(); if (ac.suspend) ac.suspend(); }
+    else { if (ac.resume) ac.resume(); if (m && st.bgm > 0) { const pr = m.el.play(); if (pr && pr.catch) pr.catch(() => {}); } }
+  });
   root.RTD_AUDIO = {
     init, play, state: st,
+    // 지금 나오는 곡(확인용)
+    nowPlaying() { const m = mus[boss ? 'boss' : 'lane']; return m ? { src: m.el.src.split('/').pop(), t: m.el.currentTime, paused: m.el.paused, gain: m.g.gain.value } : null; },
     setBoss(on) { if (boss !== on) { boss = on; if (ac) startBgm(); } },
     setSfx(v) { st.sfx = v; if (sfxBus) sfxBus.gain.value = v; },
-    setBgm(v) { st.bgm = v; if (bgmBus) bgmBus.gain.value = v; },
+    setBgm(v) {
+      st.bgm = v; if (bgmBus) bgmBus.gain.value = v;
+      // 음량 0이면 곡을 멈춰 두고(배터리), 다시 올리면 이어 튼다
+      const m = mus[boss ? 'boss' : 'lane'];
+      if (m) { if (v <= 0) m.el.pause(); else { const pr = m.el.play(); if (pr && pr.catch) pr.catch(() => {}); } }
+    },
   };
 })(typeof window !== 'undefined' ? window : globalThis);
