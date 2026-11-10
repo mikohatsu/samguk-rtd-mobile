@@ -46,7 +46,7 @@
     S.scale = s * B.dpr; S.ox = (B.sw / 2 - c.x * s) * B.dpr; S.oy = (B.sh / 2 - c.y * s) * B.dpr;
   }
   function fit() {
-    const st = $('stage'), sw = st.clientWidth, sh = st.clientHeight, dpr = Math.min((window.devicePixelRatio || 1) * zoom, qDpr());
+    const st = $('stage'), sw = st.clientWidth, sh = st.clientHeight, dpr = Math.min((window.devicePixelRatio || 1) * zoom, qDpr(), Math.sqrt(qPix() / Math.max(1, sw * sh))) * Q.rs;
     view.style.width = sw + 'px'; view.style.height = sh + 'px';
     view.width = Math.round(sw * dpr); view.height = Math.round(sh * dpr);
     const first = !S.base;

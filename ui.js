@@ -11,17 +11,20 @@
     let s = {};
     try { s = JSON.parse(localStorage.getItem('rtd-gfx') || '{}') || {}; } catch (e) { s = {}; }
     const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-    return { level: ['high', 'mid', 'low'].includes(s.level) ? s.level : coarse ? 'mid' : 'high', fps30: !!s.fps30, perf: !!s.perf, coarse };
+    return { level: ['high', 'mid', 'low'].includes(s.level) ? s.level : coarse ? 'mid' : 'high', fps30: !!s.fps30, perf: !!s.perf, coarse, rs: 1 };
   })();
   const qDpr = () => (Q.level === 'high' ? 2 : Q.level === 'mid' ? 1.5 : 1);
+  // 터치 기기는 캔버스 픽셀 수에 상한을 둔다. 태블릿(2560×1600)은 그대로 그리면 400만 픽셀이라 그래픽 칩이 못 따라간다(갤럭시 탭 S6에서 15~25fps).
+  // Q.rs는 그래도 느릴 때 자동으로 내리는 배율(17-loop의 autoRes).
+  const qPix = () => (!Q.coarse ? Infinity : Q.level === 'high' ? 2.0e6 : Q.level === 'mid' ? 1.3e6 : 0.8e6);
   const qPart = () => (Q.level === 'high' ? 1 : Q.level === 'mid' ? 0.6 : 0.35);
   const qMap = () => (Q.level === 'high' ? (Q.coarse ? 0.7 : 1) : Q.level === 'mid' ? 0.55 : 0.4);
   const BLUR = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur');
   // 빛 번짐(shadowBlur)은 iOS에서 특히 무겁다: 보통은 상한을 두고, 낮음은 끈다
   function applyQuality() {
-    if (Q.level === 'high') delete ctx.shadowBlur;
+    if (Q.level === 'high' && !Q.coarse) delete ctx.shadowBlur;
     else {
-      // 휴대폰(터치 기기)은 보통 화질에서도 끈다: 번짐 하나하나가 흐림 연산이라 안드로이드에서 프레임이 크게 떨어진다
+      // 휴대폰·태블릿(터치 기기)은 화질과 상관없이 끈다(높음 포함): 번짐 하나하나가 흐림 연산이라 안드로이드에서 프레임이 크게 떨어진다
       const cap = Q.level === 'mid' && !Q.coarse ? 6 : 0;
       Object.defineProperty(ctx, 'shadowBlur', { configurable: true, get() { return BLUR.get.call(this); }, set(v) { BLUR.set.call(this, Math.min(v, cap)); } });
     }
@@ -1856,7 +1859,7 @@
     S.scale = s * B.dpr; S.ox = (B.sw / 2 - c.x * s) * B.dpr; S.oy = (B.sh / 2 - c.y * s) * B.dpr;
   }
   function fit() {
-    const st = $('stage'), sw = st.clientWidth, sh = st.clientHeight, dpr = Math.min((window.devicePixelRatio || 1) * zoom, qDpr());
+    const st = $('stage'), sw = st.clientWidth, sh = st.clientHeight, dpr = Math.min((window.devicePixelRatio || 1) * zoom, qDpr(), Math.sqrt(qPix() / Math.max(1, sw * sh))) * Q.rs;
     view.style.width = sw + 'px'; view.style.height = sh + 'px';
     view.width = Math.round(sw * dpr); view.height = Math.round(sh * dpr);
     const first = !S.base;
@@ -2058,7 +2061,7 @@
     else if (a === 'autoAll') { const on = !['t1', 't2', 't3'].every((k) => p.auto[k]); ['t1', 't2', 't3'].forEach((k) => g.setAuto(p, k, on)); try { localStorage.setItem('rtd-auto', on ? '1' : '0'); } catch (e) { /* 저장 불가 */ } toast(on ? t('autoToastOn') : t('autoToastOff'), on ? 'good' : ''); }
     else if (a === 'selExp') S.selExp = !S.selExp;
     else if (a === 'langSet') { if (arg !== I.lang) { try { localStorage.setItem('rtd-lang', arg); } catch (e) { /* 저장 불가 */ } toast(I.LANGS.find(([k]) => k === arg)[1] + ' — ' + t('toTitle'), 'good'); } }
-    else if (a === 'gfx') { if (Q.level !== arg) { Q.level = arg; applyQuality(); sizeMap(); if (g) fit(); } }
+    else if (a === 'gfx') { if (Q.level !== arg) { Q.level = arg; Q.rs = 1; applyQuality(); sizeMap(); if (g) fit(); } }
     else if (a === 'fps30') { Q.fps30 = !Q.fps30; applyQuality(); }
     else if (a === 'perf') { Q.perf = !Q.perf; applyQuality(); }
     else if (a === 'credits') { if (window.RTD_CREDITS) window.RTD_CREDITS.open(); }
@@ -2981,8 +2984,11 @@
     else {
       // 보스전은 1배속. 협동 배속은 방장이 정한 값(모두 켰을 때만 2배 이상)을 쓴다.
       acc += dt * (g.phase !== 'wave' ? 1 : net ? net.clock.sp : speed);
+      // 혼자(또는 AI와) 하는 보스전은 계산을 초당 60번으로 한다: 30번이면 조이스틱을 민 뒤 최대 한 프레임 늦게 움직여 굼떠 보인다.
+      // 협동은 서로 같은 간격으로 계산해야 하므로 30번 그대로.
+      const h = !net && g.phase === 'boss' ? 1 / 60 : 1 / 30;
       let n = 0;
-      while (acc >= 1 / 30 && n < 40) { if (hub) hub.flush(); g.step(1 / 30); bots.forEach((b) => b.g.step(1 / 30)); acc -= 1 / 30; n++; }
+      while (acc >= h && n < 40) { if (hub) hub.flush(); g.step(h); bots.forEach((b) => b.g.step(h)); acc -= h; n++; }
       if (acc > 0.3) acc = 0;
     }
     if (net) net.tickStatus(dt, g);
@@ -3008,12 +3014,12 @@
   let lastDraw = 0;
   // 성능 표시(설정에서 켠다): 초당 프레임, 가장 길었던 프레임 간격, 계산·그리기 시간, 화면에 있는 것의 수.
   // 그리기 시간은 명령을 내보내는 데 든 시간이라, 그래픽 칩이 실제로 칠하는 시간은 '프레임'과 '최장'으로 본다.
-  const PF = { n: 0, t0: 0, sim: 0, draw: 0, worst: 0, prev: 0 };
+  const PF = { n: 0, t0: 0, sim: 0, draw: 0, worst: 0, prev: 0, wj: 0 };
   function perfMark(now, p0, p1) {
     const el = $('perf');
     if (!Q.perf) { if (el && !el.hidden) el.hidden = true; return; }
     const p2 = performance.now();
-    PF.n++; PF.sim += p1 - p0; PF.draw += p2 - p1;
+    PF.n++; PF.sim += p1 - p0; PF.draw += p2 - p1; PF.wj = Math.max(PF.wj, p2 - p0); // wj: 한 프레임에서 코드가 쓴 시간의 최댓값
     if (PF.prev) PF.worst = Math.max(PF.worst, now - PF.prev);
     PF.prev = now;
     if (!PF.t0) PF.t0 = now;
@@ -3022,11 +3028,24 @@
     // 글자는 언어와 상관없는 약어: U 유닛, E 적, HZ 장판, FX 연출
     const things = inBoss() && f ? `HZ ${f.hazards.length} · FX ${S.vfx.length + g.fx.length}` : `U ${g.units.length} · E ${g.enemies.length} · FX ${g.fx.length}`;
     el.hidden = false;
-    el.textContent = `${fps.toFixed(0)}fps · max ${PF.worst.toFixed(0)}ms
+    el.textContent = `${fps.toFixed(0)}fps · max ${PF.worst.toFixed(0)}ms (js ${PF.wj.toFixed(0)})
 sim ${(PF.sim / PF.n).toFixed(1)} · draw ${(PF.draw / PF.n).toFixed(1)}ms
 ${things}
-${view.width}×${view.height} · ${Q.level}${bots.length ? ' · AI ' + bots.length : ''}${net && !bots.length ? ' · NET' : ''}`;
-    PF.n = 0; PF.t0 = now; PF.sim = 0; PF.draw = 0; PF.worst = 0;
+${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 100) + "%" : ""}${bots.length ? ' · AI ' + bots.length : ''}${net && !bots.length ? ' · NET' : ''}`;
+    PF.n = 0; PF.t0 = now; PF.sim = 0; PF.draw = 0; PF.worst = 0; PF.wj = 0;
+  }
+  // 자동 해상도: 터치 기기에서 3초 동안 평균 42fps를 못 내면 캔버스 해상도를 20%씩(최저 55%) 낮춘다. 화질을 바꾸면 처음부터 다시 잰다.
+  const AR = { n: 0, t0: 0, prev: 0, bad: false };
+  function autoRes(now) {
+    if (!Q.coarse || Q.fps30 || S.paused) { AR.n = 0; AR.t0 = 0; AR.prev = 0; return; }
+    if (AR.prev && now - AR.prev > 400) AR.bad = true; // 앱 전환·멈춤이 낀 구간은 버린다
+    AR.prev = now;
+    if (!AR.t0) { AR.t0 = now; AR.n = 0; AR.bad = false; return; }
+    AR.n++;
+    if (now - AR.t0 < 3000) return;
+    const avg = (now - AR.t0) / AR.n, bad = AR.bad;
+    AR.t0 = now; AR.n = 0; AR.bad = false;
+    if (!bad && avg > 24 && Q.rs > 0.56) { Q.rs = Math.max(0.55, Q.rs * 0.8); fit(); }
   }
   function loop(now) {
     requestAnimationFrame(loop);
@@ -3040,6 +3059,7 @@ ${view.width}×${view.height} · ${Q.level}${bots.length ? ' · AI ' + bots.leng
     tick(now, 0.1);
     const p1 = Q.perf ? performance.now() : 0;
     render(now);
+    autoRes(now);
     perfMark(now, p0, p1);
     if (S.saveOn && now - (S.saveT || 0) > 10000) { S.saveT = now; saveGame(); }
     if (now - lastDom > 180 || needs) {

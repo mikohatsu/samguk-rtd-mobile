@@ -10,17 +10,20 @@
     let s = {};
     try { s = JSON.parse(localStorage.getItem('rtd-gfx') || '{}') || {}; } catch (e) { s = {}; }
     const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-    return { level: ['high', 'mid', 'low'].includes(s.level) ? s.level : coarse ? 'mid' : 'high', fps30: !!s.fps30, perf: !!s.perf, coarse };
+    return { level: ['high', 'mid', 'low'].includes(s.level) ? s.level : coarse ? 'mid' : 'high', fps30: !!s.fps30, perf: !!s.perf, coarse, rs: 1 };
   })();
   const qDpr = () => (Q.level === 'high' ? 2 : Q.level === 'mid' ? 1.5 : 1);
+  // 터치 기기는 캔버스 픽셀 수에 상한을 둔다. 태블릿(2560×1600)은 그대로 그리면 400만 픽셀이라 그래픽 칩이 못 따라간다(갤럭시 탭 S6에서 15~25fps).
+  // Q.rs는 그래도 느릴 때 자동으로 내리는 배율(17-loop의 autoRes).
+  const qPix = () => (!Q.coarse ? Infinity : Q.level === 'high' ? 2.0e6 : Q.level === 'mid' ? 1.3e6 : 0.8e6);
   const qPart = () => (Q.level === 'high' ? 1 : Q.level === 'mid' ? 0.6 : 0.35);
   const qMap = () => (Q.level === 'high' ? (Q.coarse ? 0.7 : 1) : Q.level === 'mid' ? 0.55 : 0.4);
   const BLUR = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur');
   // 빛 번짐(shadowBlur)은 iOS에서 특히 무겁다: 보통은 상한을 두고, 낮음은 끈다
   function applyQuality() {
-    if (Q.level === 'high') delete ctx.shadowBlur;
+    if (Q.level === 'high' && !Q.coarse) delete ctx.shadowBlur;
     else {
-      // 휴대폰(터치 기기)은 보통 화질에서도 끈다: 번짐 하나하나가 흐림 연산이라 안드로이드에서 프레임이 크게 떨어진다
+      // 휴대폰·태블릿(터치 기기)은 화질과 상관없이 끈다(높음 포함): 번짐 하나하나가 흐림 연산이라 안드로이드에서 프레임이 크게 떨어진다
       const cap = Q.level === 'mid' && !Q.coarse ? 6 : 0;
       Object.defineProperty(ctx, 'shadowBlur', { configurable: true, get() { return BLUR.get.call(this); }, set(v) { BLUR.set.call(this, Math.min(v, cap)); } });
     }

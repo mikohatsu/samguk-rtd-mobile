@@ -677,9 +677,9 @@
         const J = this.laneJoy;
         if (J && u.owner === this.me.idx && J.ids.has(u.id)) {
           const jm = Math.hypot(J.x, J.y);
-          if (jm > 0.18) {
+          if (jm > 0.1) {
             u.slot = null; u.order = { t: 'hold' }; u.target = null;
-            const s = speed * Math.min(1, jm) * dt;
+            const s = speed * Math.min(1, jm / 0.5) * dt;
             u.x = clamp(u.x + (J.x / jm) * s, INNER.x0, INNER.x1); u.y = clamp(u.y + (J.y / jm) * s, INNER.y0, INNER.y1);
             u.face = Math.atan2(J.y, J.x); u.moveT = 0.12;
             continue;
@@ -1375,9 +1375,9 @@
       let joyMove = false;
       if (man && c.joy) {
         const jm = Math.hypot(c.joy.x, c.joy.y);
-        if (jm > 0.18) {
+        if (jm > 0.1) {
           joyMove = true; c.move = false; c.chase = false;
-          const s = speed * Math.min(1, jm) * dt;
+          const s = speed * Math.min(1, jm / 0.5) * dt; // 절반만 밀어도 최고 속도(끝까지 밀어야 빨라지면 굼뜨게 느껴진다)
           c.x = clamp(c.x + (c.joy.x / jm) * s, ARENA.x0, ARENA.x1); c.y = clamp(c.y + (c.joy.y / jm) * s, ARENA.y0, ARENA.y1);
           c.face = Math.atan2(c.joy.y, c.joy.x); c.moveT = 0.12;
         }
