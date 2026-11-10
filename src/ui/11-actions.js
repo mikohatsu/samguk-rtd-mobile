@@ -11,6 +11,7 @@
     else if (a === 'gfx') { if (Q.level !== arg) { Q.level = arg; applyQuality(); sizeMap(); if (g) fit(); } }
     else if (a === 'fps30') { Q.fps30 = !Q.fps30; applyQuality(); }
     else if (a === 'perf') { Q.perf = !Q.perf; applyQuality(); }
+    else if (a === 'credits') { if (window.RTD_CREDITS) window.RTD_CREDITS.open(); }
     else if (a === 'desel') { setSel([]); S.dropSel = null; S.rsel = null; setMode(null); }
     else if (a === 'amove') { if (inBoss() || S.sel.length) setMode('amove'); }
     else if (a === 'modeMove') { if (inBoss() || S.sel.length) setMode('move'); }

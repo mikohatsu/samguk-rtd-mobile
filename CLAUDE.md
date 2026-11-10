@@ -30,6 +30,7 @@
 | `net.js` | 협동 통신 |
 | `i18n.js` / `i18n-data.js` | 4개 언어 문구 |
 | `tutorial.js` | 첫 판 안내 |
+| `credits.js` / `CREDITS.md` | 크레딧·라이선스 화면(설정 > 크레딧)과 출처 목록. 에셋을 더하거나 빼면 둘 다 고친다 |
 | `native.js` | 앱 전용(광고·ATT·로그인) |
 | `server/` | 온라인 서버(Node, PostgreSQL). VM rtd-online의 /opt/rtd-online |
 | `ios/` | Xcode 프로젝트(Capacitor). 출시 절차는 MAC_HANDOFF.md |
