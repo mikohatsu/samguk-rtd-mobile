@@ -3,6 +3,7 @@
     // 프레임 간격: 화면 주사율(60·120Hz)이나 렉과 상관없이 연출 속도가 같도록 모든 감쇠·타이머가 이 값을 쓴다
     const dt = Math.min(0.1, Math.max(0.001, (now - (S.lastNow || now - 16)) / 1000)); S.lastNow = now;
     S.fdt = dt; S.f60 = dt * 60;
+    S.auraPrev = S.auraN || 0; S.auraN = 0;
     S.shake = Math.max(0, (S.shake || 0) - 0.06 * S.f60);
     const sx = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale, sy = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale;
     const ph = g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');

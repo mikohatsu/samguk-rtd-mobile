@@ -1372,18 +1372,23 @@
       // 공격 버튼을 누르는데 사거리 밖이면 다가가서 때린다. 조이스틱을 움직이는 동안은 이동이 먼저다.
       const man = this.manual && selected && !c.ai;
       if (c.atkHold > 0) c.atkHold -= dt;
+      if (c.atkLock > 0) c.atkLock -= dt;
+      // 이동 중 공격 보정: 조이스틱을 밀고 있어도 공격 버튼을 눌렀고 사거리 안이며 칠 수 있으면, 잠깐 멈춰 치고 다시 조이스틱대로 움직인다.
+      const joyHeld = man && c.joy && Math.hypot(c.joy.x, c.joy.y) > 0.1;
+      const wantHit = man && c.atkHold > 0 && fo && c.cd <= 0 && d <= rng + 40 + (fo === b ? 0 : fo.r);
       let joyMove = false;
-      if (man && c.joy) {
+      if (joyHeld && !wantHit && !(c.atkLock > 0)) {
         const jm = Math.hypot(c.joy.x, c.joy.y);
-        if (jm > 0.1) {
+        {
           joyMove = true; c.move = false; c.chase = false;
           const s = speed * Math.min(1, jm / 0.5) * dt; // 절반만 밀어도 최고 속도(끝까지 밀어야 빨라지면 굼뜨게 느껴진다)
           c.x = clamp(c.x + (c.joy.x / jm) * s, ARENA.x0, ARENA.x1); c.y = clamp(c.y + (c.joy.y / jm) * s, ARENA.y0, ARENA.y1);
           c.face = Math.atan2(c.joy.y, c.joy.x); c.moveT = 0.12;
         }
       }
-      if (man && !joyMove && c.atkHold > 0 && fo && d > rng + 30) { c.tx = fo.x; c.ty = fo.y; c.move = true; c.chase = false; }
-      else if (man && !joyMove && c.atkHold > 0 && fo && c.move && !c.chase) c.move = false;
+      if (joyHeld) { c.move = false; c.chase = false; } // 조이스틱을 쥐고 있는 동안은 자동으로 다가가지 않는다
+      else if (man && c.atkHold > 0 && fo && d > rng + 30) { c.tx = fo.x; c.ty = fo.y; c.move = true; c.chase = false; }
+      else if (man && c.atkHold > 0 && fo && c.move && !c.chase) c.move = false;
       if (c.chase && selected && !c.ai && fo) { if (d > rng * 0.9) { c.tx = fo.x; c.ty = fo.y; c.move = true; } else c.move = false; }
       if (c.move) {
         const m = dist(c.x, c.y, c.tx, c.ty);
@@ -1392,6 +1397,7 @@
       }
       if (fo && !c.move && !joyMove && (!man || c.atkHold > 0) && d <= rng + 40 + (fo === b ? 0 : fo.r) && c.cd <= 0) {
         c.cd = this.attackTime(c.def) * (1 - Math.min(0.6, this.pv(c.def, 'haste'))) / (1 + this.hasteOf(c.owner, c.def) + (c.hasteT > 0 ? c.hasteV : 0)); c.atkT = 0.24;
+        if (man) c.atkLock = Math.min(0.16, c.cd * 0.5); // 치는 동작 동안 발을 멈춘다
         const { mult, big, procs } = this.rollHit(c.def, c), atk = this.champAtk(c);
         this.hitFoe(fo, atk * mult, c);
         const ls = this.pv(c.def, 'lifesteal'); if (ls && fo === b) c.hp = Math.min(c.mhp, c.hp + c.mhp * ls);

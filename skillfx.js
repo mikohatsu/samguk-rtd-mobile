@@ -2,6 +2,8 @@
 // 스킬마다 이름에 맞는 연출(vx)을 theme-samguk.js에서 붙인다. 그림이 아직 안 받아졌으면 false를 돌려 기존 연출로 그린다.
 (function (root) {
   const KN = {}, TINT = {};
+  const COARSE = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+  const TMAX = COARSE ? 160 : 256, TINT_MAX = 90; let tintN = 0;
   const NAMES = ('circle_01 circle_02 circle_03 circle_05 light_01 light_02 light_03 magic_01 magic_02 magic_03 magic_04 magic_05 twirl_01 twirl_02 twirl_03 '
     + 'smoke_04 smoke_07 smoke_09 smoke_10 spark_01 spark_02 spark_05 spark_06 spark_07 slash_01 slash_03 slash_04 flame_01 flame_03 flame_05 flame_06 scratch_01 '
     + 'dirt_01 dirt_03 fire_01 fire_02 flare_01 muzzle_01 muzzle_02 muzzle_04 scorch_01 scorch_02 star_01 star_02 star_04 star_06 star_07 star_08 star_09 symbol_01 '
@@ -15,10 +17,14 @@
   if (typeof document !== 'undefined') NAMES.forEach(img);
   // 흰 그림을 색으로 물들인 캔버스(색마다 한 번만 만든다)
   function tint(n, col) {
-    const k = n + col; if (TINT[k]) return TINT[k];
+    const k = n + col; if (TINT[k]) { const hit = TINT[k]; delete TINT[k]; TINT[k] = hit; return hit; } // 다시 넣어 최근 것으로
     const im = img(n); if (!im) return null;
-    const cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height;
-    const x = cv.getContext('2d'); x.drawImage(im, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, cv.width, cv.height);
+    // 색마다 원본 크기로 저장하면 한 장에 1MB씩 끝없이 쌓여(스킬 색 × 입자 종류) 판이 길어질수록 그래픽 메모리가 차고 느려진다.
+    // 화면에는 작게 그려지므로 줄여서 저장하고, 오래 안 쓴 것은 버린다.
+    const s = Math.min(1, TMAX / Math.max(im.width, im.height));
+    const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(im.width * s)); cv.height = Math.max(1, Math.round(im.height * s));
+    const x = cv.getContext('2d'); x.drawImage(im, 0, 0, cv.width, cv.height); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, cv.width, cv.height);
+    if (++tintN > TINT_MAX) { const old = Object.keys(TINT)[0]; TINT[old].width = TINT[old].height = 0; delete TINT[old]; tintN--; }
     return (TINT[k] = cv);
   }
   // 가운데 기준으로 그린다. col이 없으면 흰색 그대로, add면 빛처럼 더한다, sy는 바닥에 눕히는 납작함
@@ -313,21 +319,25 @@
   }
 
   // ---- 6성 이상 후광 ----
-  function tierAura(c, x, y, r, tier, col, t, seed, low) {
+  // lod: 2 전부 · 1 떠다니는 별 생략 · 0 바닥 빛과 법진 하나만(후광 유닛이 많을 때. 유닛마다 최대 19번 더하기 합성을 하던 것이 2~3번이 된다)
+  function tierAura(c, x, y, r, tier, col, t, seed, low, lod) {
+    if (lod == null) lod = 2;
+    if (low) lod = Math.min(lod, 1);
     if (!ready(['light_02', 'magic_02', 'magic_01', 'twirl_01', 'trace_06', 'flare_01', 'star_04', 'magic_03'])) return false;
     const fy = y + r * 0.72, pulse = 1 + Math.sin(t * 3 + seed) * 0.08;
     spr(c, 'light_02', col, x, fy, r * (tier >= 9 ? 4.4 : tier >= 8 ? 3.8 : 3.2) * pulse, r * 3.2 * pulse, t * 0.4, tier >= 8 ? 0.7 : 0.55, true, 0.45);
     if (tier >= 7) spr(c, 'magic_02', col, x, fy, r * 3, r * 3, t * 0.9, 0.75, true, 0.42);
+    if (lod === 0) { if (tier >= 10) spr(c, 'trace_06', col, x, y - r * 1.2, r * 2.2, r * 5, 0, 0.6); return true; }
     if (tier >= 8) {
       spr(c, 'twirl_01', col, x, y, r * 3, r * 3, t * 2.2, 0.6);
-      if (!low) for (let i = 0; i < (tier >= 10 ? 6 : 4); i++) {
+      if (lod >= 2) for (let i = 0; i < (tier >= 10 ? 6 : 4); i++) {
         const k = (t * 0.6 + i / 4 + seed) % 1, px = x + Math.sin(i * 2.3 + seed) * r * 0.9;
         spr(c, 'star_04', i % 2 ? '#ffffff' : col, px, fy - k * r * 2.6, 16, 16, 0, 1 - k);
       }
     }
     if (tier >= 9) {
       spr(c, 'magic_01', col, x, fy, r * 4, r * 4, -t * 0.6, 0.7, true, 0.42);
-      if (!low) for (let i = 0; i < (tier >= 10 ? 6 : 4); i++) {
+      if (lod >= 2) for (let i = 0; i < (tier >= 10 ? 6 : 4); i++) {
         const a = -t * 1.6 + (i * Math.PI * 2) / (tier >= 10 ? 6 : 4), rr = r * 1.9;
         spr(c, 'star_04', i % 2 ? '#ffffff' : col, x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.6, 22, 22, 0, 0.95);
       }

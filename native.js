@@ -73,6 +73,13 @@
     }, true);
   }
 
+  // 화면 꺼짐 방지: 앱은 네이티브 쪽(MainActivity·AppDelegate)에서 막는다. 브라우저에서는 Wake Lock을 쓴다(지원하는 브라우저만, 화면을 누른 뒤부터).
+  if (!on && typeof navigator !== 'undefined' && navigator.wakeLock && typeof document !== 'undefined') {
+    let lock = null;
+    const keep = () => { if (lock || document.visibilityState !== 'visible') return; navigator.wakeLock.request('screen').then((l) => { lock = l; l.addEventListener('release', () => { lock = null; }); }).catch(() => {}); };
+    document.addEventListener('pointerdown', keep, { passive: true });
+    document.addEventListener('visibilitychange', keep);
+  }
   root.RTD_NATIVE = { on, init, interstitial, openUrl, signIn, signOut };
   if (on) init();
 })(typeof window !== 'undefined' ? window : globalThis);

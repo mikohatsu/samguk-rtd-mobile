@@ -7,7 +7,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // 게임 중에는 화면을 만지지 않아도 화면이 꺼지지 않게 한다
+        application.isIdleTimerDisabled = true
         return true
     }
 

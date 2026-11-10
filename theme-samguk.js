@@ -511,7 +511,7 @@
     form('f_bow', '궁노 사수대', { arc: 3, hayeon: 1, hwangchung: 1 }, { tickets: [[3, 2]] }),
     form('f_cav', '철기 돌격대', { cav: 3, gongson: 1, macho: 1 }, { tickets: [[4, 1]] }),
     form('f_shield', '방패 철벽진', { shd: 3, yujin: 1, seohwang: 1 }, { tickets: [[3, 2]] }),
-    form('f_sword', '검술 결사대', { swd: 3, jutae: 1, neungtong: 1 }, { tickets: [[2, 2], [3, 1]] }),
+    form('f_sword', '검술 결사대', { swd: 3, jutae: 1, neungtong: 1 }, { tickets: [[2, 2]] }),
     form('f_spear', '장창 방진', { spr: 3, janghap: 1, wiyeon: 1 }, { tickets: [[3, 2]] }),
     form('f_hebei', '하북 대군', { hwawoong: 2, anryang: 1, munchu: 1, wonso: 1 }, { tickets: [[4, 1]] }),
     form('f_wuarmy', '강동 수군', { jutae: 2, neungtong: 1, hwanggae: 1, nosuk: 1 }, { tickets: [[4, 1]] }),

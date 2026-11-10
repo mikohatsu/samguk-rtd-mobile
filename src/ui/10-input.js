@@ -65,7 +65,7 @@
       return;
     }
     const f = g.phase === 'wave' ? flagAt(m) : null;
-    if (f) { showFlag(f, e); setTimeout(() => showFlag(null), 2600); return; }
+    if (f) { showFlag(f, e); return; } // 다른 곳을 누를 때까지 띄워 둔다(아래 pointerdown에서 닫는다)
     // 빈 곳: 고른 게 있으면 그리로 '공격하며 이동'(가는 길에 사거리 안의 적이 있으면 멈춰서 때린다), 없으면 아무것도 안 함
     // 터치: 유닛은 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
     if (S.dropSel && !S.sel.length) rightClick(m, 'amove');
@@ -139,6 +139,8 @@
     if (S.drag) { S.drag.x1 = m.x; S.drag.y1 = m.y; if (dist(S.drag.x0, S.drag.y0, m.x, m.y) > 10) S.drag.moved = true; }
   });
   view.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') $('achpop').hidden = true; });
+  // 터치로 띄운 업적 설명은 화면 어디든 다시 누르면 닫힌다(같은 깃발이나 다른 깃발을 누르면 손을 뗄 때 다시 뜬다)
+  document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' && !$('achpop').hidden) $('achpop').hidden = true; }, true);
   const endPtr = (e) => {
     ptrs.delete(e.pointerId);
     if (pinch) { if (ptrs.size < 2) { pinch = null; cancelTouch(); } return; }

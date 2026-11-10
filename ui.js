@@ -253,12 +253,26 @@
     const s = (u.def.sk || []).find((x) => (k === 'buff' ? x.k === 'buff' : k === 'taunt' ? x.k === 'taunt' : x.k === 'shield'));
     return s ? s.dur : 0;
   }
+  // 발밑 원판은 색·굵기별로 한 번 그려 두고 찍는다(유닛마다 매 프레임 타원을 채우고 테두리를 긋던 것)
+  const DISC = {};
+  function discSprite(col, thick) {
+    const key = col + (thick ? 't' : '');
+    if (DISC[key]) return DISC[key];
+    const cv = document.createElement('canvas'); cv.width = 100; cv.height = 48;
+    const x = cv.getContext('2d');
+    x.fillStyle = col; x.globalAlpha = 0.72; x.beginPath(); x.ellipse(50, 24, 46, 20.3, 0, 0, 7); x.fill();
+    x.globalAlpha = 1; x.strokeStyle = 'rgba(20,12,6,.75)'; x.lineWidth = thick ? 3.8 : 1.9; x.stroke();
+    return (DISC[key] = cv);
+  }
   function piece(c, x, y, r, d, t, ownerAI, opt) {
     const tier = d.tier, col = tierColor(tier), seed = (x * 7 + y * 13) % 6.28;
     opt = opt || {};
     // 등급 후광: 6성부터. 등급이 오를 때마다 한 단계씩 더해진다.
     // 6성 은은한 빛 → 7성 발밑 회전 고리 → 전설 회전 호와 오르는 불티 → 신화 바닥 법진과 궤도 구슬 → 불멸 빛기둥과 이중 고리
-    const kAura = tier >= 6 && window.RTD_SKFX && window.RTD_SKFX.tierAura(c, x, y, r, tier, col, t, seed, Q.level === 'low');
+    // 후광 유닛이 많아질수록(판 후반) 유닛마다 덧그리는 빛을 줄인다: 지난 프레임에 그린 후광 수로 단계를 정한다
+    let lod = 2;
+    if (tier >= 6) { S.auraN = (S.auraN || 0) + 1; const n = S.auraPrev || 0; lod = n <= (Q.coarse ? 4 : 10) ? 2 : n <= (Q.coarse ? 10 : 22) ? 1 : 0; }
+    const kAura = tier >= 6 && window.RTD_SKFX && window.RTD_SKFX.tierAura(c, x, y, r, tier, col, t, seed, Q.level === 'low', lod);
     if (tier >= 6 && !kAura) {
       const pulse = 1 + Math.sin(t * 3 + seed) * 0.1, big = tier >= 9 ? 2.5 : tier >= 8 ? 2.1 : tier >= 7 ? 1.9 : 1.6;
       const a0 = tier >= 8 ? 'aa' : '88', R = r * big * pulse;
@@ -294,8 +308,7 @@
       c.beginPath(); c.ellipse(x, y + r * 0.72, r * 1.7, r * 0.78, 0, 0, 7); c.stroke(); c.restore();
     }
     // 발밑 원판: 등급 색으로 멀리서도 구별된다
-    c.fillStyle = col; c.globalAlpha = 0.72; c.beginPath(); c.ellipse(x, y + r * 0.72, r * 0.95, r * 0.42, 0, 0, 7); c.fill(); c.globalAlpha = 1;
-    c.strokeStyle = 'rgba(20,12,6,.75)'; c.lineWidth = tier >= 6 ? 2.4 : 1.2; c.stroke();
+    { const sp = discSprite(col, tier >= 6), k = (r * 0.95) / 46; c.drawImage(sp, x - 50 * k, y + r * 0.72 - 24 * k, 100 * k, 48 * k); }
     const p = opt.pose || { x: 0, y: 0 };
     if (p.cast) Art.fxImg(c, 'magic', x, y + r * 0.7, r * 2.6 * (0.7 + p.cast * 0.4), t * 2, p.cast, 0.45);
     // 조각 애니메이션이 있는 장수는 조각으로 그린다(동작 상태는 보스전이 넘겨 주고, 라인에서는 옆모습일 때만 걷기·대기 + 기존 자세 흔들림)
@@ -1836,6 +1849,7 @@
     // 프레임 간격: 화면 주사율(60·120Hz)이나 렉과 상관없이 연출 속도가 같도록 모든 감쇠·타이머가 이 값을 쓴다
     const dt = Math.min(0.1, Math.max(0.001, (now - (S.lastNow || now - 16)) / 1000)); S.lastNow = now;
     S.fdt = dt; S.f60 = dt * 60;
+    S.auraPrev = S.auraN || 0; S.auraN = 0;
     S.shake = Math.max(0, (S.shake || 0) - 0.06 * S.f60);
     const sx = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale, sy = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale;
     const ph = g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');
@@ -1956,7 +1970,7 @@
       return;
     }
     const f = g.phase === 'wave' ? flagAt(m) : null;
-    if (f) { showFlag(f, e); setTimeout(() => showFlag(null), 2600); return; }
+    if (f) { showFlag(f, e); return; } // 다른 곳을 누를 때까지 띄워 둔다(아래 pointerdown에서 닫는다)
     // 빈 곳: 고른 게 있으면 그리로 '공격하며 이동'(가는 길에 사거리 안의 적이 있으면 멈춰서 때린다), 없으면 아무것도 안 함
     // 터치: 유닛은 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
     if (S.dropSel && !S.sel.length) rightClick(m, 'amove');
@@ -2030,6 +2044,8 @@
     if (S.drag) { S.drag.x1 = m.x; S.drag.y1 = m.y; if (dist(S.drag.x0, S.drag.y0, m.x, m.y) > 10) S.drag.moved = true; }
   });
   view.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') $('achpop').hidden = true; });
+  // 터치로 띄운 업적 설명은 화면 어디든 다시 누르면 닫힌다(같은 깃발이나 다른 깃발을 누르면 손을 뗄 때 다시 뜬다)
+  document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' && !$('achpop').hidden) $('achpop').hidden = true; }, true);
   const endPtr = (e) => {
     ptrs.delete(e.pointerId);
     if (pinch) { if (ptrs.size < 2) { pinch = null; cancelTouch(); } return; }
