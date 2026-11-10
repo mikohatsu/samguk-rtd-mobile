@@ -1,0 +1,106 @@
+  // ---- 메인 루프 ----
+  let last = 0, acc = 0, hub = null, bots = [];
+  function saveGame() {
+    if (!S.saveOn || !g || g.over) return;
+    const s = g.snapshot();
+    if (s) { try { localStorage.setItem('rtd-save', JSON.stringify(s)); } catch (e) { /* 저장 공간 없음 */ } }
+  }
+  function lifeOffline() { return !net || net.t.kind === 'hub'; }
+  document.addEventListener('visibilitychange', () => {
+    if (!g || g.over) return;
+    if (document.hidden) { S.hiddenAt = Date.now(); if (lifeOffline()) S.paused = true; saveGame(); }
+    else {
+      if (!lifeOffline() && S.hiddenAt && Date.now() - S.hiddenAt > 60000) { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
+      S.hiddenAt = 0; last = performance.now(); dirty();
+    }
+  });
+  function tick(now, cap) {
+    if (S.paused || S.tutHold) { last = now; acc = 0; return; } // 튜토리얼 설명 중에도 멈춘다
+    padTick();
+    const dt = Math.min(cap, (now - last) / 1000); last = now;
+    // 신화·불멸 컷신 동안은 시간이 멈추고, 보스전은 항상 1배속이다
+    const held = net && (net.clock.pz || net.kicked);
+    if (S.freeze > 0) { S.freeze -= dt; acc = 0; }
+    else if (S.hitStop > 0) { S.hitStop -= dt; acc = 0; } // 강타 히트스톱(혼자 할 때만)
+    else if (held) acc = 0;
+    else {
+      // 보스전은 1배속. 협동 배속은 방장이 정한 값(모두 켰을 때만 2배 이상)을 쓴다.
+      acc += dt * (g.phase !== 'wave' ? 1 : net ? net.clock.sp : speed);
+      let n = 0;
+      while (acc >= 1 / 30 && n < 40) { if (hub) hub.flush(); g.step(1 / 30); bots.forEach((b) => b.g.step(1 / 30)); acc -= 1 / 30; n++; }
+      if (acc > 0.3) acc = 0;
+    }
+    if (net) net.tickStatus(dt, g);
+    bots.forEach((b) => {
+      b.net.speedWant = net.speedWant;
+      b.net.tickStatus(dt, b.g);
+      if (!held && !(S.freeze > 0)) b.brain.update(dt);
+      // AI도 사람처럼 높은 등급 등장을 알린다. 남에게서 받은 알림(remote)을 다시 보내면 AI끼리 끝없이 주고받아 멈추므로 자기 것만 보낸다.
+      b.g.events.forEach((e) => { if (e.type === 'pop' && !e.remote) b.net.send('pop', { id: e.def.id, name: b.net.name }); });
+      b.g.events.length = 0;
+    });
+    if (hub) hub.flush();
+    drainEvents();
+  }
+  // 협동 중에는 탭이 뒤로 가도 시뮬레이션이 멈추면 안 된다
+  // 협동 중에는 탭이 뒤로 가도 멈추지 않게 워커 타이머로 돌린다(백그라운드 타이머 제한을 받지 않는다)
+  try {
+    const tw = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 100)'], { type: 'text/javascript' })));
+    tw.onmessage = () => { if (g && g.mode === 'multi' && performance.now() - last > 150) tick(performance.now(), 0.5); };
+  } catch (e) {
+    setInterval(() => { if (g && g.mode === 'multi' && performance.now() - last > 240) tick(performance.now(), 1); }, 250);
+  }
+  let lastDraw = 0;
+  function loop(now) {
+    requestAnimationFrame(loop);
+    if (!g) return;
+    // 30fps 제한: 배터리·발열용. 시뮬레이션은 흐른 시간만큼 따라잡는다.
+    if (Q.fps30 && now - lastDraw < 30) return;
+    lastDraw = now;
+    tick(now, 0.1);
+    render(now);
+    if (S.saveOn && now - (S.saveT || 0) > 10000) { S.saveT = now; saveGame(); }
+    if (now - lastDom > 180 || needs) {
+      lastDom = now; needs = false;
+      renderPane(); renderInfo(); renderTimers(); renderOverlay();
+    }
+  }
+  function begin(opt) {
+    if (window.RTD_LOBBY) window.RTD_LOBBY.close();
+    $('title').hidden = true; $('title').style.display = 'none';
+    I.applyDom($('app'));
+    $('app').hidden = false;
+    fit();
+    // AI 동맹: 나와 AI 사령관들을 가상 방에 넣고, AI마다 자기 라인을 따로 돌린다(방 협동과 같은 규칙)
+    if (opt.ai) {
+      hub = window.RTD_NET.hub();
+      opt.net = hub.join(myName());
+      opt.mode = 'multi'; opt.seed = opt.seed || (Math.random() * 1e9) | 0;
+      const pool = window.RTD_AI.BUILDS.slice();
+      bots = [];
+      for (let i = 0; i < opt.ai; i++) {
+        const b = pool.splice((Math.random() * pool.length) | 0, 1)[0], bn = hub.join('AI ' + b.name);
+        const bg = new E.Game(T, { diff: opt.diff, mode: 'multi', seed: opt.seed + i + 1, net: bn, bot: true, muts: opt.muts, mutLv: opt.mutLv });
+        bn.attach(bg);
+        bots.push({ g: bg, net: bn, brain: new window.RTD_AI.Brain(bg, b) });
+      }
+    }
+    g = opt.snap ? E.Game.restore(T, opt.snap) : new E.Game(T, opt);
+    // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기)
+    S.saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo'; S.saveT = 0;
+    S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;
+    if (opt.net) { net = opt.net; net.onLobby = null; net.attach(g); speed = 1; }
+    Snd.init();
+    S.tutHold = false;
+    // 첫 오프라인 혼자 하기(이어하기 제외)에서 튜토리얼
+    // 자동 배치(1~3성 자동 합성·정렬)는 기본으로 켠다. 직접 끈 사람은 그 선택을 기억한다('rtd-auto').
+    // 튜토리얼 판은 자동 버튼을 가르치려고 꺼 둔 채 시작하고, 건너뛰면 켠다.
+    const autoOnAll = () => ['t1', 't2', 't3'].forEach((k) => g.setAuto(g.me, k, true));
+    let autoPref = true; try { autoPref = localStorage.getItem('rtd-auto') !== '0'; } catch (e) { /* 저장 불가 */ }
+    const tutOn = !!(window.RTD_TUT && S.saveOn && !opt.snap && window.RTD_TUT.maybeStart({ get g() { return g; }, S, t: I.t, onSkip: () => { autoOnAll(); toast(t('autoToastOn'), 'good'); dirty(); } }));
+    if (!opt.snap && !tutOn && autoPref) autoOnAll();
+    window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
+    view.focus({ preventScroll: true });
+    last = performance.now();
+  }
+

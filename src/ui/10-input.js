@@ -1,0 +1,179 @@
+  // ---- 입력 ----
+  const toWorld = (e) => { const r = view.getBoundingClientRect(); return { x: (((e.clientX - r.left) / r.width) * view.width - S.ox) / S.scale, y: (((e.clientY - r.top) / r.height) * view.height - S.oy) / S.scale }; };
+  const unitAt = (x, y) => { let best = null, bd = S.coarse ? 52 : 38; g.units.forEach((u) => { if (u.owner !== 0) return; const d = dist(u.x, u.y, x, y); if (d < bd) { bd = d; best = u; } }); return best; };
+  // 겹쳐 있으면 위에 그려진(나중에 생긴) 것을 집는다
+  const dropAt = (x, y) => g.drops.slice().reverse().find((d) => d.owner === 0 && Math.abs(d.x - x) < 24 && Math.abs(d.y - y) < 22);
+  const enemyAt = (x, y) => g.enemies.find((e) => dist(e.x, e.y, x, y) < e.r + 12);
+  // 보스전 중에도 Tab으로 내 라인 화면에 와서 선택권·조합·강화를 할 수 있다. 그동안 결투 시간은 그대로 흐른다.
+  const inBoss = () => g && g.phase === 'boss' && !S.laneView;
+  const laneOn = () => g && (g.phase === 'wave' || (g.phase === 'boss' && !!S.laneView));
+  view.addEventListener('contextmenu', (e) => e.preventDefault());
+  // 게임 중에는 화면 어디서든(패널·버튼·스킬 막대·팝업) 브라우저 우클릭 메뉴를 막는다. 글자 입력칸은 그대로 둔다.
+  window.addEventListener('contextmenu', (e) => { if (g && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) e.preventDefault(); });
+  // ---- 카메라: 손가락·휠로 확대하고 끌어서 움직인다 ----
+  const zoomAt = (cx, cy, nz) => {
+    const before = toWorld({ clientX: cx, clientY: cy });
+    S.cam.z = nz; applyCam();
+    const after = toWorld({ clientX: cx, clientY: cy });
+    S.cam.x += before.x - after.x; S.cam.y += before.y - after.y; applyCam();
+    S.camHold = performance.now() + 2500;
+  };
+  const panBy = (sx, sy, dx, dy) => { const k = S.base.s0 * S.cam.z; S.cam.x = sx - dx / k; S.cam.y = sy - dy / k; applyCam(); S.camHold = performance.now() + 2500; };
+  view.addEventListener('wheel', (e) => { if (!g) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, S.cam.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
+  const ptrs = new Map();
+  let pinch = null, touch = null;
+  const cancelTouch = () => { if (touch && touch.lp) clearTimeout(touch.lp); touch = null; };
+  // 터치 한 번(움직이지 않고 뗌): 선택·이동·상자 열기
+  function tapAt(m, e) {
+    if (inBoss()) {
+      const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 50);
+      if (i >= 0) g.selectChamp(i);
+      else if (g.active()) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.arenaChase(tg); else g.arenaMove(m.x, m.y, false); }
+      dirty(); return;
+    }
+    if (!laneOn()) return;
+    const vp = viewedPeer();
+    if (vp) {
+      let best = null, bd = 44;
+      (S.remoteHits || []).forEach((h) => { const dd = dist(h.x, h.y, m.x, m.y); if (dd < bd) { bd = dd; best = h; } });
+      S.rsel = best ? { peer: vp.id, id: best.id, d: best.d, atk: best.atk } : null;
+      dirty(); return;
+    }
+    if (S.cmdMode === 'use') {
+      const d = g.drops.find((x) => x.id === S.dropSel), u = unitAt(m.x, m.y);
+      const n = g.useDrop(g.me, d, u);
+      if (n) { setSel([n.id]); S.dropSel = null; } else toast(I.t('cantUse'), 'warn');
+      setMode(null); return;
+    }
+    if (S.cmdMode) { rightClick(m, S.cmdMode); setMode(null); return; }
+    const drop = dropAt(m.x, m.y);
+    if (drop) {
+      if (drop.kind === 'chest') { const out = g.openChest(g.me, drop); S.dropSel = out ? out.id : null; S.sel = []; }
+      else { S.dropSel = drop.id; S.sel = []; }
+      dirty(); return;
+    }
+    const u = unitAt(m.x, m.y);
+    if (u) {
+      S.dropSel = null;
+      const now = performance.now();
+      // 같은 유닛을 두 번 톡 치면 그 유닛 전부 선택
+      if (now - S.lastClick.t < 360 && S.lastClick.id === u.def.id) setSel(g.units.filter((o) => o.owner === 0 && o.def.id === u.def.id).map((o) => o.id));
+      else setSel([u.id]);
+      S.lastClick = { t: now, id: u.def.id };
+      return;
+    }
+    const f = g.phase === 'wave' ? flagAt(m) : null;
+    if (f) { showFlag(f, e); setTimeout(() => showFlag(null), 2600); return; }
+    // 빈 곳: 고른 게 있으면 그리로 '공격하며 이동'(가는 길에 사거리 안의 적이 있으면 멈춰서 때린다), 없으면 아무것도 안 함
+    if (S.sel.length || S.dropSel) rightClick(m, 'amove');
+  }
+  function boxSelect(d) {
+    const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
+    S.dropSel = null;
+    const ids = g.units.filter((u) => u.owner === 0 && u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1).map((u) => u.id);
+    setSel(d.add ? [...new Set(S.sel.concat(ids))] : ids);
+  }
+  view.addEventListener('pointerdown', (e) => {
+    if (!g) return;
+    view.focus({ preventScroll: true });
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { view.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+    // 두 손가락: 확대·이동
+    if (ptrs.size === 2) {
+      cancelTouch(); S.drag = null;
+      const [a, b] = [...ptrs.values()];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, z: S.cam.z, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+      return;
+    }
+    const m = toWorld(e); S.mouse = m;
+    // 마우스 가운데 버튼: 지도 끌기
+    if (e.button === 1) { e.preventDefault(); S.pan = { x: e.clientX, y: e.clientY, cx: S.cam.x, cy: S.cam.y }; return; }
+    if (e.pointerType === 'touch') {
+      touch = { id: e.pointerId, x: e.clientX, y: e.clientY, m, mode: null, cx: S.cam.x, cy: S.cam.y };
+      // 꾹 누르고 있으면 범위 선택으로 바뀐다
+      if (laneOn() && !viewedPeer() && !S.cmdMode) touch.lp = setTimeout(() => {
+        if (touch && !touch.mode) { touch.mode = 'box'; S.drag = { x0: m.x, y0: m.y, x1: m.x, y1: m.y, moved: true, add: false }; if (navigator.vibrate) navigator.vibrate(12); }
+      }, 380);
+      return;
+    }
+    // ---- 마우스(PC): 기존 조작 ----
+    if (inBoss()) {
+      if (e.button === 2) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.arenaChase(tg); else g.arenaMove(m.x, m.y, false); }
+      else if (S.cmdMode === 'amove') { g.arenaChase(); setMode(null); }
+      else if (S.cmdMode === 'move') { g.arenaMove(m.x, m.y, false); setMode(null); }
+      else {
+        const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 40);
+        if (i >= 0) g.selectChamp(i); else g.selectChamp(null);
+        dirty();
+      }
+      return;
+    }
+    if (!laneOn()) return;
+    if (viewedPeer()) { if (e.button === 0) tapAt(m, e); return; }
+    if (e.button === 2) { rightClick(m); return; }
+    if (S.cmdMode) { tapAt(m, e); return; }
+    S.drag = { x0: m.x, y0: m.y, x1: m.x, y1: m.y, moved: false, add: e.shiftKey };
+  });
+  view.addEventListener('pointermove', (e) => {
+    if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && ptrs.size >= 2) {
+      const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      zoomAt(pinch.mx, pinch.my, pinch.z * (d / pinch.d));
+      const k = S.base.s0 * S.cam.z; S.cam.x -= (mx - pinch.mx) / k; S.cam.y -= (my - pinch.my) / k; applyCam();
+      pinch.mx = mx; pinch.my = my; pinch.z = S.cam.z; pinch.d = d;
+      return;
+    }
+    if (S.pan) { panBy(S.pan.cx, S.pan.cy, e.clientX - S.pan.x, e.clientY - S.pan.y); return; }
+    const m = toWorld(e); S.mouse = m;
+    if (touch && e.pointerId === touch.id) {
+      const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
+      if (touch.mode === 'box') { S.drag.x1 = m.x; S.drag.y1 = m.y; return; }
+      if (!touch.mode && Math.hypot(dx, dy) > 10) { touch.mode = 'pan'; if (touch.lp) clearTimeout(touch.lp); }
+      if (touch.mode === 'pan') panBy(touch.cx, touch.cy, dx, dy);
+      return;
+    }
+    if (g && e.pointerType !== 'touch') showFlag(g.phase === 'wave' && !S.drag ? flagAt(m) : null, e);
+    if (S.drag) { S.drag.x1 = m.x; S.drag.y1 = m.y; if (dist(S.drag.x0, S.drag.y0, m.x, m.y) > 10) S.drag.moved = true; }
+  });
+  view.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') $('achpop').hidden = true; });
+  const endPtr = (e) => {
+    ptrs.delete(e.pointerId);
+    if (pinch) { if (ptrs.size < 2) { pinch = null; cancelTouch(); } return; }
+    if (S.pan) { S.pan = null; return; }
+    if (!g) return;
+    if (touch && e.pointerId === touch.id) {
+      const t = touch; cancelTouch();
+      if (t.mode === 'box') { const d = S.drag; S.drag = null; if (d) boxSelect(d); }
+      else if (!t.mode) tapAt(t.m, e);
+      return;
+    }
+    const d = S.drag; S.drag = null;
+    if (!d) return;
+    if (d.moved) { boxSelect(d); return; }
+    const drop = dropAt(d.x0, d.y0);
+    if (drop) {
+      if (drop.kind === 'chest') { const out = g.openChest(g.me, drop); S.dropSel = out ? out.id : null; S.sel = []; dirty(); }
+      else { S.dropSel = drop.id; S.sel = []; dirty(); }
+      return;
+    }
+    S.dropSel = null;
+    const u = unitAt(d.x0, d.y0);
+    if (!u) { if (!d.add) setSel([]); return; }
+    const now = performance.now();
+    if ((now - S.lastClick.t < 320 && S.lastClick.id === u.def.id) || e.ctrlKey) setSel(g.units.filter((o) => o.owner === 0 && o.def.id === u.def.id).map((o) => o.id));
+    else if (d.add) setSel(S.sel.includes(u.id) ? S.sel.filter((i) => i !== u.id) : S.sel.concat(u.id));
+    else setSel([u.id]);
+    S.lastClick = { t: now, id: u.def.id };
+  };
+  view.addEventListener('pointerup', endPtr);
+  view.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); pinch = null; cancelTouch(); S.drag = null; S.pan = null; });
+  function rightClick(m, mode) {
+    // 상자·아이템을 고른 상태면 그것을 옮긴다
+    const drop = !S.sel.length && S.dropSel && g.drops.find((d) => d.id === S.dropSel);
+    if (drop) { g.moveDrop(g.me, drop, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); return; }
+    if (mode === 'amove') { g.cmd('amove', S.sel, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#ff7a60' }); }
+    else { g.cmd('move', S.sel, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); }
+  }
+  function setMode(m) { S.cmdMode = m; $('stage').classList.toggle('targeting', !!m); dirty(); }
+  function setSel(ids) { S.sel = ids; dirty(); }
+  const selUnits = () => { S.sel = S.sel.filter((id) => g.units.some((u) => u.id === id)); return S.sel.map((id) => g.units.find((u) => u.id === id)); };

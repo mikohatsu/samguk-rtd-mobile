@@ -1,0 +1,167 @@
+  // ---- 보스전 직접 조작(모바일 MOBA식) ----
+  // 왼쪽 조이스틱으로 이동, 오른쪽 아래 공격 버튼을 누르고 있는 동안 공격(자동 공격 없음).
+  // 스킬·이동기는 공격 버튼을 둘러싼 '고양이 발' 배치. 짧게 톡 = 사거리 안의 적에게 자동 조준(밖이면 보는 방향),
+  // 꾹 누르고 끌면 장수 둘레에 사거리와 범위가 보이고 끈 방향·거리로 조준해 손을 떼면 쓴다.
+  const PAD = { atk: null, aim: null, joy: null, jv: null };
+  const AIM_HOLD = 220, AIM_DRAG = 80;
+  function skillInfo(c, k) {
+    if (k === 'dash') return { range: 280, shape: 'dash', w: 44 };
+    const s = (c.def.sk || [])[+k];
+    if (!s) return null;
+    if (s.k === 'line') return { range: s.len, shape: 'line', w: s.w };
+    if (s.k === 'cone') return { range: s.r, shape: 'cone', arc: s.arc };
+    if (s.k === 'circle') return { range: s.range || 0, shape: 'circle', r: s.r };
+    return { range: 0, shape: 'self' };
+  }
+  // 짧게 눌렀을 때: 사거리 안에 적이 있으면 그 적, 없으면 보는 방향으로
+  function autoTarget(c, info) {
+    const fo = g.champFoe(c) || (g.fight && g.fight.boss), reach = info.shape === 'circle' && !info.range ? info.r : info.range;
+    if (fo && (info.shape === 'self' || dist(c.x, c.y, fo.x, fo.y) <= reach + 60)) return { x: fo.x, y: fo.y };
+    const a = c.face ?? 0, r = Math.max(info.range, 120);
+    return { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r };
+  }
+  // 끌어서 조준: 버튼에서 끈 방향이 쏘는 방향, 끈 거리(최대 AIM_DRAG px)가 사거리 비율
+  function aimTarget(c, info, A) {
+    const len = Math.hypot(A.dx, A.dy);
+    if (len < 14) return autoTarget(c, info);
+    const k = Math.min(1, len / AIM_DRAG), r = info.shape === 'circle' ? info.range * k : Math.max(info.range, 120);
+    return { x: c.x + (A.dx / len) * Math.max(r, info.shape === 'circle' ? 0 : 30), y: c.y + (A.dy / len) * Math.max(r, info.shape === 'circle' ? 0 : 30) };
+  }
+  function castAt(c, k, x, y) {
+    if (k === 'dash') g.dash(c, x, y);
+    else g.useSkill(c, +k, x, y);
+  }
+  function drawAim(c) {
+    const A = PAD.aim, ch = g.active();
+    if (!A || !ch) return;
+    if (!A.on && performance.now() - A.t0 > AIM_HOLD) A.on = true;
+    if (!A.on) return;
+    const info = skillInfo(ch, A.k);
+    if (!info) return;
+    const tg = aimTarget(ch, info, A), a = Math.atan2(tg.y - ch.y, tg.x - ch.x);
+    c.save();
+    // 사거리(장수 둘레)
+    const rr = info.range || (info.shape === 'circle' ? info.r : 90);
+    c.setLineDash([10, 8]); c.lineWidth = 3; c.strokeStyle = 'rgba(150,205,255,.85)'; c.fillStyle = 'rgba(120,180,255,.08)';
+    c.beginPath(); c.arc(ch.x, ch.y, rr, 0, 7); c.fill(); c.stroke(); c.setLineDash([]);
+    // 맞는 범위
+    c.fillStyle = 'rgba(255,205,110,.3)'; c.strokeStyle = 'rgba(255,225,150,.95)'; c.lineWidth = 2.5;
+    if (info.shape === 'line' || info.shape === 'dash') {
+      const L = info.shape === 'dash' ? Math.min(info.range, Math.max(30, dist(ch.x, ch.y, tg.x, tg.y))) : info.range;
+      c.translate(ch.x, ch.y); c.rotate(a); c.beginPath(); c.rect(0, -info.w / 2, L, info.w); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(L + 18, 0); c.lineTo(L, -12); c.lineTo(L, 12); c.closePath(); c.fillStyle = 'rgba(255,225,150,.9)'; c.fill();
+    } else if (info.shape === 'cone') {
+      c.beginPath(); c.moveTo(ch.x, ch.y); c.arc(ch.x, ch.y, info.range, a - info.arc / 2, a + info.arc / 2); c.closePath(); c.fill(); c.stroke();
+    } else if (info.shape === 'circle') {
+      const px = info.range ? tg.x : ch.x, py = info.range ? tg.y : ch.y;
+      c.beginPath(); c.arc(px, py, info.r, 0, 7); c.fill(); c.stroke();
+    }
+    c.restore();
+  }
+  function padInit() {
+    const bar = $('skillbar'), joy = $('joy');
+    if (!bar || bar._pad) return;
+    bar._pad = true;
+    bar.addEventListener('pointerdown', (e) => {
+      const b = e.target.closest('[data-sk]'), c = g && g.active();
+      if (!b || !c) return;
+      e.preventDefault(); e.stopPropagation();
+      try { b.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+      const k = b.dataset.sk;
+      if (k === 'atk') { PAD.atk = e.pointerId; c.atkHold = 0.3; b.classList.add('on'); return; }
+      if (k === 'heal') { g.useHeal(); return; }
+      if (b.dataset.cd === '1') return;
+      const r = b.getBoundingClientRect();
+      PAD.aim = { id: e.pointerId, k, cx: r.left + r.width / 2, cy: r.top + r.height / 2, t0: performance.now(), dx: 0, dy: 0, on: false, el: b };
+      b.classList.add('on');
+    });
+    bar.addEventListener('pointermove', (e) => {
+      const A = PAD.aim;
+      if (!A || A.id !== e.pointerId) return;
+      A.dx = e.clientX - A.cx; A.dy = e.clientY - A.cy;
+      if (Math.hypot(A.dx, A.dy) > 14) A.on = true;
+    });
+    const up = (e) => {
+      if (PAD.atk === e.pointerId) { PAD.atk = null; bar.querySelectorAll('.on').forEach((x) => x.classList.remove('on')); return; }
+      const A = PAD.aim;
+      if (!A || A.id !== e.pointerId) return;
+      PAD.aim = null; A.el.classList.remove('on');
+      const c = g && g.active(), info = c && skillInfo(c, A.k);
+      if (!info || e.type === 'pointercancel') return;
+      const tg = A.on ? aimTarget(c, info, A) : autoTarget(c, info);
+      castAt(c, A.k, tg.x, tg.y);
+      dirty();
+    };
+    bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
+    // 조이스틱: 받침 안에서 누른 자리를 기준으로 끈 방향·세기로 움직인다
+    const knob = joy.querySelector('i'), R = 52;
+    joy.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      try { joy.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+      const r = joy.getBoundingClientRect();
+      PAD.joy = { id: e.pointerId, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+      joyMove(e);
+    });
+    const joyMove = (e) => {
+      const J = PAD.joy;
+      if (!J || J.id !== e.pointerId) return;
+      let dx = e.clientX - J.cx, dy = e.clientY - J.cy;
+      const l = Math.hypot(dx, dy);
+      if (l > R) { dx = (dx / l) * R; dy = (dy / l) * R; }
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      PAD.jv = { x: dx / R, y: dy / R };
+      joy.classList.add('on');
+    };
+    joy.addEventListener('pointermove', joyMove);
+    const joyUp = (e) => { if (!PAD.joy || PAD.joy.id !== e.pointerId) return; PAD.joy = null; PAD.jv = null; knob.style.transform = ''; joy.classList.remove('on'); };
+    joy.addEventListener('pointerup', joyUp); joy.addEventListener('pointercancel', joyUp);
+  }
+  // 매 프레임: 조이스틱·공격 버튼 상태를 지금 고른 장수에 넘긴다
+  function padTick() {
+    const c = g && g.phase === 'boss' ? g.active() : null;
+    if (!c) return;
+    g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
+    c.joy = PAD.jv;
+    if (PAD.atk != null) c.atkHold = 0.3;
+  }
+  // 보스전 스킬: 선택한 장수의 스킬·이동기·화타 치료를 공격 버튼 둘레(고양이 발)에 아이콘과 재사용 시간으로 보여 준다
+  const SK_GLYPH = { line: '斬', circle: '爆', cone: '扇', buff: '勢', shield: '盾', heal: '治', rally: '令', taunt: '挑', weaken: '弱' };
+  // 공격 버튼 중심에서의 자리(반지름 px, 각도: 0=오른쪽, 90=위)
+  // 화면 오른쪽 끝에서 잘리지 않게 모두 공격 버튼의 왼쪽~위쪽에만 둔다(안쪽 줄 3개, 바깥 줄 3개)
+  const PAW = [[112, 186], [112, 140], [112, 94], [188, 168], [188, 132], [188, 100]];
+  function renderSkillBar() {
+    const bar = $('skillbar'), joy = $('joy'), c = inBoss() && g.phase === 'boss' ? g.active() : null;
+    padInit();
+    g.manual = !!c;
+    if (!c) { if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; joy.hidden = true; PAD.jv = null; PAD.atk = null; PAD.aim = null; } return; }
+    const sk = c.def.sk || [], heal = g.healLeft(), dash = c.def.tier >= g.R.dashMinTier;
+    const key = c.uid + ':' + sk.length + ':' + dash + ':' + (heal == null ? 'n' : 'h');
+    if (bar.dataset.k !== key) {
+      bar.dataset.k = key;
+      let slot = 0;
+      const pos = () => { const [r, a] = PAW[Math.min(slot++, PAW.length - 1)], rad = (a * Math.PI) / 180; return `--x:${(Math.cos(rad) * r).toFixed(0)}px;--y:${(-Math.sin(rad) * r).toFixed(0)}px`; };
+      // 아이콘: game-icons.net 그림(skillicons.js), 없으면 한자
+      const ic = (k, glyph) => (window.RTD_ICON && window.RTD_ICON(k)) || glyph;
+      const cell = (k, col, glyph, name) => `<button class="sk" data-sk="${k}" type="button" style="--c:${col};${pos()}" title="${esc(name)}">${glyph}<span class="cd"></span><span class="sec"></span><span class="nm">${esc(name)}</span></button>`;
+      bar.innerHTML = sk.map((s, i) => cell(i, s.fx || '#ffd86a', ic(s.k, SK_GLYPH[s.k] || '技'), s.n)).join('')
+        + (dash ? cell('dash', '#9fd8ff', ic('dash', '迅'), I.t('dash')) : '')
+        + (heal != null ? cell('heal', '#a8ffb8', ic('hwata', '醫'), I.t('hwataHeal', { n: heal })) : '')
+        + `<button class="sk atk" data-sk="atk" type="button" style="--c:#ffb070" title="${esc(t('attack'))}">${ic('atk', '攻')}</button>`;
+      bar._cells = [...bar.querySelectorAll('.sk:not(.atk)')];
+      bar.hidden = false; joy.hidden = false;
+    }
+    // 재사용 시간 갱신(돌아오는 순간 반짝)
+    const cds = sk.map((s, i) => [c.skillCd[i], s.cd * (1 - Math.min(0.6, g.pv(c.def, 'cdr')))]);
+    if (dash) cds.push([c.dashCd, g.R.dashCd]);
+    if (heal != null) cds.push([heal > 0 ? 0 : 1, 1]);
+    bar._cells.forEach((el, i) => {
+      const [left, max] = cds[i] || [0, 1], p = left > 0 ? Math.min(1, left / max) : 0;
+      el.querySelector('.cd').style.setProperty('--p', `${(p * 100).toFixed(1)}%`);
+      const sec = el.querySelector('.sec'), txt = left > 0 && max > 1 ? String(Math.ceil(left)) : '';
+      if (sec.textContent !== txt) sec.textContent = txt;
+      const was = el.dataset.cd === '1', now = p > 0;
+      if (was && !now) { el.classList.remove('ready'); void el.offsetWidth; el.classList.add('ready'); }
+      el.dataset.cd = now ? '1' : '0';
+    });
+    if (heal != null) { const nm = bar._cells[bar._cells.length - 1].querySelector('.nm'), hl = I.t('hwataHeal', { n: heal }); if (nm.textContent !== hl) nm.textContent = hl; }
+  }

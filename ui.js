@@ -1,3 +1,4 @@
+// [자동 생성] 이 파일을 직접 고치지 말 것. src/ui/*.js를 고친 뒤 `npm run ui`로 다시 만든다.
 // 화면 그리기와 입력. 게임 규칙은 engine.js, 내용은 테마 파일에 있다.
 (function () {
   const T = window.RTD_THEME, E = window.RTD_ENGINE, { W, H, ROAD, ARENA, dist } = E;
