@@ -76,19 +76,6 @@ ${things}
 ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 100) + "%" : ""}${bots.length ? ' · AI ' + bots.length : ''}${net && !bots.length ? ' · NET' : ''}`;
     PF.n = 0; PF.t0 = now; PF.sim = 0; PF.draw = 0; PF.worst = 0; PF.wj = 0;
   }
-  // 자동 해상도: 터치 기기에서 3초 동안 평균 42fps를 못 내면 캔버스 해상도를 20%씩(최저 55%) 낮춘다. 화질을 바꾸면 처음부터 다시 잰다.
-  const AR = { n: 0, t0: 0, prev: 0, bad: false };
-  function autoRes(now) {
-    if (!Q.coarse || Q.fps30 || S.paused) { AR.n = 0; AR.t0 = 0; AR.prev = 0; return; }
-    if (AR.prev && now - AR.prev > 400) AR.bad = true; // 앱 전환·멈춤이 낀 구간은 버린다
-    AR.prev = now;
-    if (!AR.t0) { AR.t0 = now; AR.n = 0; AR.bad = false; return; }
-    AR.n++;
-    if (now - AR.t0 < 3000) return;
-    const avg = (now - AR.t0) / AR.n, bad = AR.bad;
-    AR.t0 = now; AR.n = 0; AR.bad = false;
-    if (!bad && avg > 24 && Q.rs > 0.56) { Q.rs = Math.max(0.55, Q.rs * 0.8); fit(); }
-  }
   function loop(now) {
     requestAnimationFrame(loop);
     if (!g) return;
@@ -101,7 +88,6 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     tick(now, 0.1);
     const p1 = Q.perf ? performance.now() : 0;
     render(now);
-    autoRes(now);
     perfMark(now, p0, p1);
     if (S.saveOn && now - (S.saveT || 0) > 10000) { S.saveT = now; saveGame(); }
     if (now - lastDom > 180 || needs) {

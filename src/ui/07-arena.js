@@ -27,7 +27,7 @@
         x.fillStyle = gr; x.globalAlpha = 0.4; x.fillRect(-OVER.x, -OVER.y, w, h); x.globalAlpha = 1;
       }
     }
-    c.drawImage(arenaCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    blitBg(c, arenaCv, 'arena', arenaKey);
     return arenaCv._tex;
   }
   function drawArena(t) {

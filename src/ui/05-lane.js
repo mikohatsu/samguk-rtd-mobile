@@ -1,6 +1,6 @@
   function drawLane(t) {
     const c = ctx;
-    c.drawImage(mapCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    blitBg(c, mapCv, 'map', mapVer);
     drawFlags(c);
     for (const p of S.pings) { p.t += S.fdt; c.strokeStyle = p.c; c.globalAlpha = 1 - p.t / 0.5; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, 8 + p.t * 40, 0, 7); c.stroke(); c.globalAlpha = 1; }
     S.pings = S.pings.filter((p) => p.t < 0.5);
@@ -101,7 +101,7 @@
   }
   function drawRemoteLane(t, peer) {
     const c = ctx, fr0 = remoteFrame(peer);
-    c.drawImage(mapCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    blitBg(c, mapCv, 'map', mapVer);
     fr0.e.forEach(({ id, k, x, y, h, seg }) => {
       const v = [2, 0, 2, 4][seg] || 0, fr = Math.sin(t * 11 + id) > 0 ? 1 : 2;
       y -= k >= 100 ? 0 : Math.abs(Math.sin(t * 12 + id)) * 3;

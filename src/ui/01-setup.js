@@ -14,7 +14,6 @@
   })();
   const qDpr = () => (Q.level === 'high' ? 2 : Q.level === 'mid' ? 1.5 : 1);
   // 터치 기기는 캔버스 픽셀 수에 상한을 둔다. 태블릿(2560×1600)은 그대로 그리면 400만 픽셀이라 그래픽 칩이 못 따라간다(갤럭시 탭 S6에서 15~25fps).
-  // Q.rs는 그래도 느릴 때 자동으로 내리는 배율(17-loop의 autoRes).
   const qPix = () => (!Q.coarse ? Infinity : Q.level === 'high' ? 2.0e6 : Q.level === 'mid' ? 1.3e6 : 0.8e6);
   const qPart = () => (Q.level === 'high' ? 1 : Q.level === 'mid' ? 0.6 : 0.35);
   const qMap = () => (Q.level === 'high' ? (Q.coarse ? 0.7 : 1) : Q.level === 'mid' ? 0.55 : 0.4);

@@ -72,12 +72,33 @@
     if (pt.setTransform && scale) pt.setTransform(new DOMMatrix().scale(scale));
     return pt;
   }
+  // 큰 배경(지도·전장 바닥)은 화면보다 훨씬 큰 그림(최대 3900×2210)이라, 매 프레임 통째로 줄여 그리면 그래픽 칩이 화면의 몇 배를 읽어야 한다
+  // (태블릿에서 15~25fps의 원인). 카메라가 멈춰 있는 동안은 화면 크기로 한 번 옮겨 둔 것을 1:1로 찍는다. 카메라·흔들림이 움직이는 프레임만 원본을 그린다.
+  const BGC = {};
+  let mapVer = 0;
+  function blitBg(c, src, id, ver) {
+    const o = BGC[id] || (BGC[id] = { cv: null, key: '', last: '' });
+    // 기준은 카메라(S.scale·S.ox·S.oy). 화면 흔들림·타격 확대는 그 위에 얹히는 작은 변환이라, 둘레에 여백을 둔 저장본을 그대로 쓴다.
+    const key = S.scale + '|' + S.ox + '|' + S.oy + '|' + view.width + '|' + view.height + '|' + ver + '|' + src.width;
+    if (c !== ctx || key !== o.last) { o.last = key; c.drawImage(src, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); return; }
+    const mx = Math.ceil(view.width * 0.06), my = Math.ceil(view.height * 0.06), cw = view.width + mx * 2, ch = view.height + my * 2;
+    if (o.key !== key) {
+      if (!o.cv) o.cv = document.createElement('canvas');
+      if (o.cv.width !== cw || o.cv.height !== ch) { o.cv.width = cw; o.cv.height = ch; }
+      const x = o.cv.getContext('2d');
+      x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cw, ch);
+      x.setTransform(S.scale, 0, 0, S.scale, S.ox + mx, S.oy + my); x.drawImage(src, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+      o.key = key;
+    }
+    // 저장본이 덮는 자리를 게임 좌표로 되돌려 그린다(흔들림이 없으면 화면 픽셀과 1:1)
+    c.drawImage(o.cv, (-mx - S.ox) / S.scale, (-my - S.oy) / S.scale, cw / S.scale, ch / S.scale);
+  }
   const mapCv = document.createElement('canvas');
-  function sizeMap() { mapCv.width = Math.round((W + OVER.x * 2) * qMap()); mapCv.height = Math.round((H + OVER.y * 2) * qMap()); paintMap(mapCv.getContext('2d'), mapCv.width, mapCv.height); if (window.RTD_LOBBY) window.RTD_LOBBY.tintMap(mapCv); }
+  function sizeMap() { mapVer++; mapCv.width = Math.round((W + OVER.x * 2) * qMap()); mapCv.height = Math.round((H + OVER.y * 2) * qMap()); paintMap(mapCv.getContext('2d'), mapCv.width, mapCv.height); if (window.RTD_LOBBY) window.RTD_LOBBY.tintMap(mapCv); }
   sizeMap();
   // 생성 그림을 다 불러오면 지도를 다시 그린다
   Art.ready.then(() => {
-    const x = mapCv.getContext('2d'); x.clearRect(0, 0, mapCv.width, mapCv.height); paintMap(x, mapCv.width, mapCv.height); if (window.RTD_LOBBY) window.RTD_LOBBY.tintMap(mapCv);
+    mapVer++; const x = mapCv.getContext('2d'); x.clearRect(0, 0, mapCv.width, mapCv.height); paintMap(x, mapCv.width, mapCv.height); if (window.RTD_LOBBY) window.RTD_LOBBY.tintMap(mapCv);
     const hc = document.getElementById('herocv');
     if (hc && window.RTD_PALACE) window.RTD_PALACE.paint(hc);
   });

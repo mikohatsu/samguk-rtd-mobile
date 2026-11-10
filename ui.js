@@ -15,7 +15,6 @@
   })();
   const qDpr = () => (Q.level === 'high' ? 2 : Q.level === 'mid' ? 1.5 : 1);
   // 터치 기기는 캔버스 픽셀 수에 상한을 둔다. 태블릿(2560×1600)은 그대로 그리면 400만 픽셀이라 그래픽 칩이 못 따라간다(갤럭시 탭 S6에서 15~25fps).
-  // Q.rs는 그래도 느릴 때 자동으로 내리는 배율(17-loop의 autoRes).
   const qPix = () => (!Q.coarse ? Infinity : Q.level === 'high' ? 2.0e6 : Q.level === 'mid' ? 1.3e6 : 0.8e6);
   const qPart = () => (Q.level === 'high' ? 1 : Q.level === 'mid' ? 0.6 : 0.35);
   const qMap = () => (Q.level === 'high' ? (Q.coarse ? 0.7 : 1) : Q.level === 'mid' ? 0.55 : 0.4);
@@ -136,12 +135,33 @@
     if (pt.setTransform && scale) pt.setTransform(new DOMMatrix().scale(scale));
     return pt;
   }
+  // 큰 배경(지도·전장 바닥)은 화면보다 훨씬 큰 그림(최대 3900×2210)이라, 매 프레임 통째로 줄여 그리면 그래픽 칩이 화면의 몇 배를 읽어야 한다
+  // (태블릿에서 15~25fps의 원인). 카메라가 멈춰 있는 동안은 화면 크기로 한 번 옮겨 둔 것을 1:1로 찍는다. 카메라·흔들림이 움직이는 프레임만 원본을 그린다.
+  const BGC = {};
+  let mapVer = 0;
+  function blitBg(c, src, id, ver) {
+    const o = BGC[id] || (BGC[id] = { cv: null, key: '', last: '' });
+    // 기준은 카메라(S.scale·S.ox·S.oy). 화면 흔들림·타격 확대는 그 위에 얹히는 작은 변환이라, 둘레에 여백을 둔 저장본을 그대로 쓴다.
+    const key = S.scale + '|' + S.ox + '|' + S.oy + '|' + view.width + '|' + view.height + '|' + ver + '|' + src.width;
+    if (c !== ctx || key !== o.last) { o.last = key; c.drawImage(src, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); return; }
+    const mx = Math.ceil(view.width * 0.06), my = Math.ceil(view.height * 0.06), cw = view.width + mx * 2, ch = view.height + my * 2;
+    if (o.key !== key) {
+      if (!o.cv) o.cv = document.createElement('canvas');
+      if (o.cv.width !== cw || o.cv.height !== ch) { o.cv.width = cw; o.cv.height = ch; }
+      const x = o.cv.getContext('2d');
+      x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cw, ch);
+      x.setTransform(S.scale, 0, 0, S.scale, S.ox + mx, S.oy + my); x.drawImage(src, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+      o.key = key;
+    }
+    // 저장본이 덮는 자리를 게임 좌표로 되돌려 그린다(흔들림이 없으면 화면 픽셀과 1:1)
+    c.drawImage(o.cv, (-mx - S.ox) / S.scale, (-my - S.oy) / S.scale, cw / S.scale, ch / S.scale);
+  }
   const mapCv = document.createElement('canvas');
-  function sizeMap() { mapCv.width = Math.round((W + OVER.x * 2) * qMap()); mapCv.height = Math.round((H + OVER.y * 2) * qMap()); paintMap(mapCv.getContext('2d'), mapCv.width, mapCv.height); if (window.RTD_LOBBY) window.RTD_LOBBY.tintMap(mapCv); }
+  function sizeMap() { mapVer++; mapCv.width = Math.round((W + OVER.x * 2) * qMap()); mapCv.height = Math.round((H + OVER.y * 2) * qMap()); paintMap(mapCv.getContext('2d'), mapCv.width, mapCv.height); if (window.RTD_LOBBY) window.RTD_LOBBY.tintMap(mapCv); }
   sizeMap();
   // 생성 그림을 다 불러오면 지도를 다시 그린다
   Art.ready.then(() => {
-    const x = mapCv.getContext('2d'); x.clearRect(0, 0, mapCv.width, mapCv.height); paintMap(x, mapCv.width, mapCv.height); if (window.RTD_LOBBY) window.RTD_LOBBY.tintMap(mapCv);
+    mapVer++; const x = mapCv.getContext('2d'); x.clearRect(0, 0, mapCv.width, mapCv.height); paintMap(x, mapCv.width, mapCv.height); if (window.RTD_LOBBY) window.RTD_LOBBY.tintMap(mapCv);
     const hc = document.getElementById('herocv');
     if (hc && window.RTD_PALACE) window.RTD_PALACE.paint(hc);
   });
@@ -556,7 +576,7 @@
   }
   function drawLane(t) {
     const c = ctx;
-    c.drawImage(mapCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    blitBg(c, mapCv, 'map', mapVer);
     drawFlags(c);
     for (const p of S.pings) { p.t += S.fdt; c.strokeStyle = p.c; c.globalAlpha = 1 - p.t / 0.5; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, 8 + p.t * 40, 0, 7); c.stroke(); c.globalAlpha = 1; }
     S.pings = S.pings.filter((p) => p.t < 0.5);
@@ -657,7 +677,7 @@
   }
   function drawRemoteLane(t, peer) {
     const c = ctx, fr0 = remoteFrame(peer);
-    c.drawImage(mapCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    blitBg(c, mapCv, 'map', mapVer);
     fr0.e.forEach(({ id, k, x, y, h, seg }) => {
       const v = [2, 0, 2, 4][seg] || 0, fr = Math.sin(t * 11 + id) > 0 ? 1 : 2;
       y -= k >= 100 ? 0 : Math.abs(Math.sin(t * 12 + id)) * 3;
@@ -1175,7 +1195,7 @@
         x.fillStyle = gr; x.globalAlpha = 0.4; x.fillRect(-OVER.x, -OVER.y, w, h); x.globalAlpha = 1;
       }
     }
-    c.drawImage(arenaCv, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    blitBg(c, arenaCv, 'arena', arenaKey);
     return arenaCv._tex;
   }
   function drawArena(t) {
@@ -3034,19 +3054,6 @@ ${things}
 ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 100) + "%" : ""}${bots.length ? ' · AI ' + bots.length : ''}${net && !bots.length ? ' · NET' : ''}`;
     PF.n = 0; PF.t0 = now; PF.sim = 0; PF.draw = 0; PF.worst = 0; PF.wj = 0;
   }
-  // 자동 해상도: 터치 기기에서 3초 동안 평균 42fps를 못 내면 캔버스 해상도를 20%씩(최저 55%) 낮춘다. 화질을 바꾸면 처음부터 다시 잰다.
-  const AR = { n: 0, t0: 0, prev: 0, bad: false };
-  function autoRes(now) {
-    if (!Q.coarse || Q.fps30 || S.paused) { AR.n = 0; AR.t0 = 0; AR.prev = 0; return; }
-    if (AR.prev && now - AR.prev > 400) AR.bad = true; // 앱 전환·멈춤이 낀 구간은 버린다
-    AR.prev = now;
-    if (!AR.t0) { AR.t0 = now; AR.n = 0; AR.bad = false; return; }
-    AR.n++;
-    if (now - AR.t0 < 3000) return;
-    const avg = (now - AR.t0) / AR.n, bad = AR.bad;
-    AR.t0 = now; AR.n = 0; AR.bad = false;
-    if (!bad && avg > 24 && Q.rs > 0.56) { Q.rs = Math.max(0.55, Q.rs * 0.8); fit(); }
-  }
   function loop(now) {
     requestAnimationFrame(loop);
     if (!g) return;
@@ -3059,7 +3066,6 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     tick(now, 0.1);
     const p1 = Q.perf ? performance.now() : 0;
     render(now);
-    autoRes(now);
     perfMark(now, p0, p1);
     if (S.saveOn && now - (S.saveT || 0) > 10000) { S.saveT = now; saveGame(); }
     if (now - lastDom > 180 || needs) {
