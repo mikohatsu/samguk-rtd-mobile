@@ -6,10 +6,10 @@
 
 ## 효과음 — CC0 (표기 의무 없음, 감사 표시)
 - OpenGameArt.org → sfxdata.js (scripts/build-sfx.py로 가공)
-  - StarNinjas — "20 Sword Sound Effects (Attacks and Clashes)" → 검·극·단검 베기, 강타 쇳소리
-  - artisticdude — "RPG Sound Pack", "Swishes Sound Pack" → 창 바람 소리, 활, 주문, 스킬, 방패
-  - remaxim — "3 Melee sounds" → 도끼·철퇴 타격
-  - Kenney — "50 RPG sound effects" → 단검, 도끼
+  - artisticdude — "Swishes Sound Pack", "RPG Sound Pack" → 검·창·극·단검의 바람 가르는 소리, 활, 주문, 스킬, 방패
+  - remaxim — "3 Melee sounds" → 도끼·철퇴 타격, 강타가 꽂히는 소리
+  - Kenney — "50 RPG sound effects" → 도끼, 방패
+  - (쇳소리는 쓰지 않는다)
 
 ## 이펙트 애니메이션 — CC0 (표기 의무 없음, 감사 표시)
 - OpenGameArt.org

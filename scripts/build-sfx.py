@@ -7,19 +7,21 @@ import sys, os, json, base64
 import numpy as np, soundfile as sf
 src, out = sys.argv[1], sys.argv[2]
 SR = 22050
-S = 'sword/sword - StarNinjas/sword.%d.ogg'
 B = 'rpg/RPG Sound Pack/battle/'
+W = 'swish/swishes/swish-%d.wav'
+M = 'melee/melee sounds/'
+# 쇳소리(칼 부딪히는 소리·칼날 긁는 소리)는 귀에 거슬려서 쓰지 않는다. 베기는 바람 가르는 소리, 타격은 둔탁한 소리만 쓴다.
 GROUPS = {  # 이름: (파일들, 최대 길이 초)
-  'sword':  ([S % 2, S % 3, S % 4, S % 6], 0.40),
-  'heavy':  ([S % 8, S % 9, S % 10], 0.55),
-  'dagger': (['kenney/OGG/knifeSlice.ogg', 'kenney/OGG/knifeSlice2.ogg', S % 1], 0.35),
-  'spear':  (['swish/swishes/swish-2.wav', 'swish/swishes/swish-7.wav', 'swish/swishes/swish-8.wav'], 0.40),
-  'blunt':  (['melee/melee sounds/melee sound.wav', 'melee/melee sounds/animal melee sound.wav', 'kenney/OGG/chop.ogg'], 0.40),
+  'sword':  ([W % 10, W % 11, W % 12, W % 13], 0.35),
+  'heavy':  ([W % 3, W % 4, W % 5], 0.45),
+  'dagger': ([W % 1, W % 9, W % 6], 0.30),
+  'spear':  ([W % 2, W % 7, W % 8], 0.40),
+  'blunt':  ([M + 'melee sound.wav', M + 'animal melee sound.wav', 'kenney/OGG/chop.ogg'], 0.40),
   'bow':    ([B + 'swing.wav', B + 'swing2.wav', B + 'swing3.wav'], 0.30),
-  'shield': (['rpg/RPG Sound Pack/inventory/metal-small1.wav', 'rpg/RPG Sound Pack/inventory/metal-small3.wav'], 0.35),
+  'shield': (['rpg/RPG Sound Pack/inventory/wood-small.wav', 'kenney/OGG/chop.ogg'], 0.30),
   'magic':  ([B + 'magic1.wav'], 0.60),
   'skill':  ([B + 'spell.wav'], 1.20),
-  'clash':  (['clash/sword_clash.1.ogg', 'clash/sword_clash.2.ogg', 'clash/sword_clash.4.ogg', 'clash/sword_clash.9.ogg'], 0.35),
+  'clash':  ([M + 'melee sound.wav', M + 'animal melee sound.wav'], 0.35),
 }
 def load(f, cap):
     x, sr = sf.read(os.path.join(src, f), always_2d=True)
