@@ -61,3 +61,30 @@
 - **저장소가 비공개라 GitHub 주소로는 일반 사용자가 못 받는다.** 웹 서버가 직접 파일을 내주거나(예: `/download/sangokurtd-test.apk`, Content-Type `application/vnd.android.package-archive`) GCS 공개 버킷에 올려 링크해야 한다.
 - 메인 페이지에 "안드로이드 시험판 받기" 버튼 + "출처를 알 수 없는 앱 설치 허용 필요" 안내.
 - 모바일판이 갱신될 때 웹의 APK도 같이 바꾸는 방법(수동 복사 / 서버에서 주기적으로 받기)은 웹 세션이 정하고 사용자에게 알려 줄 것.
+
+---
+
+# 추가분 (2026-11-10 저녁, 모바일 커밋 3b85965 → 9c82f94)
+
+`git -C C:\Users\A\Documents\samguk-rtd-mobile diff 3b85965 9c82f94 -- <파일>` 로 정확한 변경을 볼 수 있다.
+
+## A2. 웹판에도 옮길 것 (성능·버그)
+안드로이드 실기기에서 렉이 심해 고친 것들이다. PC에서도 그리기 부담이 줄고, 4·5번은 버그 수정이다.
+
+1. **보스전 바닥 캐시** — `07-arena`의 `arenaFloor()`(새 함수) + `drawArena` 첫머리. 매 프레임 화면 전체에 그라디언트·무늬·그라디언트를 3번 칠하던 것을 한 번 그려 두고 찍는다.
+2. **조각 애니메이션 프레임 캐시** — `rig.js` 통째로 교체(`quant`, `compose`, `cache`). 동작을 프레임으로 끊어 한 번 합성한 것을 저장해 재사용한다. 화면 쪽 호출 방식은 그대로.
+3. **업적 깃발 캐시** — `04-fx-text`의 `drawFlags`(캐시) / `paintFlags`(기존 그리기). 달성 상태·인원·언어가 바뀔 때만 다시 그린다.
+4. **연출 속도를 실제 시간 기준으로** — `09-render-camera` render 첫머리에서 `S.fdt`(프레임 간격 초)·`S.f60`(=fdt×60)을 구하고, `1 / 60`이나 `*= 0.8` 같은 프레임 수 가정을 바꿨다: `04-fx-text`(d.t), `05-lane`(pings), `06-boss-vfx`(dt), `07-arena`(hr.k, hr.slam, hr.numT, pv.moveT, S.pattern.t), `08-pop`(b.t), `09`(shake, punch, 카메라 따라가기). `01-setup`의 S 초기값에 `fdt`, `f60` 추가. 120Hz 모니터에서 연출이 2배 빨리 지나가던 문제.
+5. **보스·분신 번쩍임의 캔버스 필터 제거** — `07-arena` `drawBossAt`: `c.filter = 'brightness(1.8)'` 대신 같은 그림을 'lighter'로 한 번 더 얹는다.
+6. **60fps 상한** — `17-loop` loop: `if (now - lastDraw < 14) return;` (고주사율 화면에서 2배로 그리지 않게). 웹(PC)에서 144Hz를 살리고 싶으면 옮기지 않아도 된다 → 웹 세션 판단.
+7. **성능 표시 토글(선택)** — 설정 > 화질 '성능 표시': `01-setup`(Q.perf), `11-actions`('perf'), `12-panels`·`19-title`(토글 줄), `17-loop`(`perfMark`, `PF`), `i18n.js`(perfShow, perfShowHint), html(`#perf` 요소·CSS). 진단용이라 웹에는 없어도 된다.
+
+## B2. 옮기지 말 것 (모바일 전용)
+- 라인 조이스틱 이동: `15-pad`의 `PAD.lane`, `10-input` `tapAt`에서 터치 이동 제거, `engine.js`의 `this.laneJoy`, html의 `#stage.lanejoy` CSS. (engine 변경은 `g.laneJoy`를 안 주면 동작이 같다.)
+- 휴대폰에서 shadowBlur 끄기(`01-setup`의 `!Q.coarse` 조건) — 터치 기기에만 걸리므로 옮겨도 PC에는 영향 없음.
+- 스킬 버튼 CSS(흐림·그림자 제거).
+
+## C2. 웹의 APK를 최신으로
+- 최신 APK: 모바일 커밋 9c82f94 기준(2026-11-10 20:27 빌드). `C:\Users\A\Documents\samguk-rtd-mobile\dist\sangokurtd-test.apk`
+- 또는 `gh release download android-latest -R mikohatsu/samguk-rtd-mobile -D <폴더> --clobber`
+- 웹판에서 내려받는 APK를 이 파일로 바꿔 주세요.
