@@ -3,7 +3,9 @@
   const C = root.Capacitor, on = !!(C && C.isNativePlatform && C.isNativePlatform());
   const P = on ? C.Plugins || {} : {};
   // 출시 전에 실제 AdMob 광고 단위 ID로 바꾼다(지금은 구글 공식 시험용 ID)
-  const AD = { interstitial: 'ca-app-pub-3940256099942544/4411468910', testing: true };
+  // 시험용 전면 광고 ID는 iOS와 안드로이드가 다르다
+  const droid = on && C.getPlatform && C.getPlatform() === 'android';
+  const AD = { interstitial: droid ? 'ca-app-pub-3940256099942544/1033173712' : 'ca-app-pub-3940256099942544/4411468910', testing: true };
   let adReady = false;
 
   async function prepareAd() {
