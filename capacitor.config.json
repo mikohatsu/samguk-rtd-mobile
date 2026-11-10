@@ -1,0 +1,21 @@
+{
+  "appId": "com.hongsungjae.sangokurtd",
+  "appName": "三国ランダムディフェンス",
+  "webDir": "www",
+  "backgroundColor": "#1a120c",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "backgroundColor": "#1a120c",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "overlaysWebView": true
+    }
+  }
+}

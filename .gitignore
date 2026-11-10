@@ -1,0 +1,12 @@
+# 다시 만들 수 있는 것
+node_modules/
+server/node_modules/
+www/
+ios/App/App/public/
+# 비밀값·로컬 설정
+.env
+*.env
+.claude/settings.local.json
+# OS
+Thumbs.db
+.DS_Store

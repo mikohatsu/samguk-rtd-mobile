@@ -1,0 +1,20 @@
+{
+  "name": "samguk-rtd-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "삼국지 랜덤 디펜스 협동 서버",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.13.1",
+    "ws": "8.18.0"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.4"
+  }
+}
