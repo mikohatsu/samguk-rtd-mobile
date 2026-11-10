@@ -17,6 +17,18 @@ AI 도구 중 Claude가 대신 설치·연결할 수 없는 것만 모았습니�
 - [ ] 음악: Suno / Udio — 유료 요금제에서만 상업 이용 가능. 쓰실 거면 가입 후 알려 주세요.
 - [ ] 효과음·목소리: ElevenLabs — 무료는 비상업. 상업 이용은 유료.
 
+## 0. GitHub 연결 (git은 지금 이 PC 안에만 있음)
+- [ ] github.com에서 본인 계정으로 **비공개(private)** 저장소를 하나 만들기(예: `samguk-rtd-mobile`, README 없이 빈 저장소)
+- [ ] 이 폴더에서 아래 두 줄 실행. 처음 push할 때 브라우저 로그인 창이 뜹니다.
+  - `F:\Git\cmd\git.exe remote add origin https://github.com/<계정>/samguk-rtd-mobile.git`
+  - `F:\Git\cmd\git.exe push -u origin main`
+- 연결되면 Mac이 없어도 GitHub Actions(맥 빌드 서버)로 iOS 빌드를 돌릴 수 있습니다.
+
+## 0-1. iOS 앱으로 내보내기 (자세한 순서는 MAC_HANDOFF.md)
+- [ ] Apple Developer Program 가입(연 12,800엔) — 본인 인증 필요
+- [ ] 빌드 방법 고르기: (가) Mac + Xcode에서 `npm install` → `npm run ios`, (나) Mac 없이 GitHub Actions/Codemagic 같은 클라우드 맥 빌드
+- [ ] 앱 아이콘(1024×1024)·스토어 스크린샷 정하기
+
 ## 4. 게임 안 크레딧 화면 (결정 필요)
 - [ ] 새 스킬 버튼 아이콘(game-icons.net)은 **CC BY 3.0**이라 출시 때 출처 표기가 필요합니다. 지금은 CREDITS.md 파일에만 적어 두었습니다. 설정 메뉴에 '크레딧' 화면을 넣을지 알려 주세요.
 
