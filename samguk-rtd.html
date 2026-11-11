@@ -716,6 +716,54 @@ html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
 #setup .wz-foot .btn.go { background: var(--verm); border-color: #e9c98a; color: #fff3dc; filter: none; }
 #ltoast { border-color: var(--gline); }
 #lsay { background: var(--pap); color: var(--ink2); border: 1px solid rgba(60,34,16,.45); border-radius: 8px; }
+/* ---- 로비 5차: 메뉴는 그린 물건 아이콘(돈주머니·투구·죽간), 창은 비단 두루마리, 탭은 군기 모양 ----
+   그림: gfx/ic_shop.png, ic_rank.png, ic_hist.png(아이콘), ui_silk.jpg(구름무늬 비단) */
+#lmenu { grid-template-columns: repeat(3, 84px); gap: 10px; }
+#lmenu button i { width: 72px; height: 72px; font-size: 0; color: transparent; border-radius: 50%; box-shadow: none; transform: none !important; transition: transform .12s;
+  background: var(--pap); border: 2px solid #7a4a22; box-shadow: inset 0 0 0 2px rgba(251,238,218,.7), 0 5px 12px rgba(40,14,6,.45); position: relative; box-sizing: border-box; }
+#lmenu button i::after { content: ''; position: absolute; inset: -4px -2px 2px; background: center/contain no-repeat; filter: drop-shadow(0 4px 5px rgba(40,14,6,.5)); }
+#lmenu button[data-lp="shop"] i::after { background-image: url(gfx/ic_shop.png); }
+#lmenu button[data-lp="rank"] i::after { background-image: url(gfx/ic_rank.png); }
+#lmenu button[data-lp="history"] i::after { background-image: url(gfx/ic_hist.png); }
+#lmenu button:active i { transform: scale(.93) !important; }
+#lmenu button span { border-radius: 2px; border-top: 2px solid #7a4a22; border-bottom: 2px solid #7a4a22; padding: 2px 9px; font-family: var(--serif); font-weight: 700; }
+/* 창: 위아래 나무 축에 걸린 비단 두루마리 */
+.lp-box, .wz-box, #end .sheet.es { border: 0; border-image: none; border-radius: 4px; filter: none; padding: 0;
+  background: linear-gradient(180deg, rgba(22,13,8,.5), rgba(22,13,8,.72)), url(gfx/ui_silk.jpg) center/230px;
+  box-shadow: inset 0 0 0 1px rgba(201,164,92,.55), inset 0 0 0 6px rgba(20,12,8,.85), inset 0 0 0 7px rgba(201,164,92,.25), 0 18px 50px rgba(20,8,4,.75); }
+.lp-box::before, .lp-box::after, .wz-box::before, .wz-box::after, #end .sheet.es::before, #end .sheet.es::after { content: ''; flex: none; height: 14px; border-radius: 7px; z-index: 3;
+  background: linear-gradient(90deg, #d6b068 0 18px, rgba(0,0,0,0) 18px calc(100% - 18px), #d6b068 calc(100% - 18px)), linear-gradient(180deg, #9a683c 0%, #6a4020 40%, #2e1a0c 100%);
+  box-shadow: 0 2px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,230,180,.35); }
+#end .sheet.es::before { position: sticky; top: 0; } #end .sheet.es > * { margin-left: 16px; margin-right: 16px; }
+.lp-head, .wz-head { padding: 8px 14px 6px; background: none; border-bottom: 1px solid rgba(201,164,92,.35); }
+.lp-head b, .wz-head b { text-align: center; color: #f3deb0; font: 400 30px/36px "East Sea Dokdo", "Black Han Sans", serif; letter-spacing: .06em; text-shadow: 0 2px 4px rgba(0,0,0,.6); padding: 0 8px; }
+html[lang="en"] .lp-head b, html[lang="en"] .wz-head b, html[lang="zh"] .lp-head b, html[lang="zh"] .wz-head b { font: 400 20px/36px var(--display); }
+#lpclose, #wzclose { width: 34px; height: 34px; border: 1px solid #c9a45c; border-radius: 50%; background: #2a1810; color: #f3deb0; font-size: 15px; }
+#wzback { border: 1px solid rgba(201,164,92,.6); border-radius: 50%; color: #f3deb0; }
+#wzsteps { color: #b9a37c; }
+/* 탭: 축에 걸린 작은 군기. 고른 것은 주홍 깃발 */
+#lptabs { gap: 8px; padding: 0 16px; align-items: flex-start; }
+#lptabs button { border: 0; border-radius: 0; padding: 7px 14px 15px; background: linear-gradient(180deg, #3a2a20, #241711); color: #d8c8a8; font: 700 13px var(--serif);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 9px), 0 100%); }
+#lptabs button.on { background: linear-gradient(180deg, #c8402a, #8e2012); color: #fff3dc; box-shadow: none; }
+#lpbody, .wz-box .wz { padding: 12px 18px; }
+.wz-foot { padding: 10px 18px 12px; }
+/* 통계창(판 끝): 제목은 먹 붓자국 위 붓글씨, 요약 칸은 죽간(대나무 쪽) */
+.es-win, .es-lose { position: static; align-self: center; width: auto; height: auto; aspect-ratio: auto; margin: 8px 0 2px; padding: 12px 70px 16px; display: flex; align-items: center; justify-content: center; background: url(gfx/ui_ink.png) center/100% 100% no-repeat; }
+.es-win span, .es-lose span { position: static; transform: none; font: 400 58px/1 "East Sea Dokdo", "Black Han Sans", serif; letter-spacing: .08em; white-space: nowrap; }
+html[lang="en"] .es-win span, html[lang="en"] .es-lose span, html[lang="zh"] .es-win span, html[lang="zh"] .es-lose span { font-size: 40px; }
+.es-win span { color: #ffd77a; text-shadow: 0 0 14px rgba(255,190,80,.7), 0 2px 0 #000; }
+.es-lose span { color: #d9cbb6; text-shadow: 0 2px 0 #000; }
+#end .es-cards { gap: 7px; }
+#end .es-cards .es-card { border: 0; border-radius: 3px; padding: 7px 9px; box-shadow: 0 3px 8px rgba(0,0,0,.5), inset 0 0 0 1px rgba(90,60,25,.35);
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0 9%, rgba(90,60,25,.38) 9% 11%, rgba(0,0,0,0) 11% 89%, rgba(90,60,25,.38) 89% 91%, rgba(0,0,0,0) 91%), linear-gradient(90deg, #c8a467, #e3c88e 45%, #bf9a5c); }
+#end .es-card small { color: #5a3a1c; font-weight: 700; } #end .es-card b { color: #23130a; } #end .es-card i { color: #6b4a2c; }
+#end .es-card.es-diff { border-left: 5px solid var(--dc); } #end .es-card.es-diff b { color: #23130a; }
+#end .es h3 { color: #f3deb0; border-bottom: 1px solid rgba(201,164,92,.4); font: 700 15px var(--serif); }
+#end .es-again { min-width: 300px; height: 84px; margin: 12px auto 14px; padding: 0 40px 4px; border: 0; border-image: none; background: url(gfx/ui_ink.png) center/100% 100% no-repeat; color: #fbeeda; font: 400 40px/1 "East Sea Dokdo", "Black Han Sans", serif; letter-spacing: .04em; text-shadow: 0 1px 0 #000; filter: drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+html[lang="en"] #end .es-again, html[lang="zh"] #end .es-again { font-size: 28px; }
+@media (max-height: 430px) { .es-win span, .es-lose span { font-size: 40px; } .es-win, .es-lose { padding: 8px 54px 11px; margin: 4px 0 0; } #lmenu { grid-template-columns: repeat(3, 72px); } #lmenu button i { width: 60px; height: 60px; } .lp-head b, .wz-head b { font-size: 26px; line-height: 30px; } }
+@media (min-height: 600px) { #lmenu { grid-template-columns: repeat(3, 116px); } #lmenu button i { width: 100px; height: 100px; } }
 /* 일본어: 제목이 길어 글씨를 줄이고, 버튼 글자가 이미 '出陣'이라 인장은 뺀다 */
 #lbrand h1 { max-width: 62vw; }
 html[lang="ja"] #lbrand h1 { font-size: clamp(30px, 4.6vw, 60px); }
@@ -727,7 +775,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
   #lcur .cur { font-size: 16px; padding: 5px 12px 5px 5px; }
   #lbrand { top: 84px; } #lbrand .seal { width: 64px; height: 64px; font-size: 28px; }
   #lmenu { grid-template-columns: repeat(3, 108px); gap: 16px; }
-  #lmenu button i { width: 86px; height: 86px; font-size: 42px; border-radius: 8px; } #lmenu button span { font-size: 15px; padding: 3px 10px; }
+  #lmenu button i { width: 96px; height: 96px; font-size: 0; border-radius: 50%; } #lmenu button span { font-size: 15px; padding: 3px 10px; }
   #battlebtn { min-width: 440px; height: 128px; font-size: 62px; padding: 0 84px 6px 52px; } #battlebtn::after { right: 40px; width: 32px; font-size: 16px; line-height: 32px; }
   html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 44px; }
   #lplay #contbtn { min-height: 50px; font-size: 17px; padding: 8px 18px; }
@@ -736,8 +784,8 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 @media (max-height: 430px) {
   #lbrand { top: 50px; } #lbrand h1 { font-size: clamp(40px, 6.4vw, 60px); } #lbrand .seal { width: 40px; height: 40px; font-size: 18px; }
   html[lang="en"] #lbrand h1, html[lang="zh"] #lbrand h1 { font-size: clamp(28px, 4.6vw, 44px); } html[lang="ja"] #lbrand h1 { font-size: clamp(26px, 4.2vw, 40px); }
-  #lmenu { grid-template-columns: repeat(3, 68px); gap: 10px; top: auto; bottom: 112px; transform: none; }
-  #lmenu button { height: auto; padding: 0; gap: 5px; background: none; } #lmenu button i { width: 50px; height: 50px; font-size: 24px; }
+  #lmenu { grid-template-columns: repeat(3, 74px); gap: 10px; top: auto; bottom: 108px; transform: none; }
+  #lmenu button { height: auto; padding: 0; gap: 5px; background: none; } #lmenu button i { width: 62px; height: 62px; font-size: 0; }
   #battlebtn { min-width: 270px; height: 76px; padding: 0 56px 3px 32px; border-width: 0; font-size: 38px; } #battlebtn::after { right: 24px; font-size: 11px; line-height: 22px; width: 22px; }
   html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 28px; }
   #lplay #contbtn { min-height: 34px; padding: 4px 12px; font-size: 13px; }
