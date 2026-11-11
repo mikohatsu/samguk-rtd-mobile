@@ -661,6 +661,87 @@ html:not([lang=ko]) .rkf { font: 900 22px/1 "Hiragino Mincho ProN", "Yu Mincho",
 #matchbox .spin { width: 46px; height: 46px; border-radius: 50%; border: 4px solid rgba(255,216,106,.2); border-top-color: #ffd86a; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 #netbox[data-room="join"] #mk { display: none; } #netbox[data-room="create"] #code, #netbox[data-room="create"] #jn { display: none; }
+
+/* ---- 로비 4차: 수묵화풍(먹·한지·주홍 인장). 밝은 노을 배경 위에 가벼운 종이 조각과 먹 글씨를 얹는다. 철 틀은 걷어 낸다. ----
+   그림: gfx/lobby_bg.jpg(배경), lobby_char.png(배경 지운 캐릭터), ui_paper.jpg(한지), ui_ink.png(먹 붓자국) — 출처는 CREDITS.md */
+#title { --ink2: #23130a; --verm: #b8301c; --gline: #c9a45c; --cream: #fbeeda; --pap: url(gfx/ui_paper.jpg) center/260px; }
+#ldim { background: linear-gradient(180deg, rgba(70,28,12,.5) 0, rgba(70,28,12,0) 26%, rgba(30,12,6,0) 60%, rgba(26,10,5,.55) 100%); }
+#lchar { left: 1%; width: min(46vw, 64vh); }
+/* 위 줄: 한지 조각 */
+#ltop { background: none; }
+#lprof, #lcur .cur { border: 1px solid rgba(60,34,16,.5); border-image: none; border-radius: 6px; background: var(--pap); color: var(--ink2); box-shadow: 0 3px 10px rgba(40,14,6,.35); }
+#lprof { padding: 4px 14px 4px 4px; gap: 9px; }
+#lprof img { width: 42px; height: 42px; padding: 0; margin: 0; border-radius: 4px; border: 2px solid var(--verm); background: #2a1d14; box-sizing: border-box; }
+#lprof b { color: var(--ink2); font: 400 16px var(--display); } #lprof small { color: #9a2a18; font-weight: 700; }
+#lcur .cur { padding: 3px 10px 3px 4px; color: var(--ink2); }
+#lgear { width: 44px; height: 44px; border: 1px solid rgba(60,34,16,.5); border-radius: 50%; background: var(--pap); color: var(--ink2); box-shadow: 0 3px 10px rgba(40,14,6,.35); }
+/* 제목: 붓글씨 */
+#lbrand { top: 58px; right: max(22px, env(safe-area-inset-right)); display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+#lbrand h1 { font: 400 clamp(46px, 7.2vw, 92px)/0.95 "East Sea Dokdo", "Black Han Sans", serif; color: #1d1009; text-shadow: 0 0 16px rgba(255,238,206,.95), 0 0 4px rgba(255,238,206,.9); letter-spacing: .01em; }
+html[lang="en"] #lbrand h1, html[lang="zh"] #lbrand h1 { font-size: clamp(34px, 5.2vw, 66px); }
+#lbrand .seal { width: 50px; height: 50px; margin: 0; flex: none; order: 2; background: var(--verm); color: var(--cream); font-size: 22px; border-radius: 5px; box-shadow: inset 0 0 0 2px rgba(251,238,218,.5), 0 3px 8px rgba(40,14,6,.4); }
+/* 메뉴: 주홍 인장 + 종이 이름표 */
+#lmenu { grid-template-columns: repeat(3, 80px); gap: 12px; top: 52%; transform: translateY(-50%); }
+#lmenu button { height: auto; padding: 0; gap: 7px; border: 0; background: none; justify-content: flex-start; }
+#lmenu button i { width: 62px; height: 62px; display: grid; place-items: center; background: var(--verm); color: var(--cream); font: 900 30px/1 "Noto Serif KR", serif; border-radius: 6px; text-shadow: none; box-shadow: inset 0 0 0 2px rgba(251,238,218,.5), 0 5px 12px rgba(40,14,6,.45); transition: transform .12s; }
+#lmenu button:nth-child(odd) i { transform: rotate(-3deg); } #lmenu button:nth-child(even) i { transform: rotate(2.5deg); }
+#lmenu button:active i { transform: scale(.94); }
+#lmenu button span { max-width: none; overflow: visible; text-overflow: clip; padding: 2px 8px; border-radius: 3px; background: var(--pap); color: var(--ink2); font: 700 12px var(--ui); text-shadow: none; box-shadow: 0 2px 6px rgba(40,14,6,.3); }
+/* 전투 시작: 먹 붓자국 위의 붓글씨 + 출진 인장. 이어하기는 그 위의 종이 띠 */
+#lplay { flex-direction: column; align-items: flex-end; gap: 8px; }
+#battlebtn { position: relative; min-width: 330px; height: 96px; padding: 0 64px 4px 40px; border: 0; border-image: none; background: url(gfx/ui_ink.png) center/100% 100% no-repeat; color: var(--cream); font: 400 46px/1 "East Sea Dokdo", "Black Han Sans", serif; letter-spacing: .04em; text-shadow: 0 1px 0 #000; filter: drop-shadow(0 6px 10px rgba(30,12,6,.45)); }
+html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
+#battlebtn::after { content: '出陣'; position: absolute; right: 30px; top: 50%; width: 26px; padding: 5px 0; transform: translateY(-54%) rotate(4deg); writing-mode: vertical-rl; text-align: center; background: var(--verm); color: var(--cream); font: 900 13px/26px "Noto Serif KR", serif; letter-spacing: .1em; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(251,238,218,.5); text-shadow: none; }
+#battlebtn:active { transform: scale(.97); }
+#lplay #contbtn { height: auto; min-height: 40px; padding: 6px 14px; border: 1px solid rgba(60,34,16,.5); border-image: none; border-radius: 6px; background: var(--pap); color: var(--ink2); font: 700 14px var(--ui); text-shadow: none; box-shadow: 0 3px 10px rgba(40,14,6,.35); }
+/* 창(상점·랭킹·전적·설정·시작 단계): 옻칠 바탕에 금선, 머리는 한지 */
+#lpanel, #setup { background: rgba(30,12,6,.55); }
+.lp-box, .wz-box { border: 1px solid var(--gline); border-image: none; border-radius: 10px; background: linear-gradient(180deg, #2b1d14, #1a110b); filter: none; box-shadow: 0 16px 50px rgba(20,8,4,.7); color: #efe4cc; }
+.lp-head, .wz-head { padding: 9px 12px; background: var(--pap); border-bottom: 2px solid var(--verm); }
+.lp-head b, .wz-head b { padding: 0 4px; background: none; color: var(--ink2); text-align: left; line-height: 34px; font: 400 20px/34px var(--display); text-shadow: none; }
+#lpclose, #wzclose { width: 34px; height: 34px; border: 0; border-radius: 4px; background: var(--verm); color: var(--cream); font-size: 16px; }
+#wzback { width: 34px; height: 34px; border: 1px solid rgba(60,34,16,.5); border-image: none; border-radius: 4px; background: none; color: var(--ink2); }
+#wzsteps { color: #6b4a2c; }
+#lptabs button, .lp-sel button { border: 1px solid rgba(201,164,92,.35); border-image: none; border-radius: 6px; background: rgba(255,240,210,.05); padding: 7px 12px; color: #e8dcc0; }
+#lptabs button.on, .lp-sel button.on { background: var(--verm); border-color: #e9c98a; color: #fff3dc; filter: none; box-shadow: none; }
+#setup .choice button, .lp-card { border: 1px solid rgba(201,164,92,.35); border-image: none; border-radius: 8px; background: rgba(255,240,210,.06); color: #e8dcc0; }
+#setup .choice button.on, .lp-card.on { border-color: #e9c98a; background: rgba(184,48,28,.38); color: #fff3dc; box-shadow: inset 0 0 0 1px #e9c98a; }
+#setup .sec, .hs-sum div, .hs-det, #chat, #lpbody .hs-sum div, #lpbody .hs-det { border: 1px solid rgba(201,164,92,.22); border-image: none; border-radius: 8px; background: rgba(0,0,0,.22); }
+.hs-row, #lpbody .hs-row, #lpbody .setlist .row { border: 0; border-image: none; border-bottom: 1px solid rgba(201,164,92,.18); border-radius: 0; background: none; margin-bottom: 0; padding: 8px 6px; }
+#setup .wz .btn, #lpbody .btn, #lpbody .setlist button:not(.zb), #lpbody .zb { border: 1px solid rgba(201,164,92,.45); border-image: none; border-radius: 6px; background: rgba(255,240,210,.07); padding: 5px 12px; color: #efe4cc; }
+#lpbody .zb.on { background: var(--verm); border-color: #e9c98a; color: #fff3dc; filter: none; }
+#lpbody .setlist .h { color: #e9c98a; text-shadow: none; }
+.wz-foot { padding: 10px 12px; border-top: 1px solid rgba(201,164,92,.25); }
+#setup .wz-foot .btn { min-height: 48px; border: 1px solid rgba(201,164,92,.5); border-image: none; border-radius: 6px; background: rgba(255,240,210,.07); color: #efe4cc; text-shadow: none; }
+#setup .wz-foot .btn.go { background: var(--verm); border-color: #e9c98a; color: #fff3dc; filter: none; }
+#ltoast { border-color: var(--gline); }
+#lsay { background: var(--pap); color: var(--ink2); border: 1px solid rgba(60,34,16,.45); border-radius: 8px; }
+/* 일본어: 제목이 길어 글씨를 줄이고, 버튼 글자가 이미 '出陣'이라 인장은 뺀다 */
+#lbrand h1 { max-width: 62vw; }
+html[lang="ja"] #lbrand h1 { font-size: clamp(30px, 4.6vw, 60px); }
+html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn { padding-right: 40px; }
+/* 태블릿처럼 큰 화면: 조각들을 키운다 */
+@media (min-height: 600px) {
+  #lprof { padding: 6px 18px 6px 6px; } #lprof img { width: 54px; height: 54px; } #lprof b { font-size: 20px; } #lprof small { font-size: 13px; }
+  #lgear { width: 56px; height: 56px; } #lgear svg { width: 28px; height: 28px; }
+  #lcur .cur { font-size: 16px; padding: 5px 12px 5px 5px; }
+  #lbrand { top: 84px; } #lbrand .seal { width: 64px; height: 64px; font-size: 28px; }
+  #lmenu { grid-template-columns: repeat(3, 108px); gap: 16px; }
+  #lmenu button i { width: 86px; height: 86px; font-size: 42px; border-radius: 8px; } #lmenu button span { font-size: 15px; padding: 3px 10px; }
+  #battlebtn { min-width: 440px; height: 128px; font-size: 62px; padding: 0 84px 6px 52px; } #battlebtn::after { right: 40px; width: 32px; font-size: 16px; line-height: 32px; }
+  html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 44px; }
+  #lplay #contbtn { min-height: 50px; font-size: 17px; padding: 8px 18px; }
+  #lplay { right: max(28px, env(safe-area-inset-right)); bottom: max(26px, env(safe-area-inset-bottom)); } #lmenu { right: max(28px, env(safe-area-inset-right)); } #lbrand { right: max(30px, env(safe-area-inset-right)); }
+}
+@media (max-height: 430px) {
+  #lbrand { top: 50px; } #lbrand h1 { font-size: clamp(40px, 6.4vw, 60px); } #lbrand .seal { width: 40px; height: 40px; font-size: 18px; }
+  html[lang="en"] #lbrand h1, html[lang="zh"] #lbrand h1 { font-size: clamp(28px, 4.6vw, 44px); } html[lang="ja"] #lbrand h1 { font-size: clamp(26px, 4.2vw, 40px); }
+  #lmenu { grid-template-columns: repeat(3, 68px); gap: 10px; top: auto; bottom: 112px; transform: none; }
+  #lmenu button { height: auto; padding: 0; gap: 5px; background: none; } #lmenu button i { width: 50px; height: 50px; font-size: 24px; }
+  #battlebtn { min-width: 270px; height: 76px; padding: 0 56px 3px 32px; border-width: 0; font-size: 38px; } #battlebtn::after { right: 24px; font-size: 11px; line-height: 22px; width: 22px; }
+  html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 28px; }
+  #lplay #contbtn { min-height: 34px; padding: 4px 12px; font-size: 13px; }
+}
 </style>
 
 <div id="app" hidden>

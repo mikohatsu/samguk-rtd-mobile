@@ -96,7 +96,7 @@
   // 생성 AI 등으로 만든 배경 그림(gfx/lobby_bg.jpg)이 있으면 그것을 화면에 꽉 차게 그린다
   const bgImg = typeof Image !== 'undefined' ? new Image() : null;
   let bgOk = false, bgBad = false, waiting = [];
-  if (bgImg) { bgImg.onload = () => { bgOk = true; waiting.forEach(paint); waiting = []; }; bgImg.onerror = () => { bgBad = true; waiting = []; }; bgImg.src = 'gfx/lobby_bg.jpg?v=2'; }
+  if (bgImg) { bgImg.onload = () => { bgOk = true; waiting.forEach(paint); waiting = []; }; bgImg.onerror = () => { bgBad = true; waiting = []; }; bgImg.src = 'gfx/lobby_bg.jpg?v=3'; }
   function paint(cv) {
     if (!bgOk && bgImg && bgImg.complete && bgImg.naturalWidth) bgOk = true; // 캐시에서 바로 받아져 onload보다 먼저 그려질 때
     if (bgOk) {
@@ -104,7 +104,7 @@
       const w = bgImg.naturalWidth * k, h = bgImg.naturalHeight * k;
       c.drawImage(bgImg, (W - w) / 2, (H - h) / 2, w, h);
       const vg = c.createRadialGradient(W * 0.55, H * 0.55, H * 0.3, W * 0.55, H * 0.55, W * 0.75);
-      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(8,4,2,.7)'); c.fillStyle = vg; c.fillRect(0, 0, W, H);
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(40,16,8,.22)'); c.fillStyle = vg; c.fillRect(0, 0, W, H); // 밝은 수묵화풍 배경이라 가장자리만 살짝 누른다
       return;
     }
     paintPalace(cv);

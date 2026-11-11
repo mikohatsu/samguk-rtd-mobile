@@ -86,7 +86,7 @@
   }
 
   // ---------- 로비 캐릭터 ----------
-  const charImg = new Image(); charImg.src = 'gfx/il_choseon.jpg?v=1';
+  const charImg = new Image(); charImg.src = 'gfx/lobby_char.png?v=1'; // 배경을 지운 그림(밝은 로비 배경 위에 그대로 세운다)
   let sayT = 0, hop = 0, lineI = 0;
   function charLoop(now) {
     requestAnimationFrame(charLoop);
@@ -98,9 +98,11 @@
     const x = cv.getContext('2d'), t = now / 1000;
     x.clearRect(0, 0, W, H);
     // 그림 맞추기(아래 붙임)
-    const ih = charImg.naturalHeight, iw = charImg.naturalWidth, sc = Math.min(H * 1.02 / ih, W * 1.15 / iw), dw = iw * sc, dh = ih * sc, ox = (W - dw) / 2, oy = H - dh;
+    const ih = charImg.naturalHeight, iw = charImg.naturalWidth, sc = Math.min(H * 0.94 / ih, W * 1.0 / iw), dw = iw * sc, dh = ih * sc, ox = (W - dw) / 2, oy = H - dh;
     hop = Math.max(0, hop - 1 / 60);
     const jump = Math.sin(Math.min(1, hop / 0.45) * Math.PI) * 16 * dpr;
+    // 발밑 그림자(배경 위에 떠 보이지 않게)
+    { const gx = W / 2, gy = H - dh * 0.035, rw = dw * 0.34, sh2 = x.createRadialGradient(gx, gy, 0, gx, gy, rw); sh2.addColorStop(0, 'rgba(30,12,6,.5)'); sh2.addColorStop(1, 'rgba(30,12,6,0)'); x.save(); x.translate(0, gy); x.scale(1, 0.22); x.translate(0, -gy); x.fillStyle = sh2; x.fillRect(gx - rw, gy - rw, rw * 2, rw * 2); x.restore(); }
     // 가로 띠로 잘라 위로 갈수록 살랑이게, 가슴 높이는 숨쉬듯 아주 조금 부풀었다 가라앉게
     const N = 90, sh = ih / N;
     for (let i = 0; i < N; i++) {
@@ -111,16 +113,6 @@
       const yy = oy + sy * sc - jump - (1 - k) * 0;
       x.drawImage(charImg, 0, sy, iw, sh + 0.6, ox + sway - (breathe - 1) * dw / 2, yy, dw * breathe, sh * sc + 0.6);
     }
-    // 가장자리를 배경에 녹인다(그림의 어두운 바탕이 네모로 보이지 않게 가운데만 남긴다)
-    // 캔버스 모양에 맞춘 타원 마스크(가운데 남기고 네 변으로 갈수록 투명)
-    x.save(); x.translate(W / 2, H * 0.5); x.scale(W / 2, H / 2);
-    const gr = x.createRadialGradient(0, 0, 0.35, 0, 0, 1);
-    gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.6, 'rgba(0,0,0,.85)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    x.globalCompositeOperation = 'destination-in'; x.fillStyle = gr; x.fillRect(-1, -1, 2, 2); x.restore();
-    // 발밑은 아래로 갈수록 지운다(destination-in은 칠한 곳 밖을 다 지우므로 out으로)
-    const fb = x.createLinearGradient(0, H * 0.82, 0, H); fb.addColorStop(0, 'rgba(0,0,0,0)'); fb.addColorStop(1, 'rgba(0,0,0,1)');
-    x.globalCompositeOperation = 'destination-out'; x.fillStyle = fb; x.fillRect(0, H * 0.82, W, H * 0.18);
-    x.globalCompositeOperation = 'source-over';
     if (sayT && now > sayT) { $('lsay').hidden = true; sayT = 0; }
   }
   function charTap() {
