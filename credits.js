@@ -64,7 +64,7 @@
     h += `<h3>${t('fonts')}</h3><ul>` + FONTS.map(([n, c]) => `<li>${esc(n)}<br><small>${esc(c)}</small></li>`).join('') + `</ul><p><small>SIL Open Font License, Version 1.1 — https://openfontlicense.org</small></p><p>${esc(FONT_FREE)}</p><details><summary>${t('full')} (OFL 1.1)</summary><pre>${esc(OFL)}</pre></details>`;
     h += `<h3>${t('oss')}</h3><ul>` + OSS.map(([n, c]) => `<li>${esc(n)}<br><small>${esc(c)}</small></li>`).join('') + `</ul><details><summary>${t('full')} (MIT)</summary><pre>${esc(MIT)}</pre></details>`;
     h += `<h3>${t('sfx')}</h3><ul>` + CC0.map((s) => `<li>${esc(s)}</li>`).join('') + '</ul>';
-    h += `<h3>${t('art')}</h3><p>${t('artNote')}</p><p><small>${t('disc')}</small></p>`;
+    h += `<h3>${t('art')}</h3><p>${t('artNote')}</p><p>Canva AI · Higgsfield (Z Image)</p><p><small>${t('disc')}</small></p>`;
     return h;
   }
   let openedAt = 0;
