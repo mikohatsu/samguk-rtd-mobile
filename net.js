@@ -2,7 +2,7 @@
 // 라인은 각자 클라이언트가 돌리지만, 시계(라운드·남은 시간·단계·배속)와 보스는 방장이 결정하고 모두 그 값에 맞춘다.
 // 반응이 없는 사람이 생기면 모두 멈추고, 오래 끊기면 방에서 제외한다.
 (function (root) {
-  const TOPICS = ['phase', 'hz', 'pattern', 'bs', 'dmg', 'wiped', 'start', 'pop', 'clk', 'sup', 'vol', 'chat'];
+  const TOPICS = ['phase', 'hz', 'pattern', 'bs', 'dmg', 'wiped', 'start', 'pop', 'clk', 'sup', 'vol', 'chat', 'chatno'];
   const STALL_MS = 4000, DROP_MS = 60000; // 반응 없는 사람은 60초 뒤 제외(앱을 내려도 그동안은 자리를 지킨다)
 
   async function roomTransport(code) {
@@ -159,6 +159,7 @@
       this.t.on('vol', (d) => { if (this.game && d && d.r === this.game.round) { const L = root.RTD_I18N; const line = L ? L.t('volLine' + ((d.i | 0) % 3)) : ''; this.game.log('toast', { text: `${String(d.n).slice(0, 12)}: "${line}"`, tone: 'good' }); } });
       // 방 채팅: 서버가 거른 글만 보인다(내가 보낸 글도 서버를 거쳐 돌아온 것을 쓴다)
       this.t.on('chat', (d, peer, self) => { if (!self && d && this.onChat) this.onChat(d, peer); });
+      this.t.on('chatno', (d) => { if (d && this.onChatNo) this.onChatNo(d); }); // 내 채팅이 막혔을 때(도배·광고) 서버가 나에게만 보낸다
       this.t.on('pattern', (d, peer, self) => { if (!self && this.game) { this.game.log('pattern', { name: d.n }); this.game.log('sfx', { s: 'warn' }); } });
       this.t.on('pop', (d, peer, self) => {
         const g = this.game;

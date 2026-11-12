@@ -36,7 +36,14 @@
     loginFirst: ['온라인은 로그인이 필요합니다.', 'オンラインはログインが必要です。', 'Online play requires signing in.', '在线模式需要登录。'], openAcc: ['계정 열기', 'アカウントを開く', 'Open account', '打开账号'],
     chatJoin: ['{a} 님이 들어왔습니다.', '{a}さんが入室しました。', '{a} joined.', '{a} 加入了。'], chatLeft: ['{a} 님이 나갔습니다.', '{a}さんが退室しました。', '{a} left.', '{a} 离开了。'],
     report: ['신고', '通報', 'Report', '举报'], block: ['차단', 'ブロック', 'Block', '屏蔽'], unblock: ['차단 풀기', 'ブロック解除', 'Unblock', '解除屏蔽'], reported: ['신고했습니다. 운영자가 확인합니다.', '通報しました。運営が確認します。', 'Reported. We will review it.', '已举报，运营将核实。'], blocked: ['차단한 사람의 채팅은 보이지 않습니다.', 'ブロックした人のチャットは表示されません。', "Blocked players' messages are hidden.", '已屏蔽该玩家的聊天。'],
-    chatRule: ['욕설·비방은 가려지고, 신고된 채팅은 운영자가 확인합니다.', '暴言・誹謗は伏せ字になり、通報されたチャットは運営が確認します。', 'Abusive words are masked; reported messages are reviewed.', '辱骂会被屏蔽，被举报的聊天将由运营核实。'],
+    chatRule: ['욕설은 가려지고 광고·도배는 차단됩니다. 신고된 채팅은 운영자가 확인합니다.', '暴言は伏せ字になり、広告・連投はブロックされます。通報されたチャットは運営が確認します。', 'Abusive words are masked; ads and spam are blocked. Reported messages are reviewed.', '脏话会被屏蔽，广告和刷屏会被拦截。被举报的聊天由管理员审核。'],
+    lchat: ['로비 채팅', 'ロビーチャット', 'Lobby chat', '大厅聊天'], chN: ['채널 {n}', 'チャンネル{n}', 'Channel {n}', '频道{n}'], lcSend: ['보내기', '送信', 'Send', '发送'], lcPh: ['메시지 입력', 'メッセージを入力', 'Type a message', '输入消息'],
+    chEnter: ['채널 {n}에 들어왔습니다. (지금 {c}명)', 'チャンネル{n}に入りました。（現在{c}人）', 'Joined channel {n}. ({c} here now)', '已进入频道{n}。（当前{c}人）'], chFull: ['그 채널은 가득 찼습니다.', 'そのチャンネルは満員です。', 'That channel is full.', '该频道已满。'],
+    lcWait: ['채팅 서버에 연결하는 중…', 'チャットサーバーに接続中…', 'Connecting to chat…', '正在连接聊天服务器…'], lcBar: ['채팅 · 채널 {n} ({c}명)', 'チャット・チャンネル{n}（{c}人）', 'Chat · Ch {n} ({c})', '聊天·频道{n}（{c}人）'],
+    no_fast: ['너무 빨리 보내고 있습니다. 잠시 뒤에 보내 주세요.', '送信が速すぎます。少し待ってから送ってください。', 'You are sending too fast. Please wait a moment.', '发送过快，请稍后再发。'],
+    no_dup: ['같은 말을 연달아 보낼 수 없습니다.', '同じ内容を続けて送ることはできません。', 'You cannot send the same message twice in a row.', '不能连续发送相同内容。'],
+    no_ad: ['광고·연락처·주소는 보낼 수 없습니다.', '広告・連絡先・URLは送信できません。', 'Ads, contact details and links cannot be sent.', '不能发送广告、联系方式或链接。'],
+    no_mute: ['도배·광고로 채팅이 {s}초 동안 막혔습니다.', '連投・広告のため、チャットが{s}秒間制限されました。', 'Chat is muted for {s}s due to spam or ads.', '因刷屏或广告，聊天已被禁言{s}秒。'],
     tapLines: [['오늘도 출진하시나요?', '今日も出陣されますか？', 'Heading out to battle today?', '今天也要出征吗？'], ['연환계라면 제게 맡기세요.', '連環の計なら私にお任せを。', 'Leave the chain stratagem to me.', '连环计就交给我吧。'], ['천하는 넓고, 영웅은 많지요.', '天下は広く、英雄は多いもの。', 'The realm is wide, and heroes are many.', '天下之大，英雄辈出。'], ['너무 빤히 보시면… 부끄러워요.', 'そんなに見つめられると…恥ずかしいです。', "Don't stare so… it's embarrassing.", '这样盯着看……人家会害羞的。']],
   };
   const L = (k, v) => { let s = nm(S[k] || [k]); if (v) Object.keys(v).forEach((x) => (s = s.split('{' + x + '}').join(v[x]))); return s; };
@@ -198,6 +205,7 @@
   const tabs = (list) => { if (!ptab || !list.some(([k]) => k === ptab)) ptab = list[0][0]; $('lptabs').innerHTML = list.map(([k, l]) => `<button type="button" class="${ptab === k ? 'on' : ''}" data-ptab="${k}">${l}</button>`).join(''); };
   async function renderPanel() {
     if (!panel) return;
+    if (panel === 'lchat') { renderLchat(); return; }
     const me = C.ACC.me, body = $('lpbody');
     if (panel === 'account') {
       $('lptabs').innerHTML = '';
@@ -378,6 +386,7 @@
     const l = C.getLobby();
     if (!l || l === chatNet) return;
     chatNet = l; $('chatlog').innerHTML = `<div class="sys">${L('chatRule')}</div>`; seenPeers = null;
+    l.onChatNo = (d) => chatLine(`<div class="sys warn">${esc(chatNo(d))}</div>`);
     l.onChat = (d, peer) => {
       const me = l.roster().find((p) => p.me), mine = me && me.id === peer, nick = String(d.n || '?');
       if (!mine && blocked.includes(nick)) return;
@@ -391,7 +400,71 @@
     if (seenPeers) { now.filter((n) => !seenPeers.includes(n)).forEach((n) => chatLine(`<div class="sys">${esc(L('chatJoin', { a: n }))}</div>`)); seenPeers.filter((n) => !now.includes(n)).forEach((n) => chatLine(`<div class="sys">${esc(L('chatLeft', { a: n }))}</div>`)); }
     seenPeers = now;
   }
+  const chatNo = (d) => L('no_' + (['fast', 'dup', 'ad', 'mute'].includes(d && d.why) ? d.why : 'fast'), { s: (d && d.s) || 0 });
   function sendChat() { const inp = $('chatin'), l = C.getLobby(); const v = inp.value.trim(); if (!v || !l || !l.chat) return; l.chat(v); inp.value = ''; }
+
+
+  // ---------- 로비 채팅 ----------
+  // 로비에 있는 동안만 연결한다(판을 시작하면 끊는다). 채널은 서버가 빈 곳으로 넣어 주고, 창의 탭으로 옮길 수 있다.
+  const lc = { ws: null, id: null, ch: 0, list: [], max: 50, lines: [], retryT: null, want: false };
+  const lcOpen = () => lc.ws && lc.ws.readyState === 1;
+  function lcPush(o) { lc.lines.push(o); if (lc.lines.length > 80) lc.lines.shift(); lcBar(); if (panel === 'lchat') { const log = $('lclog'); if (log) { log.insertAdjacentHTML('beforeend', lcHtml(o)); while (log.children.length > 80) log.firstChild.remove(); log.scrollTop = log.scrollHeight; } } }
+  const lcHtml = (o) => (o.sys ? `<div class="sys${o.warn ? ' warn' : ''}">${esc(o.sys)}</div>`
+    : `<div class="cl"><b>${esc(o.n)}</b><span>${esc(o.x)}</span>${o.self ? '' : `<span class="op"><button type="button" data-lcrep="${esc(o.id)}" data-nick="${esc(o.n)}" data-text="${esc(o.x)}">${L('report')}</button><button type="button" data-chatblock="${esc(o.n)}">${L('block')}</button></span>`}</div>`);
+  function lcBar() {
+    const bar = $('lchatbar'); if (!bar) return;
+    bar.hidden = !(C && C.ACC.token);
+    if (bar.hidden) return;
+    const cnt = (lc.list.find(([n]) => n === lc.ch) || [0, 0])[1];
+    const last = lc.lines.filter((o) => !o.sys).slice(-1)[0];
+    bar.innerHTML = `<b>${esc(lcOpen() && lc.ch ? L('lcBar', { n: lc.ch, c: cnt }) : L('lchat'))}</b><span>${last ? esc(last.n + ': ' + last.x) : ''}</span>`;
+  }
+  function lcConnect() {
+    if (lc.ws || !C.ACC.token) return;
+    const base = root.RTD_SERVER || (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+    let ws;
+    try { ws = new WebSocket(`${base}/ws?lobby=1&t=${encodeURIComponent(C.ACC.token)}`); } catch (e) { return; }
+    lc.ws = ws;
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.k === 'hello') lc.id = m.id;
+      else if (m.k === 'ch') {
+        const moved = m.n !== lc.ch; lc.ch = m.n; lc.list = m.list || []; lc.max = m.max || 50;
+        if (moved) { lc.lines = []; if (panel === 'lchat') renderLchat(); lcPush({ sys: L('chatRule') }); lcPush({ sys: L('chEnter', { n: m.n, c: (lc.list.find(([n]) => n === m.n) || [0, 1])[1] }) }); }
+        else if (panel === 'lchat') lcTabs();
+        lcBar();
+      } else if (m.k === 'say') { if (m.self || !blocked.includes(String(m.n))) lcPush({ id: m.id, n: String(m.n || '?'), x: String(m.x || ''), self: !!m.self }); }
+      else if (m.k === 'no') lcPush({ sys: m.why === 'full' ? L('chFull') : chatNo(m), warn: 1 });
+      else if (m.k === 'error') lc.want = false; // 로그인이 풀렸거나 서버가 가득 참: 다시 붙지 않는다
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => {
+      if (lc.ws !== ws) return;
+      lc.ws = null; lc.ch = 0; lcBar(); if (panel === 'lchat') lcTabs();
+      if (lc.want && !lc.retryT) lc.retryT = setTimeout(() => { lc.retryT = null; lcSync(); }, 4000);
+    };
+  }
+  function lcClose() { const ws = lc.ws; lc.ws = null; lc.ch = 0; if (ws) { try { ws.close(); } catch (e) { /* 무시 */ } } }
+  // 로비가 보이고 로그인돼 있으면 붙고, 아니면 끊는다
+  let lcTok = null;
+  function lcSync() {
+    const t = $('title'), tok = (C && C.ACC.token) || null, on = !!(tok && t && !t.hidden);
+    if (on !== lc.want || tok !== lcTok) { if (lc.want) { lcClose(); lc.lines = []; if (panel === 'lchat' && !on) closePanel(); } lc.want = on; lcTok = tok; }
+    if (on && !lc.retryT) lcConnect();
+    lcBar();
+  }
+  const lcSend = (m) => { if (lcOpen()) lc.ws.send(JSON.stringify(m)); };
+  function lcTabs() {
+    $('lptabs').innerHTML = lcOpen() ? lc.list.map(([n, c]) => `<button type="button" class="${n === lc.ch ? 'on' : ''}" data-lch="${n}">${esc(L('chN', { n }))} <small>${c}/${lc.max}</small></button>`).join('') : `<span class="lcwait">${L('lcWait')}</span>`;
+  }
+  function renderLchat() {
+    lcTabs();
+    $('lpbody').innerHTML = `<div id="lchat"><div id="lclog" class="chatlog">${lc.lines.map(lcHtml).join('')}</div><div class="inline"><input id="lcin" maxlength="80" enterkeyhint="send" placeholder="${esc(L('lcPh'))}"><button class="btn" id="lcsend" type="button">${L('lcSend')}</button></div></div>`;
+    const log = $('lclog'); log.scrollTop = log.scrollHeight;
+    const say = () => { const inp = $('lcin'), v = inp.value.trim(); if (!v || !lcOpen()) return; lcSend({ k: 'say', x: v }); inp.value = ''; };
+    $('lcsend').onclick = say; $('lcin').addEventListener('keydown', (e) => { if (e.key === 'Enter') say(); });
+    lcSend({ k: 'ch' }); // 채널 인원을 새로 받는다
+  }
 
   // ---------- 시작 ----------
   function init(ctx) {
@@ -399,6 +472,7 @@
     $('battlebtn').onclick = openWizard;
     $('wzclose').onclick = closeWizard; $('wzback').onclick = back; $('wznext').onclick = next;
     $('lpclose').onclick = closePanel;
+    setInterval(lcSync, 3000); // 로그인·로비 표시가 바뀌면 채팅 연결을 맞춘다
     $('lchar').onclick = charTap;
     $('chatsend').onclick = sendChat;
     $('chatin').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
@@ -414,7 +488,10 @@
       const bb = e.target.closest('[data-buy]'); if (bb) { buy(bb.dataset.buy); return; }
       const eq = e.target.closest('[data-equip]'); if (eq) { equip(eq.dataset.equip, eq.dataset.id, eq.dataset.unit); return; }
       const rp = e.target.closest('[data-chatrep]'); if (rp) { const l = C.getLobby(); C.api('/api/report', { room: l && l.code, slot: rp.dataset.chatrep, nick: rp.dataset.nick, text: rp.dataset.text }).then(() => chatLine(`<div class="sys">${L('reported')}</div>`)); rp.disabled = true; return; }
-      const bl = e.target.closest('[data-chatblock]'); if (bl) { if (!blocked.includes(bl.dataset.chatblock)) blocked.push(bl.dataset.chatblock); saveBlock(); chatLine(`<div class="sys">${L('blocked')}</div>`); return; }
+      const lch = e.target.closest('[data-lch]'); if (lch) { lcSend({ k: 'ch', n: +lch.dataset.lch }); return; }
+      const lrp = e.target.closest('[data-lcrep]'); if (lrp) { C.api('/api/report', { room: '#lobby', slot: lrp.dataset.lcrep, nick: lrp.dataset.nick, text: lrp.dataset.text }).then(() => lcPush({ sys: L('reported') })); lrp.disabled = true; return; }
+      const bl = e.target.closest('[data-chatblock]'); if (bl && bl.closest('#lchat')) { if (!blocked.includes(bl.dataset.chatblock)) blocked.push(bl.dataset.chatblock); saveBlock(); lc.lines = lc.lines.filter((o) => o.sys || o.self || o.n !== bl.dataset.chatblock); renderLchat(); lcPush({ sys: L('blocked') }); return; }
+      if (bl) { if (!blocked.includes(bl.dataset.chatblock)) blocked.push(bl.dataset.chatblock); saveBlock(); chatLine(`<div class="sys">${L('blocked')}</div>`); return; }
       if (panel === 'settings' && e.target.closest('[data-act]')) setTimeout(renderPanel, 60);
     });
     requestAnimationFrame(charLoop);
@@ -423,6 +500,7 @@
   function refresh() {
     if (!C) return;
     renderTop(); showStep(); watchRoster();
+    lcSync();
     // 생성 그림을 다 불러온 뒤 내 아이콘을 다시 그린다(먼저 그리면 옛 도형 그림이 보임)
     if (Art.ready && Art.ready.then) Art.ready.then(() => renderTop());
     const ms = (C.ACC.me && C.ACC.me.mapSkin) || 'spring'; if (ms !== painted) { painted = ms; C.repaintMap(); }

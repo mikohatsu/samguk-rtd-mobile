@@ -92,14 +92,11 @@ function tryMatch(diff) {
   }
 }
 const pub = (u) => ({ nick: shownNick(u.nick), icon: iconOf(u), level: levelOf(u.xp), grade: gradeOf(u) });
-// 금칙어(채팅은 *** 로 가리고, 닉네임은 거절). 운영하며 늘린다.
-const BAD = ['씨발', '시발', 'ㅅㅂ', '병신', 'ㅂㅅ', '좆', '개새끼', '느금', '니애미', '섹스', '자지', '보지', '씹', '창녀', '걸레년', 'fuck', 'shit', 'bitch', 'cunt', 'nigger', 'faggot', 'porn', 'pussy', 'dick', '死ね', 'しね', 'ころす', 'きちがい', 'ちんこ', 'まんこ', 'セックス', '傻逼', '操你', '他妈的', '去死', '鸡巴', '做爱', '婊子'];
-// 닉네임: 띄어쓰기·기호·숫자를 빼고 소문자로 바꿔 검사한다('섹 스', 's.e.x' 같은 우회도 잡는다)
-const squash = (s) => String(s || '').toLowerCase().replace(/[\s\d_\-.·,!?~*'"`^()[\]{}|/\\+=:;@#$%&]/g, '');
-const nickBad = (n) => { const q = squash(n); return BAD.some((w) => q.includes(w.toLowerCase())); };
+// 금칙어·광고·도배 검사는 chat.js에 있다(채팅은 가리거나 막고, 닉네임은 거절).
+const CHAT = require('./chat');
+const nickBad = CHAT.nickBad;
 // 이미 쓰고 있는 나쁜 닉네임은 다른 사람에게 *** 로 보인다(본인은 바꾸라는 안내를 받는다)
 const shownNick = (n) => (nickBad(n) ? '***' : n);
-const clean = (txt) => { let o = String(txt || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 80); BAD.forEach((w) => { const re = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); o = o.replace(re, '*'.repeat(w.length)); }); return o; };
 
 // 같은 주소에서 너무 자주 부르면 막는다(가입·로그인 무차별 대입 방지)
 const hits = new Map();
@@ -270,7 +267,8 @@ async function handle(req, res, url, query) {
     // 채팅 신고: 방·자리로 상대 계정을 찾아 기록만 남긴다(운영자가 확인)
     if (limited(ip + u.id, 'rep', 10, 3600000)) return json(res, 429, { error: 'slow_down' });
     const room = rooms.get(String(b.room || '').toLowerCase()), p = room && room.get(String(b.slot || ''));
-    await store.report({ by: u.id, target: p ? p.uid : null, nick: String(b.nick || '').slice(0, 12), text: String(b.text || '').slice(0, 120), room: String(b.room || '').slice(0, 12) });
+    const target = b.room === '#lobby' ? lobbyUid(String(b.slot || '')) : (p ? p.uid : null);
+    await store.report({ by: u.id, target, nick: String(b.nick || '').slice(0, 12), text: String(b.text || '').slice(0, 120), room: String(b.room || '').slice(0, 12) });
     return json(res, 200, { ok: true });
   }
   if (url === '/api/track') {
@@ -365,7 +363,7 @@ wss.on('connection', (ws, req) => {
   ws.on('pong', () => (ws.alive = true));
   // 인증은 저장소 조회가 끝난 뒤. 그 사이에 온 메시지는 잃지 않게 모아 둔다.
   const early = []; const keep = (raw) => early.push(raw); ws.on('message', keep);
-  store.userByToken(q.get('t') || '').then((u) => { ws.off('message', keep); joinRoom(ws, q, u, early); })
+  store.userByToken(q.get('t') || '').then((u) => { ws.off('message', keep); if (q.get('lobby')) joinLobby(ws, u, early); else joinRoom(ws, q, u, early); })
     .catch(() => { send(ws, { k: 'error', code: 'auth' }); ws.close(); });
 });
 function joinRoom(ws, q, u, early) {
@@ -401,10 +399,10 @@ function joinRoom(ws, q, u, early) {
       delete m.p.name; delete m.p.lv; delete m.p.gr; delete m.p.ic; delete m.p.away;
       Object.assign(me.state, m.p); broadcast(room, id, { k: 'pres', id, p: m.p });
     } else if (m.k === 'msg' && m.t === 'chat') {
-      // 채팅: 1초에 1번, 80자, 금칙어 가림. 보낸 사람에게도 가린 글을 돌려준다.
-      const now = Date.now(); if (now - (me.chatT || 0) < 1000) return; me.chatT = now;
-      const txt = clean(m.d && m.d.x); if (!txt.trim()) return;
-      const out = { k: 'msg', from: id, t: 'chat', d: { x: txt, n: shownNick(u.nick) } };
+      // 채팅: 도배·광고는 막고(보낸 사람에게만 까닭을 알린다), 욕설은 가려서 보낸다. 보낸 사람에게도 가린 글을 돌려준다.
+      const c = CHAT.check(u.id, m.d && m.d.x);
+      if (!c.ok) { if (c.why !== 'empty') send(ws, { k: 'msg', from: id, t: 'chatno', d: { why: c.why, s: c.s || 0 }, self: 1 }); return; }
+      const out = { k: 'msg', from: id, t: 'chat', d: { x: c.text, n: shownNick(u.nick) } };
       broadcast(room, id, out); send(ws, Object.assign({}, out, { self: 1 }));
     } else if (m.k === 'msg' && typeof m.t === 'string') broadcast(room, id, { k: 'msg', from: id, t: m.t, d: m.d });
   };
@@ -416,6 +414,60 @@ function joinRoom(ws, q, u, early) {
     broadcast(room, id, { k: 'pres', id, p: { away: 1 } });
   });
 }
+// ---------- 로비 채팅 ----------
+// 로비에 있는 사람끼리의 채팅. 한 채널에 CH_MAX명까지, 넘치면 다음 채널이 생긴다(서버 한 대 안에서 나눈다).
+// 채널 번호 → Map(연결 id → { ws, uid, nick })
+const CH_MAX = 50, CH_LIMIT = 99;
+const channels = new Map(), lobbyOf = new Map(); // lobbyOf: 계정 → 그 계정의 로비 연결(한 계정 한 연결)
+const chCount = (n) => (channels.get(n) ? channels.get(n).size : 0);
+function chList() {
+  // 사람이 있는 채널과, 들어갈 수 있는 빈 채널 하나
+  const out = []; let spare = 0;
+  for (let n = 1; n <= CH_LIMIT; n++) { const c = chCount(n); if (c) out.push([n, c]); else if (!spare) spare = n; }
+  if (spare && out.every(([, c]) => c >= CH_MAX * 0.8)) out.push([spare, 0]);
+  return out.sort((a, b) => a[0] - b[0]);
+}
+function chPick() { for (let n = 1; n <= CH_LIMIT; n++) if (chCount(n) < CH_MAX) return n; return 0; }
+function joinLobby(ws, u, early) {
+  if (!u) { send(ws, { k: 'error', code: 'auth' }); ws.close(); return; }
+  const old = lobbyOf.get(u.id); if (old && old.ws !== ws) { try { old.ws.close(); } catch (e) { /* 무시 */ } old.leave(); }
+  const id = 'c' + String(nextId++).padStart(6, '0'), me = { ws, uid: u.id, nick: shownNick(u.nick), ch: 0, id };
+  const info = () => send(ws, { k: 'ch', n: me.ch, max: CH_MAX, list: chList() });
+  const enter = (n) => {
+    if (me.ch === n) return info();
+    if (n < 1 || n > CH_LIMIT || chCount(n) >= CH_MAX) { send(ws, { k: 'no', why: 'full' }); return info(); }
+    me.leave(); me.ch = n;
+    const ch = channels.get(n) || new Map(); ch.set(id, me); channels.set(n, ch); info();
+  };
+  me.leave = () => { const ch = channels.get(me.ch); if (ch) { ch.delete(id); if (!ch.size) channels.delete(me.ch); } me.ch = 0; };
+  lobbyOf.set(u.id, me);
+  const first = chPick(); if (!first) { send(ws, { k: 'error', code: 'full' }); ws.close(); return; }
+  send(ws, { k: 'hello', id }); enter(first);
+  const onMsg = (raw) => {
+    let m;
+    try { m = JSON.parse(raw); } catch (e) { return; }
+    if (m.k === 'ch') { if (m.n) enter(m.n | 0); else info(); }
+    else if (m.k === 'say') {
+      const c = CHAT.check(u.id, m.x);
+      if (!c.ok) { if (c.why !== 'empty') send(ws, { k: 'no', why: c.why, s: c.s || 0 }); return; }
+      const ch = channels.get(me.ch); if (!ch) return;
+      ch.forEach((p) => send(p.ws, { k: 'say', id, n: me.nick, x: c.text, self: p === me ? 1 : 0 }));
+    }
+  };
+  ws.on('message', onMsg);
+  (early || []).forEach(onMsg);
+  ws.on('close', () => { me.leave(); if (lobbyOf.get(u.id) === me) lobbyOf.delete(u.id); });
+}
+// 채널 인원이 바뀌면 5초마다 로비에 있는 모두에게 알린다
+let chSeen = '';
+setInterval(() => {
+  const list = chList(), key = JSON.stringify(list);
+  if (key === chSeen) return; chSeen = key;
+  channels.forEach((ch, n) => ch.forEach((p) => send(p.ws, { k: 'ch', n, max: CH_MAX, list })));
+}, 5000);
+// 신고할 때 로비 연결 id로 상대 계정을 찾는다
+function lobbyUid(cid) { let uid = null; channels.forEach((ch) => { const p = ch.get(cid); if (p) uid = p.uid; }); return uid; }
+
 // 60초 넘게 돌아오지 않은 자리는 비운다. 남은 사람은 그 사람 없이 계속한다.
 setInterval(() => {
   const now = Date.now();
