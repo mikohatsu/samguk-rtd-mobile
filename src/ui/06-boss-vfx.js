@@ -14,7 +14,7 @@
   // 그린 이펙트 그림(gfx/vs_*.png, Higgsfield로 생성. 출처는 CREDITS.md). 도형을 이어 붙여 그리던 것을 대신한다.
   // 아직 못 불러왔으면 false를 돌려주고, 부른 쪽은 예전 도형으로 그린다.
   const VS = {};
-  if (typeof Image !== 'undefined') ['slash', 'crack', 'dust', 'wisp', 'eye', 'wind', 'streak', 'talisman', 'rock', 'arrow', 'tower', 'fireship', 'altar', 'ambush', 'pillar', 'spears'].forEach((n) => { const im = new Image(); im.onload = () => { VS[n] = im; }; im.src = 'gfx/vs_' + n + '.png?v=1'; });
+  if (typeof Image !== 'undefined') ['slash', 'crack', 'dust', 'wisp', 'eye', 'wind', 'streak', 'talisman', 'rock', 'arrow', 'tower', 'fireship', 'altar', 'ambush', 'pillar', 'spears', 'chev', 'ring', 'dao', 'ji', 'gate', 'orb'].forEach((n) => { const im = new Image(); im.onload = () => { VS[n] = im; }; im.src = 'gfx/vs_' + n + '.png?v=1'; });
   // 가운데 기준으로 그린다. w = 그릴 폭(높이는 비율대로), rot 회전, a 투명도, add 더하기 합성, flip 좌우 반전, sy 세로 납작함
   function vs(c, n, x, y, w, rot, a, add, flip, sy) {
     const im = VS[n];
@@ -178,7 +178,8 @@
         const gr = c.createRadialGradient(h.x, h.y, 0, h.x, h.y, Math.max(1, h.r * p));
         gr.addColorStop(0, col + '10'); gr.addColorStop(1, col + '88');
         c.globalAlpha = 0.85; c.fillStyle = gr; c.beginPath(); c.arc(h.x, h.y, Math.max(1, h.r * p), 0, 7); c.fill();
-        teleStyle(c, col, p); c.setLineDash([16, 10]); c.lineDashOffset = -now * 40; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.stroke(); c.setLineDash([]); c.shadowBlur = 0;
+        // 테두리: 천천히 도는 불 고리(그림). 터질 때가 가까울수록 밝아진다
+        if (!vs(c, 'ring', h.x, h.y, h.r * 2.24, now * 0.5 + h.x, 0.55 + p * 0.45, true)) { teleStyle(c, col, p); c.setLineDash([16, 10]); c.lineDashOffset = -now * 40; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.stroke(); c.setLineDash([]); c.shadowBlur = 0; }
         if (p > 0.82) { c.globalAlpha = (p - 0.82) * 5; c.strokeStyle = '#fff'; c.lineWidth = 3; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.stroke(); }
         const left = h.delay - h.t;
         if (left < 0.5 && h.fx) drawFalling(c, h, 1 - left / 0.5);
@@ -195,7 +196,8 @@
         c.globalAlpha = 0.5; c.fillStyle = col + '66'; c.fillRect(0, -h.w / 2, h.len * p, h.w);
         c.globalAlpha = 0.65; c.strokeStyle = col; c.lineWidth = 3;
         const step = 60, off = (now * 160) % step;
-        for (let d = off; d < h.len; d += step) { const s = Math.min(h.w * 0.32, 14); c.beginPath(); c.moveTo(d - s, -s); c.lineTo(d, 0); c.lineTo(d - s, s); c.stroke(); }
+        if (VS.chev) { const cw = Math.max(26, Math.min(h.w * 0.62, 54)), st2 = Math.max(70, cw * 1.6), o2 = (now * 190) % st2; for (let d = o2; d < h.len; d += st2) vs(c, 'chev', d, 0, cw, 0, (0.45 + p * 0.5) * Math.min(1, d / 60, (h.len - d) / 60), true); }
+        else for (let d = off; d < h.len; d += step) { const s = Math.min(h.w * 0.32, 14); c.beginPath(); c.moveTo(d - s, -s); c.lineTo(d, 0); c.lineTo(d - s, s); c.stroke(); }
         teleStyle(c, col, p); c.beginPath(); c.moveTo(0, -h.w / 2); c.lineTo(h.len, -h.w / 2); c.moveTo(0, h.w / 2); c.lineTo(h.len, h.w / 2); c.stroke(); c.shadowBlur = 0;
       } else { c.globalAlpha *= 0.35; c.fillStyle = col; c.fillRect(0, -h.w / 2, h.len, h.w); }
     } else if (h.k === 'cone') {
@@ -210,7 +212,8 @@
       if (!fired) {
         c.globalAlpha = 0.2 + p * 0.15; c.fillStyle = danger; ringPath(); c.fill();
         c.globalAlpha = 0.55; c.fillStyle = col + '66'; c.beginPath(); c.arc(h.x, h.y, h.r0 + (h.r1 - h.r0) * p, 0, 7); c.arc(h.x, h.y, h.r0, 0, 7, true); c.fill();
-        teleStyle(c, col, p); c.setLineDash([18, 10]); c.lineDashOffset = now * 50; c.beginPath(); c.arc(h.x, h.y, h.r1, 0, 7); c.stroke(); c.beginPath(); c.arc(h.x, h.y, h.r0, 0, 7); c.stroke(); c.setLineDash([]); c.shadowBlur = 0;
+        if (vs(c, 'ring', h.x, h.y, h.r1 * 2.24, now * 0.4, 0.55 + p * 0.45, true)) { if (h.r0 > 24) vs(c, 'ring', h.x, h.y, h.r0 * 2.24, -now * 0.6, 0.5 + p * 0.4, true); }
+        else { teleStyle(c, col, p); c.setLineDash([18, 10]); c.lineDashOffset = now * 50; c.beginPath(); c.arc(h.x, h.y, h.r1, 0, 7); c.stroke(); c.beginPath(); c.arc(h.x, h.y, h.r0, 0, 7); c.stroke(); c.setLineDash([]); c.shadowBlur = 0; }
       } else { c.globalAlpha *= 0.45; c.fillStyle = col; ringPath(); c.fill(); }
     } else if (h.k === 'safe') {
       c.beginPath(); c.rect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
@@ -257,6 +260,7 @@
     } else {
       // 요기 구슬(시전형 보스 기본 탄)
       Art.fxImg(c, 'magic', h.x, h.y, h.r * 3.2, performance.now() / 300, 0.9);
+      if (vs(c, 'orb', h.x, h.y, h.r * 3, performance.now() / 200, 1, true)) return;
       c.fillStyle = col; c.beginPath(); c.arc(h.x, h.y, h.r * 0.8, 0, 7); c.fill(); c.fillStyle = '#fff'; c.beginPath(); c.arc(h.x, h.y, h.r * 0.35, 0, 7); c.fill();
     }
   }
@@ -353,9 +357,13 @@
         if (u < 1 || p < 0.5) {
           const [hx, hy] = pt(head, v.r * 1.02), [gx, gy] = pt(head, v.r * (v.pole ? 0.05 : 0.3));
           c.globalAlpha = fade; c.shadowBlur = 10; c.lineCap = 'round';
+          const [bx, by] = pt(head, v.r * (v.pole ? 0.52 : 0.64));
+          if (vs(c, v.pole ? 'ji' : 'dao', bx, by, v.r * (v.pole ? 1.02 : 0.78), head, fade, false, false)) { /* 그림으로 그렸다 */ }
+          else {
           if (v.pole) { c.strokeStyle = '#6a3a1e'; c.lineWidth = 7; c.beginPath(); c.moveTo(gx, gy); c.lineTo(...pt(head, v.r * 0.72)); c.stroke(); }
           c.strokeStyle = '#e8eef5'; c.lineWidth = v.pole ? 9 : 7; c.beginPath(); c.moveTo(...(v.pole ? pt(head, v.r * 0.72) : [gx, gy])); c.lineTo(hx, hy); c.stroke();
           if (!v.pole) { const [ga, gb] = [pt(head, v.r * 0.3), head + Math.PI / 2]; c.strokeStyle = '#c9a24a'; c.lineWidth = 6; c.beginPath(); c.moveTo(ga[0] + Math.cos(gb) * 14, ga[1] + Math.sin(gb) * 14); c.lineTo(ga[0] - Math.cos(gb) * 14, ga[1] - Math.sin(gb) * 14); c.stroke(); }
+          }
           Art.fxImg(c, 'hit', hx, hy, 60 * fade, head, fade);
         }
       } else if (v.k === 'ringwave') {
@@ -473,8 +481,9 @@
     M.objs.forEach((o) => {
       c.save();
       if (o.k === 'gate') {
-        c.globalAlpha = 0.85; c.strokeStyle = '#d8ecff'; c.lineWidth = 3; c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.stroke();
-        c.fillStyle = '#d8ecff'; drawSym(c, o.x, o.y, o.s, 26);
+        if (vs(c, 'gate', o.x, o.y, o.r * 2.3, 0, 0.95)) { c.globalAlpha = 0.92; c.fillStyle = '#123040'; drawSym(c, o.x, o.y, o.s, Math.min(26, o.r * 0.42)); }
+        else { c.globalAlpha = 0.85; c.strokeStyle = '#d8ecff'; c.lineWidth = 3; c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.stroke();
+        c.fillStyle = '#d8ecff'; drawSym(c, o.x, o.y, o.s, 26); }
       } else if (o.k === 'pillar' && VS.pillar) {
         c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(o.x, o.y + o.r * 0.55, o.r * 1.1, o.r * 0.4, 0, 0, 7); c.fill();
         vs(c, 'pillar', o.x, o.y - o.r * 0.75, o.r * 2.3);
@@ -501,7 +510,8 @@
     });
     if (M.bur) {
       c.save(); c.strokeStyle = M.bur.lock ? '#ff5040' : '#c9b48a'; c.lineWidth = 4; c.globalAlpha = 0.9;
-      for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(M.bur.x, M.bur.y, 30 + i * 22 + ((t * 40) % 22), 0, 7); c.stroke(); }
+      if (VS.dust) { for (let i = 0; i < 4; i++) { const a = t * 2.2 + i * 1.57; vs(c, 'dust', M.bur.x + Math.cos(a) * 34, M.bur.y + Math.sin(a) * 20, 70, a, 0.6); } c.lineWidth = 2; c.beginPath(); c.ellipse(M.bur.x, M.bur.y, 52 + ((t * 30) % 18), (52 + ((t * 30) % 18)) * 0.6, 0, 0, 7); c.stroke(); }
+      else for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(M.bur.x, M.bur.y, 30 + i * 22 + ((t * 40) % 22), 0, 7); c.stroke(); }
       c.restore();
     }
   }

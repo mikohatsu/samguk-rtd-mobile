@@ -243,11 +243,27 @@
   function ang(f) { return Math.atan2(f.y1 - f.y0, f.x1 - f.x0); }
   const at = (f, p) => [f.x0 + (f.x1 - f.x0) * p, f.y0 + (f.y1 - f.y0) * p];
   const MELEE = { sword: 1, twin: 1, halberd: 1, guandao: 1, axe: 1, mace: 1, serpent: 1, dagger: 1 };
+  // 평타 투사체·궤적 그림(gfx/vs_*.png, Higgsfield 생성). [그림, 폭, 더하기 합성, 좌우 반전, 날아가며 도는 속도]
+  const VSI = {};
+  const SHOT_PIC = { bow: ['arrow', 36], crossbow: ['arrow', 36], sword: ['slash', 34, 1, 1], twin: ['slash', 34, 1, 1], spear: ['spear', 52], lance: ['spear', 52], serpent: ['spear', 56],
+    halberd: ['slash', 58, 1, 1], guandao: ['slash', 58, 1, 1], axe: ['axe', 20, 0, 0, 18], mace: ['axe', 20, 0, 0, 18], shield: ['shield', 24, 0, 0, 18], fan: ['wind', 46, 1], dagger: ['dagger', 26, 0, 0, 14], staff: ['orb', 24, 1] };
+  if (typeof Image !== 'undefined') ['arrow', 'slash', 'spear', 'axe', 'shield', 'wind', 'dagger', 'orb'].forEach((n) => { const im = new Image(); im.onload = () => { VSI[n] = im; }; im.src = 'gfx/vs_' + n + '.png?v=1'; });
   function shot(c, f) {
     const p = f.t / f.life, a = ang(f), [x, y] = at(f, p), s = f.big ? 1.5 : 1, col = f.c, wp = f.wp;
     // 생성 이펙트: 화염은 불덩이가 날아가고, 근접 무기는 맞는 자리에 베기 궤적이 남는다
     if (wp === 'flame' && fxImg(c, 'fire', x, y, 64 * s, a, 1)) return;
     if (MELEE[wp] && p > 0.45) fxImg(c, 'slash', f.x1, f.y1, 70 * s, a + Math.PI / 2, (1 - p) * 2.2);
+    const sp = SHOT_PIC[wp], pim = sp && VSI[sp[0]];
+    if (pim) {
+      // 그림으로 그린다(못 불러왔으면 아래의 예전 도형)
+      const w = sp[1], hh = (w * pim.height) / pim.width;
+      c.save(); c.translate(x, y); c.rotate(a + (sp[4] ? p * sp[4] : 0)); c.scale(sp[3] ? -s : s, s);
+      if (sp[2]) c.globalCompositeOperation = 'lighter';
+      c.drawImage(pim, -w / 2, -hh / 2, w, hh);
+      if (wp === 'twin') c.drawImage(pim, -w / 2 + 11, -hh / 2, w, hh);
+      c.restore();
+      return;
+    }
     c.save(); c.translate(x, y); c.rotate(a); c.scale(s, s);
     c.strokeStyle = col; c.fillStyle = col; c.lineCap = 'round';
     if (wp === 'bow' || wp === 'crossbow') {

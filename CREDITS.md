@@ -56,6 +56,7 @@
 - gfx/lobby_bg.jpg(로비 배경), gfx/ui_paper.jpg(한지 질감), gfx/ui_ink.png(먹 붓자국): **Higgsfield**의 Z Image 모델로 생성(무료 요금제, 글만으로 생성). 원본 배경은 art_src/lobby_bg_v3.png.
 - (v0.2.6) gfx/ic_shop.png·ic_rank.png·ic_hist.png(메뉴 아이콘: 돈주머니·투구·죽간), gfx/ui_silk.jpg(구름무늬 비단): Higgsfield Z Image로 생성, 아이콘의 흰 배경은 Canva로 제거.
 - (v0.2.7) gfx/vs_*.png 16장(보스전 이펙트·구조물: 검기 slash, 균열 crack, 먼지 dust, 혼령 wisp, 눈 eye, 바람 wind, 돌진 꼬리 streak, 부적 talisman, 바위 rock, 화살 arrow, 궁루 tower, 화선 fireship, 제단 altar, 복병 ambush, 돌기둥 pillar, 창 대열 spears): Higgsfield Z Image로 생성. 배경은 코드로 지움(검은 배경은 밝기를 투명도로, 흰 배경은 가장자리부터 지움).
+- (v0.2.8) gfx/vs_*.png 10장 추가(예고 고리 ring, 불 화살표 chev, 구슬 orb, 칼 dao, 극 ji, 창 spear, 방패 shield, 단검 dagger, 도끼 axe, 팔진 문 원판 gate): Higgsfield Z Image로 생성, 같은 방식으로 배경 제거. 보스 장판 예고·칼 휘두르기·팔진 문(06-boss-vfx)과 유닛 평타 투사체(art.js shot)에 쓴다.
 - gfx/lobby_char.png: 기존 초선 일러스트(Canva AI 생성)의 배경을 Canva로 지운 것.
 - 워터마크: 원본 3장의 네 모서리와 전체를 확인했고 보이는 워터마크는 없다(2026-11-12). 게임 안 크레딧의 그림 항목에 도구 이름(Canva AI · Higgsfield)을 표기했다.
 - 사용자 결정(2026-11-12): 무료 요금제 생성물을 크레딧에 표기하고 쓴다.
