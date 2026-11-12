@@ -2753,7 +2753,56 @@
       if (el) box.scrollTop = el.offsetTop - box.offsetTop;
     }
   }
-  // 인연 시너지 목록(왼쪽): 모인 인물 수 / 필요 수, 켜지면 밝게
+  // ---- 맵 왼쪽 시너지 줄: 인연마다 육각 아이콘(대표 인물 얼굴)과 모은 수/필요 수. 완성되면 금색으로 켜진다. ----
+  // 누르면(마우스는 올리면) 필요한 인물과 효과가 업적 설명과 같은 반투명 창으로 뜬다. 자리가 모자라면 '+N'(누르면 전황 서랍의 전체 목록).
+  let synRep = null;
+  // 대표 인물: 다른 인연에 가장 덜 나오는 인물(같은 얼굴이 여러 줄에 겹치지 않게)
+  function synFace(s) {
+    if (!synRep) {
+      const cnt = {}; synRep = {};
+      (T.synergies || []).forEach((x) => x.units.forEach((id) => { cnt[id] = (cnt[id] || 0) + 1; }));
+      (T.synergies || []).forEach((x) => { synRep[x.id] = x.units.slice().sort((a, b) => cnt[a] - cnt[b])[0]; });
+    }
+    return defOf[synRep[s.id]];
+  }
+  function renderSynBar(vis) {
+    const bar = $('synbar'), show = laneOn() && !viewedPeer() && !g.over && vis.length > 0;
+    if (bar.hidden !== !show) bar.hidden = !show;
+    if (!show) { if (S.synPop) showSyn(null); return; }
+    // 세로로 들어가는 만큼만 보여 준다
+    const vh = window.innerHeight / zoom, item = vh <= 430 ? 39 : vh >= 600 ? 57 : 45;
+    let max = Math.max(3, Math.floor((vh - 14) / item));
+    if (vis.length > max) max -= 1;
+    const top = vis.slice(0, max), more = vis.length - top.length;
+    // 얼굴 그림은 주소가 길어 매번 만들지 않는다(구성이 바뀌거나 5초마다 한 번만 다시 그린다 — 그림이 늦게 불러져도 따라온다)
+    const key = top.map(({ s, n, on }) => s.id + n + (on ? '!' : '')).join() + '+' + more + '@' + Math.floor(performance.now() / 5000);
+    if (bar.dataset.key !== key) {
+      bar.dataset.key = key;
+      bar.innerHTML = top.map(({ s, n, on }) => `<button class="sy ${on ? 'on' : ''}" data-syn="${s.id}" type="button" aria-label="${esc(s.name)}"><i><img alt="" src="${Art.portrait(synFace(s))}"></i><b>${n}/${s.units.length}</b></button>`).join('')
+        + (more > 0 ? `<button class="sy more" data-act="drawer" data-arg="war" type="button"><i><span>+${more}</span></i></button>` : '');
+    }
+    const hud = $('hud'), left = hud.offsetLeft + hud.offsetWidth + 6;
+    if (bar.dataset.left !== String(left)) { bar.dataset.left = left; bar.style.left = left + 'px'; }
+  }
+  function showSyn(id, el) {
+    const pop = $('achpop'), s = id && (T.synergies || []).find((x) => x.id === id), p = g && g.me;
+    if (!s || !el || !p) { if (S.synPop) pop.hidden = true; S.synPop = null; return; }
+    const have = s.units.filter((u) => g.has(p, u)).length, on = !!(p.syn && p.syn[s.id]);
+    const chips = s.units.map((u) => { const d = defOf[u]; return `<span class="ac ${g.has(p, u) ? 'have' : ''}" style="color:${(d.tier && tierColor(d.tier)) || '#f4ecd8'}">${esc(d.name)}</span>`; }).join('');
+    pop.innerHTML = `<strong>${s.hidden ? '★ ' : ''}${esc(s.name)} <span style="font:400 12px 'Black Han Sans',sans-serif;color:${on ? '#ffd86a' : '#cfc3a8'}">${have}/${s.units.length}</span></strong><div class="chips">${chips}</div><div style="margin-top:5px;color:${on ? '#f4ecd8' : 'var(--dim)'}">${esc(s.desc)}</div>`;
+    pop.hidden = false; S.synPop = id;
+    const r = el.getBoundingClientRect();
+    pop.style.left = Math.min(r.right / zoom + 8, window.innerWidth / zoom - pop.offsetWidth - 4) + 'px';
+    pop.style.top = Math.max(4, Math.min(r.top / zoom, window.innerHeight / zoom - pop.offsetHeight - 4)) + 'px';
+  }
+  {
+    const bar = $('synbar');
+    // 터치: 누르면 뜨고, 다른 곳을 누르면 닫힌다(닫기는 10-input의 업적 창 처리와 같이 쓴다). 마우스: 올리면 뜨고 벗어나면 닫힌다.
+    bar.addEventListener('click', (e) => { const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
+    bar.addEventListener('pointerover', (e) => { if (e.pointerType === 'touch') return; const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
+    bar.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') showSyn(null); });
+  }
+  // 인연 시너지 목록(전황 서랍): 모인 인물 수 / 필요 수, 켜지면 밝게
   function renderSyn() {
     const box = $('synlist'), p = g.me;
     const vis = (T.synergies || []).map((s) => ({ s, n: s.units.filter((id) => g.has(p, id)).length, on: !!(p.syn && p.syn[s.id]) }))
@@ -2763,6 +2812,7 @@
       return `<div class="syn ${on ? 'on' : ''}" title="${esc(s.desc)}"><span class="cnt">${have.length}/${s.units.length}</span><b>${s.hidden ? '★ ' : ''}${esc(s.name)}</b><div class="us">${s.units.map((id) => `<span class="${g.has(p, id) ? 'h' : ''}">${esc(defOf[id].name)}</span>`).join(' · ')}</div><small style="grid-column:2">${esc(s.desc)}</small></div>`;
     }).join('');
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
+    renderSynBar(vis);
     // 이번 판 변형 규칙(악몽 +N)
     const mb = $('mutlist'), mt = $('mutt');
     if (g.muts && g.muts.length && !mb.dataset.done) {
