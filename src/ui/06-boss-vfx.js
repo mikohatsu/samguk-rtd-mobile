@@ -11,6 +11,23 @@
   // 착탄 순간 남는 효과(파편·불씨·충격파 등)와 날아가는 투사체
   S.vfx = [];
   const rnd = (a, b) => a + Math.random() * (b - a);
+  // 그린 이펙트 그림(gfx/vs_*.png, Higgsfield로 생성. 출처는 CREDITS.md). 도형을 이어 붙여 그리던 것을 대신한다.
+  // 아직 못 불러왔으면 false를 돌려주고, 부른 쪽은 예전 도형으로 그린다.
+  const VS = {};
+  if (typeof Image !== 'undefined') ['slash', 'crack', 'dust', 'wisp', 'eye', 'wind', 'streak', 'talisman', 'rock', 'arrow', 'tower', 'fireship', 'altar', 'ambush', 'pillar', 'spears'].forEach((n) => { const im = new Image(); im.onload = () => { VS[n] = im; }; im.src = 'gfx/vs_' + n + '.png?v=1'; });
+  // 가운데 기준으로 그린다. w = 그릴 폭(높이는 비율대로), rot 회전, a 투명도, add 더하기 합성, flip 좌우 반전, sy 세로 납작함
+  function vs(c, n, x, y, w, rot, a, add, flip, sy) {
+    const im = VS[n];
+    if (!im) return false;
+    const h = (w * im.height) / im.width;
+    c.save();
+    c.globalAlpha = Math.max(0, Math.min(1, a == null ? 1 : a));
+    if (add) c.globalCompositeOperation = 'lighter';
+    c.translate(x, y); if (sy) c.scale(1, sy); if (rot) c.rotate(rot); if (flip) c.scale(-1, 1);
+    c.drawImage(im, -w / 2, -h / 2, w, h);
+    c.restore();
+    return true;
+  }
   function addVfx(o) {
     // 불꽃·파편 같은 잔조각은 화질에 따라 줄인다(큰 모양은 그대로)
     if ((o.k === 'spark' || o.k === 'debris' || o.k === 'ember') && Math.random() > qPart()) return;
@@ -28,7 +45,7 @@
         for (let i = 0; i < 10; i++) addVfx({ k: 'spark', x: h.x, y: h.y, a: rnd(0, 7), s: rnd(160, 420), life: rnd(0.2, 0.4), c: '#fff6a0' });
       } else if (fx === 'rock' || fx === 'quake') {
         for (let i = 0; i < 14; i++) addVfx({ k: 'debris', x: h.x, y: h.y, a: rnd(0, 7), s: rnd(120, 340), z: rnd(120, 300), life: rnd(0.5, 0.8), sz: rnd(6, 14), c: i % 3 ? '#8a6a4a' : '#c9a27a' });
-        addVfx({ k: 'crack', x: h.x, y: h.y, r: h.r, life: 1.2, seed: Math.random() * 99 });
+        addVfx({ k: 'crack', x: h.x, y: h.y, r: h.r, life: 1.2, seed: Math.random() * 99 }); addVfx({ k: 'decal', x: h.x, y: h.y, r: h.r * 1.1, life: 1.3 });
         addVfx({ k: 'dust', x: h.x, y: h.y, r: h.r * 1.3, life: 0.7 });
       } else if (fire) {
         addVfx({ k: 'img', img: 'fire', x: h.x, y: h.y - h.r * 0.3, r: h.r * 2.4, life: 0.5 });
@@ -36,7 +53,7 @@
       } else if (fx === 'roar') {
         for (let i = 0; i < 3; i++) addVfx({ k: 'shock', x: h.x, y: h.y, r: h.r * (1 + i * 0.25), life: 0.5 + i * 0.15, c: col, w: 10 - i * 3 });
         addVfx({ k: 'dust', x: h.x, y: h.y, r: h.r, life: 0.8 });
-      } else addVfx({ k: 'img', img: 'boom', x: h.x, y: h.y, r: h.r * 2.3, life: 0.4 });
+      } else { addVfx({ k: 'img', img: 'boom', x: h.x, y: h.y, r: h.r * 2.3, life: 0.4 }); addVfx({ k: 'decal', x: h.x, y: h.y, r: h.r, life: 1.1 }); }
     } else if (h.k === 'line') {
       // 직선 기술: 무엇이 실제로 날아가거나 달려 나간다
       const kind = fx === 'talisman' ? 'talisman' : fx === 'arrow' || fx === 'firearrow' ? 'arrow' : fx === 'wind' ? 'gust' : fx === 'army' || fx === 'ox' ? 'troop' : fx === 'shadow' ? 'wisp' : fx === 'halberd' || fx === 'blade' ? 'slashline' : fx === 'charge' || fx === 'redhare' ? 'dustline' : 'streak';
@@ -44,6 +61,11 @@
       // 초당 약 1400px로 날아가 눈으로 따라갈 수 있게 한다
       const life = Math.min(1.4, Math.max(0.6, h.len / 1400));
       for (let i = 0; i < n; i++) addVfx({ k: kind, x: h.x, y: h.y, a: h.a, len: h.len, w: h.w, off: n > 1 ? (i / (n - 1) - 0.5) * h.w * 0.8 : 0, lag: i * 0.06, life: life + i * 0.06, c: col });
+      // 지나간 자리에 남는 잔광(베기·돌진·기본 직선). 끝에서는 땅이 터진다.
+      if (kind === 'slashline' || kind === 'streak' || kind === 'dustline') {
+        addVfx({ k: 'scar', x: h.x, y: h.y, a: h.a, len: h.len, w: h.w, life: 0.55, c: col });
+        addVfx({ k: 'decal', x: h.x + Math.cos(h.a) * h.len * 0.92, y: h.y + Math.sin(h.a) * h.len * 0.92, r: h.w * 0.9, life: 1.0, lag: life * 0.7 });
+      }
     } else if (h.k === 'cone') {
       // 칼·극 휘두르기: 오른쪽·왼쪽 번갈아 휘두른다
       S.swingDir = -(S.swingDir || 1);
@@ -52,8 +74,12 @@
       addVfx({ k: 'ringwave', x: h.x, y: h.y, r0: h.r0, r1: h.r1, life: 0.45, c: col, fx });
     } else if (h.k === 'rect') {
       addVfx({ k: 'flash', x: h.x + h.rw / 2, y: h.y + h.rh / 2, rect: [h.x, h.y, h.rw, h.rh], life: 0.25, c: col });
+      // 구획 전체가 터진다: 넓이에 맞춰 폭발과 균열을 흩뿌린다
+      { const nb = Math.max(2, Math.min(7, Math.round((h.rw * h.rh) / 60000))), rr = Math.min(h.rw, h.rh) * 0.34;
+        for (let i = 0; i < nb; i++) { const bx = h.x + h.rw * ((i + 0.5) / nb) + rnd(-20, 20), by = h.y + h.rh * rnd(0.25, 0.75); addVfx({ k: 'img', img: 'boom', x: bx, y: by, r: rr * 2.2, life: 0.45, lag: i * 0.04 }); addVfx({ k: 'decal', x: bx, y: by, r: rr, life: 1.0, lag: i * 0.04 }); } }
     } else if (h.k === 'all') {
       addVfx({ k: 'flash', x: W / 2, y: H / 2, rect: [-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2], life: 0.5, c: '#ffffff' });
+      for (let i = 0; i < 9; i++) { const bx = rnd(ARENA.x0 + 80, ARENA.x1 - 80), by = rnd(ARENA.y0 + 60, ARENA.y1 - 60); addVfx({ k: 'img', img: 'boom', x: bx, y: by, r: 260, life: 0.5, lag: i * 0.05 }); addVfx({ k: 'decal', x: bx, y: by, r: 120, life: 1.2, lag: i * 0.05 }); }
     } else if (h.k === 'push') {
       for (let i = 0; i < 2; i++) addVfx({ k: 'shock', x: h.x, y: h.y, r: h.r * (1 + i * 0.2), life: 0.5 + i * 0.2, c: col, w: 8 });
     }
@@ -65,6 +91,7 @@
     c.globalAlpha = 0.35 * q; c.fillStyle = '#000'; c.beginPath(); c.ellipse(h.x, h.y + 4, h.r * 0.5 * q, h.r * 0.2 * q, 0, 0, 7); c.fill();
     c.globalAlpha = 1;
     if (h.fx === 'rock') {
+      if (vs(c, 'rock', x, y, h.r * 1.1, q * 6)) return;
       c.save(); c.translate(x, y); c.rotate(q * 6);
       const s = h.r * 0.45;
       c.fillStyle = '#7a5c40'; c.beginPath(); c.moveTo(-s, -s * 0.3); c.lineTo(-s * 0.4, -s); c.lineTo(s * 0.6, -s * 0.8); c.lineTo(s, s * 0.1); c.lineTo(s * 0.3, s); c.lineTo(-s * 0.7, s * 0.7); c.closePath(); c.fill();
@@ -73,6 +100,7 @@
     } else if (h.fx === 'firearrow') {
       for (let i = 0; i < 3; i++) { const ox = (i - 1) * 22, oy = i * 18; c.strokeStyle = '#ffd8a0'; c.lineWidth = 3; c.beginPath(); c.moveTo(x + ox, y + oy); c.lineTo(x + ox + 60, y + oy - 140); c.stroke(); Art.fxImg(c, 'fire', x + ox, y + oy, 46, Math.atan2(140, -60), 1); }
     } else if (h.fx === 'fireship') {
+      if (vs(c, 'fireship', x, y - 26, 150, Math.sin(performance.now() / 160) * 0.06)) return;
       c.save(); c.translate(x, y);
       c.fillStyle = '#5a3a22'; c.beginPath(); c.moveTo(-50, -6); c.lineTo(50, -6); c.lineTo(36, 14); c.lineTo(-36, 14); c.closePath(); c.fill();
       c.fillStyle = '#3a2614'; c.fillRect(-3, -60, 6, 54);
@@ -211,13 +239,16 @@
     else if (fx === 'spirit' || fx === 'shadow') {
       // 혼령: 흐느적이는 반투명 불꽃
       const w = Math.sin(performance.now() / 70 + h.x) * 3;
+      if (vs(c, 'wisp', h.x + tx * h.r * 1.6, h.y + ty * h.r * 1.6, h.r * 6, a + w * 0.02, 0.95, true)) return;
       c.globalAlpha = 0.85; c.fillStyle = col; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill();
       c.beginPath(); c.moveTo(h.x - ty * h.r, h.y + tx * h.r); c.quadraticCurveTo(h.x + tx * h.r * 2 + w, h.y + ty * h.r * 2 - w, h.x + tx * h.r * 3, h.y + ty * h.r * 3); c.quadraticCurveTo(h.x + tx * h.r * 2 - w, h.y + ty * h.r * 2 + w, h.x + ty * h.r, h.y - tx * h.r); c.fill();
       c.fillStyle = '#1a0a2a'; c.beginPath(); c.arc(h.x + Math.cos(a) * 3 - ty * 4, h.y + Math.sin(a) * 3 + tx * 4, 2.5, 0, 7); c.arc(h.x + Math.cos(a) * 3 + ty * 4, h.y + Math.sin(a) * 3 - tx * 4, 2.5, 0, 7); c.fill();
     } else if (fx === 'wind') {
+      if (vs(c, 'wind', h.x + tx * h.r, h.y + ty * h.r, h.r * 5, a, 0.95, true)) return;
       c.strokeStyle = col; c.lineWidth = 4; c.beginPath(); c.arc(h.x, h.y, h.r * 1.4, a - 1.2, a + 1.2); c.stroke();
       c.globalAlpha = 0.5; c.beginPath(); c.arc(h.x + tx * 12, h.y + ty * 12, h.r * 1.1, a - 1.1, a + 1.1); c.stroke();
     } else if (fx === 'arrow') {
+      if (vs(c, 'arrow', h.x + tx * 18, h.y + ty * 18, 78, a)) return;
       c.save(); c.translate(h.x, h.y); c.rotate(a);
       c.strokeStyle = '#6a4a2a'; c.lineWidth = 3; c.beginPath(); c.moveTo(-34, 0); c.lineTo(6, 0); c.stroke();
       c.fillStyle = '#e8e8e8'; c.beginPath(); c.moveTo(14, 0); c.lineTo(2, -6); c.lineTo(2, 6); c.closePath(); c.fill();
@@ -265,15 +296,25 @@
       } else if (v.k === 'debris') {
         // 튀는 돌조각(포물선)
         const d = v.s * p, z = v.z * 4 * p * (1 - p);
-        c.globalAlpha = 1 - p * p; c.fillStyle = v.c; c.save(); c.translate(v.x + Math.cos(v.a) * d, v.y + Math.sin(v.a) * d * 0.6 - z); c.rotate(p * 9); c.fillRect(-v.sz / 2, -v.sz / 2, v.sz, v.sz * 0.7); c.restore();
+        if (!vs(c, 'rock', v.x + Math.cos(v.a) * d, v.y + Math.sin(v.a) * d * 0.6 - z, v.sz * 2.2, p * 9 + v.a, 1 - p * p)) { c.globalAlpha = 1 - p * p; c.fillStyle = v.c; c.save(); c.translate(v.x + Math.cos(v.a) * d, v.y + Math.sin(v.a) * d * 0.6 - z); c.rotate(p * 9); c.fillRect(-v.sz / 2, -v.sz / 2, v.sz, v.sz * 0.7); c.restore(); }
+      } else if (v.k === 'decal') {
+        // 땅에 남는 균열 자국(그림): 터지는 순간 밝게 달아올랐다가 식으며 사라진다. 바닥에 눕힌다.
+        vs(c, 'crack', v.x, v.y, v.r * 2.6 * (0.85 + Math.min(1, p * 6) * 0.15), (v.x * 7 + v.y * 3) % 6.28, p < 0.15 ? 1 : (1 - p) * 0.8, p < 0.3, false, 0.62);
+      } else if (v.k === 'scar') {
+        // 직선 기술이 지나간 자리의 잔광: 길 전체에 길게 늘여 깔았다가 사라진다
+        const im = VS.streak;
+        if (im) { c.translate(v.x, v.y); c.rotate(v.a); c.globalCompositeOperation = 'lighter'; c.globalAlpha = (1 - p) * 0.85; c.drawImage(im, 0, -v.w * 0.55, v.len * Math.min(1, p * 5 + 0.25), v.w * 1.1); c.globalCompositeOperation = 'source-over'; }
+      } else if (v.k === 'crack' && VS.crack) {
+        // 그림 자국(decal)이 대신 그린다
       } else if (v.k === 'crack') {
         // 땅이 갈라진 자국(천천히 사라짐)
         c.globalAlpha = 0.7 * (1 - p); c.strokeStyle = '#2a1a0e'; c.lineWidth = 3;
         let sd = v.seed; const r = () => ((sd = (sd * 9301 + 49297) % 233280) / 233280);
         for (let k = 0; k < 6; k++) { let a = k * 1.05 + r(), x = v.x, y = v.y; c.beginPath(); c.moveTo(x, y); for (let j = 0; j < 3; j++) { a += (r() - 0.5) * 0.8; x += Math.cos(a) * v.r * 0.3; y += Math.sin(a) * v.r * 0.22; c.lineTo(x, y); } c.stroke(); }
       } else if (v.k === 'dust') {
-        c.globalAlpha = 0.35 * (1 - p); c.fillStyle = '#b8a07a';
-        for (let k = 0; k < 7; k++) { const a = k * 0.9, rr = v.r * (0.4 + p * 0.6); c.beginPath(); c.arc(v.x + Math.cos(a) * rr, v.y + Math.sin(a) * rr * 0.5 - p * 20, v.r * 0.25 * (1 + p), 0, 7); c.fill(); }
+        if (VS.dust) { for (let k = 0; k < 5; k++) { const a = k * 1.26 + v.x, rr = v.r * (0.35 + p * 0.6); vs(c, 'dust', v.x + Math.cos(a) * rr, v.y + Math.sin(a) * rr * 0.5 - p * 26, v.r * 0.9 * (0.7 + p * 0.6), a, 0.6 * (1 - p)); } }
+        else { c.globalAlpha = 0.35 * (1 - p); c.fillStyle = '#b8a07a';
+        for (let k = 0; k < 7; k++) { const a = k * 0.9, rr = v.r * (0.4 + p * 0.6); c.beginPath(); c.arc(v.x + Math.cos(a) * rr, v.y + Math.sin(a) * rr * 0.5 - p * 20, v.r * 0.25 * (1 + p), 0, 7); c.fill(); } }
       } else if (v.k === 'ember') {
         c.globalAlpha = 1 - p; c.fillStyle = p < 0.4 ? '#fff0a0' : '#ff7a2a'; c.beginPath(); c.arc(v.x + v.vx * v.t, v.y + v.vy * v.t, v.sz * (1 - p * 0.5), 0, 7); c.fill();
       } else if (v.k === 'img') {
@@ -324,7 +365,9 @@
         for (let k = 0; k < n; k++) {
           const a = (k / n) * Math.PI * 2, x = v.x + Math.cos(a) * rr, y = v.y + Math.sin(a) * rr, up = Math.sin(Math.min(1, p * 2) * Math.PI) * 34;
           if (v.fx === 'flame') Art.fxImg(c, 'fire', x, y - 18 - up * 0.5, 54, UP, 1 - p);
-          else { c.fillStyle = v.fx === 'army' ? '#e8e8e8' : v.c; c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x, y - 10 - up); c.lineTo(x + 6, y); c.closePath(); c.fill(); }
+          else if (v.fx === 'army' && k % 2 === 0 && vs(c, 'spears', x, y - 14 - up * 0.6, 54, -Math.PI / 2, 1 - p)) { /* 솟는 창 대열 */ }
+          else if (v.fx === 'army') { /* 그림으로 그릴 때는 한 칸 건너 하나씩만 */ if (!VS.spears) { c.fillStyle = '#e8e8e8'; c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x, y - 10 - up); c.lineTo(x + 6, y); c.closePath(); c.fill(); } }
+          else { c.fillStyle = v.c; c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x, y - 10 - up); c.lineTo(x + 6, y); c.closePath(); c.fill(); }
         }
       } else {
         // 직선을 따라 날아가거나 달려가는 것들
@@ -333,7 +376,33 @@
         c.translate(px, py); c.rotate(v.a);
         if (v.k === 'arrow' || v.k === 'troop' || v.k === 'wisp') c.scale(1.7, 1.7);
         c.globalAlpha = p > 0.8 ? (1 - p) * 5 : 1;
-        if (v.k === 'talisman') {
+        if (v.k === 'talisman' && VS.talisman) {
+          // 부적(그림): 팔랑이며 날아가고 뒤로 빛 꼬리가 남는다
+          const al = c.globalAlpha;
+          vs(c, 'streak', -70, 0, 150, 0, al * 0.55, true);
+          vs(c, 'talisman', 0, 0, 30, Math.PI / 2 + Math.sin(v.t * 30 + v.off) * 0.4, al);
+        } else if (v.k === 'arrow' && VS.arrow) {
+          const al = c.globalAlpha;
+          if (v.c === VIS_COL.firearrow) { vs(c, 'streak', -44, 0, 110, 0, al * 0.9, true); }
+          vs(c, 'arrow', -14, 0, 64, 0, al);
+        } else if (v.k === 'gust' && VS.wind) {
+          vs(c, 'wind', -v.w * 0.2, 0, Math.max(120, v.w * 1.5), 0, c.globalAlpha, true);
+        } else if (v.k === 'troop' && VS.spears) {
+          vs(c, 'spears', -18, 0, 74, 0, c.globalAlpha);
+        } else if (v.k === 'wisp' && VS.wisp) {
+          vs(c, 'wisp', -30, Math.sin(v.t * 14 + v.off) * 3, 96, 0, c.globalAlpha, true);
+        } else if (v.k === 'slashline' && VS.slash) {
+          // 검기: 초승달 모양 칼바람이 길을 따라 날아가고 뒤로 불꼬리가 따른다
+          const al = c.globalAlpha, sz = Math.max(110, v.w * 1.7);
+          vs(c, 'streak', -sz * 0.9, 0, sz * 1.9, 0, al * 0.8, true);
+          vs(c, 'slash', 0, 0, sz, 0, al, true, true);
+        } else if (v.k === 'streak' && VS.streak) {
+          vs(c, 'streak', -Math.max(130, v.w * 1.2), 0, Math.max(260, v.w * 2.6), 0, c.globalAlpha, true);
+        } else if (v.k === 'dustline' && VS.dust) {
+          // 돌진이 지나간 자리: 흙먼지가 피어오른다
+          c.rotate(-v.a); c.translate(-px, -py);
+          for (let k = 0; k < 7; k++) { const dd = d * (k / 7), x = v.x + ca * dd, y = v.y + sa * dd; vs(c, 'dust', x, y - p * 14, v.w * (0.9 - k * 0.04) * (0.7 + p * 0.6), k * 1.3, 0.5 * (1 - p)); }
+        } else if (v.k === 'talisman') {
           // 부적: 노란 종이에 붉은 글씨, 팔랑이며 날아간다
           c.rotate(Math.sin(v.t * 30 + v.off) * 0.4);
           c.shadowColor = '#ffe9a0'; c.shadowBlur = 12;
@@ -381,8 +450,11 @@
     } else {
       const b = g.fight.boss;
       c.globalAlpha = 0.18; c.fillStyle = '#6a2aa0'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
-      c.globalAlpha = 0.95; c.fillStyle = '#f4e8ff'; c.beginPath(); c.ellipse(b.x, b.y - 150, 56, 26, 0, 0, 7); c.fill();
-      c.fillStyle = '#7a1ad0'; c.beginPath(); c.arc(b.x, b.y - 150, 18, 0, 7); c.fill();
+      if (!vs(c, 'eye', b.x, b.y - 156, 170 * (1 + Math.sin(performance.now() / 260) * 0.05), 0, 0.98, true)) {
+        c.globalAlpha = 0.95; c.fillStyle = '#f4e8ff'; c.beginPath(); c.ellipse(b.x, b.y - 150, 56, 26, 0, 0, 7); c.fill();
+        c.fillStyle = '#7a1ad0'; c.beginPath(); c.arc(b.x, b.y - 150, 18, 0, 7); c.fill();
+      }
+      c.globalAlpha = 0.95;
       c.fillStyle = '#fff'; c.font = '700 18px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText(I.t('walkHurt'), b.x, b.y - 108);
     }
     c.restore();
@@ -403,6 +475,9 @@
       if (o.k === 'gate') {
         c.globalAlpha = 0.85; c.strokeStyle = '#d8ecff'; c.lineWidth = 3; c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.stroke();
         c.fillStyle = '#d8ecff'; drawSym(c, o.x, o.y, o.s, 26);
+      } else if (o.k === 'pillar' && VS.pillar) {
+        c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(o.x, o.y + o.r * 0.55, o.r * 1.1, o.r * 0.4, 0, 0, 7); c.fill();
+        vs(c, 'pillar', o.x, o.y - o.r * 0.75, o.r * 2.3);
       } else if (o.k === 'pillar') {
         c.fillStyle = '#6f6a62'; c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.fill();
         c.strokeStyle = '#2c2a26'; c.lineWidth = 5; c.stroke();
@@ -414,7 +489,9 @@
         const col = o.k === 'altar' ? '#f2dd5c' : o.k === 'tower' ? '#b08850' : '#c0c8d8';
         c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(o.x, o.y + o.r * 0.8, o.r, o.r * 0.35, 0, 0, 7); c.fill();
         c.fillStyle = o.flash > 0 ? '#fff' : col; c.strokeStyle = '#2a1c10'; c.lineWidth = 3;
-        if (o.k === 'tower') { c.fillRect(o.x - 30, o.y - 50, 60, 80); c.strokeRect(o.x - 30, o.y - 50, 60, 80); c.beginPath(); c.moveTo(o.x - 42, o.y - 50); c.lineTo(o.x, o.y - 82); c.lineTo(o.x + 42, o.y - 50); c.closePath(); c.fill(); c.stroke(); }
+        const pic = o.k === 'tower' ? 'tower' : o.k === 'altar' ? 'altar' : 'ambush', pw = o.k === 'tower' ? 104 : o.k === 'altar' ? 124 : o.r * 2.9, py = o.k === 'tower' ? o.y - 40 : o.k === 'altar' ? o.y - 22 : o.y - o.r * 0.25;
+        if (vs(c, pic, o.x, py, pw)) { if (o.flash > 0) vs(c, pic, o.x, py, pw, 0, 0.75, true); /* 맞으면 번쩍 */ }
+        else if (o.k === 'tower') { c.fillRect(o.x - 30, o.y - 50, 60, 80); c.strokeRect(o.x - 30, o.y - 50, 60, 80); c.beginPath(); c.moveTo(o.x - 42, o.y - 50); c.lineTo(o.x, o.y - 82); c.lineTo(o.x + 42, o.y - 50); c.closePath(); c.fill(); c.stroke(); }
         else if (o.k === 'altar') { c.fillRect(o.x - 34, o.y - 20, 68, 44); c.strokeRect(o.x - 34, o.y - 20, 68, 44); c.fillStyle = '#c03020'; c.fillRect(o.x - 8, o.y - 60, 16, 44); c.fillStyle = '#fff3a0'; c.font = '400 16px "Black Han Sans", sans-serif'; c.textAlign = 'center'; c.fillText('符', o.x, o.y - 32); }
         else { c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#2a1c10'; c.font = '400 22px "Black Han Sans", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('伏', o.x, o.y); }
         bar(c, o.x, o.y - o.r - 34, 70, 6, Math.max(0, o.hp / (o.mhp || 1)), '#ff8a5c');

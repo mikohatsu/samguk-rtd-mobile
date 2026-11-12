@@ -17,7 +17,8 @@
   function tick(now, cap) {
     if (S.paused || S.tutHold) { last = now; acc = 0; return; } // 튜토리얼 설명 중에도 멈춘다
     padTick();
-    const dt = Math.min(cap, (now - last) / 1000); last = now;
+    const dt = Math.max(0, Math.min(cap, (now - last) / 1000)) || 0; last = now; // 시계가 거꾸로 가거나 값이 깨져도 계산이 멈추지 않게
+    if (!(acc >= 0)) acc = 0;
     // 신화·불멸 컷신 동안은 시간이 멈추고, 보스전은 항상 1배속이다
     const held = net && (net.clock.pz || net.kicked);
     if (S.freeze > 0) { S.freeze -= dt; acc = 0; }
