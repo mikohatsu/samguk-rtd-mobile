@@ -212,7 +212,7 @@
       return `<div class="setlist">${h}</div>`;
     };
     const repaintMap = () => { sizeMap(); };
-    if (window.RTD_LOBBY) window.RTD_LOBBY.init({ api, ACC, saveAcc, t, I, T, cfg, getLobby: () => lobby, joinRoom: (code) => join(code), begin, refreshAcc, settingsHtml, errText, clock, repaintMap, repaintSetup: () => dr(), paintMini: (cv) => paintMap(cv.getContext('2d'), cv.width, cv.height) });
+    if (window.RTD_LOBBY) window.RTD_LOBBY.init({ api, ACC, saveAcc, t, I, T, cfg, getLobby: () => lobby, joinRoom: (code) => join(code), begin, refreshAcc, settingsHtml, errText, clock, repaintMap, repaintSetup: () => dr(), paintMini: (cv, theme) => paintMap(cv.getContext('2d'), cv.width, cv.height, theme || null) });
     dr();
   }
   setupTitle();

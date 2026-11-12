@@ -80,7 +80,7 @@
   if (Art) { const base = Art.unitSprite; Art.unitSprite = (d, v, f) => skinned(base(d, v, f), d.id); }
   function tintMap(cv) {
     const me = C && C.ACC.me, ms = me && me.mapSkin, p = ms && SHOP.MAP_SKINS[ms];
-    if (!p || ms === 'spring') return;
+    if (!p || ms === 'spring' || p.theme) return; // 그림 스킨은 지도 자체가 다르게 칠해진다(색 바꾸기 없음)
     const out = shift(cv, p); if (!out) return;
     const x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height); x.drawImage(out, 0, 0);
   }
@@ -262,7 +262,7 @@
       body.innerHTML = h;
       // 미리보기: 장수 외형은 색을 바꾼 초상, 지도는 바뀐 바닥 색
       body.querySelectorAll('[data-skinpv]').forEach((img) => { const k = img.dataset.skinpv, sk = SHOP.UNIT_SKINS[k], src = new Image(); src.onload = () => { const c2 = shift(src, sk); if (c2) img.src = c2.toDataURL(); }; src.src = img.src; });
-      body.querySelectorAll('[data-mappv]').forEach((cv) => { const k = cv.dataset.mappv; C.paintMini(cv); const sk = SHOP.MAP_SKINS[k]; if (k !== 'spring') { const o = shift(cv, sk); if (o) { const x = cv.getContext('2d'); x.drawImage(o, 0, 0); } } });
+      body.querySelectorAll('[data-mappv]').forEach((cv) => { const k = cv.dataset.mappv; const sk = SHOP.MAP_SKINS[k]; C.paintMini(cv, sk.theme || null); if (k !== 'spring' && !sk.theme) { const o = shift(cv, sk); if (o) { const x = cv.getContext('2d'); x.drawImage(o, 0, 0); } } });
       return;
     }
     if (panel === 'rank') {
@@ -428,5 +428,9 @@
     const ms = (C.ACC.me && C.ACC.me.mapSkin) || 'spring'; if (ms !== painted) { painted = ms; C.repaintMap(); }
     if (panel === 'account') { C.refreshAcc(); renderPanel(); }
   }
-  root.RTD_LOBBY = { init, refresh, onCfg, picked: isPicked, tintMap, skinned, closeWizard, recordGame, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), close: () => { closeWizard(); closePanel(); } };
+  // 지금 장착한 지도가 그림 스킨이면 그 테마 이름(아니면 null)
+  const mapTheme = () => { const me = C && C.ACC.me, p = me && me.mapSkin && SHOP.MAP_SKINS[me.mapSkin]; return p && p.theme ? p.theme : null; };
+  // 테마 그림이 뒤늦게 도착하면 상점의 지도 미리보기를 다시 그린다
+  if (typeof window !== 'undefined') window.addEventListener('rtd-maptheme', () => { if (panel === 'shop' && ptab === 'maps') renderPanel(); });
+  root.RTD_LOBBY = { init, refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), close: () => { closeWizard(); closePanel(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

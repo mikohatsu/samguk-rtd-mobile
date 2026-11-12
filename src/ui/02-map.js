@@ -1,6 +1,74 @@
   // ---- 전장 배경: 먹으로 그린 군사 지도 ----
   const OVER = { x: 1200, y: 600 };
-  function paintMap(c, w, h) {
+  // ---- 테마 지도(상점 '전장 지도'의 그림 스킨): 바닥·길·강·가운데 건물·소품을 테마별 그림으로 갈아 끼운다. 길 위치(규칙)는 그대로다. ----
+  // 그림: gfx/map_<테마>_{ground,road,water}.jpg, gfx/map_<테마>_{keep,p1,p2}.png (Higgsfield 생성, 출처는 CREDITS.md)
+  // river: 강 폭(0이면 없음). night: 밤 테마의 어두운 덮개. gf: 바닥 색 보정(유닛이 묻히지 않게 누른다).
+  const MAP_THEMES = {
+    plain: { label: '中原', river: 46, water: 'plain', gf: 'saturate(0.8) brightness(0.9)', props: ['p1', 'p1', 'p2'] },
+    redcliff: { label: '赤壁', river: 150, water: 'redcliff', gf: 'brightness(1)', night: 'rgba(14,10,26,.2)', props: ['p1', 'p1', 'p2'], p2: 'gfx/vs_fireship.png' },
+    luoyang: { label: '洛陽', river: 0, gf: 'saturate(0.7) brightness(0.66)', rf: 'saturate(0.9) brightness(0.95)', props: ['p1', 'p1', 'p2'], inner: 1.5 },
+    hanzhong: { label: '漢中', river: 40, water: 'plain', gf: 'saturate(1.1) brightness(0.66)', rf: 'sepia(0.55) saturate(1.5) brightness(0.92)', props: ['p1', 'p2', 'p2'] },
+  };
+  const THI = {};
+  let thTimer = 0;
+  function themeImg(th, part) {
+    const T2 = MAP_THEMES[th], src = part === 'water' ? `gfx/map_${T2.water}_water.jpg` : T2[part] || `gfx/map_${th}_${part}.${part === 'ground' || part === 'road' ? 'jpg' : 'png'}`;
+    let im = THI[src];
+    if (!im) {
+      im = THI[src] = new Image();
+      // 그림이 도착하면 지도를 다시 칠하고, 상점 미리보기도 다시 그리게 알린다
+      im.onload = () => { im._ok = true; clearTimeout(thTimer); thTimer = setTimeout(() => { if (typeof sizeMap === 'function') sizeMap(); try { window.dispatchEvent(new Event('rtd-maptheme')); } catch (e) { /* 무시 */ } }, 150); };
+      im.src = src + '?v=3';
+    }
+    return im._ok ? im : null;
+  }
+  const curTheme = () => { const k = window.RTD_LOBBY && window.RTD_LOBBY.mapTheme ? window.RTD_LOBBY.mapTheme() : null; return k && MAP_THEMES[k] ? k : null; };
+  // 테마 지도를 칠한다. 그림이 아직 덜 왔으면 false(기본 지도로 칠한다).
+  function paintTheme(c, w, h, th) {
+    const T2 = MAP_THEMES[th], G = themeImg(th, 'ground'), R = themeImg(th, 'road'), K = themeImg(th, 'keep'), P1 = themeImg(th, 'p1'), P2 = themeImg(th, 'p2'), Wt = T2.river ? themeImg(th, 'water') : null;
+    if (!G || !R || !K || !P1 || !P2 || (T2.river && !Wt)) return false;
+    const sx = w / (W + OVER.x * 2), sy = h / (H + OVER.y * 2);
+    c.save(); c.scale(sx, sy); c.translate(OVER.x, OVER.y);
+    c.fillStyle = tilePat(c, 'th_' + th + '_g', 1.25, T2.gf, G); c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    // 강
+    if (T2.river) {
+      c.lineCap = 'round'; c.strokeStyle = 'rgba(10,14,20,.45)'; c.lineWidth = T2.river + 10;
+      const river = () => { c.beginPath(); c.moveTo(-OVER.x, 760); c.lineTo(-20, 690); c.bezierCurveTo(330, 590, 450, 780, 680, 640); c.bezierCurveTo(880, 520, 1060, 680, W + 30, 510); c.lineTo(W + OVER.x, 420); c.stroke(); };
+      river(); c.strokeStyle = tilePat(c, 'th_' + th + '_w', 0.7, 'brightness(0.9)', Wt); c.lineWidth = T2.river; river();
+    }
+    // 소품: 기본 지도와 같은 자리 규칙(길·가운데는 비운다)
+    let seed = 7; const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const list = [];
+    for (let i = 0; i < 230; i++) {
+      const x = r() * (W + OVER.x * 2) - OVER.x, y = r() * (H + OVER.y * 2) - OVER.y, s = 14 + r() * 26, pick = T2.props[Math.floor(r() * T2.props.length)];
+      const inside = x > ROAD.x0 && x < ROAD.x1 && y > ROAD.y0 && y < ROAD.y1;
+      if (x > -20 && x < W + 20 && y > -20 && y < H + 20 && !(x > ROAD.x0 + 70 && x < ROAD.x1 - 70 && y > ROAD.y0 + 70 && y < ROAD.y1 - 70)) continue;
+      if (x > ROAD.x0 - 70 && x < ROAD.x1 + 70 && (Math.abs(y - ROAD.y0) < 70 || Math.abs(y - ROAD.y1) < 70)) continue;
+      if (y > ROAD.y0 - 70 && y < ROAD.y1 + 70 && (Math.abs(x - ROAD.x0) < 70 || Math.abs(x - ROAD.x1) < 70)) continue;
+      if (Math.abs(x - W / 2) < 170 && Math.abs(y - H / 2) < 130) continue;
+      if (inside && i % 3) continue; // 길 안쪽은 유닛 자리라 드문드문
+      list.push([x, y, s * (inside ? 2.1 * (T2.inner || 1) : 3.6), pick === 'p1' ? P1 : P2]);
+    }
+    list.sort((a, b) => a[1] - b[1]);
+    c.filter = 'saturate(0.8) brightness(0.78)';
+    list.forEach(([x, y, z, im]) => { c.drawImage(im, x - z / 2, y - z * 0.8, z, z * (im.height / im.width)); });
+    c.filter = 'none';
+    // 도로
+    c.lineJoin = 'round'; c.strokeStyle = 'rgba(24,16,10,.8)'; c.lineWidth = 84;
+    c.strokeRect(ROAD.x0, ROAD.y0, ROAD.x1 - ROAD.x0, ROAD.y1 - ROAD.y0);
+    c.strokeStyle = tilePat(c, 'th_' + th + '_r', 0.5, T2.rf || 'saturate(0.8) brightness(0.82)', R); c.lineWidth = 72; c.strokeRect(ROAD.x0, ROAD.y0, ROAD.x1 - ROAD.x0, ROAD.y1 - ROAD.y0);
+    if (T2.night) { c.fillStyle = T2.night; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); }
+    // 가운데 건물: 유닛이 태어나는 자리라 어둡게 눌러 깐다
+    const cx = (ROAD.x0 + ROAD.x1) / 2, cy = H / 2, z = 270;
+    c.filter = 'saturate(0.7) brightness(0.7)'; c.drawImage(K, cx - z / 2, cy - z * (K.height / K.width) * 0.58, z, z * (K.height / K.width)); c.filter = 'none';
+    c.fillStyle = 'rgba(30,20,12,.75)'; c.fillRect(cx - 52, cy + 70, 104, 40);
+    c.fillStyle = '#ffe2a0'; c.font = '900 30px "Noto Serif KR", serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(T2.label, cx, cy + 91);
+    c.restore();
+    return true;
+  }
+  function paintMap(c, w, h, theme) {
+    const th = theme === undefined ? curTheme() : theme && MAP_THEMES[theme] ? theme : null;
+    if (th && paintTheme(c, w, h, th)) return;
     const sx = w / (W + OVER.x * 2), sy = h / (H + OVER.y * 2);
     c.save(); c.scale(sx, sy); c.translate(OVER.x, OVER.y);
     const grd = c.createLinearGradient(0, 0, W, H);
@@ -58,8 +126,8 @@
   }
   // 타일 텍스처: 좌우·상하로 뒤집어 붙여 이음매 없이 반복한다. 색 보정(filter)은 작은 타일에 한 번만 구워 둔다.
   const pats = {};
-  function tilePat(c, name, scale, filter) {
-    const im = Art.img(name), key = name + (filter || '');
+  function tilePat(c, name, scale, filter, own) {
+    const im = own || Art.img(name), key = name + (filter || '');
     if (!im) return null;
     if (!pats[key]) {
       const w = im.width, h = im.height, cv = document.createElement('canvas'); cv.width = w * 2; cv.height = h * 2;

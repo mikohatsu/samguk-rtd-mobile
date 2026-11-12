@@ -23,6 +23,11 @@
     autumn: { hue: -40, sat: 1.3, lit: 0, price: 800, name: ['가을 산하', '秋の山河', 'Autumn Hills', '秋日山河'] },
     snow: { hue: 170, sat: 0.3, lit: 0.18, price: 800, name: ['설원', '雪原', 'Snowfield', '雪原'] },
     desert: { hue: -25, sat: 0.9, lit: 0.08, price: 800, name: ['서량 사막', '西涼の砂漠', 'Liang Desert', '西凉沙漠'] },
+    // 그림 스킨(theme): 바닥·길·건물·소품이 통째로 바뀐다. 그림과 설정은 src/ui/02-map.js의 MAP_THEMES
+    plain: { theme: 'plain', price: 1500, name: ['중원 평야', '中原の平野', 'Central Plains', '中原平野'] },
+    redcliff: { theme: 'redcliff', price: 2000, name: ['적벽', '赤壁', 'Red Cliffs', '赤壁'] },
+    luoyang: { theme: 'luoyang', price: 2000, name: ['낙양 성내', '洛陽城内', 'Luoyang City', '洛阳城内'] },
+    hanzhong: { theme: 'hanzhong', price: 2000, name: ['한중 잔도', '漢中の桟道', 'Hanzhong Plank Road', '汉中栈道'] },
   };
   const GEM_PACKS = [['gem60', 60, 160], ['gem300', 300, 800], ['gem980', 980, 2400]]; // [id, 원보, 엔] 인앱 결제 준비 중
   const price = (id) => {
