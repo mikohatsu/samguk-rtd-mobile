@@ -149,8 +149,25 @@
   }
   // 깃발 28개는 글자·도형이 많아 매 프레임 그리면 무겁다. 달성 상태가 바뀔 때만 다시 그려 두고 한 장으로 찍는다.
   let flagCv = null, flagKey = '';
+  // 깃발 그림(gfx/ach_*.png, Higgsfield 생성): 밝은 천 그림을 등급 색으로 물들여 쓴다. 종류: 수집=깃발, 전광석화=펄럭이는 기, 협동=세로 군기, 인연=성루
+  const ACH_PIC = { collect: 'flag', speed: 'pennant', party: 'banner', bond: 'castle' }, ACH_IM = {}, ACH_TINT = {};
+  let achLoaded = 0;
+  if (typeof Image !== 'undefined') Object.values(ACH_PIC).forEach((n) => { const im = new Image(); im.onload = () => { ACH_IM[n] = im; achLoaded++; }; im.src = 'gfx/ach_' + n + '.png?v=1'; });
+  function achSprite(n, col) {
+    const im = ACH_IM[n], key = n + col;
+    if (!im) return null;
+    if (!ACH_TINT[key]) {
+      const cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height;
+      const x = cv.getContext('2d'); x.drawImage(im, 0, 0);
+      // 곱하기로 물들여 천의 주름·명암을 살리고, 원래 모양대로 다시 잘라 낸다
+      x.globalCompositeOperation = 'multiply'; x.fillStyle = col; x.fillRect(0, 0, cv.width, cv.height);
+      x.globalCompositeOperation = 'destination-in'; x.drawImage(im, 0, 0);
+      ACH_TINT[key] = cv;
+    }
+    return ACH_TINT[key];
+  }
   function drawFlags(c) {
-    const key = Object.keys(g.me.done).join() + '|' + g.mode + g.party + '|' + (I.lang || '');
+    const key = Object.keys(g.me.done).join() + '|' + g.mode + g.party + '|' + (I.lang || '') + '|' + achLoaded;
     if (flagKey !== key || !flagCv) {
       flagKey = key;
       if (!flagCv) { flagCv = document.createElement('canvas'); flagCv.width = 220; flagCv.height = H; }
@@ -171,6 +188,17 @@
       c.globalAlpha = done ? 1 : closed ? 0.18 : 0.55;
       c.save(); c.translate(f.x, f.y);
       const label = achLabel(f.a);
+      const sp = achSprite(ACH_PIC[kind], col);
+      if (sp) {
+        // 그림 깃발: 높이를 맞춰 세우고 천 가운데에 글자를 쓴다
+        const hh = kind === 'bond' ? 50 : 66, ww = (hh * sp.width) / sp.height, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
+        c.drawImage(sp, kind === 'bond' ? -2 : -4, -hh, ww, hh);
+        c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,14,10,.85)'; c.lineWidth = 3.5; c.font = `700 ${label.length > 2 ? 13 : 15}px "IBM Plex Sans KR", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+        const tx = (kind === 'bond' ? -2 : -4) + ww * AT[0], ty = -hh + hh * AT[1];
+        c.strokeText(label, tx, ty); c.fillText(label, tx, ty);
+        if (done) { c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 3; c.font = '900 19px "Noto Serif KR", serif'; c.strokeText('★', ww - 4, -hh + 6); c.fillText('★', ww - 4, -hh + 6); }
+        c.restore(); c.globalAlpha = 1; continue;
+      }
       if (kind === 'speed' || kind === 'party') {
         // 전광석화는 삼각 깃, 협동은 세로 군기. 테두리 색으로 종류를 한 번 더 구분한다.
         c.strokeStyle = '#2a1c10'; c.lineWidth = 3; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -60); c.stroke();

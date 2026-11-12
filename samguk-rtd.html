@@ -716,6 +716,19 @@ html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
 #setup .wz-foot .btn.go { background: var(--verm); border-color: #e9c98a; color: #fff3dc; filter: none; }
 #ltoast { border-color: var(--gline); }
 #lsay { background: var(--pap); color: var(--ink2); border: 1px solid rgba(60,34,16,.45); border-radius: 8px; }
+/* ---- 게임 중 오른쪽 버튼(강화·명사·선택권·전황·자동): 한지 판 위의 그린 아이콘. 자동이 켜져 있으면 화살표와 둘레 고리가 돈다 ---- */
+.rb { width: 58px; height: 58px; border-radius: 10px; gap: 1px; background: url(gfx/ui_paper.jpg) center/200px; border: 1px solid rgba(60, 34, 16, .65); color: #23130a; font: 700 10.5px/1.1 var(--ui);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .5), inset 0 0 0 2px rgba(251, 238, 218, .6); }
+.rb .ri { width: 36px; height: 36px; object-fit: contain; pointer-events: none; }
+.rb .ic { width: 26px; height: 26px; margin: 5px 0; color: #4a2f18; stroke-width: 2.2; }
+.rb span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
+.rb .dot { color: #fff; }
+.rb.cur { background: url(gfx/ui_paper.jpg) center/200px; border-color: #b8301c; box-shadow: 0 0 0 2px #b8301c, 0 3px 8px rgba(0, 0, 0, .5); }
+.rb.on { border-color: #2e8b3a; color: #1d5a26; box-shadow: 0 0 0 2px #3fae4e, 0 0 12px rgba(125, 255, 142, .6); }
+.rb.on .ic { color: #1f7a2c; animation: rbspin 2.2s linear infinite; }
+.rb.on::before { content: ''; position: absolute; left: calc(50% - 20px); top: 3px; width: 36px; height: 36px; border-radius: 50%; border: 2px dashed rgba(46, 139, 58, .75); animation: rbspin 6s linear infinite reverse; pointer-events: none; }
+@keyframes rbspin { to { transform: rotate(360deg); } }
+@media (max-height: 430px) { .rb { width: 54px; height: 52px; font-size: 10px; } .rb .ri { width: 31px; height: 31px; } .rb .ic { width: 23px; height: 23px; margin: 4px 0; } .rb.on::before { width: 31px; height: 31px; left: calc(50% - 17.5px); top: 2px; } #rail { gap: 5px; } }
 /* ---- 로비 5차: 메뉴는 그린 물건 아이콘(돈주머니·투구·죽간), 창은 비단 두루마리, 탭은 군기 모양 ----
    그림: gfx/ic_shop.png, ic_rank.png, ic_hist.png(아이콘), ui_silk.jpg(구름무늬 비단) */
 #lmenu { grid-template-columns: repeat(3, 84px); gap: 10px; }
