@@ -42,7 +42,7 @@
     if (show) {
       const tick = Object.values(p.tickets).reduce((a, b) => a + b, 0), autoOn = ['t1', 't2', 't3'].every((k) => p.auto[k]);
       const cheap = T.upgrades.filter((u) => (p.upgrades[u.id] || 0) < g.upMax(p, u)).map((u) => g.upgradeCost(p, u)).sort((a, b) => a - b)[0];
-      const btn = (act, arg, ic, label, extra, cls) => `<button class="rb ${cls || ''}" data-act="${act}" data-arg="${arg}" type="button">${rIcon(ic)}<span>${label}</span>${extra || ''}</button>`;
+      const btn = (act, arg, ic, label, extra, cls) => `<button class="rb ${cls || ''}" data-act="${act}" data-arg="${arg}" type="button"><i class="rc">${rIcon(ic)}</i><span>${label}</span>${extra || ''}</button>`;
       const cur = (k) => (S.drawer === k ? 'cur' : '');
       const r = btn('drawer', 'upgrade', 'upgrade', t('upgrade'), cheap != null && p.gold >= cheap ? '<span class="dot">!</span>' : '', cur('upgrade'))
         + btn('drawer', 'sage', 'sage', `${t('sage')} ${g.sagesOf(p).length}/${g.sageMax()}`, '', cur('sage'))
