@@ -720,7 +720,7 @@ html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
    이름은 아래 그림자 글씨. 자동이 켜지면 은은한 초록 빛줄기가 둘레를 돌고 화살표도 돈다 ---- */
 #rail { gap: 4px; }
 .rb { width: 56px; height: auto; padding: 0; gap: 1px; border: 0; border-radius: 0; background: none; box-shadow: none; color: #fff; font: 700 10px/1.2 var(--ui); overflow: visible; }
-.rb .rc { position: relative; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-style: normal; background: rgba(14, 10, 8, .66); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); transition: transform .08s, background .15s; }
+.rb .rc { position: relative; box-sizing: border-box; width: 44px; height: 44px; padding: 0; margin: 0; border: 0; border-radius: 50%; display: grid; place-items: center; place-content: center; font-style: normal; line-height: 0; /* 다른 규칙에서 물려받는 안쪽 여백이 있으면 그림이 한쪽으로 밀린다 */ background: rgba(14, 10, 8, .66); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); transition: transform .08s, background .15s; }
 .rb:active .rc { transform: scale(.92); background: rgba(14, 10, 8, .82); }
 .rb .ri { width: 40px; height: 40px; object-fit: contain; pointer-events: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55)); }
 .rb .ic { width: 24px; height: 24px; margin: 0; color: rgba(255, 255, 255, .55); stroke-width: 2.2; }
