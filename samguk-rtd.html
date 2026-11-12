@@ -720,17 +720,17 @@ html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
    이름은 아래 그림자 글씨. 자동이 켜지면 은은한 초록 빛줄기가 둘레를 돌고 화살표도 돈다 ---- */
 #rail { gap: 4px; }
 .rb { width: 56px; height: auto; padding: 0; gap: 1px; border: 0; border-radius: 0; background: none; box-shadow: none; color: #fff; font: 700 10px/1.2 var(--ui); overflow: visible; }
-.rb .rc { position: relative; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-style: normal; background: rgba(14, 10, 8, .42); box-shadow: 0 2px 8px rgba(0, 0, 0, .28); transition: transform .08s, background .15s; }
-.rb:active .rc { transform: scale(.92); background: rgba(14, 10, 8, .6); }
-.rb .ri { width: 32px; height: 32px; object-fit: contain; pointer-events: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55)); }
+.rb .rc { position: relative; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-style: normal; background: rgba(14, 10, 8, .66); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); transition: transform .08s, background .15s; }
+.rb:active .rc { transform: scale(.92); background: rgba(14, 10, 8, .82); }
+.rb .ri { width: 40px; height: 40px; object-fit: contain; pointer-events: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55)); }
 .rb .ic { width: 24px; height: 24px; margin: 0; color: rgba(255, 255, 255, .55); stroke-width: 2.2; }
 .rb > span:not(.dot) { max-width: 60px; padding: 0 2px; background: none; border-radius: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, .92); text-shadow: 0 1px 2px #000, 0 0 5px rgba(0, 0, 0, .9); }
 .rb .dot { top: -2px; right: 2px; min-width: 16px; padding: 0 3px; font: 800 10px/16px var(--ui); border-radius: 8px; background: #e5483a; box-shadow: none; color: #fff; z-index: 2; }
 .rb.cur { background: none; }
-.rb.cur .rc { background: rgba(255, 214, 120, .34); box-shadow: 0 0 12px rgba(255, 200, 90, .45); }
+.rb.cur .rc { background: rgba(120, 84, 30, .78); box-shadow: 0 0 12px rgba(255, 200, 90, .45); }
 .rb.cur > span:not(.dot) { color: #ffe9a8; }
 .rb.on { border: 0; box-shadow: none; }
-.rb.on .rc { background: rgba(40, 110, 60, .38); box-shadow: 0 0 12px rgba(125, 255, 142, .32); }
+.rb.on .rc { background: rgba(22, 70, 36, .68); box-shadow: 0 0 12px rgba(125, 255, 142, .32); }
 .rb.on .ic { color: #c8ffd0; animation: rbspin 2.8s linear infinite; }
 .rb.on > span:not(.dot) { color: #c8ffd0; }
 .rb.on .rc::before { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
@@ -738,8 +738,8 @@ html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
   animation: rbspin 1.8s linear infinite; }
 @keyframes rbspin { to { transform: rotate(360deg); } }
-@media (max-height: 430px) { .rb { width: 52px; } .rb .rc { width: 41px; height: 41px; } .rb .ri { width: 30px; height: 30px; } .rb .ic { width: 22px; height: 22px; } #rail { gap: 3px; } }
-@media (min-height: 600px) { .rb { width: 72px; font-size: 12.5px; } .rb .rc { width: 58px; height: 58px; } .rb .ri { width: 42px; height: 42px; } .rb .ic { width: 31px; height: 31px; } .rb > span:not(.dot) { max-width: 76px; } #rail { gap: 7px; } }
+@media (max-height: 430px) { .rb { width: 52px; } .rb .rc { width: 41px; height: 41px; } .rb .ri { width: 37px; height: 37px; } .rb .ic { width: 22px; height: 22px; } #rail { gap: 3px; } }
+@media (min-height: 600px) { .rb { width: 72px; font-size: 12.5px; } .rb .rc { width: 58px; height: 58px; } .rb .ri { width: 52px; height: 52px; } .rb .ic { width: 31px; height: 31px; } .rb > span:not(.dot) { max-width: 76px; } #rail { gap: 7px; } }
 /* ---- 로비 5차: 메뉴는 그린 물건 아이콘(돈주머니·투구·죽간), 창은 비단 두루마리, 탭은 군기 모양 ----
    그림: gfx/ic_shop.png, ic_rank.png, ic_hist.png(아이콘), ui_silk.jpg(구름무늬 비단) */
 #lmenu { grid-template-columns: repeat(3, 84px); gap: 10px; }

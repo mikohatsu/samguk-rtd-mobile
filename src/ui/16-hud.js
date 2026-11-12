@@ -9,7 +9,7 @@
   };
   // 오른쪽 버튼 아이콘: 강화·명사·선택권·전황은 그린 그림(gfx/ic_*.png), 자동은 도는 화살표(켜져 있으면 CSS로 빙글빙글 돈다)
   const RAIL_PIC = { upgrade: 1, sage: 1, ticket: 1, war: 1 };
-  const rIcon = (k) => (RAIL_PIC[k] ? `<img class="ri" alt="" src="gfx/ic_${k}.png?v=2">` : `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${RAIL_ICON[k]}"/></svg>`);
+  const rIcon = (k) => (RAIL_PIC[k] ? `<img class="ri" alt="" src="gfx/ic_${k}.png?v=3">` : `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${RAIL_ICON[k]}"/></svg>`);
   function renderHud() {
     const vp = viewedPeer(), ln = vp && vp.state.ln;
     const gold = ln ? ln.g : g.me.gold, lives = ln ? ln.l : g.lives, en = ln ? ln.n : g.enemyCount(), own = ln ? ln.u.length : g.units.filter((u) => u.owner === 0).length;
