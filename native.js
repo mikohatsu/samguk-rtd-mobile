@@ -80,6 +80,14 @@
     document.addEventListener('pointerdown', keep, { passive: true });
     document.addEventListener('visibilitychange', keep);
   }
+  // 앱 활성 상태(@capacitor/app): 제어 센터·전화처럼 visibilitychange가 안 오는 경우도 잡는다. 받는 쪽은 audio.js, 17-loop.js
+  if (on && P.App && P.App.addListener) {
+    try {
+      Promise.resolve(P.App.addListener('appStateChange', (s) => {
+        try { root.dispatchEvent(new CustomEvent('rtd-appstate', { detail: { active: !!(s && s.isActive) } })); } catch (e) { /* 무시 */ }
+      })).catch(() => {});
+    } catch (e) { /* 플러그인 없음 */ }
+  }
   root.RTD_NATIVE = { on, init, interstitial, openUrl, signIn, signOut };
   if (on) init();
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -152,13 +152,17 @@
     const t = ac.currentTime;
     m.g.gain.cancelScheduledValues(t); m.g.gain.setValueAtTime(m.g.gain.value, t); m.g.gain.linearRampToValueAtTime(to, t + sec);
   }
+  function dropTrack(m) {
+    try { m.el.pause(); m.src.disconnect(); m.g.disconnect(); } catch (e) { /* 이미 끊김 */ }
+    m.el.removeAttribute('src'); try { m.el.load(); } catch (e) { /* 무시 */ }
+  }
   function newTrack(kind) {
     const el = new Audio('bgm/' + nextName(kind) + '.mp3'), g = ac.createGain(), m = { el, g, kind };
     el.preload = 'auto'; g.gain.value = 0;
-    ac.createMediaElementSource(el).connect(g); g.connect(bgmBus);
-    // 곡이 끝나면 다음 곡으로
-    el.addEventListener('ended', () => { if (mus[kind] === m) { mus[kind] = null; if ((boss ? 'boss' : 'lane') === kind) music(); } });
-    el.addEventListener('error', () => { if (mus[kind] === m) { mus[kind] = null; musOk = false; startBgm(); } });
+    m.src = ac.createMediaElementSource(el); m.src.connect(g); g.connect(bgmBus);
+    // 곡이 끝나면 다음 곡으로. 끝난 곡은 오디오 연결을 끊고 파일을 놓는다(한 판에 10곡쯤 쌓이던 누수)
+    el.addEventListener('ended', () => { if (mus[kind] === m) { mus[kind] = null; dropTrack(m); if ((boss ? 'boss' : 'lane') === kind) music(); } });
+    el.addEventListener('error', () => { if (mus[kind] === m) { mus[kind] = null; dropTrack(m); musOk = false; startBgm(); } });
     return m;
   }
   // 지금 상황(라인/보스전)에 맞는 곡을 틀고, 다른 쪽 곡은 서서히 줄여 멈춘다
@@ -169,7 +173,7 @@
     if (o) {
       fade(o, 0, 0.8);
       // 보스 곡은 끝내고(다음 보스전은 다른 곡), 라인 곡은 멈춰 두었다가 이어 튼다
-      setTimeout(() => { if (mus[other] !== o || (boss ? 'boss' : 'lane') === other) return; o.el.pause(); if (other === 'boss') { mus.boss = null; o.el.removeAttribute('src'); } }, 900);
+      setTimeout(() => { if (mus[other] !== o || (boss ? 'boss' : 'lane') === other) return; o.el.pause(); if (other === 'boss') { mus.boss = null; dropTrack(o); } }, 900);
     }
     let m = mus[kind];
     if (!m) m = mus[kind] = newTrack(kind);
@@ -184,13 +188,17 @@
     bgmTimer = setInterval(beat, boss ? 170 : 270);
   }
   // 앱을 내리면 소리를 멈추고, 돌아오면 이어 튼다
-  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
-    hiddenNow = document.hidden;
+  // 브라우저의 visibilitychange와 앱의 appStateChange(native.js가 'rtd-appstate'로 넘긴다) 둘 다 받는다. 겹쳐 와도 한 번만 처리한다.
+  function setHidden(h) {
+    if (hiddenNow === h) return;
+    hiddenNow = h;
     if (!ac) return;
     const m = mus[boss ? 'boss' : 'lane'];
     if (hiddenNow) { if (m) m.el.pause(); if (ac.suspend) ac.suspend(); }
     else { if (ac.resume) ac.resume(); if (m && st.bgm > 0) { const pr = m.el.play(); if (pr && pr.catch) pr.catch(() => {}); } }
-  });
+  }
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => setHidden(document.hidden));
+  if (typeof window !== 'undefined') window.addEventListener('rtd-appstate', (e) => setHidden(!(e.detail && e.detail.active)));
   root.RTD_AUDIO = {
     init, play, state: st,
     // 지금 나오는 곡(확인용)

@@ -55,10 +55,13 @@
     return row + `<div class="bk"><div>${stats}</div>${pass}${sk}${comb}${T.recipes[d.id] ? recipeRow(d.id) : ''}</div>`;
   }
   function renderPane() {
+    // 서랍이 닫혀 있으면 안 보이는 글자판을 만들지 않는다(서랍을 여는 행동이 dirty()를 불러 그때 한 번 그린다)
+    if (!S.drawer) return;
     const p = g.me, tick = Object.values(p.tickets).reduce((a, b) => a + b, 0);
     const tabs = [['upgrade', t('upgrade')], ['sage', t('sage')], ['ticket', t('ticket')], ['book', t('book')], ['war', t('war')], ['set', t('settings')]];
     if (!S.tab) S.tab = 'upgrade';
-    $('tabs').innerHTML = tabs.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}" type="button">${n}${k === 'ticket' && tick ? `<span class="dot">${tick}</span>` : ''}</button>`).join('');
+    const tb = $('tabs'), th = tabs.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}" type="button">${n}${k === 'ticket' && tick ? `<span class="dot">${tick}</span>` : ''}</button>`).join('');
+    if (tb.dataset.html !== th) { tb.innerHTML = th; tb.dataset.html = th; } // 같은 내용이면 버튼을 다시 만들지 않는다(누르는 도중 교체 방지)
     let h = '';
     if (S.tab === 'upgrade') {
       h = `<div class="h">${t('hold', { c: esc(T.currency), n: fmt(p.gold) })}</div>` + T.upgrades.map((u) => {
@@ -107,7 +110,8 @@
     if (pane.dataset.html !== h) { pane.innerHTML = h; pane.dataset.html = h; pane.scrollTop = top; }
     let a = '';
     if (net) a = net.roster().map((r) => `<div><span>${esc(r.state.name || '')}${r.me ? I.t('meTag') : ''}</span><span>${I.t('alliesLine', { u: r.state.units | 0, e: r.state.enemies | 0 })}</span></div>`).join('');
-    $('allies').innerHTML = a; $('allies').hidden = !a;
+    const al = $('allies');
+    if (al.dataset.html !== a) { al.innerHTML = a; al.dataset.html = a; al.hidden = !a; }
   }
   // 보스전 역할 표시(7성 이상)
   const roleBadge = (d) => (d.role ? `<span class="role" style="color:${T.roles[d.role].color};border-color:${T.roles[d.role].color}">${esc(T.roles[d.role].name)}</span>` : '');

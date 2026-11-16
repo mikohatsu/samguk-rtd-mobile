@@ -42,18 +42,38 @@
     while (sz > 20 && c.measureText(text).width > maxW) { sz -= 4; c.font = `${weight} ${sz}px ${family}`; }
     return sz;
   }
-  // 고해상도 일러스트: 처음 필요할 때 받고, 가장자리를 어둡게 흐려 연출 화면에 녹인다
-  const ILL = {};
+  // 고해상도 일러스트: 처음 필요할 때 받고, 가장자리를 어둡게 흐려 연출 화면에 녹인다.
+  // 메모리: 화면에 그릴 크기로 줄여 담고 원본은 바로 놓는다. 최근 2장만 남기고 나머지는 캔버스를 돌려준다(iOS 캔버스 한도).
+  const ILL = {}, ILL_ORDER = [], ILL_KEEP = 2;
+  function illEvict() {
+    while (ILL_ORDER.length > ILL_KEEP) {
+      const cur = S.pop && S.pop.def && S.pop.def.id;
+      const i = ILL_ORDER.findIndex((id) => id !== cur);
+      if (i < 0) return;
+      const id = ILL_ORDER.splice(i, 1)[0], e = ILL[id];
+      delete ILL[id];
+      if (!e) continue;
+      e.im.onload = null; e.im.removeAttribute('src');
+      if (e.cv) e.cv.width = 0;
+      if (e.bg) e.bg.width = 0;
+    }
+  }
   function illust(d) {
     if (!(T.illusts || {})[d.id]) return null;
     let e = ILL[d.id];
+    if (e) { const i = ILL_ORDER.indexOf(d.id); if (i !== ILL_ORDER.length - 1) { ILL_ORDER.splice(i, 1); ILL_ORDER.push(d.id); } }
     if (!e) {
-      e = ILL[d.id] = { im: new Image(), cv: null };
+      e = ILL[d.id] = { im: new Image(), cv: null, bg: null };
+      ILL_ORDER.push(d.id); illEvict();
       e.im.onload = () => {
-        const w = e.im.naturalWidth, h = e.im.naturalHeight, cv = document.createElement('canvas');
+        if (ILL[d.id] !== e) return; // 받는 사이에 밀려났다
+        const nw = e.im.naturalWidth, nh = e.im.naturalHeight;
+        // 연출은 화면 높이보다 조금 크게 그린다: 화면 짧은 변(기기 픽셀, 배율 최대 2) 정도면 충분하다
+        const scr = Math.min(screen.width || 0, screen.height || 0) || 768, th = Math.max(720, Math.ceil(scr * Math.min(2, window.devicePixelRatio || 1) * 1.1));
+        const sc = Math.min(1, th / nh), w = Math.max(1, Math.round(nw * sc)), h = Math.max(1, Math.round(nh * sc)), cv = document.createElement('canvas');
         cv.width = w; cv.height = h;
         const x = cv.getContext('2d');
-        x.drawImage(e.im, 0, 0);
+        x.drawImage(e.im, 0, 0, w, h);
         x.globalCompositeOperation = 'destination-in';
         const gx = x.createLinearGradient(0, 0, w, 0);
         gx.addColorStop(0, 'rgba(0,0,0,0)'); gx.addColorStop(0.18, '#000'); gx.addColorStop(0.82, '#000'); gx.addColorStop(1, 'rgba(0,0,0,0)');
@@ -61,7 +81,13 @@
         const gy = x.createLinearGradient(0, 0, 0, h);
         gy.addColorStop(0, 'rgba(0,0,0,0)'); gy.addColorStop(0.08, '#000'); gy.addColorStop(0.8, '#000'); gy.addColorStop(1, 'rgba(0,0,0,0)');
         x.fillStyle = gy; x.fillRect(0, 0, w, h);
-        e.cv = cv;
+        // 흐린 배경도 원본이 있을 때 미리 만들어 둔다(원본을 놓은 뒤에는 만들 수 없다)
+        const bg = document.createElement('canvas'); bg.width = 480; bg.height = 270;
+        const bx = bg.getContext('2d'), bs = Math.max(bg.width / nw, bg.height / nh) * 1.25;
+        bx.filter = 'blur(14px) saturate(1.3) brightness(0.55)';
+        bx.drawImage(e.im, (bg.width - nw * bs) / 2, (bg.height - nh * bs) / 2 - 20, nw * bs, nh * bs);
+        e.cv = cv; e.bg = bg;
+        e.im.onload = null; e.im.removeAttribute('src'); // 풀어 놓은 원본(수 MB)을 놓는다
       };
       e.im.src = 'gfx/il_' + d.id + '.jpg?v=' + T.illusts[d.id];
     }
@@ -74,18 +100,10 @@
     if (!e) { e = VX[name] = new Image(); e.src = 'gfx/vx_' + name + '.jpg?v=1'; }
     return e.complete && e.naturalWidth ? e : null;
   }
-  // 일러스트를 크게 흐려 깔아 연출 배경 색을 그림과 맞춘다
+  // 일러스트를 크게 흐려 깔아 연출 배경 색을 그림과 맞춘다(그림을 받을 때 illust()에서 같이 만든다)
   function illustBg(d) {
     const il = illust(d), e = ILL[d.id];
-    if (!il) return null;
-    if (!e.bg) {
-      const cv = document.createElement('canvas'); cv.width = 480; cv.height = 270;
-      const x = cv.getContext('2d'), sc = Math.max(cv.width / e.im.naturalWidth, cv.height / e.im.naturalHeight) * 1.25;
-      x.filter = 'blur(14px) saturate(1.3) brightness(0.55)';
-      x.drawImage(e.im, (cv.width - e.im.naturalWidth * sc) / 2, (cv.height - e.im.naturalHeight * sc) / 2 - 20, e.im.naturalWidth * sc, e.im.naturalHeight * sc);
-      e.bg = cv;
-    }
-    return e.bg;
+    return il && e ? e.bg : null;
   }
   // Kenney 입자 텍스처(CC0, gfx/kn_*.png): 흰색 그림을 원하는 색으로 물들여 캐시한다
   const KN = {};
@@ -118,7 +136,9 @@
     return (puffCv = cv);
   }
   function slamOnce(p, key, big) { if (!p.hits[key]) { p.hits[key] = 1; p.shake = big ? 1.3 : 0.7; Snd.play(big ? 'bigslam' : 'slam', 20); } }
-  function drawCutscene(c, p, t) {
+  function drawCutscene(c, p, t, dt) {
+    // 입자는 실제 흐른 시간으로 움직인다(30fps 모드에서 절반 속도·절반 생성이 되던 문제). 60fps면 예전과 같다.
+    const DT = Math.min(0.1, dt > 0 ? dt : 1 / 60), FR = DT * 60;
     const d = p.def, imm = d.tier === 10, T0 = p.t, fade = Math.min(1, T0 * 5) * Math.min(1, (p.dur - T0) * 2.5);
     // 불멸은 붉은 불꽃, 신화는 보랏빛 불꽃과 번개
     const C = imm ? { core: '255,240,170', mid: '255,110,30', out: '190,20,10', hex: '#ff5a2a', soft: '#ffd27a' } : { core: '255,235,255', mid: '210,110,255', out: '90,30,200', hex: '#d070ff', soft: '#f0c8ff' };
@@ -200,10 +220,10 @@
       if (!imm) {
         c.globalCompositeOperation = 'source-over';
         p.fog = p.fog || [];
-        if (Math.random() < 0.5 * qPart()) p.fog.push({ x: Math.random() * W, y: H + 30, vx: (Math.random() - 0.5) * 14, vy: -(14 + Math.random() * 22), l: 0, m: 5 + Math.random() * 3, r: 90 + Math.random() * 90, a: Math.random() * 6 });
+        if (Math.random() < 0.5 * qPart() * FR) p.fog.push({ x: Math.random() * W, y: H + 30, vx: (Math.random() - 0.5) * 14, vy: -(14 + Math.random() * 22), l: 0, m: 5 + Math.random() * 3, r: 90 + Math.random() * 90, a: Math.random() * 6 });
         const fa = fade * Math.min(1, Math.max(0, (T0 - 2.95) / 1));
         for (let i = p.fog.length - 1; i >= 0; i--) {
-          const q = p.fog[i]; q.l += 1 / 60; q.x += (q.vx + Math.sin(q.l * 0.6 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 10) / 60; q.y += q.vy / 60;
+          const q = p.fog[i]; q.l += DT; q.x += (q.vx + Math.sin(q.l * 0.6 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 10) * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.fog.splice(i, 1); continue; }
           const rr = q.r * (0.8 + k * 0.9);
@@ -213,13 +233,13 @@
         }
         c.globalCompositeOperation = 'lighter';
       }
-      const n = Math.ceil((imm ? 6 : 0) * qPart());
+      const n = Math.ceil((imm ? 6 : 0) * qPart() * FR);
       for (let i = 0; i < n; i++) {
         const nearText = Math.random() < 0.5;
         p.fire.push({ x: nearText ? rx + (Math.random() - 0.5) * 420 : Math.random() * W, y: nearText ? ry + 40 + Math.random() * 60 : H + 20, vx: (Math.random() - 0.5) * 40, vy: -(60 + Math.random() * 200), l: 0, m: 0.9 + Math.random() * 1.6, r: 2 + Math.random() * 5 });
       }
       for (let i = p.fire.length - 1; i >= 0; i--) {
-        const q = p.fire[i]; q.l += 1 / 60; q.x += (q.vx + Math.sin(q.l * 4 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 30) / 60; q.y += q.vy / 60;
+        const q = p.fire[i]; q.l += DT; q.x += (q.vx + Math.sin(q.l * 4 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 30) * DT; q.y += q.vy * DT;
         const k = q.l / q.m;
         if (k >= 1) { p.fire.splice(i, 1); continue; }
         const rr = q.r * (1 - k * 0.5) * 3;
@@ -231,11 +251,11 @@
         // 영겁의 화마: 화면 아래에서 불구름이 굽이치며 치솟고, 그 위로 검은 연기가 피어오른다(Kenney 텍스처)
         const ia = fade * Math.min(1, Math.max(0, (T0 - 2.95) / 0.5));
         p.hell = p.hell || []; p.ash = p.ash || [];
-        if (Math.random() < 0.8 * qPart()) p.hell.push({ x: Math.random() * (W + 200) - 100, y: H + 90, vx: (Math.random() - 0.5) * 30, vy: -(90 + Math.random() * 140), l: 0, m: 1.1 + Math.random() * 0.9, r: 110 + Math.random() * 120, a: Math.random() * 6, sp: (Math.random() - 0.5) * 1.2, f: (Math.random() * 9) | 0 });
-        if (Math.random() < 0.7 * qPart()) p.ash.push({ x: Math.random() * W, y: H * 0.62 + Math.random() * 80, vx: (Math.random() - 0.5) * 20, vy: -(40 + Math.random() * 50), l: 0, m: 3 + Math.random() * 2, r: 150 + Math.random() * 120, a: Math.random() * 6, f: [0, 4, 8, 12, 16, 20][(Math.random() * 6) | 0] });
+        if (Math.random() < 0.8 * qPart() * FR) p.hell.push({ x: Math.random() * (W + 200) - 100, y: H + 90, vx: (Math.random() - 0.5) * 30, vy: -(90 + Math.random() * 140), l: 0, m: 1.1 + Math.random() * 0.9, r: 110 + Math.random() * 120, a: Math.random() * 6, sp: (Math.random() - 0.5) * 1.2, f: (Math.random() * 9) | 0 });
+        if (Math.random() < 0.7 * qPart() * FR) p.ash.push({ x: Math.random() * W, y: H * 0.62 + Math.random() * 80, vx: (Math.random() - 0.5) * 20, vy: -(40 + Math.random() * 50), l: 0, m: 3 + Math.random() * 2, r: 150 + Math.random() * 120, a: Math.random() * 6, f: [0, 4, 8, 12, 16, 20][(Math.random() * 6) | 0] });
         c.globalCompositeOperation = 'source-over';
         for (let i = p.ash.length - 1; i >= 0; i--) {
-          const q = p.ash[i]; q.l += 1 / 60; q.x += q.vx / 60; q.y += q.vy / 60;
+          const q = p.ash[i]; q.l += DT; q.x += q.vx * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.ash.splice(i, 1); continue; }
           const tex = kn('bsm' + q.f, '40,14,8');
@@ -245,7 +265,7 @@
         }
         c.globalCompositeOperation = 'lighter';
         for (let i = p.hell.length - 1; i >= 0; i--) {
-          const q = p.hell[i]; q.l += 1 / 60; q.x += (q.vx + Math.sin(q.l * 3 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 30) / 60; q.y += q.vy / 60;
+          const q = p.hell[i]; q.l += DT; q.x += (q.vx + Math.sin(q.l * 3 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 30) * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.hell.splice(i, 1); continue; }
           const tex = kn('exp' + q.f, k < 0.3 ? '255,200,120' : k < 0.65 ? '255,110,40' : '170,30,10');
@@ -257,10 +277,10 @@
         const hv = c.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.75);
         hv.addColorStop(0, 'rgba(0,0,0,0)'); hv.addColorStop(1, `rgba(255,60,10,${0.22 + Math.sin(t * 3) * 0.06})`);
         c.globalAlpha = ia; c.fillStyle = hv; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
-        for (let i = 0, n = Math.ceil(16 * qPart()); i < n; i++) p.flame.push({ x: rx + (Math.random() - 0.5) * 380, y: ry + 30 + Math.random() * 70, vx: (Math.random() - 0.5) * 40, vy: -(220 + Math.random() * 360), l: 0, m: 0.45 + Math.random() * 0.8, r: 16 + Math.random() * 42 });
+        for (let i = 0, n = Math.ceil(16 * qPart() * FR); i < n; i++) p.flame.push({ x: rx + (Math.random() - 0.5) * 380, y: ry + 30 + Math.random() * 70, vx: (Math.random() - 0.5) * 40, vy: -(220 + Math.random() * 360), l: 0, m: 0.45 + Math.random() * 0.8, r: 16 + Math.random() * 42 });
         for (let i = p.flame.length - 1; i >= 0; i--) {
-          const q = p.flame[i]; q.l += 1 / 60;
-          q.x += (q.vx + Math.sin(q.l * 9 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 70) / 60; q.y += q.vy / 60;
+          const q = p.flame[i]; q.l += DT;
+          q.x += (q.vx + Math.sin(q.l * 9 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 70) * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.flame.splice(i, 1); continue; }
           const col = k < 0.25 ? C.core : k < 0.6 ? C.mid : C.out, rr = q.r * (1 - k * 0.6), fa2 = fade * (1 - k) * Math.min(1, k * 8);
@@ -275,9 +295,9 @@
         const sa = fade * Math.min(1, Math.max(0, (T0 - 2.95) / 0.8));
         // 연기 갈래(Kenney 텍스처): 글자 아래에서 휘감기며 천천히 솔솔 올라가 퍼진다
         p.smoke = p.smoke || [];
-        if (Math.random() < 0.45 * qPart()) p.smoke.push({ x: rx + (Math.random() - 0.5) * 360, y: ry + 80 + Math.random() * 30, vx: (Math.random() - 0.5) * 12, vy: -(28 + Math.random() * 30), l: 0, m: 3.2 + Math.random() * 2, r: 70 + Math.random() * 60, a: (Math.random() - 0.5) * 0.6, sp: (Math.random() - 0.5) * 0.25, tex: 'flame_0' + (1 + ((Math.random() * 4) | 0)), fl: Math.random() < 0.5 });
+        if (Math.random() < 0.45 * qPart() * FR) p.smoke.push({ x: rx + (Math.random() - 0.5) * 360, y: ry + 80 + Math.random() * 30, vx: (Math.random() - 0.5) * 12, vy: -(28 + Math.random() * 30), l: 0, m: 3.2 + Math.random() * 2, r: 70 + Math.random() * 60, a: (Math.random() - 0.5) * 0.6, sp: (Math.random() - 0.5) * 0.25, tex: 'flame_0' + (1 + ((Math.random() * 4) | 0)), fl: Math.random() < 0.5 });
         for (let i = p.smoke.length - 1; i >= 0; i--) {
-          const q = p.smoke[i]; q.l += 1 / 60; q.x += (q.vx + Math.sin(q.l * 0.8 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 10) / 60; q.y += q.vy / 60;
+          const q = p.smoke[i]; q.l += DT; q.x += (q.vx + Math.sin(q.l * 0.8 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 10) * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.smoke.splice(i, 1); continue; }
           const wisp = kn(q.tex, k < 0.4 ? '235,225,255' : '185,160,235') || smokePuff();
@@ -423,7 +443,7 @@
     if (p.t >= p.dur) { S.pop = null; return; }
     if (p.vic) return drawVictory(c, p, t);
     const d = p.def, col = tierColor(d.tier), a = Math.min(1, p.t * 5) * Math.min(1, (p.dur - p.t) * 3);
-    if (d.tier >= 9) return drawCutscene(c, p, t);
+    if (d.tier >= 9) return drawCutscene(c, p, t, dt);
     c.save();
     if (p.shake > 0) c.translate((Math.random() - 0.5) * 22 * p.shake, (Math.random() - 0.5) * 22 * p.shake);
     if (d.tier <= 5) {

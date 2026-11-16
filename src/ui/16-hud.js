@@ -115,6 +115,7 @@
     const bb = $('bossbtn'), bt = g.phase === 'boss' ? (S.laneView ? `${t('backToBoss')} · ${clock(Math.max(0, g.fight.limit - g.fight.t))}` : t('toLane')) : '';
     if (bb.dataset.t !== bt) { bb.textContent = bt; bb.dataset.t = bt; bb.hidden = !bt; bb.classList.toggle('go', !!S.laneView); }
   }
+  const CANVAS_ONLY = { dmgtext: 1, proc: 1, shake: 1, pattern: 1, banner: 1 };
   function drainEvents() {
     for (const e of g.events) {
       if (e.type === 'sfx') { Snd.play(e.s, e.gap); continue; }
@@ -129,7 +130,8 @@
         if (S.dmg.length < 40) S.dmg.push({ x: e.x + (typeof e.v === 'number' && g.phase === 'boss' ? (Math.random() - 0.5) * 90 : 0), y: e.y - (typeof e.v === 'number' && g.phase === 'boss' ? Math.random() * 30 : 0), v: e.v, big: e.big != null ? e.big : g.phase === 'boss', t: 0 });
         // 보스전 강타: 짧게 멈칫(혼자 할 때만 실제로 시간이 멈춤) + 카메라가 순간 다가감
         // 스킬 이름 글자(문자열)는 타격이 아니므로 멈칫하지 않는다(치료·강화 스킬에도 화면이 멈칫하던 문제)
-        if (g.phase === 'boss' && typeof e.v === 'number') { if (!net) S.hitStop = 0.07; S.punch = 1; S.shake = Math.max(S.shake || 0, 0.5); Snd.play('hit', 90); if (navigator.vibrate && e.big !== false) navigator.vibrate(10); }
+        // 멈칫은 220ms에 한 번까지: 강타가 초당 여러 번 나도 조작이 뚝뚝 끊기지 않게. 스킬(big: true)은 0.06초, 강타 평타는 0.035초.
+        if (g.phase === 'boss' && typeof e.v === 'number') { if (!net) { const nowMs = performance.now(); if (nowMs - (S.hitStopAt || 0) > 220) { S.hitStop = e.big === true ? 0.06 : 0.035; S.hitStopAt = nowMs; } } S.punch = 1; S.shake = Math.max(S.shake || 0, 0.5); Snd.play('hit', 90); if (navigator.vibrate && e.big !== false) navigator.vibrate(10); }
       }
       else if (e.type === 'proc') {
         // 패시브 발동: 이름을 크게 띄우고 유닛·대상에 터지는 효과
@@ -157,7 +159,8 @@
       else if (e.type === 'bossFail') { if (g.fight) (S.bossRows = S.bossRows || {})[g.fight.def.round] = meterRows(g.fight.dealt, g.fight.total); }
       else if (e.type === 'removed') { S.sel = S.sel.filter((i) => i !== e.id); }
       else if (e.type === 'dropGone') { if (S.dropSel === e.id) S.dropSel = null; }
-      dirty();
+      // 캔버스에만 그리는 알림은 글자판(DOM)을 다시 만들 이유가 없다. 이것까지 dirty()하면 후반에 매 프레임 글자판을 다시 만든다.
+      if (!CANVAS_ONLY[e.type]) dirty();
     }
     g.events.length = 0;
   }

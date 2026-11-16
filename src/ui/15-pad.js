@@ -2,7 +2,7 @@
   // 왼쪽 조이스틱으로 이동, 오른쪽 아래 공격 버튼을 누르고 있는 동안 공격(자동 공격 없음).
   // 스킬·이동기는 공격 버튼을 둘러싼 '고양이 발' 배치. 짧게 톡 = 사거리 안의 적에게 자동 조준(밖이면 보는 방향),
   // 꾹 누르고 끌면 장수 둘레에 사거리와 범위가 보이고 끈 방향·거리로 조준해 손을 떼면 쓴다.
-  const PAD = { atk: null, aim: null, joy: null, jv: null };
+  const PAD = { atk: null, aim: null, joy: null, jv: null, buf: null };
   const AIM_HOLD = 220, AIM_DRAG = 80;
   function skillInfo(c, k) {
     if (k === 'dash') return { range: 280, shape: 'dash', w: 44 };
@@ -14,7 +14,12 @@
     return { range: 0, shape: 'self' };
   }
   // 짧게 눌렀을 때: 사거리 안에 적이 있으면 그 적, 없으면 보는 방향으로
+  // 이동기는 피하는 수단이라 적에게 붙지 않는다: 조이스틱을 밀고 있으면 그 방향, 아니면 보는 방향으로 최대 거리
   function autoTarget(c, info) {
+    if (info.shape === 'dash') {
+      const j = PAD.jv, a = j && Math.hypot(j.x, j.y) > 0.1 ? Math.atan2(j.y, j.x) : (c.face ?? 0);
+      return { x: c.x + Math.cos(a) * info.range, y: c.y + Math.sin(a) * info.range };
+    }
     const fo = g.champFoe(c) || (g.fight && g.fight.boss), reach = info.shape === 'circle' && !info.range ? info.r : info.range;
     if (fo && (info.shape === 'self' || dist(c.x, c.y, fo.x, fo.y) <= reach + 60)) return { x: fo.x, y: fo.y };
     const a = c.face ?? 0, r = Math.max(info.range, 120);
@@ -30,6 +35,16 @@
   function castAt(c, k, x, y) {
     if (k === 'dash') g.dash(c, x, y);
     else g.useSkill(c, +k, x, y);
+  }
+  // 재사용이 거의 끝났을 때(BUF_EARLY초 이하) 누른 것은 버리지 않고 BUF_KEEP ms 동안 들고 있다가 끝나는 순간 쓴다(선입력)
+  const BUF_EARLY = 0.25, BUF_KEEP = 300;
+  const cdLeft = (c, k) => (k === 'dash' ? c.dashCd : c.skillCd[+k]) || 0;
+  // 조준값은 떼는 순간의 것을 쓴다. 톡(자동 조준)은 쓰는 순간 다시 고른다.
+  function fireAim(c, A) {
+    const info = skillInfo(c, A.k);
+    if (!info) return;
+    const tg = A.on ? aimTarget(c, info, A) : autoTarget(c, info);
+    castAt(c, A.k, tg.x, tg.y);
   }
   function drawAim(c) {
     const A = PAD.aim, ch = g.active();
@@ -70,7 +85,8 @@
       const k = b.dataset.sk;
       if (k === 'atk') { PAD.atk = e.pointerId; c.atkHold = 0.3; b.classList.add('on'); return; }
       if (k === 'heal') { g.useHeal(); return; }
-      if (b.dataset.cd === '1') return;
+      // 버튼의 data-cd는 화면 갱신(180ms) 때만 바뀌므로 엔진의 남은 재사용 시간을 직접 본다
+      if (cdLeft(c, k) > BUF_EARLY) return;
       const r = b.getBoundingClientRect();
       PAD.aim = { id: e.pointerId, k, cx: r.left + r.width / 2, cy: r.top + r.height / 2, t0: performance.now(), dx: 0, dy: 0, on: false, el: b };
       b.classList.add('on');
@@ -88,8 +104,9 @@
       PAD.aim = null; A.el.classList.remove('on');
       const c = g && g.active(), info = c && skillInfo(c, A.k);
       if (!info || e.type === 'pointercancel') return;
-      const tg = A.on ? aimTarget(c, info, A) : autoTarget(c, info);
-      castAt(c, A.k, tg.x, tg.y);
+      if (cdLeft(c, A.k) > 0) { PAD.buf = { A, uid: c.uid, until: performance.now() + BUF_KEEP }; return; }
+      PAD.buf = null;
+      fireAim(c, A);
       dirty();
     };
     bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
@@ -122,10 +139,16 @@
     // 라인: 고른 유닛들을 조이스틱 방향으로 직접 움직인다(다중 선택도 대형 그대로 함께 움직인다)
     g.laneJoy = PAD.lane && PAD.jv && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv.x, y: PAD.jv.y } : null;
     const c = g.phase === 'boss' && !S.laneView ? g.active() : null;
-    if (!c) return;
+    if (!c) { PAD.buf = null; return; }
     g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
     c.joy = PAD.jv;
     if (PAD.atk != null) c.atkHold = 0.3;
+    // 선입력: 재사용이 끝나는 프레임에 쓴다. 시간이 지났거나 장수가 바뀌었거나 죽었으면 버린다.
+    const B = PAD.buf;
+    if (B) {
+      if (B.uid !== c.uid || c.dead || performance.now() > B.until) PAD.buf = null;
+      else if (cdLeft(c, B.A.k) <= 0) { PAD.buf = null; fireAim(c, B.A); dirty(); }
+    }
   }
   // 보스전 스킬: 선택한 장수의 스킬·이동기·화타 치료를 공격 버튼 둘레(고양이 발)에 아이콘과 재사용 시간으로 보여 준다
   const SK_GLYPH = { line: '斬', circle: '爆', cone: '扇', buff: '勢', shield: '盾', heal: '治', rally: '令', taunt: '挑', weaken: '弱' };

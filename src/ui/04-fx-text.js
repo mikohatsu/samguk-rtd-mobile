@@ -133,20 +133,6 @@
       c.fillStyle = col; c.font = `400 ${v.length > 6 ? 30 : 38}px "Black Han Sans", sans-serif`; c.fillText(v, x + w / 2, y + 70);
     });
   }
-  // 게임 로고: 왼쪽 맵 여백 맨 위, 전황 패널 바로 위
-  function drawLogo(c) {
-    // 맵이 아니라 화면 왼쪽 끝을 기준으로 붙인다
-    const x = 8 - S.ox / S.scale, y = 4 - S.oy / S.scale;
-    c.save();
-    c.textAlign = 'left'; c.textBaseline = 'alphabetic'; c.lineJoin = 'round';
-    c.strokeStyle = 'rgba(32, 21, 12, .85)';
-    c.font = '900 46px "Noto Serif KR", serif'; c.lineWidth = 7; c.strokeText('三國志', x, y + 50);
-    c.fillStyle = '#e6c578'; c.fillText('三國志', x, y + 50);
-    c.font = '700 20px "Noto Serif KR", serif'; c.lineWidth = 4; c.fillStyle = '#f4ecd8';
-    c.strokeText('RANDOM', x + 2, y + 78); c.fillText('RANDOM', x + 2, y + 78);
-    c.strokeText('DEFENSE', x + 2, y + 100); c.fillText('DEFENSE', x + 2, y + 100);
-    c.restore();
-  }
   // 깃발 28개는 글자·도형이 많아 매 프레임 그리면 무겁다. 달성 상태가 바뀔 때만 다시 그려 두고 한 장으로 찍는다.
   let flagCv = null, flagKey = '';
   // 깃발 그림(gfx/ach_*.png, Higgsfield 생성): 밝은 천 그림을 등급 색으로 물들여 쓴다. 종류: 수집=깃발, 전광석화=펄럭이는 기, 협동=세로 군기, 인연=성루

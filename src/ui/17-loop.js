@@ -6,14 +6,19 @@
     if (s) { try { localStorage.setItem('rtd-save', JSON.stringify(s)); } catch (e) { /* 저장 공간 없음 */ } }
   }
   function lifeOffline() { return !net || net.t.kind === 'hub'; }
-  document.addEventListener('visibilitychange', () => {
+  // 앱을 내렸을 때: 브라우저의 visibilitychange와 앱의 appStateChange(native.js가 'rtd-appstate'로 넘긴다) 둘 다 받는다.
+  // iOS에서 제어 센터·전화처럼 화면이 '보이는' 채로 앱이 비활성이 되는 경우를 잡기 위해서다. 두 신호가 겹쳐도 한 번만 처리한다.
+  function onHidden(hidden) {
     if (!g || g.over) return;
-    if (document.hidden) { S.hiddenAt = Date.now(); if (lifeOffline()) S.paused = true; saveGame(); }
+    if (hidden) { if (S.hiddenAt) return; S.hiddenAt = Date.now(); if (lifeOffline()) S.paused = true; saveGame(); }
     else {
-      if (!lifeOffline() && S.hiddenAt && Date.now() - S.hiddenAt > 60000) { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
+      if (!S.hiddenAt) return;
+      if (!lifeOffline() && Date.now() - S.hiddenAt > 60000) { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
       S.hiddenAt = 0; last = performance.now(); dirty();
     }
-  });
+  }
+  document.addEventListener('visibilitychange', () => onHidden(document.hidden));
+  window.addEventListener('rtd-appstate', (e) => onHidden(!(e.detail && e.detail.active)));
   function tick(now, cap) {
     if (S.paused || S.tutHold) { last = now; acc = 0; return; } // 튜토리얼 설명 중에도 멈춘다
     padTick();
@@ -84,6 +89,10 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     if (Q.fps30 && now - lastDraw < 30) return;
     // 120Hz 화면에서도 60번만 그린다(두 배로 그려 봐야 발열·끊김만 늘어난다)
     if (now - lastDraw < 14) return;
+    // 쉬는 화면: 일시정지(창은 DOM이라 캔버스가 멈춰도 보인다), 또는 판이 끝나고 승리·등장 연출과 경험치 연출이 다 끝난 결과 화면.
+    // 이때는 초당 5번만 그린다(발열·배터리). 글자판을 고칠 일이 있으면(needs) 바로 돈다. 튜토리얼 설명 중에는 그대로 그린다.
+    const idle = !S.tutHold && ((S.paused && !g.over) || (g.over && !S.pop && !popQ.length && !S.xpPlaying));
+    if (idle && !needs && now - lastDraw < 200) return;
     lastDraw = now;
     const p0 = Q.perf ? performance.now() : 0;
     tick(now, 0.1);

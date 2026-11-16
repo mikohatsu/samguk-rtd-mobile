@@ -13,6 +13,10 @@ Windows에서 할 수 있는 작업은 끝났습니다. 이 폴더를 통째로 
 | 약관·개인정보처리방침 | https://34-146-124-57.sslip.io/terms , /privacy (`?lang=ja|en|ko|zh`) |
 | Capacitor 8 iOS 프로젝트 (`ios/`) | 생성됨. Swift Package Manager 방식이라 CocoaPods 필요 없음 |
 | Info.plist | 가로 전용, 상태 표시줄 숨김, 암호화 면제, AdMob **시험용** 앱 ID, ATT 문구, SKAdNetwork |
+| entitlements (Sign in with Apple) | **아직 없음** → Xcode에서 Capability 추가(2절 7번, 3-1절) |
+| 앱 아이콘·시작 화면 | 완료(`scripts/build-icons.py` → `ios/App/App/Assets.xcassets`) |
+| 채팅 | 로비 채널·방 채팅, 욕설 가림·광고 차단·도배 입막음, 줄마다 신고·차단. 계정 정지 기능은 아직 없음 |
+| 원보(유료 재화) | 첫 출시는 광고만. 상점 원보 탭과 잔액은 `lobby.js`의 `GEMS_ON = false`로 숨김. 결제(IAP) 없음 |
 | 언어별 ATT 문구·앱 이름 | `ios/App/App/{ja,en,ko,zh-Hans}.lproj/InfoPlist.strings` (**Xcode에 추가 필요**) |
 | 개인정보 매니페스트 | `ios/App/App/PrivacyInfo.xcprivacy` (**Xcode에 추가 필요**) |
 | 광고 | `native.js`: 앱에서는 AdMob 전면 광고(2판에 1번), ATT는 첫 실행에 한 번 물음. 지금은 **구글 시험용 광고 ID** |
@@ -48,8 +52,9 @@ npm run ios
    - Display Name: 三国ランダムディフェンス
    - Deployment Target: iOS 15 이상
    - iPhone·iPad 둘 다, Requires Full Screen 체크(이미 Info.plist에 있음)
-5. 앱 아이콘: `Assets.xcassets/AppIcon`에 1024×1024 PNG 한 장(투명 없음). 아이콘 그림은 아직 없음 → 정해야 함
-6. 시작 화면: `Assets.xcassets/Splash` 이미지 교체(지금은 Capacitor 기본). 배경색 `#1a120c`
+5. 앱 아이콘: `Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png`(1024×1024)에 이미 들어 있음(`scripts/build-icons.py`가 만듦). Xcode에서 투명 없이 보이는지만 확인
+6. 시작 화면: `Assets.xcassets/Splash.imageset`(2732×2732 3장)도 `scripts/build-icons.py`가 이미 만듦. 실기기에서 잘리지 않는지 확인. 배경색 `#1a120c`
+7. Target `App` → Signing & Capabilities → `+ Capability` → **Sign in with Apple** (3-1절. 이걸 빼면 Apple 로그인이 안 됨)
 
 ## 3. 실기기 확인 목록
 
@@ -62,6 +67,9 @@ npm run ios
 - [ ] 약관 링크가 앱 안 브라우저로 열림
 - [ ] 소리: 무음 스위치, 다른 앱 음악과 겹칠 때
 - [ ] 화질 설정(높음/보통/낮음, 30fps)이 오래된 기기에서 버벅이지 않는지
+- [ ] 채팅: 욕설이 가려지는지, 광고·연락처가 막히는지, 연속으로 보내면 입막음되는지, 「通報」「ブロック」이 되는지, 차단한 사람 글이 안 보이고 설정에서 풀리는지
+- [ ] 상점에 원보 탭이 없고, 로비 위에 원보 잔액이 안 보이는지(동전만)
+- [ ] iPad(가로)에서 화면이 잘리지 않는지
 
 ## 3-1. 로그인(Apple·Google·게스트) 설정
 
@@ -84,6 +92,7 @@ npm run ios
 - [ ] 게스트로 시작 → 몇 판 → Apple(또는 Google) 연결 → 경험치·계급 그대로
 - [ ] 앱 삭제 후 재설치 → Apple로 로그인하면 같은 계정
 - [ ] 계정 삭제 후 같은 Apple 계정으로 다시 로그인하면 새 계정(약관 동의 필요)
+- [ ] 계정 삭제 뒤 iOS 설정 › Apple 계정 › "Apple로 로그인"에서 이 앱 연결이 사라지는지(토큰 철회가 서버에 들어간 뒤)
 
 ## 4. 광고를 실제로 붙이기 (출시 직전)
 
@@ -100,15 +109,32 @@ npm run ios
 2. 스토어 문구·키워드·연령 등급·개인정보 라벨은 `STORE.md`에 초안
 3. 개인정보처리방침 URL: `https://34-146-124-57.sslip.io/privacy?lang=ja`
 4. 지원 URL: 지금은 같은 서버 주소 또는 메일. 정식 도메인을 사면 바꾸기
-5. 심사용 데모 계정: 온라인 기능 확인용으로 아이디 하나 만들어 심사 메모에 적기
+5. 심사 메모: 데모 계정 대신 "계정 창에서 「ゲストで開始」, 혼자서도 온라인 판 시작 가능"을 적는다. 채팅 위치(로비 아래 채팅 줄, 방 대기실)와 신고·차단 버튼 위치도 적는다(`STORE.md` 분류·연령 절)
 6. Xcode → Product → Archive → Distribute → App Store Connect → TestFlight로 먼저 확인
 
 ## 6. 출시 전에 정할 것 (사용자 결정)
 
-- 앱 아이콘·스토어 스크린샷 그림
-- 정식 도메인(지금 `sslip.io` 주소는 임시. 심사에서 문제되진 않지만 바꾸는 게 좋음)
+- 스토어 스크린샷(iPhone 6.9형 가로 2868×1320, iPad 13형 가로 2752×2064, 3~10장)
+- 정식 도메인과 고정 IP(지금 `sslip.io` 주소는 임시 IP에 묶여 있어, 출시 뒤 VM IP가 바뀌면 앱이 서버에 못 붙는다. 최소한 고정 IP 예약은 출시 전에)
 - 판매 국가(일본만 / 전 세계), 가격(무료)
-- 수익 모델의 나머지(작혼처럼 꾸미기 상품 등): 아직 미정이라 결제(IAP)는 넣지 않음
+- 수익 모델: 첫 출시는 광고만(결정됨). 원보 결제(IAP)는 다음 판에서 정함
+
+## 8. 사용자 본인만 할 수 있는 일 (순서대로)
+
+1. Apple Developer Program 가입(개인, 본인 인증). 스토어 판매자 이름은 본인 실명으로 나온다
+2. Mac + Xcode 준비 → `npm install`, `npm run ios`
+3. Xcode 한 번만(2절): `PrivacyInfo.xcprivacy`와 `*.lproj` 4개를 타깃에 추가, Localizations 4개, Team·서명, **Sign in with Apple** Capability
+4. Apple Developer 사이트: App ID에 Sign in with Apple 켜기, **Sign in with Apple용 키(.p8)** 발급 → Key ID·Team ID와 함께 서버 담당에게 전달(계정 삭제 때 토큰 철회용)
+5. AdMob: iOS 앱 등록, 앱 ID·전면 광고 단위 ID 발급, 광고 콘텐츠 등급, 결제·세금 정보 → ID를 팀에 전달(4절)
+6. (Google 로그인을 켜기로 하면) Google Cloud 콘솔: OAuth 동의 화면, iOS·웹 클라이언트 ID 2개(3-1절)
+7. 도메인 구매·DNS, GCP 고정 IP 예약(결제·계정은 본인, gcloud 명령은 승인하면 팀이 대신)
+8. App Store Connect: 앱 만들기(번들 ID, SKU), 무료 앱 계약·세금·은행, 연령 등급 설문, 개인정보 라벨, 문구·스크린샷, 심사 메모, 제출(`STORE.md`)
+9. 실기기 확인(3절·3-1절 전부: 채팅, 계정 삭제 뒤 재로그인, iPad 포함)
+10. 스크린샷 촬영(위 6절 크기)
+11. TestFlight로 먼저 설치해 확인한 뒤 제출
+12. 신고 처리 운영: 누가 얼마나 자주 볼지 정하고 실제로 본다
+13. 법률 확인 의뢰(약관·처리방침의 채팅 조항, 신고 기록 보관 기간, 외국 사업자 고지, 개인 주소 공개 여부), J-PlatPat 상표 조회(「三国志」 키워드 등)
+14. Higgsfield 약관 원문 확인 또는 유료 요금제로 다시 생성(`CREDITS.md`의 확인 필요 항목)
 - 사업자 정보가 바뀌면 `legal/privacy.html`, `legal/terms.html`과 서버 재배포
 
 ## 7. 파일 구조

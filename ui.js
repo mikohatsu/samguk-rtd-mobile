@@ -528,20 +528,6 @@
       c.fillStyle = col; c.font = `400 ${v.length > 6 ? 30 : 38}px "Black Han Sans", sans-serif`; c.fillText(v, x + w / 2, y + 70);
     });
   }
-  // 게임 로고: 왼쪽 맵 여백 맨 위, 전황 패널 바로 위
-  function drawLogo(c) {
-    // 맵이 아니라 화면 왼쪽 끝을 기준으로 붙인다
-    const x = 8 - S.ox / S.scale, y = 4 - S.oy / S.scale;
-    c.save();
-    c.textAlign = 'left'; c.textBaseline = 'alphabetic'; c.lineJoin = 'round';
-    c.strokeStyle = 'rgba(32, 21, 12, .85)';
-    c.font = '900 46px "Noto Serif KR", serif'; c.lineWidth = 7; c.strokeText('三國志', x, y + 50);
-    c.fillStyle = '#e6c578'; c.fillText('三國志', x, y + 50);
-    c.font = '700 20px "Noto Serif KR", serif'; c.lineWidth = 4; c.fillStyle = '#f4ecd8';
-    c.strokeText('RANDOM', x + 2, y + 78); c.fillText('RANDOM', x + 2, y + 78);
-    c.strokeText('DEFENSE', x + 2, y + 100); c.fillText('DEFENSE', x + 2, y + 100);
-    c.restore();
-  }
   // 깃발 28개는 글자·도형이 많아 매 프레임 그리면 무겁다. 달성 상태가 바뀔 때만 다시 그려 두고 한 장으로 찍는다.
   let flagCv = null, flagKey = '';
   // 깃발 그림(gfx/ach_*.png, Higgsfield 생성): 밝은 천 그림을 등급 색으로 물들여 쓴다. 종류: 수집=깃발, 전광석화=펄럭이는 기, 협동=세로 군기, 인연=성루
@@ -1416,12 +1402,17 @@
     S.bossMove = bMove;
     const bd = Art.facing(S.bossFace ?? Math.PI / 2);
     // ---- 타격감: 맞으면 공격한 쪽 반대로 밀리고 움찔(찌그러졌다 펴짐), 하얗게 번쩍. 패턴 전에는 힘을 모으고(솟으며 부풂) 터질 때 내리찍는다 ----
-    const hr = S.bhr && S.bhr.f === f ? S.bhr : (S.bhr = { f, k: 0, ax: 0, ay: 1, hp: b.hp, num: 0, numT: 0, wind: 0, slam: 0 });
+    // 움찔은 프레임마다가 아니라 시간 기준으로 쌓는다: 마지막 움찔에서 FLINCH_GAP초가 지나야 다음 움찔을 더하고,
+    // 그 사이에 들어온 피해는 모아 두었다가 다음 움찔의 세기에 넣는다(60fps·30fps·협동 계산 주기와 상관없이 같은 세기).
+    const FLINCH_GAP = 0.08;
+    const hr = S.bhr && S.bhr.f === f ? S.bhr : (S.bhr = { f, k: 0, ax: 0, ay: 1, hp: b.hp, num: 0, numT: 0, wind: 0, slam: 0, pend: 0, kt: 1 });
+    hr.kt += S.fdt;
     if (b.hp < hr.hp - 0.5) {
       const ac = g.active(), dmg = hr.hp - b.hp;
       if (ac) { const a = Math.atan2(b.y - ac.y, b.x - ac.x); hr.ax = Math.cos(a); hr.ay = Math.sin(a); }
-      hr.k = Math.min(1.4, hr.k + 0.55 + Math.min(0.6, dmg / (b.mhp * 0.02))); hr.num += dmg;
+      hr.pend += dmg; hr.num += dmg;
     }
+    if (hr.pend > 0 && hr.kt >= FLINCH_GAP) { hr.k = Math.min(1.4, hr.k + 0.55 + Math.min(0.6, hr.pend / (b.mhp * 0.02))); hr.pend = 0; hr.kt = 0; }
     hr.hp = b.hp; hr.k *= Math.pow(0.8, S.f60);
     hr.numT += S.fdt;
     if (hr.num > 0 && hr.numT > 0.14) { if (S.dmg.length < 50) S.dmg.push({ x: b.x + (Math.random() - 0.5) * 70, y: b.y - 96, v: Math.round(hr.num), t: 0, hit: true }); hr.num = 0; hr.numT = 0; }
@@ -1608,18 +1599,38 @@
     while (sz > 20 && c.measureText(text).width > maxW) { sz -= 4; c.font = `${weight} ${sz}px ${family}`; }
     return sz;
   }
-  // 고해상도 일러스트: 처음 필요할 때 받고, 가장자리를 어둡게 흐려 연출 화면에 녹인다
-  const ILL = {};
+  // 고해상도 일러스트: 처음 필요할 때 받고, 가장자리를 어둡게 흐려 연출 화면에 녹인다.
+  // 메모리: 화면에 그릴 크기로 줄여 담고 원본은 바로 놓는다. 최근 2장만 남기고 나머지는 캔버스를 돌려준다(iOS 캔버스 한도).
+  const ILL = {}, ILL_ORDER = [], ILL_KEEP = 2;
+  function illEvict() {
+    while (ILL_ORDER.length > ILL_KEEP) {
+      const cur = S.pop && S.pop.def && S.pop.def.id;
+      const i = ILL_ORDER.findIndex((id) => id !== cur);
+      if (i < 0) return;
+      const id = ILL_ORDER.splice(i, 1)[0], e = ILL[id];
+      delete ILL[id];
+      if (!e) continue;
+      e.im.onload = null; e.im.removeAttribute('src');
+      if (e.cv) e.cv.width = 0;
+      if (e.bg) e.bg.width = 0;
+    }
+  }
   function illust(d) {
     if (!(T.illusts || {})[d.id]) return null;
     let e = ILL[d.id];
+    if (e) { const i = ILL_ORDER.indexOf(d.id); if (i !== ILL_ORDER.length - 1) { ILL_ORDER.splice(i, 1); ILL_ORDER.push(d.id); } }
     if (!e) {
-      e = ILL[d.id] = { im: new Image(), cv: null };
+      e = ILL[d.id] = { im: new Image(), cv: null, bg: null };
+      ILL_ORDER.push(d.id); illEvict();
       e.im.onload = () => {
-        const w = e.im.naturalWidth, h = e.im.naturalHeight, cv = document.createElement('canvas');
+        if (ILL[d.id] !== e) return; // 받는 사이에 밀려났다
+        const nw = e.im.naturalWidth, nh = e.im.naturalHeight;
+        // 연출은 화면 높이보다 조금 크게 그린다: 화면 짧은 변(기기 픽셀, 배율 최대 2) 정도면 충분하다
+        const scr = Math.min(screen.width || 0, screen.height || 0) || 768, th = Math.max(720, Math.ceil(scr * Math.min(2, window.devicePixelRatio || 1) * 1.1));
+        const sc = Math.min(1, th / nh), w = Math.max(1, Math.round(nw * sc)), h = Math.max(1, Math.round(nh * sc)), cv = document.createElement('canvas');
         cv.width = w; cv.height = h;
         const x = cv.getContext('2d');
-        x.drawImage(e.im, 0, 0);
+        x.drawImage(e.im, 0, 0, w, h);
         x.globalCompositeOperation = 'destination-in';
         const gx = x.createLinearGradient(0, 0, w, 0);
         gx.addColorStop(0, 'rgba(0,0,0,0)'); gx.addColorStop(0.18, '#000'); gx.addColorStop(0.82, '#000'); gx.addColorStop(1, 'rgba(0,0,0,0)');
@@ -1627,7 +1638,13 @@
         const gy = x.createLinearGradient(0, 0, 0, h);
         gy.addColorStop(0, 'rgba(0,0,0,0)'); gy.addColorStop(0.08, '#000'); gy.addColorStop(0.8, '#000'); gy.addColorStop(1, 'rgba(0,0,0,0)');
         x.fillStyle = gy; x.fillRect(0, 0, w, h);
-        e.cv = cv;
+        // 흐린 배경도 원본이 있을 때 미리 만들어 둔다(원본을 놓은 뒤에는 만들 수 없다)
+        const bg = document.createElement('canvas'); bg.width = 480; bg.height = 270;
+        const bx = bg.getContext('2d'), bs = Math.max(bg.width / nw, bg.height / nh) * 1.25;
+        bx.filter = 'blur(14px) saturate(1.3) brightness(0.55)';
+        bx.drawImage(e.im, (bg.width - nw * bs) / 2, (bg.height - nh * bs) / 2 - 20, nw * bs, nh * bs);
+        e.cv = cv; e.bg = bg;
+        e.im.onload = null; e.im.removeAttribute('src'); // 풀어 놓은 원본(수 MB)을 놓는다
       };
       e.im.src = 'gfx/il_' + d.id + '.jpg?v=' + T.illusts[d.id];
     }
@@ -1640,18 +1657,10 @@
     if (!e) { e = VX[name] = new Image(); e.src = 'gfx/vx_' + name + '.jpg?v=1'; }
     return e.complete && e.naturalWidth ? e : null;
   }
-  // 일러스트를 크게 흐려 깔아 연출 배경 색을 그림과 맞춘다
+  // 일러스트를 크게 흐려 깔아 연출 배경 색을 그림과 맞춘다(그림을 받을 때 illust()에서 같이 만든다)
   function illustBg(d) {
     const il = illust(d), e = ILL[d.id];
-    if (!il) return null;
-    if (!e.bg) {
-      const cv = document.createElement('canvas'); cv.width = 480; cv.height = 270;
-      const x = cv.getContext('2d'), sc = Math.max(cv.width / e.im.naturalWidth, cv.height / e.im.naturalHeight) * 1.25;
-      x.filter = 'blur(14px) saturate(1.3) brightness(0.55)';
-      x.drawImage(e.im, (cv.width - e.im.naturalWidth * sc) / 2, (cv.height - e.im.naturalHeight * sc) / 2 - 20, e.im.naturalWidth * sc, e.im.naturalHeight * sc);
-      e.bg = cv;
-    }
-    return e.bg;
+    return il && e ? e.bg : null;
   }
   // Kenney 입자 텍스처(CC0, gfx/kn_*.png): 흰색 그림을 원하는 색으로 물들여 캐시한다
   const KN = {};
@@ -1684,7 +1693,9 @@
     return (puffCv = cv);
   }
   function slamOnce(p, key, big) { if (!p.hits[key]) { p.hits[key] = 1; p.shake = big ? 1.3 : 0.7; Snd.play(big ? 'bigslam' : 'slam', 20); } }
-  function drawCutscene(c, p, t) {
+  function drawCutscene(c, p, t, dt) {
+    // 입자는 실제 흐른 시간으로 움직인다(30fps 모드에서 절반 속도·절반 생성이 되던 문제). 60fps면 예전과 같다.
+    const DT = Math.min(0.1, dt > 0 ? dt : 1 / 60), FR = DT * 60;
     const d = p.def, imm = d.tier === 10, T0 = p.t, fade = Math.min(1, T0 * 5) * Math.min(1, (p.dur - T0) * 2.5);
     // 불멸은 붉은 불꽃, 신화는 보랏빛 불꽃과 번개
     const C = imm ? { core: '255,240,170', mid: '255,110,30', out: '190,20,10', hex: '#ff5a2a', soft: '#ffd27a' } : { core: '255,235,255', mid: '210,110,255', out: '90,30,200', hex: '#d070ff', soft: '#f0c8ff' };
@@ -1766,10 +1777,10 @@
       if (!imm) {
         c.globalCompositeOperation = 'source-over';
         p.fog = p.fog || [];
-        if (Math.random() < 0.5 * qPart()) p.fog.push({ x: Math.random() * W, y: H + 30, vx: (Math.random() - 0.5) * 14, vy: -(14 + Math.random() * 22), l: 0, m: 5 + Math.random() * 3, r: 90 + Math.random() * 90, a: Math.random() * 6 });
+        if (Math.random() < 0.5 * qPart() * FR) p.fog.push({ x: Math.random() * W, y: H + 30, vx: (Math.random() - 0.5) * 14, vy: -(14 + Math.random() * 22), l: 0, m: 5 + Math.random() * 3, r: 90 + Math.random() * 90, a: Math.random() * 6 });
         const fa = fade * Math.min(1, Math.max(0, (T0 - 2.95) / 1));
         for (let i = p.fog.length - 1; i >= 0; i--) {
-          const q = p.fog[i]; q.l += 1 / 60; q.x += (q.vx + Math.sin(q.l * 0.6 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 10) / 60; q.y += q.vy / 60;
+          const q = p.fog[i]; q.l += DT; q.x += (q.vx + Math.sin(q.l * 0.6 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 10) * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.fog.splice(i, 1); continue; }
           const rr = q.r * (0.8 + k * 0.9);
@@ -1779,13 +1790,13 @@
         }
         c.globalCompositeOperation = 'lighter';
       }
-      const n = Math.ceil((imm ? 6 : 0) * qPart());
+      const n = Math.ceil((imm ? 6 : 0) * qPart() * FR);
       for (let i = 0; i < n; i++) {
         const nearText = Math.random() < 0.5;
         p.fire.push({ x: nearText ? rx + (Math.random() - 0.5) * 420 : Math.random() * W, y: nearText ? ry + 40 + Math.random() * 60 : H + 20, vx: (Math.random() - 0.5) * 40, vy: -(60 + Math.random() * 200), l: 0, m: 0.9 + Math.random() * 1.6, r: 2 + Math.random() * 5 });
       }
       for (let i = p.fire.length - 1; i >= 0; i--) {
-        const q = p.fire[i]; q.l += 1 / 60; q.x += (q.vx + Math.sin(q.l * 4 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 30) / 60; q.y += q.vy / 60;
+        const q = p.fire[i]; q.l += DT; q.x += (q.vx + Math.sin(q.l * 4 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 30) * DT; q.y += q.vy * DT;
         const k = q.l / q.m;
         if (k >= 1) { p.fire.splice(i, 1); continue; }
         const rr = q.r * (1 - k * 0.5) * 3;
@@ -1797,11 +1808,11 @@
         // 영겁의 화마: 화면 아래에서 불구름이 굽이치며 치솟고, 그 위로 검은 연기가 피어오른다(Kenney 텍스처)
         const ia = fade * Math.min(1, Math.max(0, (T0 - 2.95) / 0.5));
         p.hell = p.hell || []; p.ash = p.ash || [];
-        if (Math.random() < 0.8 * qPart()) p.hell.push({ x: Math.random() * (W + 200) - 100, y: H + 90, vx: (Math.random() - 0.5) * 30, vy: -(90 + Math.random() * 140), l: 0, m: 1.1 + Math.random() * 0.9, r: 110 + Math.random() * 120, a: Math.random() * 6, sp: (Math.random() - 0.5) * 1.2, f: (Math.random() * 9) | 0 });
-        if (Math.random() < 0.7 * qPart()) p.ash.push({ x: Math.random() * W, y: H * 0.62 + Math.random() * 80, vx: (Math.random() - 0.5) * 20, vy: -(40 + Math.random() * 50), l: 0, m: 3 + Math.random() * 2, r: 150 + Math.random() * 120, a: Math.random() * 6, f: [0, 4, 8, 12, 16, 20][(Math.random() * 6) | 0] });
+        if (Math.random() < 0.8 * qPart() * FR) p.hell.push({ x: Math.random() * (W + 200) - 100, y: H + 90, vx: (Math.random() - 0.5) * 30, vy: -(90 + Math.random() * 140), l: 0, m: 1.1 + Math.random() * 0.9, r: 110 + Math.random() * 120, a: Math.random() * 6, sp: (Math.random() - 0.5) * 1.2, f: (Math.random() * 9) | 0 });
+        if (Math.random() < 0.7 * qPart() * FR) p.ash.push({ x: Math.random() * W, y: H * 0.62 + Math.random() * 80, vx: (Math.random() - 0.5) * 20, vy: -(40 + Math.random() * 50), l: 0, m: 3 + Math.random() * 2, r: 150 + Math.random() * 120, a: Math.random() * 6, f: [0, 4, 8, 12, 16, 20][(Math.random() * 6) | 0] });
         c.globalCompositeOperation = 'source-over';
         for (let i = p.ash.length - 1; i >= 0; i--) {
-          const q = p.ash[i]; q.l += 1 / 60; q.x += q.vx / 60; q.y += q.vy / 60;
+          const q = p.ash[i]; q.l += DT; q.x += q.vx * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.ash.splice(i, 1); continue; }
           const tex = kn('bsm' + q.f, '40,14,8');
@@ -1811,7 +1822,7 @@
         }
         c.globalCompositeOperation = 'lighter';
         for (let i = p.hell.length - 1; i >= 0; i--) {
-          const q = p.hell[i]; q.l += 1 / 60; q.x += (q.vx + Math.sin(q.l * 3 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 30) / 60; q.y += q.vy / 60;
+          const q = p.hell[i]; q.l += DT; q.x += (q.vx + Math.sin(q.l * 3 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 30) * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.hell.splice(i, 1); continue; }
           const tex = kn('exp' + q.f, k < 0.3 ? '255,200,120' : k < 0.65 ? '255,110,40' : '170,30,10');
@@ -1823,10 +1834,10 @@
         const hv = c.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.75);
         hv.addColorStop(0, 'rgba(0,0,0,0)'); hv.addColorStop(1, `rgba(255,60,10,${0.22 + Math.sin(t * 3) * 0.06})`);
         c.globalAlpha = ia; c.fillStyle = hv; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
-        for (let i = 0, n = Math.ceil(16 * qPart()); i < n; i++) p.flame.push({ x: rx + (Math.random() - 0.5) * 380, y: ry + 30 + Math.random() * 70, vx: (Math.random() - 0.5) * 40, vy: -(220 + Math.random() * 360), l: 0, m: 0.45 + Math.random() * 0.8, r: 16 + Math.random() * 42 });
+        for (let i = 0, n = Math.ceil(16 * qPart() * FR); i < n; i++) p.flame.push({ x: rx + (Math.random() - 0.5) * 380, y: ry + 30 + Math.random() * 70, vx: (Math.random() - 0.5) * 40, vy: -(220 + Math.random() * 360), l: 0, m: 0.45 + Math.random() * 0.8, r: 16 + Math.random() * 42 });
         for (let i = p.flame.length - 1; i >= 0; i--) {
-          const q = p.flame[i]; q.l += 1 / 60;
-          q.x += (q.vx + Math.sin(q.l * 9 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 70) / 60; q.y += q.vy / 60;
+          const q = p.flame[i]; q.l += DT;
+          q.x += (q.vx + Math.sin(q.l * 9 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 70) * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.flame.splice(i, 1); continue; }
           const col = k < 0.25 ? C.core : k < 0.6 ? C.mid : C.out, rr = q.r * (1 - k * 0.6), fa2 = fade * (1 - k) * Math.min(1, k * 8);
@@ -1841,9 +1852,9 @@
         const sa = fade * Math.min(1, Math.max(0, (T0 - 2.95) / 0.8));
         // 연기 갈래(Kenney 텍스처): 글자 아래에서 휘감기며 천천히 솔솔 올라가 퍼진다
         p.smoke = p.smoke || [];
-        if (Math.random() < 0.45 * qPart()) p.smoke.push({ x: rx + (Math.random() - 0.5) * 360, y: ry + 80 + Math.random() * 30, vx: (Math.random() - 0.5) * 12, vy: -(28 + Math.random() * 30), l: 0, m: 3.2 + Math.random() * 2, r: 70 + Math.random() * 60, a: (Math.random() - 0.5) * 0.6, sp: (Math.random() - 0.5) * 0.25, tex: 'flame_0' + (1 + ((Math.random() * 4) | 0)), fl: Math.random() < 0.5 });
+        if (Math.random() < 0.45 * qPart() * FR) p.smoke.push({ x: rx + (Math.random() - 0.5) * 360, y: ry + 80 + Math.random() * 30, vx: (Math.random() - 0.5) * 12, vy: -(28 + Math.random() * 30), l: 0, m: 3.2 + Math.random() * 2, r: 70 + Math.random() * 60, a: (Math.random() - 0.5) * 0.6, sp: (Math.random() - 0.5) * 0.25, tex: 'flame_0' + (1 + ((Math.random() * 4) | 0)), fl: Math.random() < 0.5 });
         for (let i = p.smoke.length - 1; i >= 0; i--) {
-          const q = p.smoke[i]; q.l += 1 / 60; q.x += (q.vx + Math.sin(q.l * 0.8 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 10) / 60; q.y += q.vy / 60;
+          const q = p.smoke[i]; q.l += DT; q.x += (q.vx + Math.sin(q.l * 0.8 + (q.ph == null ? (q.ph = Math.random() * 7) : q.ph)) * 10) * DT; q.y += q.vy * DT;
           const k = q.l / q.m;
           if (k >= 1) { p.smoke.splice(i, 1); continue; }
           const wisp = kn(q.tex, k < 0.4 ? '235,225,255' : '185,160,235') || smokePuff();
@@ -1989,7 +2000,7 @@
     if (p.t >= p.dur) { S.pop = null; return; }
     if (p.vic) return drawVictory(c, p, t);
     const d = p.def, col = tierColor(d.tier), a = Math.min(1, p.t * 5) * Math.min(1, (p.dur - p.t) * 3);
-    if (d.tier >= 9) return drawCutscene(c, p, t);
+    if (d.tier >= 9) return drawCutscene(c, p, t, dt);
     c.save();
     if (p.shake > 0) c.translate((Math.random() - 0.5) * 22 * p.shake, (Math.random() - 0.5) * 22 * p.shake);
     if (d.tier <= 5) {
@@ -2040,7 +2051,9 @@
     S.fdt = dt; S.f60 = dt * 60;
     S.auraPrev = S.auraN || 0; S.auraN = 0;
     S.shake = Math.max(0, (S.shake || 0) - 0.06 * S.f60);
-    const sx = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale, sy = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale;
+    // 흔들림 폭은 글씨처럼 작은 화면에서 키운다(uiS: PC 1, 휴대폰 최대 1.7)
+    const shk = 14 * uiS() * (S.shake || 0) * S.scale;
+    const sx = (Math.random() - 0.5) * shk, sy = (Math.random() - 0.5) * shk;
     const ph = g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');
     if (S.camPh !== ph) { S.camPh = ph; resetCam(); }
     if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) { const ac = g.active(); if (ac) { const ck = 1 - Math.pow(0.9, S.f60); S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ac.y - S.cam.y) * ck; } }
@@ -2095,8 +2108,15 @@
   // ---- 입력 ----
   const toWorld = (e) => { const r = view.getBoundingClientRect(); return { x: (((e.clientX - r.left) / r.width) * view.width - S.ox) / S.scale, y: (((e.clientY - r.top) / r.height) * view.height - S.oy) / S.scale }; };
   const unitAt = (x, y) => { let best = null, bd = S.coarse ? 52 : 38; g.units.forEach((u) => { if (u.owner !== 0) return; const d = dist(u.x, u.y, x, y); if (d < bd) { bd = d; best = u; } }); return best; };
-  // 겹쳐 있으면 위에 그려진(나중에 생긴) 것을 집는다
-  const dropAt = (x, y) => g.drops.slice().reverse().find((d) => d.owner === 0 && Math.abs(d.x - x) < 24 && Math.abs(d.y - y) < 22);
+  // 누른 자리에서 가장 가까운 상자·아이템(거리가 같으면 위에 그려진, 나중에 생긴 것). 터치는 손가락 크기에 맞게 범위를 넓힌다.
+  const dropAt = (x, y) => {
+    const rx = S.coarse ? 56 : 24, ry = S.coarse ? 52 : 22;
+    let best = null, bd = Infinity;
+    g.drops.forEach((d) => { if (d.owner !== 0 || Math.abs(d.x - x) >= rx || Math.abs(d.y - y) >= ry) return; const dd = dist(d.x, d.y, x, y); if (dd <= bd) { bd = dd; best = d; } });
+    return best;
+  };
+  // 터치에서 손가락이 이만큼(화면 px) 움직이기 전까지는 탭으로 본다
+  const TOUCH_SLOP = 18, MOUSE_SLOP = 10;
   const enemyAt = (x, y) => g.enemies.find((e) => dist(e.x, e.y, x, y) < e.r + 12);
   // 보스전 중에도 Tab으로 내 라인 화면에 와서 선택권·조합·강화를 할 수 있다. 그동안 결투 시간은 그대로 흐른다.
   const inBoss = () => g && g.phase === 'boss' && !S.laneView;
@@ -2142,7 +2162,9 @@
       setMode(null); return;
     }
     if (S.cmdMode) { rightClick(m, S.cmdMode); setMode(null); return; }
-    const drop = dropAt(m.x, m.y);
+    // 상자 범위가 넓어서 상자 옆 유닛을 누를 수도 있다: 둘 다 걸리면 누른 자리에 더 가까운 쪽을 고른다(상자 열기는 되돌릴 수 없다)
+    let drop = dropAt(m.x, m.y);
+    if (drop) { const u0 = unitAt(m.x, m.y); if (u0 && dist(u0.x, u0.y, m.x, m.y) < dist(drop.x, drop.y, m.x, m.y)) drop = null; }
     if (drop) {
       if (drop.kind === 'chest') { const out = g.openChest(g.me, drop); S.dropSel = out ? out.id : null; S.sel = []; }
       else { S.dropSel = drop.id; S.sel = []; }
@@ -2225,7 +2247,7 @@
     if (touch && e.pointerId === touch.id) {
       const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
       if (touch.mode === 'box') { S.drag.x1 = m.x; S.drag.y1 = m.y; return; }
-      if (!touch.mode && Math.hypot(dx, dy) > 10) { touch.mode = 'pan'; if (touch.lp) clearTimeout(touch.lp); }
+      if (!touch.mode && Math.hypot(dx, dy) > (S.coarse ? TOUCH_SLOP : MOUSE_SLOP)) { touch.mode = 'pan'; if (touch.lp) clearTimeout(touch.lp); }
       if (touch.mode === 'pan') panBy(touch.cx, touch.cy, dx, dy);
       return;
     }
@@ -2430,10 +2452,13 @@
     return row + `<div class="bk"><div>${stats}</div>${pass}${sk}${comb}${T.recipes[d.id] ? recipeRow(d.id) : ''}</div>`;
   }
   function renderPane() {
+    // 서랍이 닫혀 있으면 안 보이는 글자판을 만들지 않는다(서랍을 여는 행동이 dirty()를 불러 그때 한 번 그린다)
+    if (!S.drawer) return;
     const p = g.me, tick = Object.values(p.tickets).reduce((a, b) => a + b, 0);
     const tabs = [['upgrade', t('upgrade')], ['sage', t('sage')], ['ticket', t('ticket')], ['book', t('book')], ['war', t('war')], ['set', t('settings')]];
     if (!S.tab) S.tab = 'upgrade';
-    $('tabs').innerHTML = tabs.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}" type="button">${n}${k === 'ticket' && tick ? `<span class="dot">${tick}</span>` : ''}</button>`).join('');
+    const tb = $('tabs'), th = tabs.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}" type="button">${n}${k === 'ticket' && tick ? `<span class="dot">${tick}</span>` : ''}</button>`).join('');
+    if (tb.dataset.html !== th) { tb.innerHTML = th; tb.dataset.html = th; } // 같은 내용이면 버튼을 다시 만들지 않는다(누르는 도중 교체 방지)
     let h = '';
     if (S.tab === 'upgrade') {
       h = `<div class="h">${t('hold', { c: esc(T.currency), n: fmt(p.gold) })}</div>` + T.upgrades.map((u) => {
@@ -2482,7 +2507,8 @@
     if (pane.dataset.html !== h) { pane.innerHTML = h; pane.dataset.html = h; pane.scrollTop = top; }
     let a = '';
     if (net) a = net.roster().map((r) => `<div><span>${esc(r.state.name || '')}${r.me ? I.t('meTag') : ''}</span><span>${I.t('alliesLine', { u: r.state.units | 0, e: r.state.enemies | 0 })}</span></div>`).join('');
-    $('allies').innerHTML = a; $('allies').hidden = !a;
+    const al = $('allies');
+    if (al.dataset.html !== a) { al.innerHTML = a; al.dataset.html = a; al.hidden = !a; }
   }
   // 보스전 역할 표시(7성 이상)
   const roleBadge = (d) => (d.role ? `<span class="role" style="color:${T.roles[d.role].color};border-color:${T.roles[d.role].color}">${esc(T.roles[d.role].name)}</span>` : '');
@@ -2910,7 +2936,7 @@
   // 왼쪽 조이스틱으로 이동, 오른쪽 아래 공격 버튼을 누르고 있는 동안 공격(자동 공격 없음).
   // 스킬·이동기는 공격 버튼을 둘러싼 '고양이 발' 배치. 짧게 톡 = 사거리 안의 적에게 자동 조준(밖이면 보는 방향),
   // 꾹 누르고 끌면 장수 둘레에 사거리와 범위가 보이고 끈 방향·거리로 조준해 손을 떼면 쓴다.
-  const PAD = { atk: null, aim: null, joy: null, jv: null };
+  const PAD = { atk: null, aim: null, joy: null, jv: null, buf: null };
   const AIM_HOLD = 220, AIM_DRAG = 80;
   function skillInfo(c, k) {
     if (k === 'dash') return { range: 280, shape: 'dash', w: 44 };
@@ -2922,7 +2948,12 @@
     return { range: 0, shape: 'self' };
   }
   // 짧게 눌렀을 때: 사거리 안에 적이 있으면 그 적, 없으면 보는 방향으로
+  // 이동기는 피하는 수단이라 적에게 붙지 않는다: 조이스틱을 밀고 있으면 그 방향, 아니면 보는 방향으로 최대 거리
   function autoTarget(c, info) {
+    if (info.shape === 'dash') {
+      const j = PAD.jv, a = j && Math.hypot(j.x, j.y) > 0.1 ? Math.atan2(j.y, j.x) : (c.face ?? 0);
+      return { x: c.x + Math.cos(a) * info.range, y: c.y + Math.sin(a) * info.range };
+    }
     const fo = g.champFoe(c) || (g.fight && g.fight.boss), reach = info.shape === 'circle' && !info.range ? info.r : info.range;
     if (fo && (info.shape === 'self' || dist(c.x, c.y, fo.x, fo.y) <= reach + 60)) return { x: fo.x, y: fo.y };
     const a = c.face ?? 0, r = Math.max(info.range, 120);
@@ -2938,6 +2969,16 @@
   function castAt(c, k, x, y) {
     if (k === 'dash') g.dash(c, x, y);
     else g.useSkill(c, +k, x, y);
+  }
+  // 재사용이 거의 끝났을 때(BUF_EARLY초 이하) 누른 것은 버리지 않고 BUF_KEEP ms 동안 들고 있다가 끝나는 순간 쓴다(선입력)
+  const BUF_EARLY = 0.25, BUF_KEEP = 300;
+  const cdLeft = (c, k) => (k === 'dash' ? c.dashCd : c.skillCd[+k]) || 0;
+  // 조준값은 떼는 순간의 것을 쓴다. 톡(자동 조준)은 쓰는 순간 다시 고른다.
+  function fireAim(c, A) {
+    const info = skillInfo(c, A.k);
+    if (!info) return;
+    const tg = A.on ? aimTarget(c, info, A) : autoTarget(c, info);
+    castAt(c, A.k, tg.x, tg.y);
   }
   function drawAim(c) {
     const A = PAD.aim, ch = g.active();
@@ -2978,7 +3019,8 @@
       const k = b.dataset.sk;
       if (k === 'atk') { PAD.atk = e.pointerId; c.atkHold = 0.3; b.classList.add('on'); return; }
       if (k === 'heal') { g.useHeal(); return; }
-      if (b.dataset.cd === '1') return;
+      // 버튼의 data-cd는 화면 갱신(180ms) 때만 바뀌므로 엔진의 남은 재사용 시간을 직접 본다
+      if (cdLeft(c, k) > BUF_EARLY) return;
       const r = b.getBoundingClientRect();
       PAD.aim = { id: e.pointerId, k, cx: r.left + r.width / 2, cy: r.top + r.height / 2, t0: performance.now(), dx: 0, dy: 0, on: false, el: b };
       b.classList.add('on');
@@ -2996,8 +3038,9 @@
       PAD.aim = null; A.el.classList.remove('on');
       const c = g && g.active(), info = c && skillInfo(c, A.k);
       if (!info || e.type === 'pointercancel') return;
-      const tg = A.on ? aimTarget(c, info, A) : autoTarget(c, info);
-      castAt(c, A.k, tg.x, tg.y);
+      if (cdLeft(c, A.k) > 0) { PAD.buf = { A, uid: c.uid, until: performance.now() + BUF_KEEP }; return; }
+      PAD.buf = null;
+      fireAim(c, A);
       dirty();
     };
     bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
@@ -3030,10 +3073,16 @@
     // 라인: 고른 유닛들을 조이스틱 방향으로 직접 움직인다(다중 선택도 대형 그대로 함께 움직인다)
     g.laneJoy = PAD.lane && PAD.jv && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv.x, y: PAD.jv.y } : null;
     const c = g.phase === 'boss' && !S.laneView ? g.active() : null;
-    if (!c) return;
+    if (!c) { PAD.buf = null; return; }
     g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
     c.joy = PAD.jv;
     if (PAD.atk != null) c.atkHold = 0.3;
+    // 선입력: 재사용이 끝나는 프레임에 쓴다. 시간이 지났거나 장수가 바뀌었거나 죽었으면 버린다.
+    const B = PAD.buf;
+    if (B) {
+      if (B.uid !== c.uid || c.dead || performance.now() > B.until) PAD.buf = null;
+      else if (cdLeft(c, B.A.k) <= 0) { PAD.buf = null; fireAim(c, B.A); dirty(); }
+    }
   }
   // 보스전 스킬: 선택한 장수의 스킬·이동기·화타 치료를 공격 버튼 둘레(고양이 발)에 아이콘과 재사용 시간으로 보여 준다
   const SK_GLYPH = { line: '斬', circle: '爆', cone: '扇', buff: '勢', shield: '盾', heal: '治', rally: '令', taunt: '挑', weaken: '弱' };
@@ -3202,6 +3251,7 @@
     const bb = $('bossbtn'), bt = g.phase === 'boss' ? (S.laneView ? `${t('backToBoss')} · ${clock(Math.max(0, g.fight.limit - g.fight.t))}` : t('toLane')) : '';
     if (bb.dataset.t !== bt) { bb.textContent = bt; bb.dataset.t = bt; bb.hidden = !bt; bb.classList.toggle('go', !!S.laneView); }
   }
+  const CANVAS_ONLY = { dmgtext: 1, proc: 1, shake: 1, pattern: 1, banner: 1 };
   function drainEvents() {
     for (const e of g.events) {
       if (e.type === 'sfx') { Snd.play(e.s, e.gap); continue; }
@@ -3216,7 +3266,8 @@
         if (S.dmg.length < 40) S.dmg.push({ x: e.x + (typeof e.v === 'number' && g.phase === 'boss' ? (Math.random() - 0.5) * 90 : 0), y: e.y - (typeof e.v === 'number' && g.phase === 'boss' ? Math.random() * 30 : 0), v: e.v, big: e.big != null ? e.big : g.phase === 'boss', t: 0 });
         // 보스전 강타: 짧게 멈칫(혼자 할 때만 실제로 시간이 멈춤) + 카메라가 순간 다가감
         // 스킬 이름 글자(문자열)는 타격이 아니므로 멈칫하지 않는다(치료·강화 스킬에도 화면이 멈칫하던 문제)
-        if (g.phase === 'boss' && typeof e.v === 'number') { if (!net) S.hitStop = 0.07; S.punch = 1; S.shake = Math.max(S.shake || 0, 0.5); Snd.play('hit', 90); if (navigator.vibrate && e.big !== false) navigator.vibrate(10); }
+        // 멈칫은 220ms에 한 번까지: 강타가 초당 여러 번 나도 조작이 뚝뚝 끊기지 않게. 스킬(big: true)은 0.06초, 강타 평타는 0.035초.
+        if (g.phase === 'boss' && typeof e.v === 'number') { if (!net) { const nowMs = performance.now(); if (nowMs - (S.hitStopAt || 0) > 220) { S.hitStop = e.big === true ? 0.06 : 0.035; S.hitStopAt = nowMs; } } S.punch = 1; S.shake = Math.max(S.shake || 0, 0.5); Snd.play('hit', 90); if (navigator.vibrate && e.big !== false) navigator.vibrate(10); }
       }
       else if (e.type === 'proc') {
         // 패시브 발동: 이름을 크게 띄우고 유닛·대상에 터지는 효과
@@ -3244,7 +3295,8 @@
       else if (e.type === 'bossFail') { if (g.fight) (S.bossRows = S.bossRows || {})[g.fight.def.round] = meterRows(g.fight.dealt, g.fight.total); }
       else if (e.type === 'removed') { S.sel = S.sel.filter((i) => i !== e.id); }
       else if (e.type === 'dropGone') { if (S.dropSel === e.id) S.dropSel = null; }
-      dirty();
+      // 캔버스에만 그리는 알림은 글자판(DOM)을 다시 만들 이유가 없다. 이것까지 dirty()하면 후반에 매 프레임 글자판을 다시 만든다.
+      if (!CANVAS_ONLY[e.type]) dirty();
     }
     g.events.length = 0;
   }
@@ -3257,14 +3309,19 @@
     if (s) { try { localStorage.setItem('rtd-save', JSON.stringify(s)); } catch (e) { /* 저장 공간 없음 */ } }
   }
   function lifeOffline() { return !net || net.t.kind === 'hub'; }
-  document.addEventListener('visibilitychange', () => {
+  // 앱을 내렸을 때: 브라우저의 visibilitychange와 앱의 appStateChange(native.js가 'rtd-appstate'로 넘긴다) 둘 다 받는다.
+  // iOS에서 제어 센터·전화처럼 화면이 '보이는' 채로 앱이 비활성이 되는 경우를 잡기 위해서다. 두 신호가 겹쳐도 한 번만 처리한다.
+  function onHidden(hidden) {
     if (!g || g.over) return;
-    if (document.hidden) { S.hiddenAt = Date.now(); if (lifeOffline()) S.paused = true; saveGame(); }
+    if (hidden) { if (S.hiddenAt) return; S.hiddenAt = Date.now(); if (lifeOffline()) S.paused = true; saveGame(); }
     else {
-      if (!lifeOffline() && S.hiddenAt && Date.now() - S.hiddenAt > 60000) { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
+      if (!S.hiddenAt) return;
+      if (!lifeOffline() && Date.now() - S.hiddenAt > 60000) { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
       S.hiddenAt = 0; last = performance.now(); dirty();
     }
-  });
+  }
+  document.addEventListener('visibilitychange', () => onHidden(document.hidden));
+  window.addEventListener('rtd-appstate', (e) => onHidden(!(e.detail && e.detail.active)));
   function tick(now, cap) {
     if (S.paused || S.tutHold) { last = now; acc = 0; return; } // 튜토리얼 설명 중에도 멈춘다
     padTick();
@@ -3335,6 +3392,10 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     if (Q.fps30 && now - lastDraw < 30) return;
     // 120Hz 화면에서도 60번만 그린다(두 배로 그려 봐야 발열·끊김만 늘어난다)
     if (now - lastDraw < 14) return;
+    // 쉬는 화면: 일시정지(창은 DOM이라 캔버스가 멈춰도 보인다), 또는 판이 끝나고 승리·등장 연출과 경험치 연출이 다 끝난 결과 화면.
+    // 이때는 초당 5번만 그린다(발열·배터리). 글자판을 고칠 일이 있으면(needs) 바로 돈다. 튜토리얼 설명 중에는 그대로 그린다.
+    const idle = !S.tutHold && ((S.paused && !g.over) || (g.over && !S.pop && !popQ.length && !S.xpPlaying));
+    if (idle && !needs && now - lastDraw < 200) return;
     lastDraw = now;
     const p0 = Q.perf ? performance.now() : 0;
     tick(now, 0.1);

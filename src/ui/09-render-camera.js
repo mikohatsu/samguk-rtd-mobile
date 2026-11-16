@@ -5,7 +5,9 @@
     S.fdt = dt; S.f60 = dt * 60;
     S.auraPrev = S.auraN || 0; S.auraN = 0;
     S.shake = Math.max(0, (S.shake || 0) - 0.06 * S.f60);
-    const sx = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale, sy = (Math.random() - 0.5) * 14 * (S.shake || 0) * S.scale;
+    // 흔들림 폭은 글씨처럼 작은 화면에서 키운다(uiS: PC 1, 휴대폰 최대 1.7)
+    const shk = 14 * uiS() * (S.shake || 0) * S.scale;
+    const sx = (Math.random() - 0.5) * shk, sy = (Math.random() - 0.5) * shk;
     const ph = g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');
     if (S.camPh !== ph) { S.camPh = ph; resetCam(); }
     if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) { const ac = g.active(); if (ac) { const ck = 1 - Math.pow(0.9, S.f60); S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ac.y - S.cam.y) * ck; } }

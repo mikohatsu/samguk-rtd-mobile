@@ -1,8 +1,15 @@
   // ---- 입력 ----
   const toWorld = (e) => { const r = view.getBoundingClientRect(); return { x: (((e.clientX - r.left) / r.width) * view.width - S.ox) / S.scale, y: (((e.clientY - r.top) / r.height) * view.height - S.oy) / S.scale }; };
   const unitAt = (x, y) => { let best = null, bd = S.coarse ? 52 : 38; g.units.forEach((u) => { if (u.owner !== 0) return; const d = dist(u.x, u.y, x, y); if (d < bd) { bd = d; best = u; } }); return best; };
-  // 겹쳐 있으면 위에 그려진(나중에 생긴) 것을 집는다
-  const dropAt = (x, y) => g.drops.slice().reverse().find((d) => d.owner === 0 && Math.abs(d.x - x) < 24 && Math.abs(d.y - y) < 22);
+  // 누른 자리에서 가장 가까운 상자·아이템(거리가 같으면 위에 그려진, 나중에 생긴 것). 터치는 손가락 크기에 맞게 범위를 넓힌다.
+  const dropAt = (x, y) => {
+    const rx = S.coarse ? 56 : 24, ry = S.coarse ? 52 : 22;
+    let best = null, bd = Infinity;
+    g.drops.forEach((d) => { if (d.owner !== 0 || Math.abs(d.x - x) >= rx || Math.abs(d.y - y) >= ry) return; const dd = dist(d.x, d.y, x, y); if (dd <= bd) { bd = dd; best = d; } });
+    return best;
+  };
+  // 터치에서 손가락이 이만큼(화면 px) 움직이기 전까지는 탭으로 본다
+  const TOUCH_SLOP = 18, MOUSE_SLOP = 10;
   const enemyAt = (x, y) => g.enemies.find((e) => dist(e.x, e.y, x, y) < e.r + 12);
   // 보스전 중에도 Tab으로 내 라인 화면에 와서 선택권·조합·강화를 할 수 있다. 그동안 결투 시간은 그대로 흐른다.
   const inBoss = () => g && g.phase === 'boss' && !S.laneView;
@@ -48,7 +55,9 @@
       setMode(null); return;
     }
     if (S.cmdMode) { rightClick(m, S.cmdMode); setMode(null); return; }
-    const drop = dropAt(m.x, m.y);
+    // 상자 범위가 넓어서 상자 옆 유닛을 누를 수도 있다: 둘 다 걸리면 누른 자리에 더 가까운 쪽을 고른다(상자 열기는 되돌릴 수 없다)
+    let drop = dropAt(m.x, m.y);
+    if (drop) { const u0 = unitAt(m.x, m.y); if (u0 && dist(u0.x, u0.y, m.x, m.y) < dist(drop.x, drop.y, m.x, m.y)) drop = null; }
     if (drop) {
       if (drop.kind === 'chest') { const out = g.openChest(g.me, drop); S.dropSel = out ? out.id : null; S.sel = []; }
       else { S.dropSel = drop.id; S.sel = []; }
@@ -131,7 +140,7 @@
     if (touch && e.pointerId === touch.id) {
       const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
       if (touch.mode === 'box') { S.drag.x1 = m.x; S.drag.y1 = m.y; return; }
-      if (!touch.mode && Math.hypot(dx, dy) > 10) { touch.mode = 'pan'; if (touch.lp) clearTimeout(touch.lp); }
+      if (!touch.mode && Math.hypot(dx, dy) > (S.coarse ? TOUCH_SLOP : MOUSE_SLOP)) { touch.mode = 'pan'; if (touch.lp) clearTimeout(touch.lp); }
       if (touch.mode === 'pan') panBy(touch.cx, touch.cy, dx, dy);
       return;
     }

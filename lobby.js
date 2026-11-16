@@ -4,6 +4,8 @@
   const SHOP = root.RTD_SHOP, Art = root.RTD_ART;
   const $ = (id) => document.getElementById(id);
   let C = null; // ui.js가 넘겨주는 도구들
+  // 원보(유료 재화) 스위치: 첫 출시는 광고만이라 상점 원보 탭과 로비 위 원보 잔액을 숨긴다. 결제를 붙이면 true
+  const GEMS_ON = false;
   const LI = () => ({ ko: 0, ja: 1, en: 2, zh: 3 }[C.I.lang] || 0);
   const nm = (arr) => arr[LI()] || arr[0];
   // 로비 전용 문구 [ko, ja, en, zh]
@@ -189,6 +191,8 @@
     $('lrank').textContent = me ? `${C.t(me.grade)} · ${C.t('level', { n: me.level })}` : L('needLogin');
     $('lcur').hidden = !me;
     if (me) { $('lcoins').textContent = (me.coins || 0).toLocaleString(); $('lgems').textContent = (me.gems || 0).toLocaleString(); }
+    // #lcur .cur 은 CSS가 display:flex 라 hidden 속성이 안 먹는다 → style로 숨긴다
+    const gemChip = $('lgems') && $('lgems').parentElement; if (gemChip) gemChip.style.display = GEMS_ON ? '' : 'none';
   }
 
   // ---------- 메뉴 창 ----------
@@ -246,7 +250,7 @@
       return;
     }
     if (panel === 'shop') {
-      tabs([['icons', L('icons')], ['skins', L('skins')], ['maps', L('maps')], ['gems', L('gems')]]);
+      tabs([['icons', L('icons')], ['skins', L('skins')], ['maps', L('maps')]].concat(GEMS_ON ? [['gems', L('gems')]] : []));
       if (!me) { body.innerHTML = `<div class="lp-note">${L('needLogin')}</div>`; return; }
       const has = (id) => SHOP.free(id) || me.owned.includes(id);
       const btn = (id, cost, on, kind, unit) => has(id)
@@ -265,7 +269,7 @@
           const sk = SHOP.MAP_SKINS[k], on = (me.mapSkin || 'spring') === k;
           return `<div class="lp-card ${on ? 'on' : ''}"><canvas class="lp-sw" data-mappv="${k}" width="144" height="96"></canvas><span class="nm">${esc(nm(sk.name))}</span>${sk.price ? '' : `<span class="pr">${L('free')}</span>`}${btn('map_' + k, sk.price, on, 'map')}</div>`;
         }).join('')}</div>`;
-      } else {
+      } else if (GEMS_ON) {
         h = `<div class="lp-note">${L('gemHint')}</div><div class="lp-grid">${SHOP.GEM_PACKS.map(([id, n, yen]) => `<div class="lp-card"><span style="font:900 26px 'Noto Serif KR',serif;color:#ff8a9a">寶</span><span class="nm">${n}</span><span class="pr">¥${yen}</span><button class="btn" type="button" disabled>${L('soon')}</button></div>`).join('')}</div>`;
       }
       body.innerHTML = h;
