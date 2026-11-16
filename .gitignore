@@ -13,3 +13,15 @@ Thumbs.db
 
 # 내려받은 빌드 결과
 dist/
+
+# AI 작업용 문서(게임 스튜디오 템플릿): 이 컴퓨터에만 둔다. 다시 깔려면 bash ~/.claude/ccgs/install.sh
+.claude/*
+!.claude/launch.json
+docs/
+design/
+production/
+studio-tests/
+project.yaml
+project.local.yaml
+CLAUDE.local.md
+.scratch/

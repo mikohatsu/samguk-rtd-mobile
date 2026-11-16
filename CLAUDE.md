@@ -73,3 +73,15 @@ gcloud compute scp x.tgz rtd-online:/tmp/x.tgz --zone asia-northeast1-b --projec
 gcloud compute ssh rtd-online --zone asia-northeast1-b --project mikoserver-513016 --account mikohatsu97@gmail.com --command "sudo tar -xzf /tmp/x.tgz -C /opt/rtd-online && sudo chown -R rtd:rtd /opt/rtd-online"
 ```
 그 뒤 공개 주소에서 받아 해시 비교, `npm run build`, 모바일 아티팩트(Ktr5qcLEUSmJ1Qtep1UmEe) 다시 게시.
+
+## 게임 스튜디오 템플릿 (Claude Code Game Studios v1.3.0, MIT)
+- 템플릿 README 방식 그대로 이 저장소의 `.claude/` 안에 전부 있다: 에이전트 49, 스킬 78, 훅, 규칙, 문서, 스크립트, `settings.json`. 그 밖에 `docs/`, `design/`, `production/`, `studio-tests/`, `project.yaml`. 라이선스는 `.claude/CCGS-LICENSE`, 원본은 `~/.claude/ccgs/`.
+- 세션은 반드시 이 저장소 맨 위 폴더에서 연다(하위 폴더에서 열면 훅과 금지 규칙이 안 걸린다).
+- **이 파일의 위쪽 규칙이 템플릿 기본 동작과 `.claude/rules/`보다 우선한다.** 특히 "요청하지 않은 기능은 넣지 않는다"가 먼저다(예: `.claude/rules/ui-code.md`의 게임패드·색각 모드 필수 항목은 사용자가 요청할 때만 한다).
+- 템플릿의 "파일을 쓰기 전에 매번 허락받기"는 쓰지 않는다(`project.yaml`의 automation: guided). `settings.json`에서 `permissions.defaultMode`만 뺐고 나머지(훅, 허용·금지 목록)는 템플릿 그대로다.
+- 설계의 기준은 계속 Claude Docs 설계 문서다. `design/`은 템플릿 스킬이 쓰는 작업 공간이다.
+- 템플릿 파일은 앱(`www/`, APK)에 들어가지 않는다(`scripts/build-www.js`가 목록에 있는 파일만 복사한다).
+- **템플릿 파일은 git에 올리지 않는다**(`.gitignore`: `.claude/`(launch.json 제외), `docs/`, `design/`, `production/`, `studio-tests/`, `project.yaml`). 이 컴퓨터에만 있고, 새로 받은 폴더에서는 `bash ~/.claude/ccgs/install.sh`로 다시 깐다.
+- 세션 체크포인트는 `production/session-state/active.md`.
+
+@.claude/docs/coordination-rules.md
