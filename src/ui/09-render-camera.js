@@ -17,7 +17,11 @@
     if (S.punch > 0.02 && g.fight && g.phase === 'boss') { const p = 1 + S.punch * 0.035, fx = g.fight.boss.x, fy = g.fight.boss.y; ctx.translate(fx, fy); ctx.scale(p, p); ctx.translate(-fx, -fy); S.punch *= Math.pow(0.82, S.f60); } else S.punch = 0;
     const watching = viewedPeer();
     if (net) net.setWatch(watching ? watching.id : null);
+    // 보스 등장: 보스 쪽으로 밀어 들어가는 확대(그리기 변환만. S.cam은 그대로). 글씨·레터박스는 확대를 풀고 화면 좌표로 그린다
+    const intro = g.fight && !laneOn() ? introState() : null;
+    if (intro) introCam(ctx, intro);
     if (g.fight && g.phase !== 'wave' && !laneOn()) drawArena(t); else if (watching) drawRemoteLane(t, watching); else drawLane(t);
+    if (intro) { ctx.setTransform(S.scale, 0, 0, S.scale, S.ox + sx, S.oy + sy); drawBossIntro(ctx); }
     drawText(ctx); drawBanner();
     drawPop(ctx, t, dt);
   }

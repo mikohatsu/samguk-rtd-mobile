@@ -431,7 +431,10 @@
     c.globalAlpha = 1;
   }
   function drawPop(c, t, dt) {
-    if (!S.pop && popQ.length) {
+    // 보스 등장 중에는 유닛 등장 알림을 꺼내지 않고(끝난 뒤 이어서 보여 준다), 이미 떠 있는 알림은 0.3초 안에 닫는다
+    const inIntro = g && g.phase === 'bossIntro';
+    if (inIntro && S.pop && !S.pop.vic && !S.pop.cut) { S.pop.cut = 1; S.pop.dur = Math.min(S.pop.dur, S.pop.t + 0.3); }
+    if (!S.pop && popQ.length && !inIntro) {
       S.pop = popQ.shift();
       const tier = S.pop.def ? S.pop.def.tier : 0;
       if (tier >= 9) Snd.play('legend'); else if (tier === 8) Snd.play('craft');

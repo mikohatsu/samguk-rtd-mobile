@@ -19,21 +19,86 @@
       const gr = x.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 1300);
       gr.addColorStop(0, a.ground); gr.addColorStop(1, a.sky);
       x.fillStyle = gr; x.fillRect(-OVER.x, -OVER.y, w, h);
-      // 바닥이 유닛·장판보다 튀지 않게 채도와 밝기를 낮추고(타일에 미리 구움) 경기장 색을 얇게 덮는다
-      const floor = tilePat(x, 'tex_' + a.motif, 1.2, 'saturate(0.45) brightness(0.62) contrast(0.85)');
+      // 바닥 무늬는 크게(2.0배) 깔고, 캔버스 필터(iOS Safari 지원 미확인) 대신 합성 모드로 누른다:
+      // 반투명으로 얹어 대비를 줄이고 → 경기장 색을 얇게 덮고 → 어두운 색을 곱해 밝기를 낮춘다
+      const floor = tilePat(x, 'tex_' + a.motif, 2.0);
       arenaCv._tex = !!floor;
       if (floor) {
-        x.fillStyle = floor; x.fillRect(-OVER.x, -OVER.y, w, h);
-        x.fillStyle = gr; x.globalAlpha = 0.4; x.fillRect(-OVER.x, -OVER.y, w, h); x.globalAlpha = 1;
+        x.globalAlpha = 0.5; x.fillStyle = floor; x.fillRect(-OVER.x, -OVER.y, w, h);
+        x.fillStyle = gr; x.globalAlpha = 0.35; x.fillRect(-OVER.x, -OVER.y, w, h);
+        x.globalAlpha = 1; x.globalCompositeOperation = 'multiply'; x.fillStyle = '#9a9288'; x.fillRect(-OVER.x, -OVER.y, w, h);
+        x.globalCompositeOperation = 'source-over';
       }
+      // 큰 명암 층: 무늬 몇 칸을 덮는 크기의 얼룩이라 같은 무늬가 같은 밝기로 반복되는 게 덜 보인다(판마다 같은 모양이 되게 고정 난수)
+      let sd = 0; for (let i = 0; i < a.motif.length; i++) sd = (sd * 31 + a.motif.charCodeAt(i)) >>> 0;
+      const rnd = () => ((sd = (sd * 1664525 + 1013904223) >>> 0) / 4294967296);
+      const blobs = Q.level === 'low' ? 5 : 9;
+      for (let i = 0; i < blobs; i++) {
+        const bx = ARENA.x0 + rnd() * (ARENA.x1 - ARENA.x0), by = ARENA.y0 + rnd() * (ARENA.y1 - ARENA.y0), r = 260 + rnd() * 280, dark = i % 3 !== 2;
+        const bg = x.createRadialGradient(bx, by, 0, bx, by, r);
+        bg.addColorStop(0, dark ? 'rgba(20,14,8,.22)' : 'rgba(255,236,200,.07)'); bg.addColorStop(1, dark ? 'rgba(20,14,8,0)' : 'rgba(255,236,200,0)');
+        x.fillStyle = bg; x.fillRect(bx - r, by - r, r * 2, r * 2);
+      }
+      // 무대 조명: 경기장 가운데를 밝게(screen)
+      const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2, sr = Math.max(ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0) * 0.62;
+      const lg = x.createRadialGradient(cx, cy, 0, cx, cy, sr);
+      lg.addColorStop(0, 'rgba(255,235,190,.16)'); lg.addColorStop(0.55, 'rgba(255,235,190,.06)'); lg.addColorStop(1, 'rgba(255,235,190,0)');
+      x.globalCompositeOperation = 'screen'; x.fillStyle = lg; x.fillRect(cx - sr, cy - sr, sr * 2, sr * 2);
+      x.globalCompositeOperation = 'source-over';
+      // 경기장 밖 어둡게: 바깥은 한 번에 덮고, 경계 32px은 그라디언트로 부드럽게 이어 준다
+      const E0 = 32, OUT = 'rgba(8,6,4,.58)', NONE = 'rgba(8,6,4,0)';
+      x.fillStyle = OUT; x.beginPath(); x.rect(-OVER.x, -OVER.y, w, h);
+      x.rect(ARENA.x0 - E0, ARENA.y0 - E0, ARENA.x1 - ARENA.x0 + E0 * 2, ARENA.y1 - ARENA.y0 + E0 * 2); x.fill('evenodd');
+      const edge = (x0, y0, x1, y1, rx, ry, rw, rh) => { const eg = x.createLinearGradient(x0, y0, x1, y1); eg.addColorStop(0, NONE); eg.addColorStop(1, OUT); x.fillStyle = eg; x.fillRect(rx, ry, rw, rh); };
+      edge(0, ARENA.y0, 0, ARENA.y0 - E0, ARENA.x0 - E0, ARENA.y0 - E0, ARENA.x1 - ARENA.x0 + E0 * 2, E0);
+      edge(0, ARENA.y1, 0, ARENA.y1 + E0, ARENA.x0 - E0, ARENA.y1, ARENA.x1 - ARENA.x0 + E0 * 2, E0);
+      edge(ARENA.x0, 0, ARENA.x0 - E0, 0, ARENA.x0 - E0, ARENA.y0, E0, ARENA.y1 - ARENA.y0);
+      edge(ARENA.x1, 0, ARENA.x1 + E0, 0, ARENA.x1, ARENA.y0, E0, ARENA.y1 - ARENA.y0);
     }
     blitBg(c, arenaCv, 'arena', arenaKey);
     return arenaCv._tex;
   }
+  // ---- 보스 등장 연출의 진행값(그림만. 판정·카메라 값은 건드리지 않는다). e = 지난 시간(초, 0~4.2) ----
+  // 0~0.5 레터박스(감속) / 0.2~1.6 보스 쪽으로 천천히 확대 / 1.6 내려찍기(흔들림·번쩍임·제목) / 3.6~4.2 원래대로
+  const INTRO_LEN = 4.2, INTRO_HIT = 1.6;
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  const outCubic = (v) => 1 - Math.pow(1 - clamp01(v), 3);
+  const inOutSine = (v) => 0.5 - Math.cos(Math.PI * clamp01(v)) / 2;
+  function introState() {
+    const f = g && g.fight;
+    if (!f || g.phase !== 'bossIntro') return null;
+    const e = Math.max(0, INTRO_LEN - f.introT), out = 1 - inOutSine((e - 3.6) / 0.6);
+    const push = inOutSine((e - 0.2) / (INTRO_HIT - 0.2));
+    // 내려찍는 순간 1.30 → 1.42로 튀었다가 1.34로 가라앉는다
+    const kick = e >= INTRO_HIT ? Math.exp(-(e - INTRO_HIT) * 9) * Math.sin(Math.min(Math.PI, (e - INTRO_HIT) * 14)) : 0;
+    const zoom = Q.level === 'low' ? 0.22 : 0.3;
+    return {
+      e, f, out,
+      z: 1 + (zoom * push + (e >= INTRO_HIT ? 0.04 * clamp01((e - INTRO_HIT) / 0.25) : 0) + kick * 0.12) * out,
+      m: 0.55 * push * out, // 확대 중심이 화면 가운데에서 보스 쪽으로 옮겨 가는 정도
+      big: 1 + 0.28 * push * out, // 보스 그림만 키운다(판정 크기는 그대로)
+      dark: 0.62 * outCubic((e - 0.1) / 1.2) * out,
+      lb: Math.min(1, outCubic(e / 0.5)) * (1 - outCubic((e - 3.7) / 0.5)),
+    };
+  }
+  // 09-render-camera에서 부른다: 펀치처럼 그리기 변환만 덧씌운다
+  function introCam(c, s) {
+    if (!s || s.z <= 1.0005 && s.m <= 0.0005) return;
+    const b = s.f.boss, px = W / 2 + (b.x - W / 2) * s.m, py = H / 2 + (b.y - 40 - H / 2) * s.m;
+    c.translate(W / 2, H / 2); c.scale(s.z, s.z); c.translate(-px, -py);
+  }
   function drawArena(t) {
-    const c = ctx, f = g.fight, a = f.def.arena, b = f.boss;
+    const c = ctx, f = g.fight, a = f.def.arena, b = f.boss, IS = introState();
     if (!arenaFloor(c, a)) drawMotif(c, a.motif, '#f0e0c0', t);
-    c.strokeStyle = f.def.fx + '66'; c.lineWidth = 3; c.strokeRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
+    // 경계선: 바깥 어두운 4px + 안쪽 보스색 1.5px. 등장 연출 중에는 숨기고 끝나기 0.5초 전부터 다시 보인다
+    const edgeA = IS ? clamp01((IS.e - 3.7) / 0.5) : 1;
+    if (edgeA > 0) {
+      const aw = ARENA.x1 - ARENA.x0, ah = ARENA.y1 - ARENA.y0;
+      c.save(); c.globalAlpha = edgeA;
+      c.strokeStyle = 'rgba(0,0,0,.45)'; c.lineWidth = 4; c.strokeRect(ARENA.x0 - 2, ARENA.y0 - 2, aw + 4, ah + 4);
+      c.strokeStyle = f.def.fx + '88'; c.lineWidth = 1.5; c.strokeRect(ARENA.x0, ARENA.y0, aw, ah);
+      c.restore();
+    }
     f.hazards.forEach((h) => drawHazard(c, h));
     drawRaid(c, t);
     // 보스(잠행 중에는 보이지 않는다. 분신 기믹에서는 그림자가 있는 쪽이 진짜)
@@ -41,8 +106,11 @@
     if (!M.hide) {
     if (b.charge) { c.fillStyle = f.def.fx + '55'; c.beginPath(); c.arc(b.x, b.y, 86, 0, 7); c.fill(); }
     if (M.ctr > 0) { c.save(); c.globalAlpha = 0.5 + Math.sin(t * 20) * 0.3; c.fillStyle = '#4aa8ff'; c.beginPath(); c.arc(b.x, b.y, 110, 0, 7); c.fill(); c.restore(); }
-    c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(b.x, b.y + 62, 62 * BOSS_S, 20 * BOSS_S, 0, 0, 7); c.fill();
-    c.strokeStyle = f.def.fx; c.lineWidth = 4; c.beginPath(); c.ellipse(b.x, b.y + 62, 62 * BOSS_S, 20 * BOSS_S, 0, 0, 7); c.stroke();
+    const BIG = IS ? IS.big : 1;
+    // 등장 연출: 보스 뒤 보스색 후광(낮음 화질은 생략)
+    if (IS && Q.level !== 'low' && IS.dark > 0.02) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.32 * IS.dark / 0.62; const gr2 = 420 * BIG; c.drawImage(glowSprite('w' + f.def.fx, [[0, f.def.fx + 'cc'], [0.6, f.def.fx + '44'], [1, f.def.fx + '00']]), b.x - gr2 / 2, b.y - 40 - gr2 / 2, gr2, gr2); c.restore(); }
+    c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(b.x, b.y + 62, 62 * BOSS_S * BIG, 20 * BOSS_S * BIG, 0, 0, 7); c.fill();
+    if (!IS) { c.strokeStyle = f.def.fx; c.lineWidth = 4; c.beginPath(); c.ellipse(b.x, b.y + 62, 62 * BOSS_S, 20 * BOSS_S, 0, 0, 7); c.stroke(); }
     // 게임은 1초에 30번 움직이고 화면은 그보다 자주 그려서, 프레임마다 '움직임'만 보면 걷기·서기가 번갈아 덜덜 떨린다.
     // 마지막으로 움직인 뒤 0.15초까지는 걷는 중으로 본다.
     const bdx = b.x - (S.bossX ?? b.x), bdy = b.y - (S.bossY ?? b.y), moved = Math.hypot(bdx, bdy) > 0.3;
@@ -71,8 +139,9 @@
     if (hr.wind > 0.85 && wind < 0.2) { hr.slam = 1; S.shake = Math.max(S.shake || 0, 0.55); }
     hr.wind = wind; hr.slam *= Math.pow(0.86, S.f60);
     const wk = Math.pow(wind, 1.5), push = hr.k * 16;
-    const bx = b.x + hr.ax * push, by = b.y + hr.ay * push * 0.6 - wk * 18 + hr.slam * 10 - 56 * (BOSS_S - 1);
-    const sy = (1 - hr.k * 0.08) * (1 + wk * 0.08) * (1 - hr.slam * 0.1), sc = 200 * BOSS_S * (1 + hr.k * 0.04 + wk * 0.06 + hr.slam * 0.05);
+    // BIG: 등장 연출 동안만 그림을 키운다(발 위치는 그대로 두고 위로 커진다)
+    const bx = b.x + hr.ax * push, by = b.y + hr.ay * push * 0.6 - wk * 18 + hr.slam * 10 - 56 * (BOSS_S * BIG - 1);
+    const sy = (1 - hr.k * 0.08) * (1 + wk * 0.08) * (1 - hr.slam * 0.1), sc = 200 * BOSS_S * BIG * (1 + hr.k * 0.04 + wk * 0.06 + hr.slam * 0.05);
     const bImg = Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, bd.v, bMove ? (Math.sin(t * 10) > 0 ? 1 : 2) : 0);
     // 힘 모으기: 붉은 기운이 몸에 맺힌다
     if (wk > 0.05) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = wk * 0.5; c.drawImage(glowSprite('w' + f.def.fx, [[0, f.def.fx + 'cc'], [0.6, f.def.fx + '44'], [1, f.def.fx + '00']]), bx - 130, by - 150, 260, 260); c.restore(); }
@@ -189,19 +258,69 @@
       if (M.objs.some((o) => o.k === 'clone')) { c.fillStyle = '#fff'; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.fillText(I.t('clones'), W / 2, 176); }
       if (S.pattern && S.pattern.t > 0) {
         S.pattern.t -= S.fdt;
-        c.fillStyle = f.def.fx; c.font = '400 38px "Black Han Sans", sans-serif'; c.globalAlpha = Math.min(1, S.pattern.t * 2); c.fillText(S.pattern.name, W / 2, 124); c.globalAlpha = 1;
+        // 기술 이름: 체력바 밑 고정 자리에 반투명 판을 깔아 제단·장판 그림과 겹쳐도 읽히게 한다
+        const pa = Math.min(1, S.pattern.t * 2);
+        c.font = '400 38px "Black Han Sans", sans-serif';
+        const pw = Math.min(900, c.measureText(S.pattern.name).width + 56);
+        c.globalAlpha = pa; c.fillStyle = 'rgba(16,11,8,.72)'; c.fillRect(W / 2 - pw / 2, 101, pw, 46);
+        c.fillStyle = f.def.fx; c.fillRect(W / 2 - pw / 2, 101, pw, 2); c.fillRect(W / 2 - pw / 2, 145, pw, 2);
+        c.lineWidth = 5; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineJoin = 'round'; c.strokeText(S.pattern.name, W / 2, 124);
+        c.fillText(S.pattern.name, W / 2, 124); c.globalAlpha = 1;
       }
       c.restore();
     }
-    if (g.phase === 'bossIntro') {
-      const p = 1 - f.introT / 4.2, bh = Math.min(120, p * 500);
-      c.fillStyle = '#000'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, OVER.y + bh); c.fillRect(-OVER.x, H - bh, W + OVER.x * 2, OVER.y + bh);
-      c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillStyle = '#e8dcc0'; c.font = '700 26px "Gowun Batang", serif'; c.fillText(I.t('roundPlace', { r: f.def.round, p: f.def.place }), W / 2, 60);
-      c.fillStyle = f.def.fx; c.font = '400 76px "Black Han Sans", sans-serif'; c.globalAlpha = Math.min(1, p * 3); c.fillText(f.def.title, W / 2, H - 230);
-      c.fillStyle = '#fff'; c.font = '400 42px "Black Han Sans", sans-serif'; c.fillText(f.def.name, W / 2, H - 160);
-      c.fillStyle = '#e8dcc0'; c.font = '400 23px "Gowun Batang", serif'; c.fillText(`“${f.def.line}”`, W / 2, H - 60); c.globalAlpha = 1;
+    // 등장 연출: 보스 주변만 밝게(바깥을 둥글게 누른다). 전장 좌표라 확대와 함께 움직인다
+    if (IS && IS.dark > 0.01) {
+      const r0 = 150 * IS.big, sg = c.createRadialGradient(b.x, b.y - 40, r0, b.x, b.y - 40, r0 + 520);
+      sg.addColorStop(0, 'rgba(6,4,3,0)'); sg.addColorStop(1, `rgba(6,4,3,${IS.dark.toFixed(3)})`);
+      c.fillStyle = sg; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
     }
+  }
+  // 등장 연출의 글씨·레터박스·번쩍임. 확대 변환을 풀고 화면 좌표로 그린다(09-render-camera에서 부른다)
+  function drawBossIntro(c) {
+    const s = introState();
+    if (!s) return;
+    const f = s.f, e = s.e, fo = 1 - clamp01((e - 3.7) / 0.4);
+    // 내려찍는 순간 한 번: 흔들림
+    if (e >= INTRO_HIT && S.introHit !== f) { S.introHit = f; S.shake = Math.max(S.shake || 0, Q.level === 'low' ? 0.55 : 0.8); }
+    const bh = 120 * s.lb;
+    c.save();
+    c.fillStyle = '#000'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, OVER.y + bh); c.fillRect(-OVER.x, H - bh, W + OVER.x * 2, OVER.y + bh);
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+    // 0.3초: 장소(위 레터박스)
+    const aPlace = clamp01((e - 0.3) / 0.35) * fo;
+    if (aPlace > 0) { c.globalAlpha = aPlace; c.fillStyle = '#e8dcc0'; c.font = '700 26px "Gowun Batang", serif'; c.fillText(I.t('roundPlace', { r: f.def.round, p: f.def.place }), W / 2, bh / 2); }
+    const TY = H - 275, NY = H - 196;
+    // 1.85초: 이름 뒤 먹 띠(신화 등장과 같은 띠)
+    const aBand = clamp01((e - 1.85) / 0.25) * fo;
+    if (aBand > 0) popBand(c, TY - 80, 245, aBand);
+    // 1.6초: 제목이 1.6배에서 1배로 박힌다
+    if (e >= INTRO_HIT) {
+      const k = clamp01((e - INTRO_HIT) / 0.18), sc = 1.6 - 0.6 * outCubic(k);
+      const sz = fitFont(c, f.def.title, 400, 84, '"Black Han Sans", sans-serif', W - 260), tw = c.measureText(f.def.title).width;
+      // 양옆 가는 줄이 가운데서 바깥으로 자란다
+      const lk = outCubic((e - INTRO_HIT - 0.05) / 0.4);
+      if (lk > 0) { c.globalAlpha = fo * 0.85; c.fillStyle = f.def.fx; const L = 220 * lk; c.fillRect(W / 2 - tw / 2 - 24 - L, TY - 1.5, L, 3); c.fillRect(W / 2 + tw / 2 + 24, TY - 1.5, L, 3); }
+      c.save(); c.translate(W / 2, TY); c.scale(sc, sc);
+      c.globalAlpha = (0.35 + 0.65 * k) * fo;
+      const tg = c.createLinearGradient(0, -sz / 2, 0, sz / 2); tg.addColorStop(0, '#fff6e0'); tg.addColorStop(0.45, f.def.fx); tg.addColorStop(1, f.def.fx);
+      c.lineWidth = 8; c.strokeStyle = 'rgba(14,9,6,.9)'; c.strokeText(f.def.title, 0, 0);
+      c.fillStyle = tg; c.fillText(f.def.title, 0, 0);
+      c.restore();
+    }
+    // 1.9초: 보스 이름(살짝 올라오며)
+    const aName = clamp01((e - 1.9) / 0.25) * fo;
+    if (aName > 0) {
+      c.globalAlpha = aName; fitFont(c, f.def.name, 400, 46, '"Black Han Sans", sans-serif', W - 300);
+      c.lineWidth = 6; c.strokeStyle = 'rgba(14,9,6,.85)'; const ny = NY + (1 - aName) * 14;
+      c.strokeText(f.def.name, W / 2, ny); c.fillStyle = '#fff'; c.fillText(f.def.name, W / 2, ny);
+    }
+    // 2.3초: 대사(아래 레터박스)
+    const aLine = clamp01((e - 2.3) / 0.35) * fo;
+    if (aLine > 0) { c.globalAlpha = aLine; c.fillStyle = '#e8dcc0'; fitFont(c, `“${f.def.line}”`, 400, 23, '"Gowun Batang", serif', W - 160); c.fillText(`“${f.def.line}”`, W / 2, H - bh / 2); }
+    // 1.6~1.75초: 흰 번쩍임
+    if (e >= INTRO_HIT && e < INTRO_HIT + 0.15) { c.globalAlpha = 0.35 * (1 - (e - INTRO_HIT) / 0.15); c.fillStyle = '#fff'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); }
+    c.restore();
   }
   const popQ = [];
   const POP_DUR = { 4: 2.4, 5: 2.4, 6: 3.2, 7: 3.8, 8: 3.4, 9: 6.6, 10: 7.2 };
