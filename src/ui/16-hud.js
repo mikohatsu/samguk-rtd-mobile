@@ -12,7 +12,7 @@
   const rIcon = (k) => (RAIL_PIC[k] ? `<img class="ri" alt="" src="gfx/ic_${k}.png?v=5">` : `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${RAIL_ICON[k]}"/></svg>`);
   function renderHud() {
     const vp = viewedPeer(), ln = vp && vp.state.ln;
-    const gold = ln ? ln.g : g.me.gold, lives = ln ? ln.l : g.lives, en = ln ? ln.n : g.enemyCount(), own = ln ? ln.u.length : g.units.filter((u) => u.owner === 0).length;
+    const gold = ln ? +ln.g || 0 : g.me.gold, lives = ln ? ln.l | 0 : g.lives, en = ln ? ln.n | 0 : g.enemyCount(), own = ln ? (ln.u || []).length : g.units.filter((u) => u.owner === 0).length;
     const tm = g.phase === 'wave' ? clock(Math.max(0, g.R.roundTime - g.roundT)) : g.phase === 'boss' && g.fight ? clock(Math.max(0, g.fight.limit - g.fight.t)) : '-';
     const cell = (l, v, cls) => `<div class="hs ${cls || ''}"><small>${l}</small><b>${v}</b></div>`;
     let h = `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${g.phase === 'boss' && !S.laneView ? '' : cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '') + cell(t('troops'), own)}</div>`;
@@ -26,10 +26,10 @@
       const ros = net.roster(), lim = g.limit;
       const rows = ros.map((pp) => {
         const st = pp.state || {}, ln = pp.me ? null : st.ln;
-        const en = pp.me ? g.enemyCount() : ln ? ln.n : st.enemies, lv = pp.me ? g.lives : ln ? ln.l : null;
+        const en = pp.me ? g.enemyCount() : ln ? ln.n | 0 : st.enemies == null ? null : st.enemies | 0, lv = pp.me ? g.lives : ln ? ln.l | 0 : null; // 남이 보낸 값은 숫자로만 쓴다
         const d = defOf[st.ic] || defOf.cav, rk = /(\d+)$/.exec(st.gr || '') ? +/(\d+)$/.exec(st.gr)[1] : null;
         const on = pp.me ? !S.view : S.view === pp.id;
-        return `<button class="pm ${on ? 'on' : ''} ${st.away ? 'away' : ''}" data-act="viewPeer" data-arg="${pp.me ? 'me' : pp.id}" type="button"><img class="pi" alt="" src="${Art.portrait(d)}"><span class="pn">${rk != null ? `<img class="rkm" alt="" src="gfx/rank_${rk}.png" onerror="this.remove()">` : ''}${esc(st.name || '?')}</span><span class="ps">${t('front')} ${en == null ? '-' : en}/${lim} · ${t('lives')} ${lv == null ? '-' : lv}</span></button>`;
+        return `<button class="pm ${on ? 'on' : ''} ${st.away ? 'away' : ''}" data-act="viewPeer" data-arg="${pp.me ? 'me' : esc(pp.id)}" type="button"><img class="pi" alt="" src="${Art.portrait(d)}"><span class="pn">${rk != null ? `<img class="rkm" alt="" src="gfx/rank_${rk}.png" onerror="this.remove()">` : ''}${esc(st.name || '?')}</span><span class="ps">${t('front')} ${en == null ? '-' : en}/${lim} · ${t('lives')} ${lv == null ? '-' : lv}</span></button>`;
       }).join('');
       if (ros.length > 1) h += `<div class="party">${rows}</div>`;
     }

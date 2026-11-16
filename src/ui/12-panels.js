@@ -103,7 +103,7 @@
     const pane = $('pane'), top = pane.scrollTop;
     if (pane.dataset.html !== h) { pane.innerHTML = h; pane.dataset.html = h; pane.scrollTop = top; }
     let a = '';
-    if (net) a = net.roster().map((r) => `<div><span>${esc(r.state.name || '')}${r.me ? I.t('meTag') : ''}</span><span>${I.t('alliesLine', { u: r.state.units || 0, e: r.state.enemies || 0 })}</span></div>`).join('');
+    if (net) a = net.roster().map((r) => `<div><span>${esc(r.state.name || '')}${r.me ? I.t('meTag') : ''}</span><span>${I.t('alliesLine', { u: r.state.units | 0, e: r.state.enemies | 0 })}</span></div>`).join('');
     $('allies').innerHTML = a; $('allies').hidden = !a;
   }
   // 보스전 역할 표시(7성 이상)

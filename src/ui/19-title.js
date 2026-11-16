@@ -98,7 +98,7 @@
       }).join('');
       const hc = lobby.isHost() ? { diff: cfg.diff, mutLv: +cfg.mutLv, muts: cfg.muts } : hostCfg;
       const dn = hc ? (T.difficulties.find((d) => d.id === hc.diff) || {}).name : '';
-      $('lbcfg').innerHTML = hc ? `${t('hostCfg')}: <b>${esc(dn || '')}${hc.mutLv ? ` +${hc.mutLv}` : ''}</b>${!lobby.isHost() && (hc.muts || []).length ? `<div style="display:grid;gap:4px;margin-top:5px">${hc.muts.map(mutCard).join('')}</div>` : ''}` : '';
+      $('lbcfg').innerHTML = hc ? `${t('hostCfg')}: <b>${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>${!lobby.isHost() && (hc.muts || []).length ? `<div style="display:grid;gap:4px;margin-top:5px">${hc.muts.map(mutCard).join('')}</div>` : ''}` : '';
     };
     const setErr = (e) => { const el = $('acc-err'); if (el) el.textContent = e ? errText(e) : ''; };
     const signedIn = (r) => { ACC.token = r.token; ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); };

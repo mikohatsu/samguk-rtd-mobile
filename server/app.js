@@ -129,7 +129,9 @@ function api(req, res, url, query) {
   handle(req, res, url, query).catch((e) => { console.error('api', url, e); if (!res.headersSent) json(res, 500, { error: 'server' }); });
 }
 async function handle(req, res, url, query) {
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  // 앞단 프록시(같은 서버의 Caddy)를 거친 연결일 때만 X-Forwarded-For의 마지막 값(프록시가 붙인 값)을 믿는다
+  const ra = req.socket.remoteAddress || '', viaProxy = /^(::ffff:)?127\.|^::1$/.test(ra);
+  const ip = viaProxy ? (String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || ra) : ra;
   if (req.method === 'OPTIONS') return json(res, 204, {});
   if (url === '/api/rank' && req.method === 'GET') {
     // type=level | clear(&diff=) | imm(&id=)
@@ -366,6 +368,22 @@ wss.on('connection', (ws, req) => {
   store.userByToken(q.get('t') || '').then((u) => { ws.off('message', keep); if (q.get('lobby')) joinLobby(ws, u, early); else joinRoom(ws, q, u, early); })
     .catch(() => { send(ws, { k: 'error', code: 'auth' }); ws.close(); });
 });
+// 방 안에서 남에게 전달되는 값: 화면에 그대로 들어가도 태그가 되지 않게 < > " ` 를 빼고, 모양(깊이·개수·열쇠 이름)을 묶는다.
+// cap: 글자 수 상한(0이면 자르지 않는다)
+function cleanRelay(v, cap, depth) {
+  depth = depth || 0;
+  if (v == null || typeof v === 'boolean') return v;
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  if (typeof v === 'string') { const s = v.replace(/[<>"`]/g, ''); return cap ? s.slice(0, cap) : s; }
+  if (depth >= 6) return null;
+  if (Array.isArray(v)) return v.slice(0, 400).map((x) => cleanRelay(x, cap, depth + 1));
+  if (typeof v === 'object') {
+    const o = {};
+    Object.keys(v).slice(0, 80).forEach((k) => { if (/^[A-Za-z0-9_$-]{1,24}$/.test(k) && k !== '__proto__' && k !== 'constructor' && k !== 'prototype') o[k] = cleanRelay(v[k], cap, depth + 1); });
+    return o;
+  }
+  return null;
+}
 function joinRoom(ws, q, u, early) {
   const code = (q.get('room') || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
   if (!u) { send(ws, { k: 'error', code: 'auth' }); ws.close(); return; }
@@ -395,19 +413,22 @@ function joinRoom(ws, q, u, early) {
   const onMsg = (raw) => {
     let m;
     try { m = JSON.parse(raw); } catch (e) { return; }
+    if (!m || typeof m !== 'object' || Array.isArray(m)) return;
     if (m.k === 'pres' && m.p && typeof m.p === 'object') {
-      delete m.p.name; delete m.p.lv; delete m.p.gr; delete m.p.ic; delete m.p.away;
-      Object.assign(me.state, m.p); broadcast(room, id, { k: 'pres', id, p: m.p });
+      const p = cleanRelay(m.p, 64) || {};
+      delete p.name; delete p.lv; delete p.gr; delete p.ic; delete p.away;
+      Object.assign(me.state, p); broadcast(room, id, { k: 'pres', id, p });
     } else if (m.k === 'msg' && m.t === 'chat') {
       // 채팅: 도배·광고는 막고(보낸 사람에게만 까닭을 알린다), 욕설은 가려서 보낸다. 보낸 사람에게도 가린 글을 돌려준다.
       const c = CHAT.check(u.id, m.d && m.d.x);
       if (!c.ok) { if (c.why !== 'empty') send(ws, { k: 'msg', from: id, t: 'chatno', d: { why: c.why, s: c.s || 0 }, self: 1 }); return; }
       const out = { k: 'msg', from: id, t: 'chat', d: { x: c.text, n: shownNick(u.nick) } };
       broadcast(room, id, out); send(ws, Object.assign({}, out, { self: 1 }));
-    } else if (m.k === 'msg' && typeof m.t === 'string') broadcast(room, id, { k: 'msg', from: id, t: m.t, d: m.d });
+    } else if (m.k === 'msg' && typeof m.t === 'string') broadcast(room, id, { k: 'msg', from: id, t: m.t.slice(0, 24), d: cleanRelay(m.d, 0) });
   };
-  ws.on('message', onMsg);
-  (early || []).forEach(onMsg);
+  const safeMsg = (raw) => { try { onMsg(raw); } catch (e) { console.error('ws', e && e.message); } };
+  ws.on('message', safeMsg);
+  (early || []).forEach(safeMsg);
   ws.on('close', () => {
     if (me.ws !== ws) return; // 새 연결로 바뀐 뒤 옛 연결이 닫힌 것
     me.ws = null; me.awayT = Date.now(); me.state.away = 1;
@@ -446,6 +467,7 @@ function joinLobby(ws, u, early) {
   const onMsg = (raw) => {
     let m;
     try { m = JSON.parse(raw); } catch (e) { return; }
+    if (!m || typeof m !== 'object' || Array.isArray(m)) return;
     if (m.k === 'ch') { if (m.n) enter(m.n | 0); else info(); }
     else if (m.k === 'say') {
       const c = CHAT.check(u.id, m.x);
@@ -454,8 +476,9 @@ function joinLobby(ws, u, early) {
       ch.forEach((p) => send(p.ws, { k: 'say', id, n: me.nick, x: c.text, self: p === me ? 1 : 0 }));
     }
   };
-  ws.on('message', onMsg);
-  (early || []).forEach(onMsg);
+  const safeMsg = (raw) => { try { onMsg(raw); } catch (e) { console.error('ws', e && e.message); } };
+  ws.on('message', safeMsg);
+  (early || []).forEach(safeMsg);
   ws.on('close', () => { me.leave(); if (lobbyOf.get(u.id) === me) lobbyOf.delete(u.id); });
 }
 // 채널 인원이 바뀌면 5초마다 로비에 있는 모두에게 알린다
@@ -486,5 +509,7 @@ async function start(opts = {}) {
   console.log(`삼국 랜덤 디펜스 온라인 서버(${store.kind}): http://localhost:${server.address().port}`);
   return { server, store };
 }
+// 처리하지 못한 오류 하나로 서버 전체(모든 방)가 내려가지 않게 기록만 남긴다
+if (require.main === module) { process.on('uncaughtException', (e) => console.error('uncaught', e)); process.on('unhandledRejection', (e) => console.error('unhandled', e)); }
 if (require.main === module) start().catch((e) => { console.error(e); process.exit(1); });
 module.exports = { start };
