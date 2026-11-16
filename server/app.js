@@ -20,7 +20,35 @@ const shutdown = () => { (store ? store.close() : Promise.resolve()).finally(() 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-const hashPw = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
+// 비밀값 해시: 비동기 scrypt(끝날 때까지 서버 전체를 세우지 않는다). 입력은 128자에서 자른다(비밀번호는 64자, 게스트 비밀값은 48자까지라 기존 해시와 같다).
+// 한꺼번에 2개까지만 돌리고 나머지는 줄을 세운다(작업 스레드를 다 차지해 파일 읽기까지 밀리지 않게). 줄이 64개를 넘으면 503.
+const scryptAsync = require('util').promisify(crypto.scrypt);
+const PW_MAX = 128, HASH_PAR = 2, HASH_QUEUE = 64;
+let hashBusy = 0; const hashWait = [];
+async function hashPw(pw, salt) {
+  if (hashBusy >= HASH_PAR) {
+    if (hashWait.length >= HASH_QUEUE) throw Object.assign(new Error('busy'), { busy: true });
+    await new Promise((r) => hashWait.push(r)); // 앞사람이 자리를 넘겨준다(hashBusy는 그대로)
+  } else hashBusy++;
+  try { return (await scryptAsync(String(pw).slice(0, PW_MAX), String(salt || ''), 32)).toString('hex'); }
+  finally { const next = hashWait.shift(); if (next) next(); else hashBusy--; }
+}
+// 해시 비교는 걸리는 시간이 같게
+const sameHex = (a, b) => { const x = Buffer.from(String(a || ''), 'hex'), y = Buffer.from(String(b || ''), 'hex'); return x.length > 0 && x.length === y.length && crypto.timingSafeEqual(x, y); };
+// 기록을 분당 max줄까지만 남긴다(공격자가 기록을 끝없이 늘리지 못하게). 넘친 수는 다음 분에 한 줄로 적는다.
+const logHits = {};
+function warnSome(key, max, text) {
+  const now = Date.now(), h = logHits[key] || (logHits[key] = { n: 0, skip: 0, t: now });
+  if (now - h.t > 60000) { if (h.skip) console.warn(`[sec] ${key}: 앞선 1분 동안 ${h.skip}건을 더 적지 않았다`); h.n = 0; h.skip = 0; h.t = now; }
+  if (++h.n > max) { h.skip++; return; }
+  console.warn(`[sec] ${key} ${text}`);
+}
+// 요청한 주소: 앞단 프록시(같은 서버의 Caddy)를 거친 연결일 때만 X-Forwarded-For의 마지막 값(프록시가 붙인 값)을 믿는다
+function ipOf(req) {
+  const ra = req.socket.remoteAddress || '', viaProxy = /^(::ffff:)?127\.|^::1$/.test(ra);
+  return viaProxy ? (String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || ra) : ra;
+}
+const termsOf = (b) => Math.min(1000000, Math.max(1, b.termsVer | 0)) || 1;
 // 등급: 경험치로 레벨, 레벨 구간으로 계급
 // 레벨은 51(군주)에서 멈춘다. 경험치 10만(대략 1000판)이면 군주.
 const MAX_LV = 51;
@@ -75,9 +103,28 @@ async function verifyIdToken(name, tok) {
 // 판 보고를 검사해 전적 한 줄로 만든다(숫자만, 크기 제한). 저장은 store가 한다.
 function histOf(b, online) {
   const diff = DIFFS.includes(b.diff) ? b.diff : 'easy', mut = Math.min(5, Math.max(0, b.mutLv | 0));
-  const myth = {}; if (b.myth && typeof b.myth === 'object') Object.keys(b.myth).slice(0, 30).forEach((id) => { if (/^[a-z]{2,16}$/.test(id)) myth[id] = Math.min(50, b.myth[id] | 0); });
-  const st = {}; if (b.st && typeof b.st === 'object') ['kills', 'midKill', 'midMiss', 'lifeLost', 'goldIn', 'goldUp', 'goldHire', 'combines', 'crafts', 'best', 'tickets', 'chests', 'bosses', 'bossWins', 'fast'].forEach((k) => { if (typeof b.st[k] === 'number') st[k] = Math.round(b.st[k]); });
-  return { at: Date.now(), diff, mut, round: Math.min(200, Math.max(0, b.round | 0)), win: !!b.win, time: Math.max(0, Math.round(+b.time || 0)), online: !!online, mode: String(b.mode || '').slice(0, 8), myth, st };
+  const myth = {}; if (b.myth && typeof b.myth === 'object') Object.keys(b.myth).slice(0, 30).forEach((id) => { if (/^[a-z]{2,16}$/.test(id)) myth[id] = Math.min(50, Math.max(0, b.myth[id] | 0)); });
+  // 숫자는 DB 정수 범위 안으로 묶는다(범위를 넘는 값으로 500 오류가 나지 않게)
+  const st = {}; if (b.st && typeof b.st === 'object') ['kills', 'midKill', 'midMiss', 'lifeLost', 'goldIn', 'goldUp', 'goldHire', 'combines', 'crafts', 'best', 'tickets', 'chests', 'bosses', 'bossWins', 'fast'].forEach((k) => { if (typeof b.st[k] === 'number' && isFinite(b.st[k])) st[k] = Math.max(-1e9, Math.min(1e9, Math.round(b.st[k]))); });
+  return { at: Date.now(), diff, mut, round: Math.min(200, Math.max(0, b.round | 0)), win: !!b.win, time: timeOf(b), online: !!online, mode: String(b.mode || '').slice(0, 8), myth, st };
+}
+// 판 시간(초): 0 ~ 하루
+const timeOf = (b) => Math.min(86400, Math.max(0, Math.round(+b.time || 0)));
+// 결과 보고의 시간이 라운드 수에 비해 불가능하게 짧은지. 라인 라운드는 45초 고정, 배속 최대 3 → 벽시계로도 라운드당 약 15초가 바닥.
+// 정상 판이 걸리지 않게 그 절반(7초)을 쓴다. round에 닿으려면 그 앞의 (round - 1)개 라운드를 지나야 한다.
+const MIN_ROUND_SEC = 7;
+const tooFast = (round, time) => time > 0 && time < (round - 1) * MIN_ROUND_SEC;
+// 순위 응답을 30초 동안 기억한다(로그인 없이 부르는 주소라, 부를 때마다 DB 질의 수백 개가 나가지 않게).
+// 같은 열쇠를 동시에 여러 번 불러도 질의는 한 번만 나간다(약속을 기억한다).
+const RANK_MS = 30000;
+const rankCache = new Map(), immCache = new Map(); // 불멸 순위는 열쇠(장수 id)가 많아 따로 둔다: 넘쳐서 비워도 다른 순위 캐시는 남는다
+function cached(map, key, make) {
+  const now = Date.now(), c = map.get(key);
+  if (c && now - c.at < RANK_MS) return c.v;
+  if (map.size >= 100) map.clear();
+  const v = make(); map.set(key, { at: now, v });
+  v.catch(() => { const x = map.get(key); if (x && x.v === v) map.delete(key); }); // 실패는 기억하지 않는다
+  return v;
 }
 // 빠른 대전: 같은 난이도를 고른 사람끼리 최대 4명 묶는다. 4명이 모이거나, 2명 이상이 20초 넘게 기다리면 방을 연다.
 const MATCH_MAX = 4, MATCH_WAIT = 20000;
@@ -91,6 +138,12 @@ function tryMatch(diff) {
     group.forEach((e, i) => (matched[e.uid] = { room, size: group.length, order: i, diff, at: now }));
   }
 }
+// 묶인 결과는 2분 뒤 지운다(기기는 2초마다 확인하므로 그 안에 받아 간다). 확인이 끊긴 대기자도 같이 치운다.
+setInterval(() => {
+  const now = Date.now();
+  Object.keys(matched).forEach((uid) => { if (now - matched[uid].at > 120000) delete matched[uid]; });
+  Object.keys(queues).forEach((k) => { queues[k] = queues[k].filter((e) => now - e.seen < 8000); if (!queues[k].length) delete queues[k]; });
+}, 30000);
 const pub = (u) => ({ nick: shownNick(u.nick), icon: iconOf(u), level: levelOf(u.xp), grade: gradeOf(u) });
 // 금칙어·광고·도배 검사는 chat.js에 있다(채팅은 가리거나 막고, 닉네임은 거절).
 const CHAT = require('./chat');
@@ -126,29 +179,35 @@ function json(res, code, obj) {
 }
 const ID_RE = /^[a-z0-9_]{4,16}$/;
 function api(req, res, url, query) {
-  handle(req, res, url, query).catch((e) => { console.error('api', url, e); if (!res.headersSent) json(res, 500, { error: 'server' }); });
+  handle(req, res, url, query).catch((e) => {
+    if (e && e.busy) { if (!res.headersSent) json(res, 503, { error: 'busy' }); return; }
+    console.error('api', url, e); if (!res.headersSent) json(res, 500, { error: 'server' });
+  });
 }
 async function handle(req, res, url, query) {
-  // 앞단 프록시(같은 서버의 Caddy)를 거친 연결일 때만 X-Forwarded-For의 마지막 값(프록시가 붙인 값)을 믿는다
-  const ra = req.socket.remoteAddress || '', viaProxy = /^(::ffff:)?127\.|^::1$/.test(ra);
-  const ip = viaProxy ? (String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || ra) : ra;
+  const ip = ipOf(req);
   if (req.method === 'OPTIONS') return json(res, 204, {});
-  if (url === '/api/rank' && req.method === 'GET') {
+  if ((url === '/api/rank' || url === '/api/ranking') && req.method === 'GET') {
+    // 로그인 없이 부르는 주소: 주소당 분당 120번, 응답은 30초 동안 기억한 것을 준다
+    if (limited(ip, 'rank', 120, 60000)) return json(res, 429, { error: 'slow_down' });
+    // 옛 화면용(시작 화면의 순위 20줄): 닉네임·아이콘·레벨·계급만 내보낸다(계정 ID·재화·보유 목록은 내보내지 않는다)
+    if (url === '/api/ranking') return json(res, 200, { top: await cached(rankCache, 'top', async () => (await store.rankLevel(50)).map(pub)) });
     // type=level | clear(&diff=) | imm(&id=)
     const q = new URLSearchParams(query || ''), type = q.get('type');
     if (type === 'clear') {
-      const list = (await store.rankClear(String(q.get('diff') || ''), 30)).map((c) => ({ time: c.time, mut: c.mut, at: c.at, members: c.members.map((m) => (m.user ? pub(m.user) : { nick: shownNick(m.nick), icon: m.icon })) }));
+      const diff = String(q.get('diff') || '');
+      if (!DIFFS.includes(diff)) return json(res, 200, { list: [] });
+      const list = await cached(rankCache, 'clear:' + diff, async () => (await store.rankClear(diff, 30)).map((c) => ({ time: c.time, mut: c.mut, at: c.at, members: c.members.map((m) => (m.user ? pub(m.user) : { nick: shownNick(m.nick), icon: m.icon })) })));
       return json(res, 200, { list });
     }
     if (type === 'imm') {
-      const list = (await store.rankImm(String(q.get('id') || ''), 30)).map((x) => Object.assign(pub(x.user), { n: x.n }));
+      const id = String(q.get('id') || '');
+      if (!/^[a-z]{2,16}$/.test(id)) return json(res, 200, { list: [] });
+      const list = await cached(immCache, id, async () => (await store.rankImm(id, 30)).map((x) => Object.assign(pub(x.user), { n: x.n })));
       return json(res, 200, { list });
     }
-    const list = (await store.rankLevel(50)).map((u) => Object.assign(pub(u), { xp: u.xp, games: u.games }));
+    const list = await cached(rankCache, 'level', async () => (await store.rankLevel(50)).map((u) => Object.assign(pub(u), { xp: u.xp, games: u.games })));
     return json(res, 200, { list });
-  }
-  if (url === '/api/ranking' && req.method === 'GET') {
-    return json(res, 200, { top: (await store.rankLevel(50)).map(profile) });
   }
   if (url === '/api/me' && req.method === 'GET') {
     const u = await userOf(req);
@@ -164,13 +223,13 @@ async function handle(req, res, url, query) {
     const nick = String(b.nick || '').trim().slice(0, 12);
     if (!nickOk(nick)) return json(res, 400, { error: 'bad_nick' });
     const secret = crypto.randomBytes(24).toString('hex'), salt = crypto.randomBytes(16).toString('hex');
-    const u = await store.createUser('g', { nick, gsalt: salt, gsec: hashPw(secret, salt), agreed: { terms: b.termsVer || 1, at: Date.now() } });
+    const u = await store.createUser('g', { nick, gsalt: salt, gsec: await hashPw(secret, salt), agreed: { terms: termsOf(b), at: Date.now() } });
     return json(res, 200, { token: await issue(u), me: profile(u), guest: { id: u.id, secret } });
   }
   if (url === '/api/guest/login') {
     if (limited(ip, 'glogin', 30, 600000)) return json(res, 429, { error: 'slow_down' });
-    const u = await store.getUser(String(b.id || ''));
-    if (!u || !u.gsec || hashPw(String(b.secret || ''), u.gsalt) !== u.gsec) return json(res, 401, { error: 'wrong' });
+    const u = await store.getUser(String(b.id || '').slice(0, 32));
+    if (!u || !u.gsec || !sameHex(await hashPw(String(b.secret || ''), u.gsalt), u.gsec)) return json(res, 401, { error: 'wrong' });
     return json(res, 200, { token: await issue(u), me: profile(u) });
   }
   // Apple·Google: 이미 연결된 계정이면 로그인. 처음이면 새 계정(약관 동의 필요).
@@ -191,7 +250,7 @@ async function handle(req, res, url, query) {
     if (b.agree !== true) return json(res, 400, { error: 'need_agree' });
     const nick = String(b.nick || '').trim().slice(0, 12);
     if (!nickOk(nick)) return json(res, 400, { error: 'bad_nick' });
-    const u = await store.createUser(prov[0], { nick, prov, sub, agreed: { terms: b.termsVer || 1, at: Date.now() } });
+    const u = await store.createUser(prov[0], { nick, prov, sub, agreed: { terms: termsOf(b), at: Date.now() } });
     return json(res, 200, { token: await issue(u), me: profile(u), created: true });
   }
   if (url === '/api/register') {
@@ -203,13 +262,13 @@ async function handle(req, res, url, query) {
     if (b.agree !== true) return json(res, 400, { error: 'need_agree' });
     if (await store.getUser(id)) return json(res, 409, { error: 'taken' });
     const salt = crypto.randomBytes(16).toString('hex');
-    const u = await store.createUser('', { id, nick, salt, pw: hashPw(pw, salt), agreed: { terms: b.termsVer || 1, at: Date.now() } });
+    const u = await store.createUser('', { id, nick, salt, pw: await hashPw(pw, salt), agreed: { terms: termsOf(b), at: Date.now() } });
     return json(res, 200, { token: await issue(u), me: profile(u) });
   }
   if (url === '/api/login') {
     if (limited(ip, 'login', 20, 600000)) return json(res, 429, { error: 'slow_down' });
-    const u = await store.getUser(String(b.id || '').toLowerCase());
-    if (!u || !u.pw || hashPw(String(b.password || ''), u.salt) !== u.pw) return json(res, 401, { error: 'wrong' });
+    const u = await store.getUser(String(b.id || '').slice(0, 32).toLowerCase());
+    if (!u || !u.pw || !sameHex(await hashPw(String(b.password || ''), u.salt), u.pw)) return json(res, 401, { error: 'wrong' });
     return json(res, 200, { token: await issue(u), me: profile(u) });
   }
   const u = await userOf(req);
@@ -224,6 +283,8 @@ async function handle(req, res, url, query) {
     return json(res, 200, { me: profile(await store.addHistory(u.id, histOf(b, false))) });
   }
   if (url === '/api/hist') return json(res, 200, { hist: await store.history(u.id), prog: progOf(u) });
+  // 빠른 대전 주소는 계정당 분당 90번까지(기기는 2초마다 확인한다 = 분당 30번)
+  if (url.startsWith('/api/match/') && limited('u:' + u.id, 'match', 90, 60000)) return json(res, 429, { error: 'slow_down' });
   if (url === '/api/match/join') {
     const diff = DIFFS.includes(b.diff) ? b.diff : null, di = DIFFS.indexOf(diff), pg = progOf(u);
     if (!diff || di > pg.clr + 1) return json(res, 400, { error: 'locked' });
@@ -284,23 +345,31 @@ async function handle(req, res, url, query) {
   }
   if (url === '/api/result') {
     // 판 하나에 한 번만: 같은 방·판 열쇠로 두 번 보내면 무시
-    if (limited(ip + u.id, 'res', 6, 600000)) return json(res, 429, { error: 'slow_down' });
+    if (limited('u:' + u.id, 'res', 6, 600000)) return json(res, 429, { error: 'slow_down' }); // 계정 기준(주소를 바꿔도 같은 한도)
     const key = String(b.key || '').slice(0, 40);
     if (!key) return json(res, 200, { me: profile(u), gained: 0 });
     const gained = xpFor(b), coins = Math.round(gained / 5) + (b.win ? 20 : 0); // 동전: 경험치의 1/5 + 클리어 20
     // 불멸 장수를 이번 판에 몇 번 소환했는지(장수별로 쌓는다)
     const imm = {}; if (b.imm && typeof b.imm === 'object') Object.keys(b.imm).slice(0, 12).forEach((id) => { const n = Math.min(20, b.imm[id] | 0); if (/^[a-z]{2,16}$/.test(id) && n > 0) imm[id] = n; });
     // 클리어 시간: 같은 판(같은 열쇠)을 마친 파티원을 한 줄에 모은다
-    const diff = String(b.diff || ''), time = Math.round(+b.time || 0);
+    const diff = String(b.diff || ''), time = timeOf(b), round = Math.min(200, Math.max(0, b.round | 0));
+    // 시간이 라운드 수에 비해 불가능하게 짧은 보고는 아무것도 주지 않는다(경험치·동전·순위·전적). 까닭은 알려 주지 않고 기록만 남긴다.
+    // 시간이 없는 보고는 전처럼 클리어 순위에서만 뺀다(아래 time > 60).
+    if (tooFast(round, time)) {
+      warnSome('result_fast', 20, `uid=${u.id} round=${round} time=${time} diff=${diff.slice(0, 12)} win=${!!b.win}`);
+      return json(res, 200, { me: profile(u), gained: 0 });
+    }
     const clear = b.win && DIFF_MUL[diff] && time > 60 ? { diff, party: String(b.party || key).slice(0, 40), time, mut: Math.min(5, Math.max(0, b.mutLv | 0)) } : null;
-    const done = await store.recordResult(u.id, { key, xp: gained, coins, win: !!b.win, round: Math.min(200, Math.max(0, b.round | 0)), hist: histOf(b, true), imm, clear });
+    const done = await store.recordResult(u.id, { key, xp: gained, coins, win: !!b.win, round, hist: histOf(b, true), imm, clear });
     if (!done) return json(res, 200, { me: profile(u), gained: 0 });
     return json(res, 200, { me: profile(await store.getUser(u.id)), gained, coins });
   }
   if (url === '/api/delete') {
     // 탈퇴: 비밀번호 계정은 비밀번호를, Apple·Google·게스트는 '삭제' 확인 문자를 받고 계정·연결·토큰·기록을 모두 지운다
-    if (u.pw ? hashPw(String(b.password || ''), u.salt) !== u.pw : b.confirm !== 'DELETE') return json(res, 401, { error: 'wrong' });
+    if (limited('u:' + u.id, 'del', 10, 600000)) return json(res, 429, { error: 'slow_down' });
+    if (u.pw ? !sameHex(await hashPw(String(b.password || ''), u.salt), u.pw) : b.confirm !== 'DELETE') return json(res, 401, { error: 'wrong' });
     await store.deleteUser(u.id);
+    dropConns(u.id); // 열려 있는 방·로비 연결도 닫는다
     return json(res, 200, { ok: true });
   }
   return json(res, 404, { error: 'not_found' });
@@ -359,12 +428,57 @@ let nextId = 1;
 const send = (ws, msg) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); };
 const broadcast = (room, from, msg) => room.forEach((p, id) => { if (id !== from) send(p.ws, msg); });
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_MESSAGE });
+// ---------- WebSocket 한도 ----------
+// 연결당: 초당 60개(잠깐 120개까지), 초당 128KB(잠깐 256KB까지). 정상 기기는 위치 초당 10~15번, 다 합쳐 초당 30번 안쪽이다.
+// 넘친 메시지는 그것만 버린다(연결은 끊지 않는다).
+const WS_RATE = 60, WS_BURST = 120, WS_BYTES = 128 * 1024, WS_BYTES_BURST = 256 * 1024;
+// 주소당 동시 연결(한 사람이 방 1 + 로비 1을 쓴다. 통신사·공유기 뒤에서는 여러 사람이 한 주소를 쓰므로 넉넉히), 주소당 접속 시도, 인증 전 모아 두는 메시지 수
+const WS_PER_IP = +process.env.WS_PER_IP || 40, WS_TRIES_MIN = 240, WS_EARLY = 20;
+// 방 개수, 자리 하나의 상태 크기(열쇠 수·글자 수)
+const MAX_ROOMS = 2000, STATE_KEYS = 64, STATE_BYTES = 32 * 1024;
+const ipConns = new Map(); // 주소 → 열려 있는 연결 수
+function bucketOf() {
+  const b = { n: WS_BURST, b: WS_BYTES_BURST, t: Date.now() };
+  return (len) => {
+    const now = Date.now(), dt = Math.max(0, now - b.t) / 1000; b.t = now;
+    b.n = Math.min(WS_BURST, b.n + dt * WS_RATE); b.b = Math.min(WS_BYTES_BURST, b.b + dt * WS_BYTES);
+    if (b.n < 1 || b.b < len) return false; // 버리는 메시지는 통에서 빼지 않는다(계속 넘치게 보내도 한도만큼은 통과한다)
+    b.n -= 1; b.b -= len; return true;
+  };
+}
+// 방장 전용 신호. 서버가 보는 방장 = 연결이 살아 있는 사람 가운데 자리 번호가 가장 앞인 사람.
+// 지금은 방장이 아닌 사람이 보내도 막지 않고 기록만 한다(기기가 보는 방장과 잠깐 어긋날 수 있어, 기록을 보고 나서 막는다).
+const HOST_ONLY = new Set(['phase', 'clk', 'bs', 'hz', 'start', 'pattern']);
+const seatNo = (pid) => +String(pid).slice(1);
+function hostOf(room) { let h = null; room.forEach((p, pid) => { if (p.ws && p.ws.readyState === 1 && (h === null || seatNo(pid) < seatNo(h))) h = pid; }); return h; }
+// 계정당 방 자리 하나.
+// 다른 방에 새로 들어오면 그 계정의 '자리 비움' 자리는 바로 비운다. 연결이 살아 있는 자리는 서버가 끊지 않는다:
+// 기기(net.js)는 끊긴 방에 1.5초 뒤 다시 붙으므로, 서버가 끊으면 두 방을 오가며 서로를 밀어내는 일이 생긴다.
+// 대신 살아 있던 옛 자리는 닫히는 순간 바로 비우고(아래 close), 살아 있는 다른 방 자리가 이미 2개면 새 방에 들이지 않는다.
+const SEAT_LIVE_MAX = 2; // 방을 옮기는 순간에는 옛 방 연결이 아직 닫히지 않았을 수 있어 2까지 둔다
+function seatsOf(uid, except) { const out = []; rooms.forEach((r, c) => { if (c !== except) r.forEach((p, pid) => { if (p.uid === uid) out.push({ r, c, p, pid }); }); }); return out; }
+function freeSeat(s) { s.r.delete(s.pid); broadcast(s.r, s.pid, { k: 'left', id: s.pid }); if (!s.r.size) rooms.delete(s.c); }
+// 계정의 방·로비 연결을 모두 닫고 자리를 비운다(탈퇴)
+function dropConns(uid) {
+  seatsOf(uid, null).forEach((s) => { const old = s.p.ws; s.p.ws = null; freeSeat(s); if (old) { try { old.close(); } catch (e) { /* 무시 */ } } });
+  const lb = lobbyOf.get(uid); if (lb) { try { lb.ws.close(); } catch (e) { /* 무시 */ } }
+}
 wss.on('connection', (ws, req) => {
   const q = new URL(req.url, 'http://x').searchParams;
+  // 주소당 동시 연결 수와 분당 접속 시도 수를 먼저 본다(인증 전에 연결마다 저장소 조회가 한 번 돌기 때문)
+  const ip = ipOf(req), open = ipConns.get(ip) || 0;
+  if (open >= WS_PER_IP || limited(ip, 'wsc', WS_TRIES_MIN, 60000)) {
+    warnSome('ws_conn', 20, `ip=${ip} open=${open}`);
+    send(ws, { k: 'error', code: 'busy' }); ws.close(); return;
+  }
+  ipConns.set(ip, open + 1);
+  ws.on('close', () => { const n = (ipConns.get(ip) || 1) - 1; if (n > 0) ipConns.set(ip, n); else ipConns.delete(ip); });
+  ws.on('error', () => { /* 잘못된 프레임 등: 닫힘 처리에 맡긴다 */ });
+  ws.allow = bucketOf();
   ws.alive = true;
   ws.on('pong', () => (ws.alive = true));
-  // 인증은 저장소 조회가 끝난 뒤. 그 사이에 온 메시지는 잃지 않게 모아 둔다.
-  const early = []; const keep = (raw) => early.push(raw); ws.on('message', keep);
+  // 인증은 저장소 조회가 끝난 뒤. 그 사이에 온 메시지는 잃지 않게 모아 둔다(WS_EARLY개까지).
+  const early = []; const keep = (raw) => { if (early.length < WS_EARLY) early.push(raw); }; ws.on('message', keep);
   store.userByToken(q.get('t') || '').then((u) => { ws.off('message', keep); if (q.get('lobby')) joinLobby(ws, u, early); else joinRoom(ws, q, u, early); })
     .catch(() => { send(ws, { k: 'error', code: 'auth' }); ws.close(); });
 });
@@ -388,6 +502,11 @@ function joinRoom(ws, q, u, early) {
   const code = (q.get('room') || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
   if (!u) { send(ws, { k: 'error', code: 'auth' }); ws.close(); return; }
   if (!code) { send(ws, { k: 'error', code: 'bad_room' }); ws.close(); return; }
+  if (!rooms.has(code) && rooms.size >= MAX_ROOMS) { send(ws, { k: 'error', code: 'full' }); ws.close(); return; }
+  // 계정당 방 자리 하나: 다른 방의 '자리 비움' 자리는 비우고, 살아 있는 자리가 이미 많으면 들이지 않는다
+  const others = seatsOf(u.id, code);
+  if (others.filter((s) => s.p.ws).length >= SEAT_LIVE_MAX) { warnSome('ws_seats', 20, `uid=${u.id} room=${code}`); send(ws, { k: 'error', code: 'busy' }); ws.close(); return; }
+  others.filter((s) => !s.p.ws).forEach(freeSeat);
   const room = rooms.get(code) || new Map();
   // 같은 계정이 60초 안에 돌아오면 원래 자리로 다시 붙는다
   let id = null;
@@ -411,12 +530,16 @@ function joinRoom(ws, q, u, early) {
   send(ws, { k: 'hello', id, peers, mine: me.state });
   broadcast(room, id, { k: 'pres', id, p: me.state });
   const onMsg = (raw) => {
+    if (!ws.allow(raw.length)) { warnSome('ws_rate', 20, `room=${code} from=${id} uid=${u.id}`); return; }
     let m;
     try { m = JSON.parse(raw); } catch (e) { return; }
     if (!m || typeof m !== 'object' || Array.isArray(m)) return;
     if (m.k === 'pres' && m.p && typeof m.p === 'object') {
       const p = cleanRelay(m.p, 64) || {};
       delete p.name; delete p.lv; delete p.gr; delete p.ic; delete p.away;
+      // 자리 상태가 끝없이 불어나지 않게: 합친 뒤의 열쇠 수·크기가 상한을 넘으면 이 메시지는 버린다
+      const next = Object.assign({}, me.state, p);
+      if (Object.keys(next).length > STATE_KEYS || JSON.stringify(next).length > STATE_BYTES) { warnSome('ws_state', 20, `room=${code} from=${id} uid=${u.id}`); return; }
       Object.assign(me.state, p); broadcast(room, id, { k: 'pres', id, p });
     } else if (m.k === 'msg' && m.t === 'chat') {
       // 채팅: 도배·광고는 막고(보낸 사람에게만 까닭을 알린다), 욕설은 가려서 보낸다. 보낸 사람에게도 가린 글을 돌려준다.
@@ -424,14 +547,20 @@ function joinRoom(ws, q, u, early) {
       if (!c.ok) { if (c.why !== 'empty') send(ws, { k: 'msg', from: id, t: 'chatno', d: { why: c.why, s: c.s || 0 }, self: 1 }); return; }
       const out = { k: 'msg', from: id, t: 'chat', d: { x: c.text, n: shownNick(u.nick) } };
       broadcast(room, id, out); send(ws, Object.assign({}, out, { self: 1 }));
-    } else if (m.k === 'msg' && typeof m.t === 'string') broadcast(room, id, { k: 'msg', from: id, t: m.t.slice(0, 24), d: cleanRelay(m.d, 0) });
+    } else if (m.k === 'msg' && typeof m.t === 'string') {
+      if (HOST_ONLY.has(m.t)) { const h = hostOf(room); if (h !== id) warnSome('not_host', 30, `room=${code} t=${m.t} from=${id} host=${h} uid=${u.id}`); } // 기록만, 중계는 그대로
+      broadcast(room, id, { k: 'msg', from: id, t: m.t.slice(0, 24), d: cleanRelay(m.d, 0) });
+    }
   };
   const safeMsg = (raw) => { try { onMsg(raw); } catch (e) { console.error('ws', e && e.message); } };
   ws.on('message', safeMsg);
   (early || []).forEach(safeMsg);
   ws.on('close', () => {
     if (me.ws !== ws) return; // 새 연결로 바뀐 뒤 옛 연결이 닫힌 것
-    me.ws = null; me.awayT = Date.now(); me.state.away = 1;
+    me.ws = null;
+    // 이 계정이 이미 다른 방에 앉아 있으면(방을 옮김) 이 자리는 60초 지키지 않고 바로 비운다
+    if (room.get(id) === me && seatsOf(u.id, code).length) { freeSeat({ r: room, c: code, p: me, pid: id }); return; }
+    me.awayT = Date.now(); me.state.away = 1;
     broadcast(room, id, { k: 'pres', id, p: { away: 1 } });
   });
 }
@@ -465,6 +594,7 @@ function joinLobby(ws, u, early) {
   const first = chPick(); if (!first) { send(ws, { k: 'error', code: 'full' }); ws.close(); return; }
   send(ws, { k: 'hello', id }); enter(first);
   const onMsg = (raw) => {
+    if (!ws.allow(raw.length)) { warnSome('ws_rate', 20, `lobby from=${id} uid=${u.id}`); return; }
     let m;
     try { m = JSON.parse(raw); } catch (e) { return; }
     if (!m || typeof m !== 'object' || Array.isArray(m)) return;

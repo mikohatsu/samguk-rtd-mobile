@@ -140,13 +140,19 @@
     drawAim(c);
     Object.values(f.ghosts).forEach((o) => {
       if (!o.def) return;
-      // 동료 유닛은 위치 변화로 방향을 맞춘다
-      const pv = (S.ghostPos = S.ghostPos || {})[o.name] || { x: o.x, y: o.y, moveT: 0, face: Math.PI / 2, def: o.def, id: 1 };
-      if (Math.hypot(o.x - pv.x, o.y - pv.y) > 0.3) { pv.face = Math.atan2(o.y - pv.y, o.x - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
-      pv.x = o.x; pv.y = o.y; S.ghostPos[o.name] = pv;
-      c.globalAlpha = 0.85; piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf(pv, t, CHAMP_R) }); c.globalAlpha = 1;
-      bar(c, o.x, o.y - 78, 72, 6, o.hpf, '#7fd4ff');
-      c.fillStyle = '#d8f0ff'; c.font = '500 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText(o.name || '', o.x, o.y + 52);
+      // 동료 장수는 받은 위치를 0.1초 늦게 이어 그린다(net.ghostAt). 판정 좌표 o.x, o.y는 그대로 둔다
+      const gp = net && net.ghostAt && o.id ? net.ghostAt(o.id, performance.now()) : null;
+      const ox = gp ? Math.max(ARENA.x0, Math.min(ARENA.x1, gp.x)) : o.x, oy = gp ? Math.max(ARENA.y0, Math.min(ARENA.y1, gp.y)) : o.y;
+      // 자세 기억은 자리 id로(같은 닉네임 두 명이 서로 덮어쓰지 않게)
+      const key = o.id || o.name, pv = (S.ghostPos = S.ghostPos || {})[key] || { x: ox, y: oy, moveT: 0, face: Math.PI / 2, def: o.def, id: 1 };
+      if (gp) {
+        // 보간한 속도(px/ms)로 방향과 걷기를 정한다. 초속 20px 아래는 서 있는 것으로 본다
+        if (Math.hypot(gp.vx, gp.vy) > 0.02) { pv.face = Math.atan2(gp.vy, gp.vx); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
+      } else if (Math.hypot(ox - pv.x, oy - pv.y) > 0.3) { pv.face = Math.atan2(oy - pv.y, ox - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
+      pv.x = ox; pv.y = oy; pv.def = o.def; S.ghostPos[key] = pv;
+      c.globalAlpha = 0.85; piece(c, ox, oy, CHAMP_R, o.def, t, true, { pose: poseOf(pv, t, CHAMP_R) }); c.globalAlpha = 1;
+      bar(c, ox, oy - 78, 72, 6, o.hpf, '#7fd4ff');
+      c.fillStyle = '#d8f0ff'; c.font = '500 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText(o.name || '', ox, oy + 52);
     });
     drawVfx(c);
     drawFx(c);

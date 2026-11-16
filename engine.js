@@ -499,7 +499,7 @@
         v: 1, at: Date.now(), diff: this.diff.id, mutLv: this.mutLv, muts: this.muts.map((m) => m.id),
         round: this.round, roundT: this.roundT, time: this.time, lives: this.lives, nextId: this.nextId,
         spawned: this.spawned, toSpawn: this.toSpawn, spawnCd: this.spawnCd || 0, endedRound: this.endedRound, midDone: this.midDone, mids: this.mids, stats: this.stats,
-        me: { gold: p.gold, upgrades: p.upgrades, tickets: p.tickets, auto: p.auto, zones: p.zones, ever: p.ever, done: p.done },
+        me: { gold: p.gold, upgrades: p.upgrades, tickets: p.tickets, auto: p.auto, zones: p.zones, ever: p.ever, done: p.done, usedItems: (p.usedItems || []).slice() },
         units: this.units.filter((u) => u.owner === p.idx).map((u) => ({ id: u.id, d: u.def.id, x: Math.round(u.x), y: Math.round(u.y), slot: u.slot || null, o: u.order && (u.order.t === 'hold' || u.order.t === 'focus') ? u.order.t : 'idle', ss: u.sageSlot })),
         drops: this.drops.map((d) => Object.assign({}, d)),
         enemies: this.enemies.map((e) => ({ id: e.id, w: e.mid ? -1 : T.waves.indexOf(e.w), x: Math.round(e.x), y: Math.round(e.y), seg: e.seg, hp: e.hp, mhp: e.mhp, def: e.def, sp: e.speed, mr: e.midDef ? e.midDef.round : 0, mt: e.midT || 0 })),
@@ -510,6 +510,7 @@
       g.events.length = 0; // 새 판을 만들며 생긴 알림은 버린다
       ['round', 'roundT', 'time', 'lives', 'nextId', 'spawned', 'toSpawn', 'spawnCd', 'endedRound', 'midDone', 'mids', 'stats'].forEach((k) => { if (s[k] !== undefined) g[k] = s[k]; });
       Object.assign(g.me, s.me);
+      if (!Array.isArray(g.me.usedItems)) g.me.usedItems = []; // 옛 저장본에는 이 항목이 없다
       g.units = s.units.filter((u) => g.defs[u.d]).map((u) => ({ id: u.id, def: g.defs[u.d], owner: 0, x: u.x, y: u.y, cd: 0, order: { t: u.o || 'idle' }, target: null, aura: 0, hits: 0, scan: 0, fl: 0, slot: u.slot || undefined, sageSlot: u.ss }));
       g.drops = (s.drops || []).map((d) => Object.assign({}, d, { tx: undefined, ty: undefined }));
       g.enemies = (s.enemies || []).map((e) => {
@@ -917,7 +918,8 @@
       this.log('bossFight', {});
       if (this.net && this.net.partyDeployed) this.checkPartyAchievements(dep || this.net.partyDeployed());
     }
-    localChamps() { return this.fight.champs.filter((c) => c.owner === this.me.idx); }
+    // 보스전이 끝난 직후 남은 버튼이 눌려도 예외가 나지 않게 fight가 없으면 빈 값으로 답한다
+    localChamps() { return this.fight ? this.fight.champs.filter((c) => c.owner === this.me.idx) : []; }
     myRelayTurn() { return !this.net || !this.net.relayMine || this.net.relayMine(); }
     // 일기토에서 기다리는 장수: 내 차례가 아니거나, 내 장수 중 앞 순서가 아직 살아 있으면 대기
     benched(c) {
@@ -928,6 +930,7 @@
     }
     active() {
       // 조작과 스킬은 선택 중인 유닛에게만 들어간다
+      if (!this.fight) return null;
       if (this.mut.relay) return this.localChamps().find((o) => !o.dead && !o.bench) || null;
       const c = this.localChamps()[this.fight.sel];
       return c && !c.dead ? c : null;
@@ -939,6 +942,7 @@
       return out;
     }
     selectChamp(i) {
+      if (!this.fight) return;
       const l = this.localChamps();
       if (i == null) this.fight.sel = null;
       else if (l[i] && !l[i].dead) this.fight.sel = i;
@@ -1023,9 +1027,16 @@
       if (M.q) M.q.length = 0;
       M.ctr = 0; M.ctrGo = null;
     }
+    // 미인계 재사용은 팀이 같이 쓴다: 한 명이 쓰면 미인계를 가진 모든 출전 장수의 버튼이 같이 돈다
+    charmShare() {
+      const f = this.fight, M = f.mech;
+      if (!(M.charmCd > 0)) return;
+      f.champs.forEach((c) => (c.def.sk || []).forEach((s, j) => { if (s.k === 'charm' && c.skillCd && !(c.skillCd[j] >= M.charmCd)) c.skillCd[j] = M.charmCd; }));
+    }
     charmBoss(dur, amp, cd) {
       const f = this.fight, b = f.boss, M = f.mech;
       M.charmT = dur;
+      if (cd > 0) { M.charmCd = Math.max(M.charmCd > 0 ? M.charmCd : 0, cd); this.charmShare(); }
       b.stun = Math.max(b.stun, dur); b.charge = null; b.cast = 0;
       this.charmClear();
       if (amp) { if (!(M.ampT > 0) || amp >= M.amp) M.amp = amp; M.ampT = Math.max(M.ampT || 0, dur); }
@@ -1033,8 +1044,8 @@
     }
     useSkill(c, i, x, y) {
       const s = (c.def.sk || [])[i], f = this.fight;
-      if (!s || c.dead || c.skillCd[i] > 0) return false;
-      if (s.k === 'charm' && f.mech.hide) return false;
+      if (!f || !s || c.dead || c.skillCd[i] > 0) return false;
+      if (s.k === 'charm' && (f.mech.hide || f.mech.charmCd > 0)) return false;
       c.skillCd[i] = s.cd * (1 - Math.min(0.6, this.pv(c.def, 'cdr') + this.synFor(c.owner, c.def).cdr + this.sageVal(this.players[c.owner], 'sageCdr') + (f.pcdr || 0) + (this.mut.bossCdr || 0)));
       const ch = this.passives(c.def, 'chain').reduce((m, x) => m + x.n, 0);
       if (ch) c.skillCd = c.skillCd.map((v, j) => (j === i ? v : Math.max(0, v - ch))); c.atkT = 0.36; c.face = Math.atan2(y - c.y, x - c.x);
@@ -1092,8 +1103,10 @@
         this.fx.push({ k: 'aura', x: c.x, y: c.y, r: 120, t: 0, life: 0.8, c: s.fx, vx: s.vx });
       } else if (s.k === 'charm') {
         // 미인계: 보스가 넋을 잃고 멈춘다(무력화 시전은 끊지 못함). 팀 전체가 재사용을 같이 쓴다.
-        this.charmBoss(s.dur, s.amp, s.cd);
-        if (this.net && !this.isAuthority) f.pendCharm = [s.dur, s.amp, s.cd];
+        // 같이 쓰는 재사용 시간 = 쓴 사람이 실제로 받은 재사용(재사용 단축 반영). s.cd 수치는 그대로다.
+        const shareCd = c.skillCd[i] > 0 ? c.skillCd[i] : s.cd;
+        this.charmBoss(s.dur, s.amp, shareCd);
+        if (this.net && !this.isAuthority) { f.pendCharm = [s.dur, s.amp, Math.round(shareCd * 10) / 10]; f.mech.charmHold = 1.5; }
         this.fx.push({ k: 'blast', x: b.x, y: b.y, r: 150, t: 0, life: 0.9, c: s.fx, vx: s.vx });
         this.log('proc', { x: c.x, y: c.y, tx: b.x, ty: b.y, names: [this.L('e_charm', null, '매혹')], c: s.fx, vx: s.vx });
       } else if (s.k === 'weaken') {
@@ -1169,7 +1182,7 @@
     }
     replaceChamp(id) {
       const f = this.fight, u = this.units.find((x) => x.id === id);
-      if (!u || f.used[id] || this.phase !== 'boss' || this.mut.relay) return; // 일기토는 대체 출전 없음
+      if (!f || !u || f.used[id] || this.phase !== 'boss' || this.mut.relay) return; // 일기토는 대체 출전 없음
       const l = this.localChamps(), dead = l.find((c) => c.dead);
       if (!dead) return;
       const c = this.deploy(u, dead.slot);

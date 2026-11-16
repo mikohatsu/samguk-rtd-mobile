@@ -175,7 +175,7 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 .cmd.info { background: #241b15; border-style: dashed; cursor: help; }
 .cmd.empty { background: none; border-color: #2c211a; }
 .cmd .cool { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .66); pointer-events: none; }
-.over { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(13, 9, 7, .72); }
+.over { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: rgba(13, 9, 7, .72); }
 .sheet { width: min(760px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 14px; background: var(--lacquer); border: 1px solid var(--line); overflow: hidden; }
 .sheet h2 { margin: 0; font: 400 24px var(--display); color: var(--brass); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 5px; overflow-y: auto; min-height: 0; }
@@ -371,12 +371,20 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 #selbar:not(.exp) #info > .chips { flex-wrap: nowrap; overflow-x: auto; margin-top: 2px; scrollbar-width: none; }
 #selbar #info > .chips .chip { white-space: nowrap; flex: none; }
 #selbar.exp #info { max-height: 42vh; overflow-y: auto; }
-#selbar #recipes { grid-column: 1; grid-row: 2; padding: 0; border: 0; max-height: 56px; overflow: hidden; }
+#selbar #recipes { grid-column: 1; grid-row: 2; padding: 0; border: 0; max-height: 92px; overflow: hidden; }
+/* 합성·조합 줄: 손가락으로 누르는 버튼이라 줄 44px, 버튼 40px */
+#selbar .rc { min-height: 44px; }
+#selbar .rc .btn { min-height: 40px; min-width: 64px; padding: 0 12px; }
 #selbar.exp #recipes { max-height: 30vh; overflow-y: auto; }
 #selbar #cmds { grid-column: 2; grid-row: 1 / 3; display: flex; flex-wrap: wrap; gap: 4px; align-content: center; max-width: 300px; background: none; border: 0; padding: 0; }
 #selbar .cmd { width: 46px; height: 46px; border-radius: 10px; }
+html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 #selbar .cmd.empty { display: none; }
-#selbar.boss { width: auto; max-width: calc(100% - 340px); left: var(--sl); transform: none; padding: 4px 6px; background: rgba(20, 14, 10, .72); }
+/* 보스전 막대는 조이스틱(왼쪽 44px + 132px) 오른쪽에 둔다. 대체 출전 줄이 생겨 높아져도 조이스틱을 덮지 않는다 */
+#selbar.boss { width: auto; max-width: calc(100% - var(--sl, 0px) - 192px - 300px); left: calc(var(--sl, 0px) + 192px); transform: none; padding: 4px 6px; background: rgba(20, 14, 10, .72); }
+#selbar.boss .mini, #selbar.boss .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+#selbar.boss .mini .btn, #selbar.boss .chips .btn { flex: none; }
+#selbar.boss .chips .btn { min-height: 36px; padding: 2px 10px; font-size: 12px; }
 #selbar.boss:not(.exp) #info { display: none; }
 #selbar.boss #recipes { max-height: none; }
 #selbar.boss:not(.exp) #recipes > .line { display: none; }
@@ -445,7 +453,8 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 #stage.lanejoy #selbar { left: calc(var(--sl, 0px) + 176px); transform: none; width: calc(100% - var(--sl, 0px) - 176px - 74px); }
 #joy i { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: radial-gradient(circle at 45% 38%, rgba(255, 246, 225, .7), rgba(200, 170, 120, .45)); box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none; }
 #joy.on { border-color: rgba(255, 235, 200, .65); }
-#bossbtn { top: calc(var(--st) + 48px); bottom: auto; right: var(--sr); left: auto; transform: none; min-height: 38px; }
+/* 보스전 중 라인 화면: 오른쪽 버튼 열(#rail)에 가리지 않게 맨 윗줄, 메뉴 버튼 왼쪽에 둔다 */
+#bossbtn { top: var(--st); bottom: auto; right: calc(var(--sr) + 50px); left: auto; transform: none; height: 44px; min-height: 44px; }
 #backbtn { top: calc(var(--st) + 48px); }
 #toasts { top: calc(var(--st) + 50px); }
 /* 세로 화면 안내 */
@@ -456,6 +465,8 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 @media (max-height: 430px) {
   .hs { width: 104px; padding: 1px 7px; } .hs b { font-size: 14px; } .hs small { font-size: 10px; } .nc { width: 104px; }
   .rb { width: 50px; height: 46px; }
+  /* 낮은 화면에서는 버튼 열을 위에서부터 놓아 메뉴 버튼과 닿지 않게 한다 */
+  #rail { top: calc(var(--st) + 52px); transform: none; }
   #selbar { width: calc(100% - 140px); }
 }
 /* ===== 시작 화면: 오프라인/온라인, 계정, 언어 ===== */
@@ -575,8 +586,11 @@ html:not([lang=ko]) .rkf { font: 900 22px/1 "Hiragino Mincho ProN", "Yu Mincho",
 #chatlog { height: 120px; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; font-size: 13px; line-height: 1.5; user-select: text; -webkit-user-select: text; }
 #chatlog .cl { display: flex; gap: 6px; align-items: baseline; }
 #chatlog .cl b { color: #ffd86a; white-space: nowrap; }
-#chatlog .cl .op { margin-left: auto; display: flex; gap: 4px; }
-#chatlog .cl .op button { font-size: 10px; padding: 0 5px; background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 6px; }
+#chatlog .cl .op { margin-left: auto; display: flex; gap: 10px; flex: none; align-self: center; }
+#chatlog .cl .op button { min-height: 44px; min-width: 44px; font-size: 12px; padding: 0 10px; background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 6px; }
+/* 신고·차단은 한 번 누르면 '한 번 더'로 바뀐다(.arm). 차단 풀기 버튼(.unb) */
+.cl .op button.arm { border-color: #c8402e; color: #ffb0a0; }
+.unb { min-height: 44px; min-width: 44px; padding: 0 12px; margin-left: 6px; background: none; border: 1px solid var(--line); color: var(--paper); border-radius: 6px; font-size: 12px; }
 #chatlog .sys { color: var(--dim); font-size: 12px; }
 #chatlog .sys.warn, #lclog .sys.warn { color: #ff9a7a; }
 /* 로비 채팅: 왼쪽 아래 한 줄 막대(누르면 창), 창 안의 기록·입력 */
@@ -589,8 +603,8 @@ html:not([lang=ko]) .rkf { font: 900 22px/1 "Hiragino Mincho ProN", "Yu Mincho",
 #lclog .cl { display: flex; gap: 6px; align-items: baseline; }
 #lclog .cl b { color: #ffd86a; white-space: nowrap; }
 #lclog .cl span { min-width: 0; overflow-wrap: anywhere; }
-#lclog .cl .op { margin-left: auto; display: flex; gap: 4px; flex: none; }
-#lclog .cl .op button { font-size: 10px; padding: 0 5px; background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 6px; }
+#lclog .cl .op { margin-left: auto; display: flex; gap: 10px; flex: none; align-self: center; }
+#lclog .cl .op button { min-height: 44px; min-width: 44px; font-size: 12px; padding: 0 10px; background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 6px; }
 #lclog .sys { color: var(--dim); font-size: 12px; }
 #lchat .inline { margin-top: 8px; display: flex; gap: 6px; }
 #lchat .inline input { flex: 1; min-width: 0; }
@@ -674,7 +688,7 @@ html:not([lang=ko]) .rkf { font: 900 22px/1 "Hiragino Mincho ProN", "Yu Mincho",
 .hs-det .ms img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; object-position: top; }
 .hs-det .sg { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 4px 10px; }
 #diffs button.lock { opacity: 1; filter: saturate(.35) brightness(.8); }
-#diffs button .lk { display: block; margin-top: 3px; font: 700 11.5px "IBM Plex Sans KR", sans-serif; font-style: normal; color: #ffcf8a; white-space: nowrap; }
+#diffs button .lk { display: block; margin-top: 3px; font: 700 11.5px "IBM Plex Sans KR", sans-serif; font-style: normal; color: #ffcf8a; white-space: normal; overflow-wrap: anywhere; font-size: 10.5px; line-height: 1.25; }
 #matchbox { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 8px; text-align: center; }
 #matchbox .spin { width: 46px; height: 46px; border-radius: 50%; border: 4px solid rgba(255,216,106,.2); border-top-color: #ffd86a; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -846,11 +860,12 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 @media (max-height: 430px) {
   #lbrand { top: 50px; } #lbrand h1 { font-size: clamp(40px, 6.4vw, 60px); } #lbrand .seal { width: 40px; height: 40px; font-size: 18px; }
   html[lang="en"] #lbrand h1, html[lang="zh"] #lbrand h1 { font-size: clamp(28px, 4.6vw, 44px); } html[lang="ja"] #lbrand h1 { font-size: clamp(26px, 4.2vw, 40px); }
-  #lmenu { grid-template-columns: repeat(3, 74px); gap: 10px; top: auto; bottom: 108px; transform: none; }
+  /* 이어하기(44) + 간격(8) + 전투 버튼(76) + 아래 여백(16~21) 위로 메뉴를 올린다 */
+  #lmenu { grid-template-columns: repeat(3, 74px); gap: 10px; top: auto; bottom: 160px; transform: none; }
   #lmenu button { height: auto; padding: 0; gap: 5px; background: none; } #lmenu button i { width: 62px; height: 62px; font-size: 0; }
   #battlebtn { min-width: 270px; height: 76px; padding: 0 56px 3px 32px; border-width: 0; font-size: 38px; } #battlebtn::after { right: 24px; font-size: 11px; line-height: 22px; width: 22px; }
   html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 28px; }
-  #lplay #contbtn { min-height: 34px; padding: 4px 12px; font-size: 13px; }
+  #lplay #contbtn { min-height: 44px; padding: 4px 12px; font-size: 13px; }
 }
 </style>
 
@@ -863,7 +878,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
     <div id="synbar" hidden></div>
     <div id="toasts"></div>
     <div id="achpop" hidden></div>
-    <button id="backbtn" class="btn go" data-act="myview" type="button" hidden>내 전장으로 (Space)</button>
+    <button id="backbtn" class="btn go" data-act="myview" data-i18n="myField" type="button" hidden>내 전장으로</button>
     <button id="bossbtn" class="btn" data-act="laneView" type="button" hidden></button>
     <div id="skillbar" hidden></div>
     <div id="joy" hidden><i></i></div>

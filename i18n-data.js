@@ -443,7 +443,7 @@
       healLow: (p) => `3秒ごとに体力50%以下の味方（他の司令官含む）の体力${pc(p.pct)}回復`, healBuff: (p) => `全軍治療の時、味方全体の攻撃力3秒間${pc(p.pct)}上昇`,
       roundGold: (p) => `ラウンド終了時に金貨+${p.n}`, interest: (p) => `ラウンド終了時に所持金貨の${pc(p.pct)}の利息（最大${p.max}）`, midGold: (p) => `中ボス討伐ごとに金貨+${p.n}`, bossGold: (p) => `ボス討伐の金貨${pc(p.pct)}増加`, discount: (p) => `強化費用${pc(p.pct)}割引`,
       roundT1: (p) => `ラウンド報酬の★1 +${p.n}体`, combineT1: () => '合成するたびにランダム★1を1体（選択券は除く）', midReward: (p) => `中ボス討伐の報酬${p.n}倍`, tierHaste: (p) => `★${p.tier}以上の攻撃速度${pc(p.pct)}上昇`, sageCdr: (p) => `ボス戦の出陣武将のスキル再使用${pc(p.pct)}短縮`,
-      staggerEase: (p) => `ブレイク・反撃に必要なダメージ${pc(p.pct)}減少`, activeHeal: (p) => `ボス戦ごとに${p.uses}回、Fで自分の出陣武将の体力${pc(p.pct)}回復`, upMax: (p) => `全強化の最大段階+${p.n}`, fieldSlow: (p) => `全敵の移動速度${pc(p.pct)}低下`,
+      staggerEase: (p) => `ブレイク・反撃に必要なダメージ${pc(p.pct)}減少`, activeHeal: (p) => `ボス戦ごとに${p.uses}回、回復ボタンで自分の出陣武将の体力${pc(p.pct)}回復`, upMax: (p) => `全強化の最大段階+${p.n}`, fieldSlow: (p) => `全敵の移動速度${pc(p.pct)}低下`,
     },
     en: {
       slow: (p) => `Hit enemies slowed by ${pc(p.pct)}`, bossPct: (p) => `+${pc(p.pct)} damage to bosses and mid-bosses`, crit: (p) => `${pc(p.ch)} chance to deal ×${p.mult} damage`, everyN: (p) => `Every ${p.n}th attack deals ×${p.mult} damage`,
@@ -457,7 +457,7 @@
       healLow: (p) => `Every 3s heals allies below 50% HP (incl. other commanders) by ${pc(p.pct)}`, healBuff: (p) => `Heal All also gives the party +${pc(p.pct)} ATK for 3s`,
       roundGold: (p) => `+${p.n} gold at round end`, interest: (p) => `${pc(p.pct)} interest on your gold each round (max ${p.max})`, midGold: (p) => `+${p.n} gold per mid-boss`, bossGold: (p) => `Boss gold +${pc(p.pct)}`, discount: (p) => `Upgrades cost -${pc(p.pct)}`,
       roundT1: (p) => `+${p.n} ★1 unit per round`, combineT1: () => 'Each combine gives a random ★1 (not tickets)', midReward: (p) => `Mid-boss rewards ×${p.n}`, tierHaste: (p) => `★${p.tier}+ units attack ${pc(p.pct)} faster`, sageCdr: (p) => `Champions' skill cooldown -${pc(p.pct)} in boss fights`,
-      staggerEase: (p) => `Break and counter need ${pc(p.pct)} less damage`, activeHeal: (p) => `${p.uses}× per boss fight, press F to heal your champions ${pc(p.pct)}`, upMax: (p) => `All upgrade caps +${p.n}`, fieldSlow: (p) => `All enemies slowed by ${pc(p.pct)}`,
+      staggerEase: (p) => `Break and counter need ${pc(p.pct)} less damage`, activeHeal: (p) => `${p.uses}× per boss fight, tap the heal button to heal your champions ${pc(p.pct)}`, upMax: (p) => `All upgrade caps +${p.n}`, fieldSlow: (p) => `All enemies slowed by ${pc(p.pct)}`,
     },
     zh: {
       slow: (p) => `被攻击的敌人移速降低${pc(p.pct)}`, bossPct: (p) => `对首领·中首领伤害+${pc(p.pct)}`, crit: (p) => `${pc(p.ch)}几率造成${p.mult}倍伤害`, everyN: (p) => `每第${p.n}次攻击造成${p.mult}倍伤害`,
@@ -471,7 +471,7 @@
       healLow: (p) => `每3秒为生命低于50%的友方（含其他指挥官）回复${pc(p.pct)}`, healBuff: (p) => `全军治疗时全队3秒攻击+${pc(p.pct)}`,
       roundGold: (p) => `回合结束时金币+${p.n}`, interest: (p) => `回合结束时获得持有金币${pc(p.pct)}的利息（最多${p.max}）`, midGold: (p) => `每讨伐中首领金币+${p.n}`, bossGold: (p) => `首领金币+${pc(p.pct)}`, discount: (p) => `强化费用-${pc(p.pct)}`,
       roundT1: (p) => `每回合奖励1星+${p.n}个`, combineT1: () => '每次合成获得随机1星1个（选择券除外）', midReward: (p) => `中首领奖励×${p.n}`, tierHaste: (p) => `${p.tier}星以上攻速+${pc(p.pct)}`, sageCdr: (p) => `首领战出战武将技能冷却-${pc(p.pct)}`,
-      staggerEase: (p) => `破防·反击所需伤害-${pc(p.pct)}`, activeHeal: (p) => `每场首领战${p.uses}次，按F为己方出战武将回复${pc(p.pct)}生命`, upMax: (p) => `全部强化上限+${p.n}`, fieldSlow: (p) => `全体敌人移速-${pc(p.pct)}`,
+      staggerEase: (p) => `破防·反击所需伤害-${pc(p.pct)}`, activeHeal: (p) => `每场首领战${p.uses}次，按回复按钮为己方出战武将回复${pc(p.pct)}生命`, upMax: (p) => `全部强化上限+${p.n}`, fieldSlow: (p) => `全体敌人移速-${pc(p.pct)}`,
     },
   };
   // ---- 스킬 설명 틀 ----

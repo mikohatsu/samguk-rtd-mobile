@@ -241,7 +241,8 @@
     }
     if (panel === 'settings') {
       $('lptabs').innerHTML = '';
-      body.innerHTML = C.settingsHtml();
+      // 차단 풀기: 차단한 사람이 있으면 설정 맨 아래에 목록을 붙인다
+      body.innerHTML = C.settingsHtml() + (blocked.length ? `<div class="setlist"><div class="h">${L('block')}</div>${blocked.map((n) => `<div class="row"><span>${esc(n)}</span><button type="button" class="unb" data-unblock="${esc(n)}">${L('unblock')}</button></div>`).join('')}</div>` : '');
       return;
     }
     if (panel === 'shop') {
@@ -280,7 +281,7 @@
       if (ptab === 'clear') {
         h += `<div class="lp-sel">${C.T.difficulties.map((d) => `<button type="button" class="${rdiff === d.id ? 'on' : ''}" data-rdiff="${d.id}">${esc(d.name)}</button>`).join('')}</div>`;
         const r = await C.api('/api/rank?type=clear&diff=' + rdiff); list = r.list || [];
-        h += list.map((c, i) => `<div class="lp-row"><span class="no">${i + 1}</span><img alt="" src="${iconSrc(c.members[0] && c.members[0].icon)}"><span class="who"><span class="lp-party">${c.members.map((m) => `<span><img alt="" src="${iconSrc(m.icon)}">${esc(m.nick)}</span>`).join('')}</span><small>${c.mut ? 'Nightmare +' + c.mut : ''}</small></span><span class="val">${C.clock(c.time)}</span></div>`).join('');
+        h += list.map((c, i) => `<div class="lp-row"><span class="no">${i + 1}</span><img alt="" src="${iconSrc(c.members[0] && c.members[0].icon)}"><span class="who"><span class="lp-party">${c.members.map((m) => `<span><img alt="" src="${iconSrc(m.icon)}">${esc(m.nick)}</span>`).join('')}</span><small>${c.mut ? esc(((C.T.difficulties.find((d) => d.id === 'nightmare') || {}).name || '') + ' +' + c.mut) : ''}</small></span><span class="val">${C.clock(c.time)}</span></div>`).join('');
       } else if (ptab === 'imm') {
         const imms = C.T.units.filter((d) => d.tier === 10);
         h += `<div class="lp-sel">${imms.map((d) => `<button type="button" class="${rimm === d.id ? 'on' : ''}" data-rimm="${d.id}">${esc(d.name)}</button>`).join('')}</div>`;
@@ -381,6 +382,15 @@
   const blocked = (() => { try { return JSON.parse(localStorage.getItem('rtd-block') || '[]'); } catch (e) { return []; } })();
   const saveBlock = () => { try { localStorage.setItem('rtd-block', JSON.stringify(blocked.slice(-200))); } catch (e) { /* 저장 불가 */ } };
   let chatNet = null, seenPeers = null;
+  // 차단 안내 줄에 붙는 '차단 풀기' 버튼
+  const unbBtn = (n) => `<button type="button" class="unb" data-unblock="${esc(n)}">${L('unblock')}</button>`;
+  // 신고·차단은 바로 실행하지 않는다. 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 실행한다.
+  function armed(b) {
+    if (b.dataset.armed) return true;
+    const label = b.textContent; b.dataset.armed = '1'; b.classList.add('arm'); b.textContent = C.t('quitAgain');
+    setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.classList.remove('arm'); b.textContent = label; } }, 3000);
+    return false;
+  }
   function chatLine(html) { const log = $('chatlog'); if (!log) return; log.insertAdjacentHTML('beforeend', html); while (log.children.length > 80) log.firstChild.remove(); log.scrollTop = log.scrollHeight; }
   function attachChat() {
     const l = C.getLobby();
@@ -409,7 +419,7 @@
   const lc = { ws: null, id: null, ch: 0, list: [], max: 50, lines: [], retryT: null, want: false };
   const lcOpen = () => lc.ws && lc.ws.readyState === 1;
   function lcPush(o) { lc.lines.push(o); if (lc.lines.length > 80) lc.lines.shift(); lcBar(); if (panel === 'lchat') { const log = $('lclog'); if (log) { log.insertAdjacentHTML('beforeend', lcHtml(o)); while (log.children.length > 80) log.firstChild.remove(); log.scrollTop = log.scrollHeight; } } }
-  const lcHtml = (o) => (o.sys ? `<div class="sys${o.warn ? ' warn' : ''}">${esc(o.sys)}</div>`
+  const lcHtml = (o) => (o.sys ? `<div class="sys${o.warn ? ' warn' : ''}">${esc(o.sys)}${o.unb != null ? unbBtn(o.unb) : ''}</div>`
     : `<div class="cl"><b>${esc(o.n)}</b><span>${esc(o.x)}</span>${o.self ? '' : `<span class="op"><button type="button" data-lcrep="${esc(o.id)}" data-nick="${esc(o.n)}" data-text="${esc(o.x)}">${L('report')}</button><button type="button" data-chatblock="${esc(o.n)}">${L('block')}</button></span>`}</div>`);
   function lcBar() {
     const bar = $('lchatbar'); if (!bar) return;
@@ -487,11 +497,13 @@
       if (e.target.id === 'malone') { stopMatch(true); closeWizard(); C.begin({ diff: C.cfg.diff, mode: 'solo', online: true, muts: [], mutLv: 0, key: 's-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }); return; }
       const bb = e.target.closest('[data-buy]'); if (bb) { buy(bb.dataset.buy); return; }
       const eq = e.target.closest('[data-equip]'); if (eq) { equip(eq.dataset.equip, eq.dataset.id, eq.dataset.unit); return; }
-      const rp = e.target.closest('[data-chatrep]'); if (rp) { const l = C.getLobby(); C.api('/api/report', { room: l && l.code, slot: rp.dataset.chatrep, nick: rp.dataset.nick, text: rp.dataset.text }).then(() => chatLine(`<div class="sys">${L('reported')}</div>`)); rp.disabled = true; return; }
+      const rp = e.target.closest('[data-chatrep]'); if (rp) { if (!armed(rp)) return; const l = C.getLobby(); C.api('/api/report', { room: l && l.code, slot: rp.dataset.chatrep, nick: rp.dataset.nick, text: rp.dataset.text }).then(() => chatLine(`<div class="sys">${L('reported')}</div>`)); rp.disabled = true; return; }
       const lch = e.target.closest('[data-lch]'); if (lch) { lcSend({ k: 'ch', n: +lch.dataset.lch }); return; }
-      const lrp = e.target.closest('[data-lcrep]'); if (lrp) { C.api('/api/report', { room: '#lobby', slot: lrp.dataset.lcrep, nick: lrp.dataset.nick, text: lrp.dataset.text }).then(() => lcPush({ sys: L('reported') })); lrp.disabled = true; return; }
-      const bl = e.target.closest('[data-chatblock]'); if (bl && bl.closest('#lchat')) { if (!blocked.includes(bl.dataset.chatblock)) blocked.push(bl.dataset.chatblock); saveBlock(); lc.lines = lc.lines.filter((o) => o.sys || o.self || o.n !== bl.dataset.chatblock); renderLchat(); lcPush({ sys: L('blocked') }); return; }
-      if (bl) { if (!blocked.includes(bl.dataset.chatblock)) blocked.push(bl.dataset.chatblock); saveBlock(); chatLine(`<div class="sys">${L('blocked')}</div>`); return; }
+      const lrp = e.target.closest('[data-lcrep]'); if (lrp) { if (!armed(lrp)) return; C.api('/api/report', { room: '#lobby', slot: lrp.dataset.lcrep, nick: lrp.dataset.nick, text: lrp.dataset.text }).then(() => lcPush({ sys: L('reported') })); lrp.disabled = true; return; }
+      const ub = e.target.closest('[data-unblock]'); if (ub) { const i = blocked.indexOf(ub.dataset.unblock); if (i >= 0) blocked.splice(i, 1); saveBlock(); ub.disabled = true; if (panel === 'settings') renderPanel(); return; }
+      const bl = e.target.closest('[data-chatblock]'); if (bl && !armed(bl)) return;
+      if (bl && bl.closest('#lchat')) { if (!blocked.includes(bl.dataset.chatblock)) blocked.push(bl.dataset.chatblock); saveBlock(); lc.lines = lc.lines.filter((o) => o.sys || o.self || o.n !== bl.dataset.chatblock); renderLchat(); lcPush({ sys: L('blocked'), unb: bl.dataset.chatblock }); return; }
+      if (bl) { if (!blocked.includes(bl.dataset.chatblock)) blocked.push(bl.dataset.chatblock); saveBlock(); chatLine(`<div class="sys">${L('blocked')}${unbBtn(bl.dataset.chatblock)}</div>`); return; }
       if (panel === 'settings' && e.target.closest('[data-act]')) setTimeout(renderPanel, 60);
     });
     requestAnimationFrame(charLoop);

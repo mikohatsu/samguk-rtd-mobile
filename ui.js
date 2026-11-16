@@ -1504,13 +1504,19 @@
     drawAim(c);
     Object.values(f.ghosts).forEach((o) => {
       if (!o.def) return;
-      // 동료 유닛은 위치 변화로 방향을 맞춘다
-      const pv = (S.ghostPos = S.ghostPos || {})[o.name] || { x: o.x, y: o.y, moveT: 0, face: Math.PI / 2, def: o.def, id: 1 };
-      if (Math.hypot(o.x - pv.x, o.y - pv.y) > 0.3) { pv.face = Math.atan2(o.y - pv.y, o.x - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
-      pv.x = o.x; pv.y = o.y; S.ghostPos[o.name] = pv;
-      c.globalAlpha = 0.85; piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf(pv, t, CHAMP_R) }); c.globalAlpha = 1;
-      bar(c, o.x, o.y - 78, 72, 6, o.hpf, '#7fd4ff');
-      c.fillStyle = '#d8f0ff'; c.font = '500 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText(o.name || '', o.x, o.y + 52);
+      // 동료 장수는 받은 위치를 0.1초 늦게 이어 그린다(net.ghostAt). 판정 좌표 o.x, o.y는 그대로 둔다
+      const gp = net && net.ghostAt && o.id ? net.ghostAt(o.id, performance.now()) : null;
+      const ox = gp ? Math.max(ARENA.x0, Math.min(ARENA.x1, gp.x)) : o.x, oy = gp ? Math.max(ARENA.y0, Math.min(ARENA.y1, gp.y)) : o.y;
+      // 자세 기억은 자리 id로(같은 닉네임 두 명이 서로 덮어쓰지 않게)
+      const key = o.id || o.name, pv = (S.ghostPos = S.ghostPos || {})[key] || { x: ox, y: oy, moveT: 0, face: Math.PI / 2, def: o.def, id: 1 };
+      if (gp) {
+        // 보간한 속도(px/ms)로 방향과 걷기를 정한다. 초속 20px 아래는 서 있는 것으로 본다
+        if (Math.hypot(gp.vx, gp.vy) > 0.02) { pv.face = Math.atan2(gp.vy, gp.vx); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
+      } else if (Math.hypot(ox - pv.x, oy - pv.y) > 0.3) { pv.face = Math.atan2(oy - pv.y, ox - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
+      pv.x = ox; pv.y = oy; pv.def = o.def; S.ghostPos[key] = pv;
+      c.globalAlpha = 0.85; piece(c, ox, oy, CHAMP_R, o.def, t, true, { pose: poseOf(pv, t, CHAMP_R) }); c.globalAlpha = 1;
+      bar(c, ox, oy - 78, 72, 6, o.hpf, '#7fd4ff');
+      c.fillStyle = '#d8f0ff'; c.font = '500 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText(o.name || '', ox, oy + 52);
     });
     drawVfx(c);
     drawFx(c);
@@ -2324,6 +2330,15 @@
     else if (a === 'dash') { g.dash(g.active(), S.mouse.x, S.mouse.y); }
     else if (a === 'champ') g.selectChamp(+arg);
     else if (a === 'restart') adThen(() => location.reload());
+    // 판 도중 나가기(설정 탭): 두 번 눌러 확인. 혼자 하는 오프라인 판은 저장해 두고(이어하기) 멈춘다.
+    // 협동 방은 오래 자리를 비웠을 때와 같은 길(kicked + leave)로 방에서 나간다. 그 뒤는 결과창의 restart와 같다.
+    else if (a === 'quit') {
+      if (S.quitArm) {
+        S.quitArm = false; saveGame();
+        if (lifeOffline()) S.paused = true; else { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
+        adThen(() => location.reload());
+      } else { S.quitArm = true; toast(t('quitConfirm'), 'warn'); setTimeout(() => { if (S.quitArm) { S.quitArm = false; dirty(); } }, 3000); }
+    }
     else if (a === 'resume') { S.paused = false; last = performance.now(); }
     else if (a === 'volunteer') { if (net && net.volunteer) net.volunteer(); }
     else if (a === 'tutReset') { if (window.RTD_TUT) window.RTD_TUT.reset(); toast(I.t('tutReplayHint'), 'good'); }
@@ -2455,6 +2470,9 @@
       h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
       h += `<div class="row"><div>${t('version')}</div><div>v${window.RTD_VERSION || '?'}</div></div>`;
       h += `<div class="row"><div>${t('bgm')}</div><button class="toggle" data-act="vol" data-arg="bgm" type="button">${Math.round(Snd.state.bgm * 100)}%</button></div>`;
+      // 판 도중 나가기: 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 나간다(11-actions의 quit)
+      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : 'quitHintRoom';
+      h += `<div class="h">${I.t('quitGame')}</div><div class="row"><div><small>${I.t(qh)}</small></div><button class="toggle ${S.quitArm ? 'on' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitBtn')}</button></div>`;
     } else if (S.tab === 'war') {
       h = '';
     } else {
@@ -2523,7 +2541,7 @@
     const d = u.def, need = T.combineNeed[d.tier], lines = [];
     if (need) {
       const have = g.ownedOf(g.me, d.id).length;
-      lines.push(`<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(have, need), b: need, r: rankName(d.tier + 1) })}</span><button class="btn ${have >= need ? 'go' : ''}" data-act="combine" type="button" ${have >= need ? '' : 'disabled'}>${I.t('combineBtn')} R</button></div>`);
+      lines.push(`<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(have, need), b: need, r: rankName(d.tier + 1) })}</span><button class="btn ${have >= need ? 'go' : ''}" data-act="combine" type="button" ${have >= need ? '' : 'disabled'}>${I.t('combineBtn')}${S.coarse ? '' : ' R'}</button></div>`);
     }
     const score = (id) => { const st = g.recipeStatus(g.me, id); return st.parts.filter((x) => x.have >= x.need).length / st.parts.length; };
     const used = Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id)).sort((a, b) => score(b) - score(a));
@@ -2585,9 +2603,9 @@
     const ci = CMD_INFO[a] || ['dot', l, ''], ik = a === 'stop' && l === I.t('stop') ? 'stop' : ci[0];
     return `<button class="cmd ${on ? 'on' : ''}" data-act="${a}" type="button" ${ok ? '' : 'disabled'} ${tipAttr(l, t('command'), a === 'stop' && l === I.t('stop') ? I.t('stopDesc') : ci[2])}>${icon(ik)}${extra || ''}</button>`;
   };
-  const passiveCell = (x) => `<div class="cmd info" ${tipAttr(x.name, t('passive'), x.desc)}>${icon(PASSIVE_ICON[x.k], '#e6c578')}<kbd>${t('passive')}</kbd></div>`;
+  const passiveCell = (x) => `<div class="cmd info" ${tipAttr(x.name, t('passive'), x.desc)}>${icon(PASSIVE_ICON[x.k], '#e6c578')}<kbd>${t('cmdPassive')}</kbd></div>`;
   const skillDesc = (s) => `${(SKILL_TEXT[s.k] || (() => ''))(s)} · ${I.t('cooldown', { n: s.cd })}`;
-  const skillCell = (s) => `<div class="cmd info" ${tipAttr(s.n, t('active'), skillDesc(s))}>${icon(SKILL_ICON[s.k], s.fx)}<kbd>${t('active')}</kbd></div>`;
+  const skillCell = (s) => `<div class="cmd info" ${tipAttr(s.n, t('active'), skillDesc(s))}>${icon(SKILL_ICON[s.k], s.fx)}<kbd>${t('cmdActive')}</kbd></div>`;
   function fillCmds(cells) {
     // 9칸을 넘는 장수(불멸 등)도 잘리지 않게 모두 보여 준다
     const list = cells.slice();

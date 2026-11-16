@@ -52,6 +52,15 @@
     else if (a === 'dash') { g.dash(g.active(), S.mouse.x, S.mouse.y); }
     else if (a === 'champ') g.selectChamp(+arg);
     else if (a === 'restart') adThen(() => location.reload());
+    // 판 도중 나가기(설정 탭): 두 번 눌러 확인. 혼자 하는 오프라인 판은 저장해 두고(이어하기) 멈춘다.
+    // 협동 방은 오래 자리를 비웠을 때와 같은 길(kicked + leave)로 방에서 나간다. 그 뒤는 결과창의 restart와 같다.
+    else if (a === 'quit') {
+      if (S.quitArm) {
+        S.quitArm = false; saveGame();
+        if (lifeOffline()) S.paused = true; else { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
+        adThen(() => location.reload());
+      } else { S.quitArm = true; toast(t('quitConfirm'), 'warn'); setTimeout(() => { if (S.quitArm) { S.quitArm = false; dirty(); } }, 3000); }
+    }
     else if (a === 'resume') { S.paused = false; last = performance.now(); }
     else if (a === 'volunteer') { if (net && net.volunteer) net.volunteer(); }
     else if (a === 'tutReset') { if (window.RTD_TUT) window.RTD_TUT.reset(); toast(I.t('tutReplayHint'), 'good'); }

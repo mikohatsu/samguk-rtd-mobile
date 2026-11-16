@@ -14,7 +14,8 @@
     { k: 'tut_hello', at: '#hud', hold: true },
     { k: 'tut_select', at: null, hold: true, until: (c) => c.S.sel.length > 0, noNext: true },
     { k: 'tut_selbar', at: '#selbar', hold: true },
-    { k: 'tut_move', at: null, hold: true },
+    // 터치에서는 조이스틱으로만 움직인다. 조이스틱이 안 보이면(선택이 풀림) 아래쪽 가운데에 글만 띄운다
+    { k: 'tut_move', at: '#joy', hold: true },
     { k: 'tut_upgrade', at: '#rail [data-arg="upgrade"]', hold: true },
     { k: 'tut_auto', at: '#rail [data-act="autoAll"]', hold: true },
     { k: 'tut_ticket', at: '#rail [data-arg="ticket"]', hold: true },

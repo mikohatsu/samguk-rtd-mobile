@@ -95,6 +95,9 @@
       h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
       h += `<div class="row"><div>${t('version')}</div><div>v${window.RTD_VERSION || '?'}</div></div>`;
       h += `<div class="row"><div>${t('bgm')}</div><button class="toggle" data-act="vol" data-arg="bgm" type="button">${Math.round(Snd.state.bgm * 100)}%</button></div>`;
+      // 판 도중 나가기: 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 나간다(11-actions의 quit)
+      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : 'quitHintRoom';
+      h += `<div class="h">${I.t('quitGame')}</div><div class="row"><div><small>${I.t(qh)}</small></div><button class="toggle ${S.quitArm ? 'on' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitBtn')}</button></div>`;
     } else if (S.tab === 'war') {
       h = '';
     } else {
@@ -163,7 +166,7 @@
     const d = u.def, need = T.combineNeed[d.tier], lines = [];
     if (need) {
       const have = g.ownedOf(g.me, d.id).length;
-      lines.push(`<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(have, need), b: need, r: rankName(d.tier + 1) })}</span><button class="btn ${have >= need ? 'go' : ''}" data-act="combine" type="button" ${have >= need ? '' : 'disabled'}>${I.t('combineBtn')} R</button></div>`);
+      lines.push(`<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(have, need), b: need, r: rankName(d.tier + 1) })}</span><button class="btn ${have >= need ? 'go' : ''}" data-act="combine" type="button" ${have >= need ? '' : 'disabled'}>${I.t('combineBtn')}${S.coarse ? '' : ' R'}</button></div>`);
     }
     const score = (id) => { const st = g.recipeStatus(g.me, id); return st.parts.filter((x) => x.have >= x.need).length / st.parts.length; };
     const used = Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id)).sort((a, b) => score(b) - score(a));
@@ -225,9 +228,9 @@
     const ci = CMD_INFO[a] || ['dot', l, ''], ik = a === 'stop' && l === I.t('stop') ? 'stop' : ci[0];
     return `<button class="cmd ${on ? 'on' : ''}" data-act="${a}" type="button" ${ok ? '' : 'disabled'} ${tipAttr(l, t('command'), a === 'stop' && l === I.t('stop') ? I.t('stopDesc') : ci[2])}>${icon(ik)}${extra || ''}</button>`;
   };
-  const passiveCell = (x) => `<div class="cmd info" ${tipAttr(x.name, t('passive'), x.desc)}>${icon(PASSIVE_ICON[x.k], '#e6c578')}<kbd>${t('passive')}</kbd></div>`;
+  const passiveCell = (x) => `<div class="cmd info" ${tipAttr(x.name, t('passive'), x.desc)}>${icon(PASSIVE_ICON[x.k], '#e6c578')}<kbd>${t('cmdPassive')}</kbd></div>`;
   const skillDesc = (s) => `${(SKILL_TEXT[s.k] || (() => ''))(s)} · ${I.t('cooldown', { n: s.cd })}`;
-  const skillCell = (s) => `<div class="cmd info" ${tipAttr(s.n, t('active'), skillDesc(s))}>${icon(SKILL_ICON[s.k], s.fx)}<kbd>${t('active')}</kbd></div>`;
+  const skillCell = (s) => `<div class="cmd info" ${tipAttr(s.n, t('active'), skillDesc(s))}>${icon(SKILL_ICON[s.k], s.fx)}<kbd>${t('cmdActive')}</kbd></div>`;
   function fillCmds(cells) {
     // 9칸을 넘는 장수(불멸 등)도 잘리지 않게 모두 보여 준다
     const list = cells.slice();

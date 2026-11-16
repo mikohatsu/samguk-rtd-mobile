@@ -70,7 +70,8 @@
       if (M.ctr <= 0) {
         M.ctr = 0;
         const go = M.ctrGo; M.ctrGo = null;
-        if (go) { f.vis = go.v || null; this.patternGen[go.gen].call(this, f, b, go.t, Object.assign({}, go.p, { now: true }), this.pace(), this.allTargets()); f.vis = null; }
+        const gt = go && (go.t || this.nearestTo(b.x, b.y)); // 방장이 바뀌면 표적 참조가 없다
+        if (go && gt) { f.vis = go.v || null; this.patternGen[go.gen].call(this, f, b, gt, Object.assign({}, go.p, { now: true }), this.pace(), this.allTargets()); f.vis = null; }
       }
     }
     this.stepObjs(dt);
@@ -86,12 +87,18 @@
     if (M.ampT > 0) M.ampT -= dt;
     if (M.charmCd > 0) M.charmCd -= dt;
     if (M.charmT > 0) M.charmT -= dt;
+    if (M.charmHold > 0) M.charmHold -= dt;
     if (M.adT > 0) M.adT -= dt;
     M.objs.forEach((o) => { if (o.flash > 0) o.flash -= dt; });
     if (!this.isAuthority) { if (M.gr > 0) M.gr -= dt; if (M.ctr > 0) M.ctr -= dt; if (M.cast) M.cast.t += dt; }
   };
+  // 시전이 끝난 뒤 할 일. 방장이 바뀌어도 이어지도록 함수 대신 이름(ak)으로 들고 다닌다.
+  const CAST_AFTER = {
+    awaken() { const f = this.fight; f.mech.enr = true; f.boss.speed *= 1.3; },
+  };
   P.stepCast = function (dt) {
     const f = this.fight, M = f.mech, c = M.cast;
+    if (!c.after && c.ak && CAST_AFTER[c.ak]) c.after = CAST_AFTER[c.ak];
     c.t += dt;
     if (c.got >= c.need) {
       M.cast = null; M.gr = 4;
@@ -138,7 +145,7 @@
     Object.keys(d.o || {}).forEach((id) => { const o = M.objs.find((x) => x.id === +id); if (o && o.hp > 0) this.damageObj(o, d.o[id]); });
     if (d.ctr && M.ctr > 0) this.addCounter(d.ctr);
     if (d.amp) { if (!(M.ampT > 0) || d.amp[0] >= M.amp) M.amp = d.amp[0]; M.ampT = Math.max(M.ampT || 0, d.amp[1]); }
-    if (d.cm) this.charmBoss(d.cm[0], d.cm[1], d.cm[2]);
+    if (d.cm && !(M.charmCd > 1)) this.charmBoss(d.cm[0], d.cm[1], d.cm[2]); // 팀 공유 재사용 중이면 받지 않는다
     if (d.ad) { if (!(M.adT > 0) || d.ad[0] >= M.adV) M.adV = d.ad[0]; M.adT = Math.max(M.adT || 0, d.ad[1]); }
     if (d.gp) b.gap += d.gp;
   };
@@ -366,7 +373,7 @@
     },
     awaken: {
       start(f, b, p) {
-        this.startCast(p.n, 8, 'kill', { after() { f.mech.enr = true; b.speed *= 1.3; } });
+        this.startCast(p.n, 8, 'kill', { ak: 'awaken' });
       },
     },
     // 사마의 천하통일·제갈량 칠성등 기도: 중앙에서 무력화, 실패하면 전멸
@@ -385,7 +392,7 @@
         const h = 190, y0 = ARENA.y0 + 140 + this.rand() * (AH - 280 - h), pace = this.pace(), vy = (this.rand() < 0.5 ? -1 : 1) * 110;
         this.addHazards([
           { k: 'band', raid: 1, x: 0, y: 0, y0, y1: y0 + h, delay: 3.6 * pace, dmg: b.hit * 1.2 },
-          { k: 'wind', raid: 1, x: 0, y: 0, vx: 0, vy, delay: 0.8, dur: 4.4 * pace },
+          { k: 'wind', raid: 1, x: 0, y: 0, vx: 0, vy, delay: 0.8, dur: 4.4 * pace, dmg: 0 },
         ]);
       },
     },
@@ -488,7 +495,7 @@
     gates(f, b, t, p, pace) {
       const M = f.mech, syms = [0, 1, 2, 3, 4, 5, 6, 7];
       for (let i = 7; i > 0; i--) { const j = (this.rand() * (i + 1)) | 0; [syms[i], syms[j]] = [syms[j], syms[i]]; }
-      const delay = 4.6 * pace, pos = ring(8, 470, 330, this.rand());
+      const delay = 5.6 * pace, pos = ring(8, 470, 330, this.rand());
       M.objs = M.objs.filter((o) => o.k !== 'gate');
       pos.forEach(([x, y], i) => this.addObj('gate', x, y, 95, 0, { s: syms[i], life: delay + 0.4 }));
       M.sym = syms[(this.rand() * 8) | 0];
@@ -513,8 +520,8 @@
       if (s.st === 'follow') {
         const t = this.allTargets().includes(s.tgt) ? s.tgt : this.nearestTo(M.bur.x, M.bur.y);
         if (t) { M.bur.x = t.x; M.bur.y = t.y; }
-        if (s.t >= 2) { s.st = 'lock'; s.t = 0; M.bur.lock = true; this.addHazards([{ k: 'circle', x: M.bur.x | 0, y: M.bur.y | 0, r: 150, delay: 0.9, dmg: b.hit * 0.5, fx: 'quake' }]); }
-      } else if (s.st === 'lock' && s.t >= 0.9) {
+        if (s.t >= 2) { s.st = 'lock'; s.t = 0; M.bur.lock = true; this.addHazards([{ k: 'circle', x: M.bur.x | 0, y: M.bur.y | 0, r: 150, delay: 1.2, dmg: b.hit * 0.5, fx: 'quake' }]); }
+      } else if (s.st === 'lock' && s.t >= 1.2) {
         s.st = 'up'; s.t = 0; M.hide = false; b.x = M.bur.x; b.y = M.bur.y; this.log('shake', { v: 0.8 });
       } else if (s.st === 'up' && s.t >= 2) {
         if (--s.n <= 0) { M.busy = null; M.bur = null; return; }
@@ -526,27 +533,62 @@
 
   // ---- 동기화 ----
   P.raidWire = function () {
-    const M = this.fight.mech;
+    const f = this.fight, M = f.mech, busy = M.busy ? Object.assign({}, M.busy) : null;
+    if (busy) delete busy.tgt; // 표적은 객체 참조라 보내지 않는다(받는 쪽이 가까운 대상으로 다시 잡는다)
     return {
-      g: r1(M.gr), v: M.vuln, c: r1(M.ctr), cp: M.ctr > 0 ? r2((M.ctrGot || 0) / (M.ctrNeed || 1)) : 0, a: M.ampT > 0 ? [r2(M.amp), r1(M.ampT)] : null, f: r2(M.face), h: M.hide ? 1 : 0, y: M.sym, cm: M.charmT > 0 ? [0, r1(M.charmT)] : null,
+      g: r1(M.gr), v: M.vuln, c: r1(M.ctr), cp: M.ctr > 0 ? r2((M.ctrGot || 0) / (M.ctrNeed || 1)) : 0, a: M.ampT > 0 ? [r2(M.amp), r1(M.ampT)] : null, f: r2(M.face), h: M.hide ? 1 : 0, y: M.sym,
+      // 미인계: [팀 공유 재사용 남은 시간, 매혹 남은 시간]
+      cm: M.charmT > 0 || M.charmCd > 0 ? [r1(Math.max(0, M.charmCd || 0)), r1(Math.max(0, M.charmT || 0))] : null,
       s: M.cast ? { n: M.cast.n, t: r1(M.cast.t), d: M.cast.dur, p: r2(M.cast.got / M.cast.need), sp: M.cast.spots || null } : null,
-      o: M.objs.map((o) => [o.id, o.k, o.x | 0, o.y | 0, o.r, Math.round(o.hp), Math.round(o.mhp), o.s == null ? -1 : o.s, o.lit ? 1 : 0, o.done ? 1 : 0, r2(o.p || 0)]),
+      // 오브젝트: 끝의 두 칸(cd, life)은 방장 교체용. 옛 버전은 앞 11칸만 읽는다.
+      o: M.objs.map((o) => [o.id, o.k, o.x | 0, o.y | 0, o.r, Math.round(o.hp), Math.round(o.mhp), o.s == null ? -1 : o.s, o.lit ? 1 : 0, o.done ? 1 : 0, r2(o.p || 0), r1(o.cd || 0), o.life == null ? -1 : r1(o.life)]),
       b: M.bur ? [M.bur.x | 0, M.bur.y | 0, M.bur.lock ? 1 : 0] : null,
+      // 방장 교체용: 방장만 알던 기믹 진행 상태. 옛 버전은 이 칸을 읽지 않는다.
+      x: {
+        ph: M.ph, wb: M.wasBusy ? 1 : 0, bc: r1(f.bigCd || 0), en: M.enr ? 1 : 0, bu: busy,
+        q: M.q.map((q) => ({ t: r1(q.t), gen: q.gen, p: q.p, v: q.v || null })),
+        cg: M.ctr > 0 && M.ctrGo ? { gen: M.ctrGo.gen, p: M.ctrGo.p, v: M.ctrGo.v || null } : null, kn: M.ctr > 0 ? M.ctrNeed || 1 : 0,
+        cn: M.cast ? [Math.round(M.cast.need), M.cast.fail || '', M.cast.lock ? 1 : 0, M.cast.ak || ''] : null,
+      },
     };
   };
   P.raidApply = function (m) {
-    const M = this.fight.mech;
+    const f = this.fight, M = f.mech;
     if (!m) return;
+    const x = m.x && typeof m.x === 'object' ? m.x : null; // 옛 버전 방장은 보내지 않는다
     M.gr = m.g; M.vuln = m.v; M.ctr = m.c; M.face = m.f; M.hide = !!m.h; M.sym = m.y;
-    const was = M.charmT > 0;
-    M.charmCd = m.cm ? m.cm[0] : 0; M.charmT = m.cm ? m.cm[1] : 0;
-    if (M.charmT > 0 && !was) this.charmClear();
-    M.ctrGot = m.cp || 0; M.ctrNeed = 1;
+    // 내가 방금 쓴 미인계가 방장에게 닿기 전의 옛 값으로 덮이지 않게 잠깐 지킨다
+    if (!(M.charmHold > 0 && !m.cm)) {
+      const was = M.charmT > 0;
+      M.charmCd = m.cm ? m.cm[0] || 0 : 0; M.charmT = m.cm ? m.cm[1] || 0 : 0;
+      if (M.charmT > 0 && !was) this.charmClear();
+      this.charmShare();
+    }
+    const kn = x && x.kn > 0 ? x.kn : 1;
+    M.ctrGot = (m.cp || 0) * kn; M.ctrNeed = kn;
+    if (x) M.ctrGo = M.ctr > 0 && x.cg && this.patternGen[x.cg.gen] ? { gen: x.cg.gen, p: x.cg.p || {}, v: x.cg.v || null, t: null } : null;
     if (m.a) { M.amp = m.a[0]; M.ampT = m.a[1]; } else M.ampT = 0;
-    M.cast = m.s ? { n: m.s.n, t: m.s.t, dur: m.s.d, need: 1, got: m.s.p, spots: m.s.sp } : null;
+    if (m.s) {
+      const cn = x && Array.isArray(x.cn) && x.cn[0] > 0 ? x.cn : null, need = cn ? cn[0] : 1;
+      M.cast = { n: m.s.n, t: m.s.t, dur: m.s.d, need, got: m.s.p * need, spots: m.s.sp };
+      if (cn) { M.cast.fail = cn[1] || undefined; M.cast.lock = !!cn[2]; if (cn[3]) M.cast.ak = cn[3]; }
+    } else M.cast = null;
     const old = {}; M.objs.forEach((o) => (old[o.id] = o));
-    M.objs = m.o.map(([id, k, x, y, r, hp, mhp, s, lit, done, p]) => Object.assign(old[id] || {}, { id, k, x, y, r, hp, mhp, s, lit: !!lit, done: !!done, p }));
+    M.objs = (m.o || []).map(([id, k, x0, y, r, hp, mhp, s, lit, done, p, cd, life]) => {
+      const o = Object.assign(old[id] || { cd: 1 }, { id, k, x: x0, y, r, hp, mhp, s, lit: !!lit, done: !!done, p });
+      if (typeof cd === 'number') { o.cd = cd; if (life >= 0) o.life = life; else delete o.life; }
+      return o;
+    });
+    M.objs.forEach((o) => { if (o.id >= M.oid) M.oid = o.id + 1; }); // 내가 방장이 되어도 번호가 겹치지 않게
     M.bur = m.b ? { x: m.b[0], y: m.b[1], lock: !!m.b[2] } : null;
+    if (x) {
+      if (typeof x.ph === 'number') M.ph = x.ph;
+      M.wasBusy = !!x.wb;
+      if (typeof x.bc === 'number') f.bigCd = x.bc;
+      if (x.en && !M.enr) { M.enr = true; f.boss.speed *= 1.3; }
+      M.busy = x.bu && this.mechs[x.bu.k] ? Object.assign({}, x.bu) : null;
+      M.q = Array.isArray(x.q) ? x.q.filter((q) => q && this.patternGen[q.gen]).map((q) => ({ t: q.t || 0, gen: q.gen, p: q.p || {}, v: q.v || undefined })) : [];
+    }
   };
 
   if (typeof module !== 'undefined') module.exports = {};
