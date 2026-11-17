@@ -881,7 +881,9 @@
       // 이동 중엔 공격하지 못하므로 실제 딜 시간 비율을 넣는다. hpx는 강화까지 고려해 보스별로 맞춘 체력 배율이다.
       // 그 난이도의 마지막 보스면 fhpx(5인 기준 최종 보스 맞춤)를 쓴다
       // bossHpx: 난이도별 라운드→보스 체력 보정(없으면 1). 2026-11-17 보통은 실패를 R90 육손에서 R55~80으로 나눔
-      const x = (b.round === this.diff.rounds && b.fhpx ? b.fhpx : b.hpx || 1) * ((this.diff.bossHpx || {})[b.round] || 1);
+      // partyHpx: 협동(2인 이상)에만 거는 보스 체력 보정 R.partyHpx[난이도][라운드](없으면 1, 혼자 판은 항상 1). 근거: production/team/2026-11-17/balance-coop.md
+      const px = this.party > 1 ? ((this.R.partyHpx || {})[this.diff.id] || {})[b.round] || 1 : 1;
+      const x = (b.round === this.diff.rounds && b.fhpx ? b.fhpx : b.hpx || 1) * ((this.diff.bossHpx || {})[b.round] || 1) * px;
       const hp = b.reqDps * b.time * this.R.bossUptime * (m / 0.4) * scale * x * this.mut.bossHp;
       const specAtk = b.reqDps / 2;
       return { hp, def: specAtk * 0.25 * m, hit: this.rankOf[b.hitTier].hp * this.diff.bossAtk * this.mut.bossAtk };

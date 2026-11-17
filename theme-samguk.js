@@ -347,7 +347,7 @@
   const difficulties = [
     { id: 'easy', name: '쉬움', rounds: 70, mult: 0.4, lane: 1, bossAtk: 0.45, startUnits: 6, level: 0 },
     { id: 'normal', name: '보통', rounds: 90, mult: 0.85, lane: 1.55, bossAtk: 0.72, startUnits: 7, level: 1,
-      upPct: 0.22, sellGold: 0.7, bossGold: 1.2, laneBump: [[31, 80, 1.1]], bossHpx: { 55: 1.25, 70: 1.3, 80: 3.9, 90: 4.0 } },
+      upPct: 0.22, sellGold: 0.7, bossGold: 1.2, laneBump: [[31, 80, 1.1]], bossHpx: { 55: 1.25, 70: 1.3, 80: 2.0, 90: 1.6 } },
     { id: 'hard', name: '어려움', rounds: 100, mult: 1.1, lane: 1.9, bossAtk: 0.92, startUnits: 8, level: 2,
       upPct: 0.22, sellGold: 0.7, bossGold: 1.2, bossHpx: { 55: 1.1, 70: 1.2, 80: 1.2, 90: 4.4, 100: 4.2 } },
     // 악몽: 사용자 '악몽도 지금 쉬움'(2026-11-17). 불멸이 있으면 R55~110이 거의 공짜라(balance-tiers.md) R90~110 보스 체력 ×2. 사람 시험으로 다시 맞출 것
@@ -579,6 +579,9 @@
       roundTime: 45, spawnCount: 40, spawnInterval: 1, enemyLimit: 60, lives: 20, bossUptime: 0.3, midSpeed: 250, midLimit: 45, midRespawn: 360, midLifeLoss: 1, startGold: 0, disbandGold: [3, 12],
       pickTime: 25, dashCd: 10, dashMinTier: 6,
       baseRange: 200, baseAttackTime: 1, partyBossScale: [1, 1.05, 1.7, 2.4, 3.2],
+      // 협동(2인 이상) 전용 보스 체력 보정 {난이도: {라운드: 배율}}(없으면 1). 혼자 판에는 걸리지 않는다(engine.js bossStats).
+      // 2026-11-18 5인 기준: 보통은 전설(강화 잘 함) 3명, 어려움은 불멸 2명 또는 신화 4명이면 클리어. 근거: production/team/2026-11-17/balance-coop.md
+      partyHpx: { normal: { 90: 1.2 }, hard: { 100: 0.85 } },
       // 무력화(시전 끊기·반격)에 필요한 화력: 제한 시간에 겨우 잡는 화력의 몇 배를 그 시간 동안 넣어야 하는지
       staggerK: 4.5,
       itemBias: 3, // 들고 있는 신화·불멸 아이템과 관련된 장수가 랜덤으로 나올 가중치
