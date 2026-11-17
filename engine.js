@@ -38,6 +38,12 @@
       this.rand = mulberry(opt.seed || (Math.random() * 1e9) | 0);
       this.net = opt.net || null;
       this.defs = {}; theme.units.forEach((d) => (this.defs[d.id] = d));
+      // 장수 해금(theme.unlock): opt.unlocked = 이 사람이 연 잠금 장수 id 목록. 없으면 화면이 넣은 provider, 그것도 없으면(시험·시뮬레이터) 전부 열림.
+      // 잠긴 장수는 조합·교체권·선택권·상자에서 나오지 않는다(확률은 그대로, 종류만 대신한다).
+      const UL = theme.unlock, ul = opt.unlocked !== undefined ? opt.unlocked : (UL && UL.provider ? UL.provider() : null);
+      this.unlocked = Array.isArray(ul) ? ul.filter((x) => typeof x === 'string').slice(0, 64) : null;
+      this.lockedSet = new Set(this.unlocked && UL ? UL.lockedIds().filter((id) => !this.unlocked.includes(id)) : []);
+      this.itemUnit = {}; Object.keys(theme.recipes).forEach((id) => { const r = theme.recipes[id]; if (!Array.isArray(r) && r.item) this.itemUnit[r.item] = id; });
       this.rankOf = {}; theme.ranks.forEach((r) => (this.rankOf[r.t] = r));
       this.bossByRound = {}; theme.bosses.forEach((b) => (this.bossByRound[b.round] = b));
       this.midByRound = {}; theme.midbosses.forEach((m) => (this.midByRound[m.round] = m));
@@ -96,7 +102,10 @@
       for (let i = 0; i < a.length; i++) { r -= w[i]; if (r < 0) return a[i]; }
       return a[a.length - 1];
     }
-    tierIds(t) { return this.T.units.filter((d) => d.tier === t).map((d) => d.id); }
+    tierIds(t) { return this.T.units.filter((d) => d.tier === t && !this.lockedSet.has(d.id)).map((d) => d.id); }
+    isLocked(id) { return this.lockedSet.has(id); }
+    // 조합 아이템이 잠긴 장수 전용이면 false
+    itemOpen(itemId) { const u = this.itemUnit[itemId]; return !u || !this.lockedSet.has(u); }
 
     // ---- 유닛 ----
     spawnUnit(p, defId, x, y, quiet) {
@@ -299,7 +308,8 @@
       r.parts.forEach((x) => (need[x] = (need[x] || 0) + 1));
       const parts = Object.keys(need).map((x) => ({ id: x, need: need[x], have: this.freeOf(p, x).length }));
       const hasItem = !r.item || !!this.findItem(p, r.item);
-      return { parts, item: r.item, hasItem, ok: hasItem && parts.every((x) => x.have >= x.need) };
+      const locked = this.lockedSet.has(id);
+      return { parts, item: r.item, hasItem, locked, ok: !locked && hasItem && parts.every((x) => x.have >= x.need) };
     }
     craft(p, id) {
       const st = this.recipeStatus(p, id);
@@ -315,7 +325,7 @@
       return n;
     }
     useTicket(p, tier, defId) {
-      if (!(p.tickets[tier] > 0) || this.defs[defId].tier !== tier) return false;
+      if (!(p.tickets[tier] > 0) || !this.defs[defId] || this.defs[defId].tier !== tier || this.lockedSet.has(defId)) return false;
       p.tickets[tier]--; if (p === this.me) this.stats.tickets++; this.spawnUnit(p, defId, undefined, undefined, true);
       return true;
     }
@@ -416,8 +426,10 @@
       // 신화·불멸 조합 아이템은 같은 것을 한 번에 하나만 갖는다: 이미 들고 있는 것은 빼고 뽑고,
       // 그 등급을 다 들고 있으면 다른 등급, 그것도 없으면 등급 상승권을 준다
       const held = (i) => this.itemDone(p, i.id); // 들고 있거나 이미 조합에 쓴 것은 빼고 뽑는다
-      const pool = row.kind === 'item' ? this.T.items.filter((i) => i.tier === row.tier && !held(i)) : [];
-      const any = row.kind === 'item' && !pool.length ? this.T.items.filter((i) => !held(i)) : pool;
+      // 잠긴 장수 전용 아이템도 뺀다. 그 등급에 열린 것이 없으면 한 등급 아래(불멸 → 신화), 그래도 없으면 남은 열린 아이템 아무거나
+      const open = row.kind === 'item' ? this.T.items.filter((i) => !held(i) && this.itemOpen(i.id)) : [];
+      const pool = open.filter((i) => i.tier === row.tier), down = pool.length ? pool : open.filter((i) => i.tier < row.tier);
+      const any = down.length ? down : open;
       const out = row.kind !== 'item' ? this.spawnDrop(p, row.kind, {}, d.x, d.y)
         : any.length ? this.spawnDrop(p, 'item', { item: this.pick(any).id }, d.x, d.y)
         : this.spawnDrop(p, 'rankUp', {}, d.x, d.y);
@@ -427,7 +439,7 @@
       return out;
     }
     mythItems(p) { return this.drops.filter((d) => d.owner === p.idx && d.kind === 'item' && this.T.items.find((i) => i.id === d.item).tier === 9); }
-    fuseTargets(p) { return this.T.items.filter((i) => i.tier === 10 && !this.itemDone(p, i.id)); }
+    fuseTargets(p) { return this.T.items.filter((i) => i.tier === 10 && !this.itemDone(p, i.id) && this.itemOpen(i.id)); }
     canFuse(p) { return this.mythItems(p).length >= 4 && this.fuseTargets(p).length > 0; }
     fuseItems(p, keepId) {
       if (!this.canFuse(p)) return null;
@@ -496,7 +508,7 @@
       if (this.phase !== 'wave' || this.over || this.fight) return null;
       const T = this.T, p = this.me;
       return {
-        v: 1, at: Date.now(), diff: this.diff.id, mutLv: this.mutLv, muts: this.muts.map((m) => m.id),
+        v: 1, at: Date.now(), diff: this.diff.id, mutLv: this.mutLv, muts: this.muts.map((m) => m.id), unl: this.unlocked,
         round: this.round, roundT: this.roundT, time: this.time, lives: this.lives, nextId: this.nextId,
         spawned: this.spawned, toSpawn: this.toSpawn, spawnCd: this.spawnCd || 0, endedRound: this.endedRound, midDone: this.midDone, mids: this.mids, stats: this.stats,
         me: { gold: p.gold, upgrades: p.upgrades, tickets: p.tickets, auto: p.auto, zones: p.zones, ever: p.ever, done: p.done, usedItems: (p.usedItems || []).slice() },
@@ -506,7 +518,7 @@
       };
     }
     static restore(theme, s) {
-      const g = new Game(theme, { diff: s.diff, mode: 'solo', muts: s.muts, mutLv: s.mutLv });
+      const g = new Game(theme, Object.assign({ diff: s.diff, mode: 'solo', muts: s.muts, mutLv: s.mutLv }, s.unl !== undefined ? { unlocked: s.unl } : {}));
       g.events.length = 0; // 새 판을 만들며 생긴 알림은 버린다
       ['round', 'roundT', 'time', 'lives', 'nextId', 'spawned', 'toSpawn', 'spawnCd', 'endedRound', 'midDone', 'mids', 'stats'].forEach((k) => { if (s[k] !== undefined) g[k] = s[k]; });
       Object.assign(g.me, s.me);

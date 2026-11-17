@@ -40,6 +40,12 @@
     'Sinestesia — Hit Animation 1·2, 2D Explosion Animations 1·2 (OpenGameArt.org)',
     'wreaderror — lightning (OpenGameArt.org)',
     'Grahhhhh — Animated Blue Ring Explosion (OpenGameArt.org)',
+    'para — Animated particle effects #1 (OpenGameArt.org)',
+    'Esthar — Item popup starburst (OpenGameArt.org)',
+    'Beast — Smoke Aura (OpenGameArt.org)',
+    'Luke.RUSTLTD — 4 summoning circles (OpenGameArt.org)',
+    'simranzenov — Sunbursts / 2D Rays (OpenGameArt.org)',
+    'alexander123 — Stars Icon for UI (OpenGameArt.org)',
   ];
   const OSS = [
     ['Capacitor (@capacitor/core, android, ios, app, browser, screen-orientation, splash-screen, status-bar)', 'MIT License — Copyright (c) 2017-present Drifty Co. / Copyright 2020-present Ionic'],

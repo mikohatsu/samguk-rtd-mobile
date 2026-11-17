@@ -25,3 +25,6 @@ project.yaml
 project.local.yaml
 CLAUDE.local.md
 .scratch/
+
+# 받은 무료 에셋 원본 묶음(크다). 가공한 결과는 gfx/, 출처는 CREDITS.md
+art_src/vfx_dl/

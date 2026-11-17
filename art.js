@@ -202,18 +202,50 @@
   // 생성 이펙트(빛 그림)를 가운데 기준으로 덧그린다. 없으면 false를 돌려 도형 이펙트를 쓰게 한다.
   // 프레임 애니메이션 이펙트(gfx/fxa_*.png): OpenGameArt CC0 이펙트(Sinestesia 타격·폭발, wreaderror 번개, Grahhhhh 충격파 고리)를
   // 게임 크기로 줄여 묶은 시트. [칸 수, 줄 수, 프레임 수, 프레임 폭, 프레임 높이]. 더하기 합성으로 그린다.
-  const FXA_META = { hit: [4, 4, 16, 256, 256], hit2: [4, 4, 16, 256, 256], boom: [8, 4, 32, 192, 192], boom2: [8, 4, 32, 192, 192], ring: [5, 4, 19, 200, 200], bolt: [1, 4, 4, 1024, 256] };
+  // 흰 시트(물들여 쓰는 것): wave 충격파 고리(para, CC0), burst 빛살 터짐(Esthar, CC0), smoke 연기(Beast, CC0). art_src/build-vfx.py로 가공.
+  const FXA_META = { hit: [4, 4, 16, 256, 256], hit2: [4, 4, 16, 256, 256], boom: [8, 4, 32, 192, 192], boom2: [8, 4, 32, 192, 192], ring: [5, 4, 19, 200, 200], bolt: [1, 4, 4, 1024, 256],
+    wave: [5, 5, 25, 96, 96], burst: [6, 5, 30, 128, 128], smoke: [6, 5, 30, 96, 96] };
   const FXA = {};
   if (typeof Image !== 'undefined') Object.keys(FXA_META).forEach((n) => { const im = new Image(); im.onload = () => { FXA[n] = im; }; im.src = 'gfx/fxa_' + n + '.png?v=1'; });
-  // p: 진행(0→1)로 프레임을 고른다(frame을 주면 그 프레임). w·h: 그릴 크기. 시트가 없으면 false.
-  function fxAnim(c, name, p, x, y, w, h, rot, alpha, frame) {
-    const im = FXA[name], m = FXA_META[name];
-    if (!im || alpha <= 0) return false;
-    const [cols, , n, fw, fh] = m, i = frame != null ? ((frame % n) + n) % n : Math.min(n - 1, Math.max(0, Math.floor(p * n)));
-    c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.max(0, Math.min(1, alpha));
-    c.translate(x, y); if (rot) c.rotate(rot);
-    c.drawImage(im, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh, -w / 2, -h / 2, w, h);
+  // 낱장 그림(흰색, 물들여 쓴다): mc_rune1~3 법진(Luke.RUSTLTD, CC0), ray_sun 빛살(simranzenov, CC0), pic_star 별(alexander123, CC0)
+  const PIC = {};
+  if (typeof Image !== 'undefined') ['mc_rune1', 'mc_rune2', 'mc_rune3', 'ray_sun', 'pic_star'].forEach((n) => { const im = new Image(); im.onload = () => { PIC[n] = im; }; im.src = 'gfx/' + n + '.png?v=1'; });
+  // 흰 그림을 색으로 물들인 캔버스(그림·색마다 한 번 만든다). 최근 32개만 남기고 오래 안 쓴 것은 버린다.
+  // 낱장 그림은 256px로 줄여 물들인다(스킬 색이 많아 자주 새로 만들어도 가볍게. 빛살·법진은 흐린 그림이라 키워도 티가 덜 난다).
+  const TNT = {}; let tntN = 0;
+  function tinted(key, im, col) {
+    const k = key + '|' + col; let cv = TNT[k];
+    if (cv) { delete TNT[k]; TNT[k] = cv; return cv; }
+    const s = key[0] === 'p' ? Math.min(1, 256 / Math.max(im.width, im.height)) : 1;
+    cv = document.createElement('canvas'); cv.width = Math.round(im.width * s); cv.height = Math.round(im.height * s);
+    const x = cv.getContext('2d'); x.drawImage(im, 0, 0, cv.width, cv.height);
+    x.globalCompositeOperation = 'multiply'; x.fillStyle = col; x.fillRect(0, 0, cv.width, cv.height);
+    x.globalCompositeOperation = 'destination-in'; x.drawImage(im, 0, 0, cv.width, cv.height);
+    if (++tntN > 32) { const old = Object.keys(TNT)[0]; TNT[old].width = TNT[old].height = 0; delete TNT[old]; tntN--; }
+    return (TNT[k] = cv);
+  }
+  // o(선택): { col 물들일 색, sy 세로 납작함(바닥에 눕힐 때), op 합성 모드(기본 더하기) }
+  function blit(c, im, sx, sy0, sw, sh, x, y, w, h, rot, alpha, o) {
+    c.save(); c.globalCompositeOperation = (o && o.op) || 'lighter'; c.globalAlpha = Math.max(0, Math.min(1, alpha));
+    c.translate(x, y); if (o && o.sy) c.scale(1, o.sy); if (rot) c.rotate(rot);
+    c.drawImage(im, sx, sy0, sw, sh, -w / 2, -h / 2, w, h);
     c.restore();
+  }
+  // p: 진행(0→1)로 프레임을 고른다(frame을 주면 그 프레임). w·h: 그릴 크기. 시트가 없으면 false.
+  function fxAnim(c, name, p, x, y, w, h, rot, alpha, frame, o) {
+    let im = FXA[name]; const m = FXA_META[name];
+    if (!im || !(alpha > 0.01)) return !!im;
+    if (o && o.col) im = tinted('a' + name, im, o.col);
+    const [cols, , n, fw, fh] = m, i = frame != null ? ((frame % n) + n) % n : Math.min(n - 1, Math.max(0, Math.floor(p * n)));
+    blit(c, im, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh, x, y, w, h, rot, alpha, o);
+    return true;
+  }
+  // 낱장 그림을 가운데 기준으로 그린다. 없으면 false.
+  function fxPic(c, name, x, y, w, h, rot, alpha, o) {
+    let im = PIC[name];
+    if (!im || !(alpha > 0.01)) return !!im;
+    if (o && o.col) im = tinted('p' + name, im, o.col);
+    blit(c, im, 0, 0, im.width, im.height, x, y, w, h, rot, alpha, o);
     return true;
   }
   function fxImg(c, name, x, y, size, rot, alpha, sy) {
@@ -309,5 +341,5 @@
     const o = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
     return [{ v: 2 }, { v: 1 }, { v: 0 }, { v: 1, flip: true }, { v: 2, flip: true }, { v: 3, flip: true }, { v: 4 }, { v: 3 }][o];
   }
-  root.RTD_ART = { facing, unitSprite, namedSprite, soldierSprite, portrait, drawSprite, shot, fxImg, fxAnim, img, ready };
+  root.RTD_ART = { facing, unitSprite, namedSprite, soldierSprite, portrait, drawSprite, shot, fxImg, fxAnim, fxPic, img, ready };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -35,26 +35,26 @@
       }
       return;
     }
-    // 발밑에 퍼지는 고리(모든 등급). 1~3성은 흰 고리 하나로 가볍게.
-    c.save(); c.globalAlpha = 1 - k; c.strokeStyle = tier <= 3 ? '#fff6dc' : col; c.lineWidth = tier <= 3 ? 2 : tier <= 5 ? 3 : 4;
-    c.beginPath(); c.ellipse(x, fy, r * (0.6 + k * (tier <= 3 ? 1.1 : 1.8)), r * (0.26 + k * (tier <= 3 ? 0.5 : 0.8)), 0, 0, 7); c.stroke(); c.restore();
+    // 발밑에 퍼지는 충격파 고리(프레임 애니메이션 gfx/fxa_wave.png, 모든 등급). 1~3성은 작고 흰 고리로 가볍게.
+    if (k < 1) Art.fxAnim(c, 'wave', k, x, fy, r * (tier <= 3 ? 3 : tier <= 5 ? 4.2 : 5.4), r * (tier <= 3 ? 3 : tier <= 5 ? 4.2 : 5.4), 0, tier <= 3 ? 0.8 : 1, null, { col: tier <= 3 ? '#fff6dc' : col, sy: 0.45 });
     if (tier < 4 || !SK) return;
-    SK.spr(c, 'circle_02', col, x, fy, r * (1 + k * 3), r * (1 + k * 3), 0, (1 - k) * 0.8, true, 0.45);
     if (tier >= 6) {
-      // 빛기둥: 순식간에 솟았다가 가늘어지며 사라진다
+      // 빛기둥(Kenney 빛줄기 그림): 순식간에 솟았다가 가늘어지며 사라진다
       const hgt = r * (tier >= 9 ? 14 : tier >= 8 ? 10 : 7), wid = r * (tier >= 9 ? 2.4 : tier >= 8 ? 1.8 : 1.3) * (1 - k * 0.6), pa = Math.min(1, age / 0.06) * (1 - k);
-      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = pa; c.drawImage(pillarSprite(col), x - wid / 2, fy - hgt, wid, hgt);
-      if (tier >= 8) { c.globalAlpha = pa * 0.8; c.drawImage(pillarSprite('#ffffff'), x - wid / 5, fy - hgt, wid / 2.5, hgt); }
-      c.restore();
+      SK.spr(c, 'trace_06', col, x, fy - hgt / 2, wid * 4, hgt, 0, pa);
+      SK.spr(c, 'light_03', col, x, fy, wid * 2.2, wid * 2.2, k * 2, pa * 0.7, true, 0.45);
+      if (tier >= 8) SK.spr(c, 'trace_06', '#ffffff', x, fy - hgt / 2, wid * 1.6, hgt, 0, pa * 0.8);
     }
     if (tier >= 8) {
-      SK.spr(c, 'star_09', tier === 8 ? '#ffd27a' : col, x, y - r * 0.4, r * 6 * (0.6 + k * 0.6), r * 6 * (0.6 + k * 0.6), k * 1.5, bell * 0.9);
+      // 빛살 터짐(프레임 애니메이션 gfx/fxa_burst.png)
+      Art.fxAnim(c, 'burst', Math.min(0.99, k * 1.4), x, y - r * 0.4, r * 7, r * 7, 0, 1, null, { col: tier === 8 ? '#ffd27a' : col });
       SK.spr(c, 'flare_01', '#fff0c8', x, fy - r * (tier >= 9 ? 12 : 8), r * 3, r * 3, k * 3, bell * 0.8);
     }
     if (tier >= 9) {
-      SK.spr(c, 'magic_01', col, x, fy, r * (2 + ease2(k) * 4), r * (2 + ease2(k) * 4), k * 3, (1 - k) * 0.9, true, 0.42);
-      if (tier >= 10) SK.spr(c, 'magic_03', '#fff0c8', x, fy, r * (1.5 + ease2(k) * 3), r * (1.5 + ease2(k) * 3), -k * 4, (1 - k), true, 0.42);
-      SK.spr(c, 'circle_02', '#ffffff', x, fy, r * (1 + k * 6), r * (1 + k * 6), 0, (1 - k) * 0.6, true, 0.45);
+      // 바닥 법진(gfx/mc_rune*.png)이 돌며 펼쳐지고, 흰 충격파가 한 겹 더 퍼진다
+      Art.fxPic(c, 'mc_rune1', x, fy, r * (2 + ease2(k) * 4), r * (2 + ease2(k) * 4), k * 3, (1 - k) * 0.9, { col, sy: 0.42 });
+      if (tier >= 10) Art.fxPic(c, 'mc_rune2', x, fy, r * (1.5 + ease2(k) * 3), r * (1.5 + ease2(k) * 3), -k * 4, 1 - k, { col: '#fff0c8', sy: 0.42 });
+      if (k < 1) Art.fxAnim(c, 'wave', k, x, fy, r * 9, r * 9, 0, 0.8, null, { col: '#ffffff', sy: 0.45 });
     }
   }
   const ease2 = (p) => 1 - (1 - p) * (1 - p);
@@ -160,35 +160,8 @@
       const a0 = tier >= 8 ? 'aa' : '88', R = r * big * pulse;
       c.drawImage(glowSprite('a' + col + a0, [[0, col + a0], [0.5 / big, col + a0], [1, col + '00']]), x - R, y - R, R * 2, R * 2);
     }
-    if (tier >= 7 && !kAura) {
-      // 발밑에서 도는 점선 고리
-      c.save(); c.strokeStyle = col; c.lineWidth = 2; c.globalAlpha = 0.8; c.setLineDash([6, 6]); c.lineDashOffset = -t * 30;
-      c.beginPath(); c.ellipse(x, y + r * 0.72, r * 1.35, r * 0.6, 0, 0, 7); c.stroke(); c.restore();
-    }
+    // 후광 그림(Kenney·법진)을 받기 전에는 은은한 빛과 생성 법진 그림만 깐다(도형 고리·호·점은 그리지 않는다)
     if (tier >= 9 && !kAura) Art.fxImg(c, 'magic', x, y + r * 0.72, r * 3.4, t * 0.8, 0.55, 0.42);
-    if (tier >= 8 && !kAura) {
-      c.strokeStyle = col; c.lineWidth = tier >= 9 ? 3 : 2;
-      const n = tier >= 9 ? 3 : 2;
-      for (let i = 0; i < n; i++) { const a = t * 2.2 + (i * Math.PI * 2) / n; c.beginPath(); c.arc(x, y, r * 1.5, a, a + 1); c.stroke(); }
-      // 위로 떠오르는 불티(낮음 화질은 생략)
-      c.fillStyle = col;
-      for (let i = 0; i < (Q.level === 'low' ? 0 : tier >= 10 ? 7 : 4); i++) {
-        const k = ((t * 0.6 + i / 4 + seed) % 1), px = x + Math.sin(i * 2.3 + seed) * r * 0.9;
-        c.globalAlpha = 1 - k; c.beginPath(); c.arc(px, y + r * 0.6 - k * r * 2.4, 2.2 + (1 - k) * 1.5, 0, 7); c.fill();
-      }
-      c.globalAlpha = 1;
-    }
-    if (tier >= 9 && !kAura && Q.level !== 'low') for (let i = 0; i < (tier >= 10 ? 8 : 5); i++) {
-      // 궤도를 도는 빛 구슬
-      const a = -t * 1.6 + (i * Math.PI * 2) / (tier >= 10 ? 8 : 5), rr = r * (1.85 + Math.sin(t * 2 + i) * 0.2);
-      c.fillStyle = i % 2 ? '#ffffff' : col; c.beginPath(); c.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.6, 3, 0, 7); c.fill();
-    }
-    if (tier >= 10 && !kAura) {
-      // 불멸: 솟는 빛기둥과 바깥 이중 고리
-      c.globalAlpha = 0.55 + Math.sin(t * 4 + seed) * 0.2; c.drawImage(pillarSprite(col), x - r * 0.7, y - r * 3.2, r * 1.4, r * 4.2); c.globalAlpha = 1;
-      c.save(); c.strokeStyle = '#fff0c8'; c.lineWidth = 1.5; c.globalAlpha = 0.7; c.setLineDash([3, 9]); c.lineDashOffset = t * 40;
-      c.beginPath(); c.ellipse(x, y + r * 0.72, r * 1.7, r * 0.78, 0, 0, 7); c.stroke(); c.restore();
-    }
     const pb = opt.pose && opt.pose.born >= 0 ? opt.pose : null;
     if (pb) birthFx(c, x, y, r, tier, col, pb.born, false);
     // 발밑 원판: 등급 색으로 멀리서도 구별된다

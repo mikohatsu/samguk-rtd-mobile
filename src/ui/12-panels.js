@@ -173,7 +173,7 @@
       lines.push(`<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(have, need), b: need, r: rankName(d.tier + 1) })}</span><button class="btn ${have >= need ? 'go' : ''}" data-act="combine" type="button" ${have >= need ? '' : 'disabled'}>${I.t('combineBtn')}${S.coarse ? '' : ' R'}</button></div>`);
     }
     const score = (id) => { const st = g.recipeStatus(g.me, id); return st.parts.filter((x) => x.have >= x.need).length / st.parts.length; };
-    const used = Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id)).sort((a, b) => score(b) - score(a));
+    const used = Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id) && !(g.isLocked && g.isLocked(id))) // 잠긴 장수의 조합식은 빼고 보인다.sort((a, b) => score(b) - score(a));
     const list = used, max = need ? 5 : 6; // 자기 자신의 조합식은 재료로 쓰이는 곳이 아니므로 뺀다
     lines.push(...list.slice(0, max).map(recipeLine));
     if (list.length > max) lines.push(`<div class="sub line">${I.t('moreInBook', { n: list.length - max })}</div>`);

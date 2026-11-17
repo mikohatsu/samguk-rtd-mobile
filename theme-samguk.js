@@ -311,6 +311,25 @@
     { w: 27, kind: 'item', tier: 10 }, { w: 73, kind: 'item', tier: 9 },
   ];
 
+  // ---- 장수 해금(2026-11-17 사용자 결정: 불멸 전부 잠금, 신화 일부 잠금) ----
+  // 확률은 그대로 두고 종류만 막는다. 잠긴 장수의 조합 아이템이 뽑히면 같은 등급의 열린 장수 아이템으로, 그 등급이 다 잠겼으면 한 등급 아래로 대신한다.
+  // 처음부터 열린 신화: 세력마다 한 명 이상, 조합 재료가 쉬운(7성 1~2기, 전설 불필요) 상징적인 장수.
+  //   조인(위, 7성 1기) · 장비·조운(촉, 일본에서 가장 이름난 둘) · 육손(오, 전설 불필요) · 초선(그 외, 7성 1기)
+  // 잠긴 신화: 곽가·순욱(7성 2기), 손책(전설 손견 필요), 동탁(7성 2기)
+  // 열쇠: 계정 보유 목록(owned)에 'unl_<장수 id>'. 가격: 동전(coins), 결제 상품(iap: [상품 ID, 엔]).
+  // 동전 기준: 보통 클리어 1판 = 동전 58(서버 xpFor). 신화 150 ≒ 2~4판, 불멸 700 ≒ 12~20판.
+  const unlock = {
+    freeMyth: ['join', 'jangbi', 'joun', 'yukson', 'choseon'],
+    tiers: [9, 10], // 이 등급에서 freeMyth에 없는 장수는 잠근다
+    coins: { 9: 150, 10: 700 },
+    ad: { coins: 30, daily: 5 }, // 보상형 광고 1회 = 동전 30, 하루 5회(서버가 막는다)
+    iap: { 9: ['unlock_myth_', 160], 10: ['unlock_imm_', 320], all10: ['unlock_imm_all', 1200] },
+    key: (id) => 'unl_' + id,
+    provider: null, // 화면(lobby.js)이 지금 이용자의 열린 목록을 돌려주는 함수를 넣는다. 엔진은 opt.unlocked가 없을 때 이것을 쓴다.
+  };
+  unlock.lockedIds = () => units.filter((d) => unlock.tiers.includes(d.tier) && !unlock.freeMyth.includes(d.id)).map((d) => d.id);
+  unlock.price = (id) => { const d = units.find((x) => x.id === id); return d && unlock.lockedIds().includes(id) ? unlock.coins[d.tier] : null; };
+
   // 2026-11-17 밸런스: 보통·어려움을 올렸다(보통 mult 0.75→0.85·lane 1.4→1.55·bossAtk 0.65→0.72, 어려움 mult 1→1.1·lane 1.75→1.9·bossAtk 0.85→0.92). 쉬움·악몽은 그대로. 측정: tests/balance/sim.js
   const difficulties = [
     { id: 'easy', name: '쉬움', rounds: 70, mult: 0.4, lane: 1, bossAtk: 0.45, startUnits: 6, level: 0 },
@@ -534,7 +553,7 @@
     currency: '금화', chestName: '전리품 상자',
     // 등장 연출용 고해상도 일러스트가 있는 장수(gfx/il_<id>.jpg). 값은 그림 버전(바꾸면 브라우저가 새로 받는다).
     illusts: { jojo: 3, gwanu: 1, yeopo: 1, jegal: 1, yubi: 1, samaui: 1, juyu: 1, songwon: 1, taesaja: 1, janggak: 1, jangbi: 1, joun: 1, choseon: 1, gwakga: 1, join: 1, sunuk: 1, sonchaek: 1, yukson: 1, dongtak: 1 },
-    factions, ranks, combineNeed, units, sageMax, roles, synergies, mutators, recipes, items, consumables, chestMark, itemMark, chestTable, difficulties, upgrades,
+    factions, ranks, combineNeed, units, sageMax, roles, synergies, mutators, recipes, items, consumables, chestMark, itemMark, chestTable, unlock, difficulties, upgrades,
     waves, bosses, midbosses, bossRewards, fastClearRemain, achievements,
     rules: {
       // 라인 몹 체력(쉬움 기준). 초반은 높게 시작해 완만하게, 이후 성장 속도에 맞춰 오른다. 15라운드부터는 제대로 뽑지 않으면 밀리게 1.2배.

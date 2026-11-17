@@ -7,24 +7,20 @@
     if (stop && !net && g && g.phase === 'wave') S.hitStop = Math.max(S.hitStop || 0, stop);
     if (buzz && navigator.vibrate) { try { navigator.vibrate(buzz); } catch (e) { /* 진동 없음 */ } }
   }
-  // 빛살: 가운데에서 뻗는 가는 삼각형들이 천천히 돈다(더하기 합성, 그라디언트 없음)
-  // 딱딱한 삼각형이 그대로 보이지 않게: 작은 캔버스에 한 번 그려 가운데서 바깥으로 사라지게 지우고, 키워 그려 가장자리를 흐린다(색·개수별로 한 번만 만든다).
-  const rayCache = {};
-  function raySheet(col, n) {
-    const key = col + n; if (rayCache[key]) return rayCache[key];
-    const S2 = 160, cv = document.createElement('canvas'); cv.width = cv.height = S2 * 2; const x = cv.getContext('2d');
-    x.translate(S2, S2); x.fillStyle = col;
-    for (let i = 0; i < n; i++) { const t0 = (i / n) * Math.PI * 2 + (i % 4) * 0.06, w = 0.035 + (i % 3) * 0.02, rr = S2 * (0.6 + ((i * 7) % 5) * 0.1); x.globalAlpha = i % 2 ? 0.5 : 1; x.beginPath(); x.moveTo(0, 0); x.lineTo(Math.cos(t0 - w) * rr, Math.sin(t0 - w) * rr); x.lineTo(Math.cos(t0 + w) * rr, Math.sin(t0 + w) * rr); x.closePath(); x.fill(); }
-    x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'destination-in';
-    const fg = x.createRadialGradient(S2, S2, 0, S2, S2, S2); fg.addColorStop(0, 'rgba(0,0,0,1)'); fg.addColorStop(0.35, 'rgba(0,0,0,0.75)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = fg; x.fillRect(0, 0, S2 * 2, S2 * 2);
-    return (rayCache[key] = cv);
-  }
-  function rays(c, x, y, R, col, a, rot, n) {
+  // 빛살: 빛살 그림(gfx/ray_sun.png, CC0)을 등급 색으로 물들여 천천히 돌린다(더하기 합성)
+  function rays(c, x, y, R, col, a, rot) {
     if (!(a > 0.01)) return;
-    c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a * 1.3); c.translate(x, y); c.rotate(rot);
-    c.drawImage(raySheet(col, n), -R, -R, R * 2, R * 2);
-    c.restore();
+    Art.fxPic(c, 'ray_sun', x, y, R * 2, R * 2, rot, Math.min(1, a * 1.6), { col });
+  }
+  // 퍼지는 충격파 고리(프레임 애니메이션 gfx/fxa_wave.png, CC0). sy: 바닥에 눕힐 때 세로 납작함
+  function wave(c, q, x, y, s, col, a, sy) {
+    if (q <= 0 || q >= 1) return;
+    Art.fxAnim(c, 'wave', q, x, y, s, s, 0, a, null, { col, sy });
+  }
+  // 빛살 터짐(프레임 애니메이션 gfx/fxa_burst.png, CC0)
+  function burstFx(c, q, x, y, s, col, a, rot) {
+    if (q <= 0 || q >= 1) return;
+    Art.fxAnim(c, 'burst', q, x, y, s, s, rot || 0, a, null, { col });
   }
   // 다음 알림 꺼내기: 신화·불멸을 먼저(시간 멈춤과 어긋나지 않게), 이어 쌓인 7성 이하 알림은 하나로 묶어 가장 높은 것을 보여 주고 나머지는 +N
   function nextPop() {
@@ -38,6 +34,11 @@
     }
     return p;
   }
+  // 별: 별 그림(gfx/pic_star.png, CC0)을 등급 색으로 물들여 찍는다. 그림을 받기 전에만 다각형으로 대신한다.
+  function starPic(c, x, y, r, col, a) {
+    if (Art.fxPic(c, 'pic_star', x, y, r * 2.3, r * 2.2, 0, a, { col, op: 'source-over' })) return;
+    c.save(); c.globalAlpha = a; c.fillStyle = col; star(c, x, y, r); c.fill(); c.restore();
+  }
   function star(c, x, y, r) {
     c.beginPath();
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? r * 0.44 : r; c[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
@@ -49,9 +50,8 @@
     if (tt < 0) return;
     const f = Math.min(1, tt / 0.18), s = 3.2 - 2.2 * f;
     if (f >= 1 && !p.hits[key]) { p.hits[key] = 1; p.shake = Math.max(p.shake, big ? 1 : 0.35); Snd.play(big ? 'bigslam' : 'star' + Math.min(6, key), 20); }
-    c.globalAlpha = 0.4 + 0.6 * f; c.fillStyle = col; c.strokeStyle = '#fff'; c.lineWidth = 2;
-    star(c, x, y, r * s); c.fill(); c.stroke();
-    if (f >= 1 && tt < 0.55) { c.globalAlpha = 1 - (tt - 0.18) / 0.37; c.lineWidth = 4; c.strokeStyle = col; c.beginPath(); c.arc(x, y, r * (1 + (tt - 0.18) * 6), 0, 7); c.stroke(); }
+    starPic(c, x, y, r * s, col, 0.4 + 0.6 * f);
+    if (f >= 1 && tt < 0.55) wave(c, (tt - 0.18) / 0.37, x, y, r * 6, col, 1);
     c.globalAlpha = 1;
   }
   function popBand(c, y, h, a) {
@@ -176,6 +176,8 @@
     }
     return (puffCv = cv);
   }
+  // 배경 연기 한 뭉치(l0: 이미 지난 시간. 처음부터 화면이 비어 보이지 않게)
+  function inkPuff(l0) { return { x: Math.random() * W, y: H * 0.3 + Math.random() * H * 0.8, vx: (Math.random() - 0.5) * 30, vy: -(12 + Math.random() * 26), l: l0, m: 3 + Math.random() * 1.5, s: 460 + Math.random() * 380, a: Math.random() * 6, sp: (Math.random() - 0.5) * 0.3, f0: Math.random() * 30 }; }
   function slamOnce(p, key, big) { if (!p.hits[key]) { p.hits[key] = 1; p.shake = big ? 1.3 : 0.7; Snd.play(big ? 'bigslam' : 'slam', 20); } }
   function drawCutscene(c, p, t, dt) {
     // 입자는 실제 흐른 시간으로 움직인다(30fps 모드에서 절반 속도·절반 생성이 되던 문제). 60fps면 예전과 같다.
@@ -190,19 +192,36 @@
     const tease = T0 < 0.35;
     if (!tease && !p.hits.tease) { p.hits.tease = 1; Snd.play('shimmer'); }
     if (T0 > 0.5 && !p.hits.rise) { p.hits.rise = 1; Snd.play('rise'); }
-    // 1) 빛줄기가 화면을 가로지른다
-    if (T0 < 0.95) {
-      const q = Math.min(1, T0 / 0.8), k = q * q * (3 - 2 * q), x = -500 + (W + 1000) * k;
+    // 0) 배경: 등급 색 연기(연기 애니메이션 gfx/fxa_smoke.png)가 천천히 피어오르고 불티(Kenney 반짝이)가 오른다. 그림이 들어오면 걷힌다.
+    if (T0 < 3.4) {
+      const ba = fade * Math.min(1, T0 * 2.5) * (1 - Math.max(0, (T0 - 2.95) / 0.45));
+      if (!p.ink) { p.ink = []; for (let i = 0; i < Math.max(2, Math.round(6 * qPart())); i++) p.ink.push(inkPuff(Math.random() * 1.6)); }
+      if (Math.random() < 2.2 * qPart() * DT) p.ink.push(inkPuff(0));
+      const ic = imm ? '#b03a1c' : '#7040c0';
+      for (let i = p.ink.length - 1; i >= 0; i--) {
+        const q = p.ink[i]; q.l += DT; q.x += q.vx * DT; q.y += q.vy * DT;
+        const k = q.l / q.m;
+        if (k >= 1) { p.ink.splice(i, 1); continue; }
+        const s = q.s * (0.75 + k * 0.5);
+        Art.fxAnim(c, 'smoke', 0, q.x, q.y, s, s, q.a + q.l * q.sp, ba * Math.sin(k * Math.PI) * 0.6, Math.floor(q.f0 + q.l * 12), { col: ic });
+      }
+      p.emb = p.emb || [];
+      if (Math.random() < 16 * qPart() * DT) p.emb.push({ x: Math.random() * W, y: H + 10, vx: (Math.random() - 0.5) * 40, vy: -(70 + Math.random() * 170), l: 0, m: 1.6 + Math.random() * 1.6, r: 12 + Math.random() * 18 });
+      const et = kn('star_04', C.core);
       c.globalCompositeOperation = 'lighter';
-      c.save(); c.translate(x, H / 2); c.rotate(-0.32);
-      const gr = c.createLinearGradient(-160, 0, 160, 0);
-      gr.addColorStop(0, 'rgba(255,255,255,0)'); const sc = tease ? '255,190,80' : C.mid; gr.addColorStop(0.45, `rgba(${sc},.5)`); gr.addColorStop(0.5, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, `rgba(${sc},.5)`); gr.addColorStop(1, 'rgba(255,255,255,0)');
-      c.globalAlpha = fade * (1 - Math.max(0, T0 - 0.75) / 0.2); c.fillStyle = gr; c.fillRect(-160, -H * 1.4, 320, H * 2.8);
-      c.restore();
-      // 가로 섬광선
-      const lg = c.createLinearGradient(0, 0, W, 0); lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(Math.min(1, Math.max(0, x / W)), 'rgba(255,255,255,.95)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
-      c.globalAlpha = fade * 0.8 * (1 - T0 / 0.95); c.fillStyle = lg; c.fillRect(-OVER.x, H / 2 - 2, W + OVER.x * 2, 4);
+      for (let i = p.emb.length - 1; i >= 0; i--) {
+        const q = p.emb[i]; q.l += DT; q.x += (q.vx + Math.sin(q.l * 3 + i) * 25) * DT; q.y += q.vy * DT;
+        const k = q.l / q.m;
+        if (k >= 1) { p.emb.splice(i, 1); continue; }
+        if (et) { c.globalAlpha = ba * (1 - k) * Math.min(1, k * 6); c.drawImage(et, q.x - q.r, q.y - q.r, q.r * 2, q.r * 2); }
+      }
       c.globalCompositeOperation = 'source-over';
+    }
+    // 1) 빛살 터짐 애니메이션과 도는 빛살 그림으로 연다(처음 0.35초는 금빛)
+    if (T0 < 1.2) {
+      const q = Math.min(1, T0 / 1.2), sc = tease ? '#ffbe50' : C.hex;
+      burstFx(c, q, W / 2, H / 2 - 40, 1150, tease ? '#ffe0a0' : C.soft, fade * (1 - q * 0.5));
+      rays(c, W / 2, H / 2 - 40, 760 * (0.6 + 0.4 * ease(q)), sc, fade * 0.45 * Math.sin(q * Math.PI), T0 * 0.4);
     }
     // 2) 한문 명대사 → 번역
     const qc = d.qc || '', qk = d.quote || '';
@@ -226,7 +245,7 @@
         const ka = Math.min(1, (T0 - 0.5 - chars.length / 16) * 3) * out;
         c.globalAlpha = fade * ka; c.shadowBlur = 0; c.fillStyle = '#e8d8b8';
         fitFont(c, qk, 700, 36, '"Gowun Batang", serif', W - 220); c.fillText(qk, W / 2, H / 2 + 40);
-        c.strokeStyle = C.hex; c.lineWidth = 1.5; c.globalAlpha = fade * ka * 0.7; c.beginPath(); c.moveTo(W / 2 - 260 * ka, H / 2 + 4); c.lineTo(W / 2 + 260 * ka, H / 2 + 4); c.stroke();
+        if (window.RTD_SKFX) window.RTD_SKFX.spr(c, 'trace_06', C.hex, W / 2, H / 2 + 4, 40, 560 * ka, Math.PI / 2, fade * ka * 0.85);
       }
     }
     // 3) 섬광
@@ -288,7 +307,7 @@
         const k = q.l / q.m;
         if (k >= 1) { p.fire.splice(i, 1); continue; }
         const rr = q.r * (1 - k * 0.5) * 3;
-        c.globalAlpha = fade * (1 - k) * Math.min(1, k * 6) * 0.9; c.drawImage(softGlow(k < 0.4 ? C.core : C.mid), q.x - rr, q.y - rr, rr * 2, rr * 2);
+        c.globalAlpha = fade * (1 - k) * Math.min(1, k * 6) * 0.9; c.drawImage(kn('star_04', k < 0.4 ? C.core : C.mid) || softGlow(k < 0.4 ? C.core : C.mid), q.x - rr * 1.6, q.y - rr * 1.6, rr * 3.2, rr * 3.2);
       }
       // 글자 주변: 불멸은 큰 불꽃이 거세게 타오르고, 신화는 보랏빛 아지랑이가 느릿하게 피어오른다
       p.flame = p.flame || [];
@@ -410,7 +429,7 @@
         c.font = '700 50px "Gowun Batang", serif'; const label = rank.split('').join('  ');
         c.shadowColor = '#000'; c.shadowBlur = 8; c.fillStyle = C.soft; c.fillText(label, 0, 0); c.shadowBlur = 0;
         const lw = c.measureText(label).width / 2 + 18;
-        c.strokeStyle = C.hex; c.lineWidth = 2; c.beginPath(); c.moveTo(-lw - 90 * kr, 0); c.lineTo(-lw, 0); c.moveTo(lw, 0); c.lineTo(lw + 90 * kr, 0); c.stroke();
+        if (window.RTD_SKFX) [-1, 1].forEach((sd) => window.RTD_SKFX.spr(c, 'trace_06', C.hex, sd * (lw + 50 * kr), 0, 30, 110 * kr, Math.PI / 2, fade * kr));
         c.restore();
       }
       // 6) 한자 이름, 한글 이름이 차례로 박힌다
@@ -443,7 +462,8 @@
     }
     // 잭팟 충격파: 등급 글자 자리에서 화면 밖까지 두 겹 고리가 퍼진다
     if (T0 >= 2.95 && T0 < 3.85) {
-      for (let i = 0; i < 2; i++) { const q = (T0 - 2.95 - i * 0.12) / 0.75; if (q <= 0 || q >= 1) continue; c.globalAlpha = fade * (1 - q); c.strokeStyle = i ? '#fff' : C.hex; c.lineWidth = 26 * (1 - q) + 2; c.beginPath(); c.arc(W * 0.3, H * 0.36, 80 + ease(q) * W * 1.1, 0, 7); c.stroke(); }
+      for (let i = 0; i < 2; i++) { const q = (T0 - 2.95 - i * 0.12) / 0.75; wave(c, q, W * 0.3, H * 0.36, 500 + ease(q) * W * 1.4, i ? '#ffffff' : C.hex, fade * (1 - q * 0.5)); }
+      burstFx(c, (T0 - 2.95) / 0.9, W * 0.3, H * 0.36, 1300, C.soft, fade);
     }
     // 섬광은 맨 위에 덮는다
     if (T0 >= 2.95 && T0 < 3.5) { c.globalAlpha = fade * Math.pow(1 - (T0 - 2.95) / 0.55, 2); c.fillStyle = '#fff'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); }
@@ -454,7 +474,8 @@
     const rows = p.rows.slice(0, 5), y0 = 120;
     popBand(c, y0, 640 + rows.length * 40, a);
     c.globalAlpha = a; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.strokeStyle = b.fx; c.lineWidth = 3; c.beginPath(); c.moveTo(cx - 420, y0 + 192); c.lineTo(cx + 420, y0 + 192); c.stroke();
+    if (window.RTD_SKFX) window.RTD_SKFX.spr(c, 'trace_06', b.fx, cx, y0 + 192, 50, 880, Math.PI / 2, a);
+    c.globalAlpha = a;
     c.shadowColor = '#ffb347'; c.shadowBlur = 30 + Math.sin(t * 6) * 10; c.fillStyle = '#ffe2a8';
     const s = 1 + Math.max(0, 0.4 - p.t) * 1.5;
     c.font = `400 ${Math.round(130 * s)}px "East Sea Dokdo", "Black Han Sans", serif`; c.fillText(I.t('bossDown'), cx, y0 + 90); c.shadowBlur = 0;
@@ -507,7 +528,7 @@
       for (let i = 0; i < d.tier; i++) {
         const k = Math.min(1, Math.max(0, (T0 - i * 0.05) / 0.12)), s = k < 1 ? 0.4 + k * 0.9 : 1.3 - Math.min(0.3, (T0 - i * 0.05 - 0.12) * 3);
         if (k <= 0) continue;
-        c.globalAlpha = a; c.fillStyle = col; star(c, W / 2 + (i - (d.tier - 1) / 2) * 62, 220, 25 * s); c.fill();
+        starPic(c, W / 2 + (i - (d.tier - 1) / 2) * 62, 220, 25 * s, col, a);
       }
       c.globalAlpha = 1; popName(c, p, 292, 46, a);
       if (more) popMore(c, more, 330, col, a);
@@ -521,15 +542,16 @@
       // 7성: 별 여섯 → 큰 별이 떨어져 쾅(빛살·섬광·멈칫)
       popBand(c, 90, 420, a);
       const land = 1.2, fall = Math.min(1, Math.max(0, (T0 - 0.95) / (land - 0.95)));
-      if (T0 > land) rays(c, W / 2, 225, 520, col, a * 0.3 * Math.min(1, (T0 - land) * 4), T0 * 0.25, 18);
+      if (T0 > land) rays(c, W / 2, 225, 520, col, a * 0.3 * Math.min(1, (T0 - land) * 4), T0 * 0.25);
       [-310, -215, -120, 120, 215, 310].forEach((o, i) => slamStar(c, p, i, W / 2 + o, 290, 40, col, 0.08 + i * 0.13));
       if (fall > 0) {
         const y = -160 + (225 + 160) * fall * fall;
         if (fall >= 1 && !p.hits.big) { p.hits.big = 1; impact(p, 1.3, 0.08, 18); Snd.play('bigslam', 20); Snd.play('shimmer'); }
-        c.globalAlpha = a; c.fillStyle = '#fff'; c.shadowColor = col; c.shadowBlur = 40; star(c, W / 2, y, 86); c.fill(); c.fillStyle = col; star(c, W / 2, y, 76); c.fill(); c.shadowBlur = 0; c.globalAlpha = 1;
-        if (fall >= 1 && T0 < land + 0.5) { const q = (T0 - land) / 0.5; c.globalAlpha = a * (1 - q); c.strokeStyle = col; c.lineWidth = 6 * (1 - q) + 1; c.beginPath(); c.arc(W / 2, 225, 90 + q * 360, 0, 7); c.stroke(); }
+        Art.fxPic(c, 'ray_sun', W / 2, y, 300, 300, T0, a * 0.5, { col });
+        starPic(c, W / 2, y, 90, '#ffffff', a); starPic(c, W / 2, y, 80, col, a); c.globalAlpha = 1;
+        if (fall >= 1 && T0 < land + 0.6) { const q = (T0 - land) / 0.6; wave(c, q, W / 2, 225, 360 + q * 500, col, a); burstFx(c, q, W / 2, 225, 700, '#ffffff', a); }
       }
-      if (T0 > land && T0 < land + 0.18) { c.globalAlpha = a * (1 - (T0 - land) / 0.18) * 0.7; c.fillStyle = '#fff'; c.fillRect(-OVER.x, 90, W + OVER.x * 2, 420); }
+      if (T0 > land && T0 < land + 0.18) { c.globalAlpha = a * (1 - (T0 - land) / 0.18) * 0.45; c.fillStyle = '#fff'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); }
       c.globalAlpha = 1;
       popName(c, p, 420, 66, Math.min(1, Math.max(0, (T0 - 1.35) * 4)) * a);
       if (more) popMore(c, more, 470, col, a);
@@ -540,19 +562,20 @@
       if (T0 < HIT) {
         const k = T0 / HIT;
         c.save(); c.globalCompositeOperation = 'lighter';
-        for (let i = 0; i < 16; i++) { const an = i * 0.39 + i * i * 0.07, rr = (1 - k * k) * (260 + (i % 4) * 70); c.globalAlpha = a * k; c.drawImage(softGlow('255,190,90'), W / 2 + Math.cos(an) * rr * 1.6 - 12, cy + Math.sin(an) * rr * 0.6 - 12, 24, 24); }
+        for (let i = 0; i < 16; i++) { const an = i * 0.39 + i * i * 0.07, rr = (1 - k * k) * (260 + (i % 4) * 70); c.globalAlpha = a * k; c.drawImage(kn('star_04', '255,200,110') || softGlow('255,190,90'), W / 2 + Math.cos(an) * rr * 1.6 - 18, cy + Math.sin(an) * rr * 0.6 - 18, 36, 36); }
         const gs = 60 + k * 160; c.globalAlpha = a * k * 0.8; c.drawImage(softGlow('255,220,140'), W / 2 - gs, cy - gs, gs * 2, gs * 2);
         c.restore();
       } else {
         if (!p.hits.lg) { p.hits.lg = 1; impact(p, 1.3, 0.09, 22); Snd.play('bigslam', 20); Snd.play('legendHit'); }
         const k = T0 - HIT;
-        rays(c, W / 2, cy, 700, '#ffb347', a * 0.28 * Math.min(1, k * 5), T0 * 0.18, 22);
+        rays(c, W / 2, cy, 700, '#ffb347', a * 0.28 * Math.min(1, k * 5), T0 * 0.18);
         // 퍼지는 충격 고리와 튀는 불티
         if (k < 0.6) {
-          const q = k / 0.6; c.globalAlpha = a * (1 - q) * (1 - q) * 0.6; c.strokeStyle = '#ffe2a8'; c.lineWidth = 14 * (1 - q) + 1;
-          c.beginPath(); c.ellipse(W / 2, cy, 120 + q * 640, 60 + q * 220, 0, 0, 7); c.stroke();
+          const q = k / 0.6;
+          wave(c, q, W / 2, cy, 700 + q * 900, '#ffe2a8', a * 0.6 * (1 - q * 0.5), 0.45);
+          burstFx(c, q, W / 2, cy, 900, '#ffd890', a * 0.7);
           c.save(); c.globalCompositeOperation = 'lighter';
-          for (let i = 0; i < 18; i++) { const an = i * 0.349 + 0.2, rr = 60 + q * (300 + (i % 3) * 120); c.globalAlpha = a * (1 - q); c.drawImage(softGlow(i % 3 ? '255,180,80' : '255,245,210'), W / 2 + Math.cos(an) * rr * 1.5 - 10, cy + Math.sin(an) * rr * 0.55 - 10, 20, 20); }
+          for (let i = 0; i < 18; i++) { const an = i * 0.349 + 0.2, rr = 60 + q * (300 + (i % 3) * 120); c.globalAlpha = a * (1 - q); c.drawImage(kn('star_04', i % 3 ? '255,180,80' : '255,245,210') || softGlow('255,190,90'), W / 2 + Math.cos(an) * rr * 1.5 - 18, cy + Math.sin(an) * rr * 0.55 - 18, 36, 36); }
           c.restore();
         }
         const sk = Math.min(1, k / 0.14), ns = sk < 1 ? 2.1 - 1.1 * ease(sk) : 1;
@@ -566,7 +589,7 @@
         const ka = Math.min(1, Math.max(0, (k - 0.25) * 4));
         c.globalAlpha = a * ka; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#ffe2a8'; c.font = '700 32px "Gowun Batang", serif'; c.fillText((p.who ? I.t('whose', { w: p.who }) : '') + I.t('legendAppear', { title: d.title ? '· ' + d.title + ' ' : '' }), W / 2, 410);
         // 섬광(띠 안쪽만)
-        if (k < 0.2) { c.globalAlpha = a * Math.pow(1 - k / 0.2, 2) * 0.85; c.fillStyle = '#fff'; c.fillRect(-OVER.x, 130, W + OVER.x * 2, 400); }
+        if (k < 0.2) { c.globalAlpha = a * Math.pow(1 - k / 0.2, 2) * 0.55; c.fillStyle = '#fff'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); }
         c.globalAlpha = 1;
       }
     }
@@ -578,7 +601,7 @@
     b.t -= S.fdt;
     if (b.t <= 0) { S.banner = null; return; }
     c.globalAlpha = Math.min(1, b.t * 2); c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillStyle = 'rgba(15,10,8,.7)'; c.fillRect(W / 2 - 300, 170, 600, 86);
+    { const pg = c.createLinearGradient(W / 2 - 340, 0, W / 2 + 340, 0); pg.addColorStop(0, 'rgba(15,10,8,0)'); pg.addColorStop(0.25, 'rgba(15,10,8,.72)'); pg.addColorStop(0.75, 'rgba(15,10,8,.72)'); pg.addColorStop(1, 'rgba(15,10,8,0)'); c.fillStyle = pg; c.fillRect(W / 2 - 340, 170, 680, 86); } // 상자 모서리가 보이지 않게 양옆을 흐린다
     c.fillStyle = '#ffd86a'; c.font = '400 40px "Black Han Sans", sans-serif'; c.fillText(b.text, W / 2, 200);
     c.fillStyle = '#e8dcc0'; c.font = '400 20px "Gowun Batang", serif'; c.fillText(b.sub || '', W / 2, 236);
     c.globalAlpha = 1;

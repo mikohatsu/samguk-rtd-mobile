@@ -27,6 +27,15 @@
   - Sinestesia — "Hit Animation | Frame by frame", "Hit Animation 2", "2D Explosion Animations", "2D Explosion Animations #2" → gfx/fxa_hit, fxa_hit2, fxa_boom, fxa_boom2
   - wreaderror — "lightning" → gfx/fxa_bolt
   - Grahhhhh — "Animated Blue Ring Explosion" → gfx/fxa_ring
+  - para — "Animated particle effects #1" (https://opengameart.org/content/animated-particle-effects-1) → gfx/fxa_wave (충격파 고리, 흰색으로 가공)
+  - Esthar — "Item popup starburst" (https://opengameart.org/content/item-popup-starburst) → gfx/fxa_burst (빛살 터짐)
+  - Beast — "Smoke Aura" (https://opengameart.org/node/16871) → gfx/fxa_smoke (연기)
+
+## 연출 그림 — CC0 (표기 의무 없음, 감사 표시)
+- OpenGameArt.org (원본: art_src/vfx_dl/, 가공: art_src/build-vfx.py)
+  - Luke.RUSTLTD — "4 summoning circles" (https://opengameart.org/content/4-summoning-circles) → gfx/mc_rune1~3 (법진, 흰 선으로 가공)
+  - simranzenov — "Sunbursts / 2D Rays" (https://opengameart.org/content/sunbursts-2d-rays) → gfx/ray_sun (빛살, 흐리게 가공)
+  - alexander123 — "Stars Icon for UI" (https://opengameart.org/content/stars-icon-for-ui) → gfx/pic_star (등급 별)
 
 ## 이펙트 입자 그림 — CC0 (표기 의무 없음, 감사 표시)
 - Kenney (kenney.nl) — "Particle Pack" → gfx/kn_*.png (skillfx.js, 신화·불멸 등장 연출)

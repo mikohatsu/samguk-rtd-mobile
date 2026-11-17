@@ -4,7 +4,7 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 
-const ALL = ['t1-smoke', 't2-coop', 't3-mutators', 't4-save', 't5-host-change'];
+const ALL = ['t1-smoke', 't2-coop', 't3-mutators', 't4-save', 't5-host-change', 't6-unlock'];
 const want = process.argv.slice(2);
 const list = want.length ? ALL.filter((n) => want.some((w) => n.startsWith(w))) : ALL;
 if (!list.length) { console.log('FAIL 돌릴 시험이 없음: ' + want.join(' ')); process.exit(1); }

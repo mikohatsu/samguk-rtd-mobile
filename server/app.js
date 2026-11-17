@@ -7,6 +7,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), zlib = require('zlib'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const SHOP = require('../shop.js');
+const THEME = require('../theme-samguk.js'); // 장수 해금 목록·가격(theme.unlock)
 const { openStore } = require('./store');
 
 const PORT = +process.env.PORT || 8300;
@@ -98,6 +99,37 @@ async function verifyIdToken(name, tok) {
   const aud = Array.isArray(body.aud) ? body.aud : [body.aud];
   if (!ok || !P.iss.includes(body.iss) || !aud.some((a) => P.aud.includes(a)) || !(body.exp * 1000 > Date.now()) || !body.sub) throw new Error('bad_token');
   return String(body.sub);
+}
+
+// ---------- 장수 해금(동전·보상형 광고·앱스토어 결제) ----------
+const UNL = THEME.unlock;
+const unlockKey = (id) => UNL.key(id);
+// 결제 상품 ID → 넣어 줄 열쇠 목록(확정 구매만. 확률형 판매 없음)
+function iapItems(pid) {
+  const locked = UNL.lockedIds(), tierOf = (id) => (THEME.units.find((d) => d.id === id) || {}).tier;
+  if (pid === UNL.iap.all10[0]) return locked.filter((id) => tierOf(id) === 10).map(unlockKey);
+  for (const t of [9, 10]) { const pre = UNL.iap[t][0]; if (pid.startsWith(pre)) { const id = pid.slice(pre.length); return locked.includes(id) && tierOf(id) === t ? [unlockKey(id)] : null; } }
+  return null;
+}
+// 광고 하루 = 일본 시간(UTC+9) 0시부터
+const jstDayStart = (now = Date.now()) => { const d = new Date(now + 9 * 3600000); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - 9 * 3600000; };
+// App Store 서명 거래(StoreKit 2 JWS) 검증. APPLE_IAP_ROOT_CA(애플 루트 인증서 G3 파일 경로)가 없으면 결제는 꺼져 있다(503).
+const IAP = { root: process.env.APPLE_IAP_ROOT_CA || '', bundle: (process.env.APPLE_BUNDLE || 'com.hongsungjae.sangokurtd') };
+const iapOn = () => !!IAP.root && fs.existsSync(IAP.root);
+function verifySignedTx(jws) {
+  const bad = () => new Error('bad_receipt'), parts = String(jws || '').split('.');
+  if (parts.length !== 3 || jws.length > 20000) throw bad();
+  let head, body; try { head = JSON.parse(b64(parts[0]).toString('utf8')); body = JSON.parse(b64(parts[1]).toString('utf8')); } catch (e) { throw bad(); }
+  if (head.alg !== 'ES256' || !Array.isArray(head.x5c) || head.x5c.length < 2 || head.x5c.length > 4) throw bad();
+  const certs = head.x5c.map((c) => new crypto.X509Certificate(Buffer.from(String(c), 'base64'))), root = new crypto.X509Certificate(fs.readFileSync(IAP.root));
+  const now = Date.now(), live = (c) => Date.parse(c.validFrom) <= now && now <= Date.parse(c.validTo);
+  for (let i = 0; i < certs.length - 1; i++) if (!live(certs[i]) || !certs[i].verify(certs[i + 1].publicKey)) throw bad();
+  const last = certs[certs.length - 1];
+  if (!(last.fingerprint256 === root.fingerprint256 || last.verify(root.publicKey))) throw bad();
+  // [확인 필요] 애플 권장: 잎 인증서 OID 1.2.840.113635.100.6.11.1, 중간 1.2.840.113635.100.6.2.1 확인. 지금은 체인·서명·번들만 본다.
+  if (!crypto.verify('sha256', Buffer.from(parts[0] + '.' + parts[1]), { key: certs[0].publicKey, dsaEncoding: 'ieee-p1363' }, b64(parts[2]))) throw bad();
+  if (body.bundleId !== IAP.bundle || body.revocationDate || !body.productId || !body.transactionId) throw bad();
+  return body;
 }
 
 // 판 보고를 검사해 전적 한 줄로 만든다(숫자만, 크기 제한). 저장은 store가 한다.
@@ -310,6 +342,41 @@ async function handle(req, res, url, query) {
     const r = await store.buy(u.id, id, cost);
     if (r === 'owned') return json(res, 409, { error: 'owned' });
     if (r === 'coins') return json(res, 400, { error: 'coins' });
+    return json(res, 200, { me: profile(await store.getUser(u.id)) });
+  }
+  // 해금: 동전으로 잠긴 장수 하나를 연다(상점 구매와 같은 길, 보유 목록에 'unl_<id>')
+  if (url === '/api/unlock') {
+    if (limited('u:' + u.id, 'unl', 30, 600000)) return json(res, 429, { error: 'slow_down' });
+    const id = String(b.id || ''), cost = /^[a-z]{2,16}$/.test(id) ? UNL.price(id) : null;
+    if (cost == null) return json(res, 400, { error: 'bad_item' });
+    const r = await store.buy(u.id, unlockKey(id), cost);
+    if (r === 'owned') return json(res, 409, { error: 'owned' });
+    if (r === 'coins') return json(res, 400, { error: 'coins' });
+    return json(res, 200, { me: profile(await store.getUser(u.id)) });
+  }
+  // 소급 해금: 이미 소환한 적 있는 잠금 장수(판 기록·불멸 소환 수)를 연다. 여러 번 불러도 같다.
+  if (url === '/api/unlock/claim') {
+    if (limited('u:' + u.id, 'unlc', 10, 600000)) return json(res, 429, { error: 'slow_down' });
+    const locked = UNL.lockedIds(), ever = (await store.everMyth(u.id)).filter((id) => locked.includes(id) && !(u.owned || []).includes(unlockKey(id)));
+    const me = ever.length ? await store.grantItems(u.id, ever.map(unlockKey)) : u;
+    return json(res, 200, { me: profile(me), granted: ever });
+  }
+  // 보상형 광고 1회 = 동전. 서버는 시청을 검증할 수 없어(AdMob SSV는 나중) 하루 횟수만 막는다.
+  if (url === '/api/ad/reward') {
+    if (limited('u:' + u.id, 'ad', 10, 600000)) return json(res, 429, { error: 'slow_down' });
+    const r = await store.adReward(u.id, UNL.ad.coins, UNL.ad.daily, jstDayStart());
+    if (!r.ok) return json(res, 429, { error: 'ad_cap', left: 0 });
+    return json(res, 200, { me: profile(await store.getUser(u.id)), coins: UNL.ad.coins, left: r.left });
+  }
+  // 앱스토어 결제(구매·복원 모두): 서명 거래를 검증하고 상품의 열쇠를 넣는다. 설정 전이면 503.
+  if (url === '/api/iap/verify') {
+    if (limited('u:' + u.id, 'iap', 30, 600000)) return json(res, 429, { error: 'slow_down' });
+    if (!iapOn()) return json(res, 503, { error: 'not_configured' });
+    let tx; try { tx = verifySignedTx(b.signed); } catch (e) { return json(res, 400, { error: 'bad_receipt' }); }
+    const pid = String(tx.productId), items = iapItems(pid);
+    if (!items || !items.length) return json(res, 400, { error: 'bad_item' });
+    const r = await store.grantIap(u.id, String(tx.originalTransactionId || tx.transactionId).slice(0, 64), pid, items, +tx.purchaseDate || Date.now());
+    if (r === 'other') return json(res, 409, { error: 'other_account' });
     return json(res, 200, { me: profile(await store.getUser(u.id)) });
   }
   if (url === '/api/equip') {

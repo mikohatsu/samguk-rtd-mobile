@@ -44,6 +44,19 @@ module.exports = function jsonStore(dir) {
       if ((u.coins || 0) < cost) return P('coins');
       u.coins -= cost; u.owned.push(item); mark(); return P('ok');
     },
+    grantItems: (uid, items) => { const u = user(uid); u.owned = u.owned || []; items.forEach((it) => { if (!u.owned.includes(it)) u.owned.push(it); }); mark(); return P(u); },
+    everMyth: (uid) => { const u = user(uid) || {}, s = new Set(Object.keys(u.imm || {})); (u.hist || []).forEach((h) => Object.keys(h.myth || {}).forEach((k) => s.add(k))); return P([...s]); },
+    adReward: (uid, coins, daily, since) => {
+      const u = user(uid); if (!u.ads || u.ads.since !== since) u.ads = { since, n: 0 };
+      if (u.ads.n >= daily) return P({ ok: false, left: 0 });
+      u.ads.n++; u.coins = (u.coins || 0) + coins; mark(); return P({ ok: true, left: daily - u.ads.n });
+    },
+    grantIap: (uid, txId, productId, items, at) => {
+      db.iap = db.iap || {};
+      const had = db.iap[txId]; if (had && had.uid !== uid) return P('other');
+      if (!had) db.iap[txId] = { uid, productId, at: at || Date.now() };
+      const u = user(uid); u.owned = u.owned || []; items.forEach((it) => { if (!u.owned.includes(it)) u.owned.push(it); }); mark(); return P('ok');
+    },
     equip: (uid, e) => {
       const u = user(uid);
       if (e.icon) u.icon = e.icon;

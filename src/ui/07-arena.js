@@ -104,13 +104,16 @@
     // 보스(잠행 중에는 보이지 않는다. 분신 기믹에서는 그림자가 있는 쪽이 진짜)
     const M = f.mech;
     if (!M.hide) {
-    if (b.charge) { c.fillStyle = f.def.fx + '55'; c.beginPath(); c.arc(b.x, b.y, 86, 0, 7); c.fill(); }
-    if (M.ctr > 0) { c.save(); c.globalAlpha = 0.5 + Math.sin(t * 20) * 0.3; c.fillStyle = '#4aa8ff'; c.beginPath(); c.arc(b.x, b.y, 110, 0, 7); c.fill(); c.restore(); }
+    // 기 모으기·반격 태세 표시: Kenney 빛 그림(도형 원 대신)
+    const SKF = window.RTD_SKFX;
+    if (b.charge && SKF) SKF.spr(c, 'light_01', f.def.fx, b.x, b.y, 230, 230, t * 2, 0.75);
+    if (M.ctr > 0 && SKF) SKF.spr(c, 'light_02', '#4aa8ff', b.x, b.y, 290, 290, -t * 3, 0.6 + Math.sin(t * 20) * 0.3);
     const BIG = IS ? IS.big : 1;
     // 등장 연출: 보스 뒤 보스색 후광(낮음 화질은 생략)
     if (IS && Q.level !== 'low' && IS.dark > 0.02) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.32 * IS.dark / 0.62; const gr2 = 420 * BIG; c.drawImage(glowSprite('w' + f.def.fx, [[0, f.def.fx + 'cc'], [0.6, f.def.fx + '44'], [1, f.def.fx + '00']]), b.x - gr2 / 2, b.y - 40 - gr2 / 2, gr2, gr2); c.restore(); }
     c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(b.x, b.y + 62, 62 * BOSS_S * BIG, 20 * BOSS_S * BIG, 0, 0, 7); c.fill();
-    if (!IS) { c.strokeStyle = f.def.fx; c.lineWidth = 4; c.beginPath(); c.ellipse(b.x, b.y + 62, 62 * BOSS_S, 20 * BOSS_S, 0, 0, 7); c.stroke(); }
+    // 보스 발밑: 보스 색 법진 그림(gfx/mc_rune1)이 천천히 돈다(받기 전에는 예전 고리)
+    if (!IS && !Art.fxPic(c, 'mc_rune1', b.x, b.y + 62, 150 * BOSS_S, 150 * BOSS_S, t * 0.3, 0.7, { col: f.def.fx, sy: 20 / 62 })) { c.strokeStyle = f.def.fx; c.lineWidth = 4; c.beginPath(); c.ellipse(b.x, b.y + 62, 62 * BOSS_S, 20 * BOSS_S, 0, 0, 7); c.stroke(); }
     // 게임은 1초에 30번 움직이고 화면은 그보다 자주 그려서, 프레임마다 '움직임'만 보면 걷기·서기가 번갈아 덜덜 떨린다.
     // 마지막으로 움직인 뒤 0.15초까지는 걷는 중으로 본다.
     const bdx = b.x - (S.bossX ?? b.x), bdy = b.y - (S.bossY ?? b.y), moved = Math.hypot(bdx, bdy) > 0.3;
@@ -163,7 +166,7 @@
       if (hr.k > 0.08) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(0.85, hr.k * 0.7); Art.drawSprite(c, bImg, bx, by, sc, bd.flip, 0, sy); c.restore(); }
     }
     if (hr.slam > 0.1) { Art.fxAnim(c, 'ring', 1 - hr.slam, b.x, b.y + 62, 420, 170, 0, 1); Art.fxAnim(c, 'boom2', Math.min(0.99, (1 - hr.slam) * 1.3), b.x, b.y + 40, 260, 260, 0, 0.9); }
-    if (hr.slam > 0.1) { c.save(); c.globalAlpha = hr.slam * 0.8; c.strokeStyle = '#fff2d0'; c.lineWidth = 6 * hr.slam; c.beginPath(); c.ellipse(b.x, b.y + 62, 70 + (1 - hr.slam) * 120, 24 + (1 - hr.slam) * 40, 0, 0, 7); c.stroke(); c.restore(); }
+    if (hr.slam > 0.1) Art.fxAnim(c, 'wave', 1 - hr.slam, b.x, b.y + 62, 380, 380, 0, 0.9, null, { col: '#fff2d0', sy: 0.4 });
     c.filter = 'none';
     c.textAlign = 'center';
     if (M.charmT > 0) {

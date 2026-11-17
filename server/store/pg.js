@@ -117,6 +117,42 @@ module.exports = function pgStore(pool) {
         return 'ok';
       });
     },
+    // 해금: 보유 목록(inventory)에 열쇠를 넣는다(이미 있으면 그대로). 소급 해금·결제에 쓴다.
+    async grantItems(uid, items) {
+      for (const it of items) await q('INSERT INTO inventory (account_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [uid, it]);
+      return hydrate(uid);
+    },
+    // 이 계정이 지금까지 소환한 신화·불멸 id(판 기록 games.myth + 불멸 소환 수)
+    async everMyth(uid) {
+      const r = await q('SELECT myth FROM games WHERE account_id = $1', [uid]); // 로그인당 한 번만 부른다(소급 해금)
+      const im = await q('SELECT unit_id FROM immortal_counts WHERE account_id = $1 AND n > 0', [uid]);
+      const out = new Set(im.rows.map((x) => x.unit_id));
+      r.rows.forEach((x) => Object.keys((typeof x.myth === 'string' ? JSON.parse(x.myth) : x.myth) || {}).forEach((k) => out.add(k)));
+      return [...out];
+    },
+    // 보상형 광고: 하루(since 이후) daily번까지 동전 coins. 계정 줄을 잠가 동시에 두 번 와도 상한을 넘지 않게 한다.
+    async adReward(uid, coins, daily, since) {
+      return tx(async (qq) => {
+        await qq('SELECT 1 FROM accounts WHERE id = $1 FOR UPDATE', [uid]);
+        const n = +(await qq("SELECT count(*) AS n FROM currency_ledger WHERE account_id = $1 AND reason = 'ad' AND created_at >= $2", [uid, new Date(since)])).rows[0].n;
+        if (n >= daily) return { ok: false, left: 0 };
+        const up = await qq('UPDATE accounts SET coins = coins + $2::int WHERE id = $1 RETURNING coins', [uid, coins]);
+        await ledger(qq, uid, 'coin', coins, up.rows[0].coins, 'ad', null);
+        return { ok: true, left: daily - n - 1 };
+      });
+    },
+    // 앱스토어 결제(해금 상품): 같은 거래 번호는 한 번만. 표 구조는 그대로(purchases.gems = 0).
+    async grantIap(uid, txId, productId, items, at) {
+      return tx(async (qq) => {
+        const ins = await qq('INSERT INTO purchases (transaction_id, account_id, product_id, gems, purchased_at) VALUES ($1, $2, $3, 0, $4) ON CONFLICT DO NOTHING RETURNING transaction_id', [txId, uid, productId, new Date(at || Date.now())]);
+        if (!ins.rows.length) {
+          const own = (await qq('SELECT account_id FROM purchases WHERE transaction_id = $1', [txId])).rows[0];
+          if (!own || own.account_id !== uid) return 'other';
+        }
+        for (const it of items) await qq('INSERT INTO inventory (account_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [uid, it]);
+        return 'ok';
+      });
+    },
     async equip(uid, e) {
       if (e.icon) await q('UPDATE accounts SET icon = $2 WHERE id = $1', [uid, e.icon]);
       if (e.mapSkin) await q('UPDATE accounts SET map_skin = $2 WHERE id = $1', [uid, e.mapSkin]);

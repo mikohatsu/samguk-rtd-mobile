@@ -38,6 +38,19 @@
   const ready = (list) => list.every((n) => img(n));
   const ease = (p) => 1 - (1 - p) * (1 - p), cl = (v) => Math.max(0, Math.min(1, v)), bell = (p) => Math.sin(cl(p) * Math.PI);
   const WHITE = '#ffffff';
+  // art.js의 그림: 법진(mc_rune1~3)·충격파(fxa_wave)·빛살 터짐(fxa_burst). 아직 없으면 Kenney 그림으로 대신한다.
+  const ART = () => root.RTD_ART;
+  function rune(c, n, col, x, y, s, rot, a, sy, fb) {
+    const A = ART();
+    if (A && A.fxPic(c, 'mc_rune' + n, x, y, s, s, rot, a, { col, sy })) return;
+    if (fb) spr(c, fb, col, x, y, s, s, rot, a, true, sy);
+  }
+  function wave(c, col, x, y, s, q, a, sy) {
+    if (q <= 0 || q >= 1) return;
+    const A = ART();
+    if (A && A.fxAnim(c, 'wave', q, x, y, s, s, 0, a, null, { col, sy })) return;
+    spr(c, 'circle_02', col, x, y, s * q, s * q, 0, (1 - q) * a, true, sy);
+  }
   let Q = 1; // 화질(낮음 0.5): 입자 수를 줄인다
   const N = (n) => Math.max(1, Math.round(n * Q));
 
@@ -166,8 +179,8 @@
     },
     rune(c, f, p) { // 진법·계략: 법진이 돌며 조여 들고 빛이 터진다
       const s = f.r * 2.4 * (1.2 - ease(cl(p * 1.5)) * 0.3);
-      spr(c, 'magic_01', f.c, f.x, f.y, s, s, p * 3, 1 - p, true, 0.7);
-      spr(c, 'magic_02', f.c, f.x, f.y, s * 0.75, s * 0.75, -p * 4, 1 - p, true, 0.7);
+      rune(c, 1, f.c, f.x, f.y, s, p * 3, 1 - p, 0.7, 'magic_01');
+      rune(c, 3, f.c, f.x, f.y, s * 0.75, -p * 4, 1 - p, 0.7, 'magic_02');
       spr(c, 'light_03', f.c, f.x, f.y, f.r * 2.6, f.r * 2.6, 0, bell(cl(p * 2)) * 0.9);
       spr(c, 'star_07', WHITE, f.x, f.y, f.r * 1.4, f.r * 1.4, 0, bell(cl(p * 3)));
       return true;
@@ -226,7 +239,7 @@
       return true;
     },
     scheme(c, f, p) { // 반간계: 보스 위로 계략의 법진이 감긴다
-      spr(c, 'magic_02', f.c, f.x, f.y, f.r * 2.2, f.r * 2.2, -p * 4, 1 - p, true, 0.6);
+      rune(c, 3, f.c, f.x, f.y, f.r * 2.2, -p * 4, 1 - p, 0.6, 'magic_02');
       spr(c, 'twirl_03', f.c, f.x, f.y - 40, f.r * 1.6, f.r * 1.6, p * 9, bell(p));
       spr(c, 'magic_04', WHITE, f.x, f.y - 60, f.r, f.r, p * 3, bell(cl(p * 2)) * 0.8);
       return true;
@@ -238,7 +251,7 @@
     },
     curse(c, f, p) { // 약화: 보랏빛 저주 법진과 어두운 기운
       spr(c, 'smoke_09', '#40205a', f.x, f.y, f.r * 2.4, f.r * 2.4, p * 2, (1 - p) * 0.7, false);
-      spr(c, 'magic_01', f.c, f.x, f.y, f.r * 2.4 * (1 - p * 0.3), f.r * 2.4 * (1 - p * 0.3), p * 5, 1 - p, true, 0.6);
+      rune(c, 1, f.c, f.x, f.y, f.r * 2.4 * (1 - p * 0.3), p * 5, 1 - p, 0.6, 'magic_01');
       spr(c, 'light_02', f.c, f.x, f.y, f.r * 1.8, f.r * 1.8, 0, bell(p) * 0.7);
       return true;
     },
@@ -262,7 +275,7 @@
     },
     guard(c, f, p) { // 보호·무적: 빛의 막과 반짝이는 십자성
       spr(c, 'circle_03', f.c, f.x, f.y - 10, f.r * 1.5, f.r * 1.5, 0, bell(cl(p * 1.3)));
-      spr(c, 'magic_03', f.c, f.x, f.y - 10, f.r * 1.6, f.r * 1.6, p * 2, bell(p) * 0.8);
+      rune(c, 2, f.c, f.x, f.y - 10, f.r * 1.6, p * 2, bell(p) * 0.8, 0, 'magic_03');
       for (let i = 0; i < N(5); i++) spr(c, 'star_02', WHITE, f.x + Math.cos(i * 1.26 + p * 4) * f.r * 0.6, f.y - 10 + Math.sin(i * 1.26 + p * 4) * f.r * 0.6, 40, 40, 0, bell(cl(p * 1.5 - i * 0.08)));
       return true;
     },
@@ -284,7 +297,7 @@
       return true;
     },
     barrier(c, f, p) { // 방진·엄호: 바닥에 큰 법진, 둥근 빛의 막
-      spr(c, 'magic_02', f.c, f.x, f.y + 20, f.r * 2.2, f.r * 2.2, p * 2, bell(cl(p * 1.2)), true, 0.45);
+      rune(c, 3, f.c, f.x, f.y + 20, f.r * 2.2, p * 2, bell(cl(p * 1.2)), 0.45, 'magic_02');
       spr(c, 'circle_03', f.c, f.x, f.y - 10, f.r * 1.7, f.r * 1.7, 0, bell(p) * 0.8);
       spr(c, 'light_03', WHITE, f.x, f.y - 10, f.r * 1.2, f.r * 1.2, 0, bell(cl(p * 2)) * 0.5);
       return true;
@@ -295,7 +308,7 @@
       return true;
     },
     reflect(c, f, p) { // 반격 태세: 날 선 법진과 튀는 전류
-      spr(c, 'magic_03', f.c, f.x, f.y - 10, f.r * 1.8, f.r * 1.8, p * 4, bell(p));
+      rune(c, 2, f.c, f.x, f.y - 10, f.r * 1.8, p * 4, bell(p), 0, 'magic_03');
       spr(c, 'circle_02', f.c, f.x, f.y - 10, f.r * 1.5, f.r * 1.5, 0, bell(p) * 0.8);
       for (let i = 0; i < N(4); i++) spr(c, i % 2 ? 'spark_01' : 'spark_02', WHITE, f.x + Math.cos(i * 1.57) * f.r * 0.6, f.y - 10 + Math.sin(i * 1.57) * f.r * 0.6, 60, 60, i, Math.random() < 0.6 ? bell(p) : 0);
       return true;
@@ -310,10 +323,10 @@
     const iy = f.k === 'beam' ? f.y + Math.sin(f.a) * f.len * hp : f.k === 'cone' ? f.y + Math.sin(f.a) * f.r * 0.6 : f.y;
     const R = f.k === 'beam' ? f.w * 2.2 : f.r || 120;
     spr(c, 'flare_01', WHITE, ix, iy, R * (big ? 2.6 : 2), R * (big ? 2.6 : 2), p * 2, bell(cl(p * 1.8)) * 0.9);
-    spr(c, 'circle_02', f.c, ix, iy + 10, R * (0.6 + ease(cl(p * 1.4)) * 2.6) * 2, R * (0.6 + ease(cl(p * 1.4)) * 2.6) * 2, 0, (1 - cl(p * 1.4)) * 0.9, true, 0.5);
+    wave(c, f.c, ix, iy + 10, R * 6.4, cl(p * 1.4), 1, 0.5);
     if (big) {
       spr(c, 'light_01', f.c, ix, iy, R * 3.2, R * 3.2, 0, bell(cl(p * 1.4)) * 0.6);
-      const q = cl(p * 1.4 - 0.2); spr(c, 'circle_02', WHITE, ix, iy + 10, R * (0.5 + ease(q) * 3.4) * 2, R * (0.5 + ease(q) * 3.4) * 2, 0, (1 - q) * 0.7, true, 0.5);
+      wave(c, WHITE, ix, iy + 10, R * 8, cl(p * 1.4 - 0.2), 0.8, 0.5);
     }
   }
   // g.fx 한 개를 그린다(그렸으면 true)
@@ -329,7 +342,7 @@
   function tele(c, h, p, fired) {
     if (!ready(['magic_02', 'circle_01'])) return false;
     if (fired) return true;
-    spr(c, 'magic_02', h.c, h.x, h.y, h.r * 2.2, h.r * 2.2, p * 3, 0.5 + p * 0.4, true, 0.75);
+    rune(c, 3, h.c, h.x, h.y, h.r * 2.2, p * 3, 0.5 + p * 0.4, 0.75, 'magic_02');
     spr(c, 'circle_01', h.c, h.x, h.y, h.r * 2 * p, h.r * 2 * p, 0, 0.9, true, 0.75);
     return true;
   }
@@ -342,9 +355,9 @@
     if (!ready(['light_02', 'magic_02', 'magic_01', 'twirl_01', 'trace_06', 'flare_01', 'star_04', 'magic_03'])) return false;
     const fy = y + r * 0.72, pulse = 1 + Math.sin(t * 3 + seed) * 0.08;
     spr(c, 'light_02', col, x, fy, r * (tier >= 9 ? 4.4 : tier >= 8 ? 3.8 : 3.2) * pulse, r * 3.2 * pulse, t * 0.4, tier >= 8 ? 0.7 : 0.55, true, 0.45);
-    if (tier >= 7) spr(c, 'magic_02', col, x, fy, r * 3, r * 3, t * 0.9, 0.75, true, 0.42);
+    if (tier >= 7) rune(c, 3, col, x, fy, r * 3, t * 0.9, 0.75, 0.42, 'magic_02');
     // 전설 이상: 몇 초마다 몸에서 십자 반짝임이 한 번 번쩍인다(멀리서도 '좋은 유닛'이 눈에 띄게). 등급이 높을수록 자주.
-    if (tier >= 8) { const ph = (t * (tier >= 10 ? 0.45 : tier >= 9 ? 0.35 : 0.25) + seed * 0.159) % 1; if (ph < 0.1) spr(c, 'star_09', '#ffffff', x, y - r * 0.7, r * (tier >= 10 ? 3.4 : 2.6), r * (tier >= 10 ? 3.4 : 2.6), ph * 8, Math.sin((ph / 0.1) * Math.PI) * 0.9); }
+    if (tier >= 8) { const ph = (t * (tier >= 10 ? 0.45 : tier >= 9 ? 0.35 : 0.25) + seed * 0.159) % 1; if (ph < 0.1) { const A = ART(), s = r * (tier >= 10 ? 4.4 : 3.4); if (!(A && A.fxAnim(c, 'burst', ph / 0.1, x, y - r * 0.7, s, s, 0, 0.95))) spr(c, 'star_09', '#ffffff', x, y - r * 0.7, s * 0.8, s * 0.8, ph * 8, Math.sin((ph / 0.1) * Math.PI) * 0.9); } }
     if (lod === 0) { if (tier >= 10) spr(c, 'trace_06', col, x, y - r * 1.2, r * 2.2, r * 5, 0, 0.6); return true; }
     if (tier >= 8) {
       spr(c, 'twirl_01', col, x, y, r * 3, r * 3, t * 2.2, 0.6);
@@ -354,7 +367,7 @@
       }
     }
     if (tier >= 9) {
-      spr(c, 'magic_01', col, x, fy, r * 4, r * 4, -t * 0.6, 0.7, true, 0.42);
+      rune(c, 1, col, x, fy, r * 4, -t * 0.6, 0.7, 0.42, 'magic_01');
       if (lod >= 2) for (let i = 0; i < (tier >= 10 ? 6 : 4); i++) {
         const a = -t * 1.6 + (i * Math.PI * 2) / (tier >= 10 ? 6 : 4), rr = r * 1.9;
         spr(c, 'star_04', i % 2 ? '#ffffff' : col, x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.6, 22, 22, 0, 0.95);
@@ -363,7 +376,7 @@
     if (tier >= 10) {
       spr(c, 'trace_06', col, x, y - r * 1.2, r * 2.2, r * 5, 0, 0.55 + Math.sin(t * 4 + seed) * 0.2);
       spr(c, 'flare_01', '#fff0c8', x, y - r * 3.4, r * 2.4, r * 2.4, t, 0.6);
-      spr(c, 'magic_03', '#fff0c8', x, fy, r * 2.6, r * 2.6, t * 1.4, 0.5, true, 0.42);
+      rune(c, 2, '#fff0c8', x, fy, r * 2.6, t * 1.4, 0.5, 0.42, 'magic_03');
     }
     return true;
   }

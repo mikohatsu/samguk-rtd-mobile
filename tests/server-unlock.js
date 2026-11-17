@@ -1,0 +1,56 @@
+// 서버 해금 시험: 임시 포트·임시 DATA_DIR(JSON 저장소)로 서버를 띄워 해금 구매·동전 부족·광고 하루 상한·소급 해금·결제 꺼짐을 확인한다.
+// 쓰는 법: node tests/server-unlock.js   (DATABASE_URL은 비우고 띄운다. 운영 DB를 건드리지 않는다)
+'use strict';
+const { spawn } = require('child_process');
+const path = require('path'), fs = require('fs'), os = require('os');
+const PORT = 18000 + ((Math.random() * 1000) | 0);
+const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'rtd-unl-'));
+const env = Object.assign({}, process.env, { PORT: String(PORT), DATA_DIR: DATA, DATABASE_URL: '', APPLE_IAP_ROOT_CA: '' });
+const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'app.js')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+let fail = 0, okN = 0;
+const ok = (c, m) => { console.log((c ? 'OK  ' : 'FAIL') + ' ' + m); if (c) okN++; else fail++; };
+const api = async (p, body, tok) => {
+  const r = await fetch(`http://127.0.0.1:${PORT}${p}`, { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, tok ? { authorization: 'Bearer ' + tok } : {}), body: JSON.stringify(body || {}) });
+  let j = {}; try { j = await r.json(); } catch (e) { /* 빈 응답 */ }
+  return Object.assign({ status: r.status }, j);
+};
+async function waitUp() { for (let i = 0; i < 50; i++) { try { await fetch(`http://127.0.0.1:${PORT}/api/me`); return; } catch (e) { await new Promise((r) => setTimeout(r, 200)); } } throw new Error('서버가 뜨지 않음'); }
+(async () => {
+  try {
+    await waitUp();
+    const reg = await api('/api/register', { id: 'unltest' + PORT, password: 'password123', nick: 'tester', agree: true });
+    const tok = reg.token;
+    ok(!!tok && reg.me.coins === 0, '계정 생성, 동전 0');
+    let r = await api('/api/unlock', { id: 'gwakga' }, tok);
+    ok(r.status === 400 && r.error === 'coins', '동전이 부족하면 해금 거절(coins)');
+    r = await api('/api/unlock', { id: 'join' }, tok);
+    ok(r.status === 400 && r.error === 'bad_item', '처음부터 열린 신화(조인)는 해금 대상이 아님');
+    r = await api('/api/unlock', { id: '../x' }, tok);
+    ok(r.status === 400 && r.error === 'bad_item', '이상한 id 거절');
+    let last = null;
+    for (let i = 0; i < 5; i++) last = await api('/api/ad/reward', {}, tok);
+    ok(last.status === 200 && last.me.coins === 150 && last.left === 0, `광고 5회 = 동전 150 (지금 ${last.me && last.me.coins}, 남은 ${last.left})`);
+    r = await api('/api/ad/reward', {}, tok);
+    ok(r.status === 429 && r.error === 'ad_cap', '하루 6번째 광고는 거절(ad_cap)');
+    r = await api('/api/unlock', { id: 'gwakga' }, tok);
+    ok(r.status === 200 && r.me.coins === 0 && r.me.owned.includes('unl_gwakga'), '동전 150으로 곽가 해금, owned에 unl_gwakga');
+    r = await api('/api/unlock', { id: 'gwakga' }, tok);
+    ok(r.status === 409 && r.error === 'owned', '이미 연 장수는 다시 살 수 없음');
+    r = await api('/api/unlock', { id: 'jojo' }, tok);
+    ok(r.status === 400 && r.error === 'coins', '불멸(700)은 동전 부족');
+    // 소급 해금: 소환 기록(전적의 myth)이 있으면 연다
+    await api('/api/history', { diff: 'easy', round: 70, win: true, time: 3000, myth: { yeopo: 1, sunuk: 2 } }, tok);
+    r = await api('/api/unlock/claim', {}, tok);
+    ok(r.status === 200 && r.me.owned.includes('unl_yeopo') && r.me.owned.includes('unl_sunuk') && r.granted.length === 2, `소급 해금: 소환 기록이 있는 여포·순욱이 열림 (${(r.granted || []).join(',')})`);
+    r = await api('/api/unlock/claim', {}, tok);
+    ok(r.status === 200 && r.granted.length === 0, '소급 해금을 다시 불러도 더 주지 않음');
+    r = await api('/api/iap/verify', { signed: 'a.b.c' }, tok);
+    ok(r.status === 503 && r.error === 'not_configured', '결제 설정이 없으면 503(not_configured)');
+    r = await api('/api/unlock', { id: 'gwakga' });
+    ok(r.status === 401, '로그인 없이 해금 불가');
+  } catch (e) { ok(false, '예외 ' + e.message); }
+  srv.kill();
+  try { fs.rmSync(DATA, { recursive: true, force: true }); } catch (e) { /* 무시 */ }
+  console.log(`RESULT server-unlock ok=${okN} fail=${fail}`);
+  process.exit(fail ? 1 : 0);
+})();

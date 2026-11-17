@@ -23,61 +23,38 @@
     if (fl.t > 0.25) { S.skFlash = null; return; }
     c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.22 * (1 - fl.t / 0.25); c.fillStyle = fl.c; c.fillRect(-W, -H, W * 3, H * 3); c.restore();
   }
+  // 연출 이름이 없는 이펙트의 기본 연출(skillfx.js): 직선은 찌르기, 부채꼴은 난무, 기운은 색으로 회복·호령·강화
+  const DEF_VX = { beam: 'thrust', cone: 'blades' };
+  function defVx(f) { return DEF_VX[f.k] || (f.k === 'aura' ? (f.c === '#8ee6a0' ? 'heal' : f.c === '#ffe07a' ? 'rally' : 'power') : null); }
+  // 게임 상태(g.fx)는 고치지 않고, 연출 이름을 붙인 사본을 이펙트마다 한 번 만들어 둔다
+  const VXC = new WeakMap();
+  function withVx(f, vx) { let o = VXC.get(f); if (!o) { o = Object.create(f); o.vx = vx; VXC.set(f, o); } return o; }
   function drawFx(c) {
     if (window.RTD_SKFX) window.RTD_SKFX.setQuality(Q.level === 'low' ? 0.5 : Q.level === 'mid' ? 0.75 : 1);
     for (const f of g.fx) {
       if (f.t < 0) continue;
       const p = f.t / f.life;
-      // 스킬 연출: 새 이펙트(skillfx.js)가 그리면 기존 모양은 건너뛴다
-      if (f.vx && window.RTD_SKFX && window.RTD_SKFX.fx(c, f, p, skillTier(f))) { c.globalAlpha = 1; continue; }
+      // 스킬 연출(skillfx.js, 그림·프레임 애니메이션). 연출 이름(vx)이 없는 직선·부채꼴·폭발·기운도 기본 연출로 그린다.
+      const SK = window.RTD_SKFX, dvx = f.vx || defVx(f);
+      if (dvx && SK && SK.fx(c, f.vx ? f : withVx(f, dvx), p, f.vx ? skillTier(f) : 0)) { c.globalAlpha = 1; continue; }
       if (f.k === 'shot') { c.globalAlpha = Math.min(1, (1 - p) * 3); Art.shot(c, f); c.globalAlpha = 1; continue; }
       c.globalAlpha = 1 - p;
-      c.strokeStyle = f.c; c.fillStyle = f.c;
-      if (f.k === 'ring') { c.lineWidth = 3; c.beginPath(); c.arc(f.x, f.y, f.r * (0.5 + p * 0.5), 0, 7); c.stroke(); }
+      // 작은 충격파: 프레임 애니메이션 고리
+      if (f.k === 'ring') Art.fxAnim(c, 'wave', p, f.x, f.y, f.r * 2.6, f.r * 2.6, 0, 1, null, { col: f.c });
       // 타격: 프레임 애니메이션(평타는 작은 타격, 강타·스킬은 큰 타격)
-      else if (f.k === 'spark' && Art.fxAnim(c, f.r < 60 ? 'hit2' : 'hit', p, f.x, f.y, f.r * 3.2, f.r * 3.2, f.a, 1)) { /* 애니메이션 이펙트 */ }
-      else if (f.k === 'spark' && Art.fxImg(c, 'hit', f.x, f.y, f.r * 2.4 * (0.7 + p * 0.5), f.a, 1 - p)) { /* 생성 이펙트 */ }
-      else if (f.k === 'spark') {
-        // 타격 지점의 방사형 불꽃
-        c.lineWidth = 3; c.lineCap = 'round';
-        for (let i = 0; i < 6; i++) { const a = f.a + (i - 2.5) * 0.7, a1 = f.r * (0.3 + p * 0.5), a2 = f.r * (0.6 + p); c.beginPath(); c.moveTo(f.x + Math.cos(a) * a1, f.y + Math.sin(a) * a1); c.lineTo(f.x + Math.cos(a) * a2, f.y + Math.sin(a) * a2); c.stroke(); }
-        c.fillStyle = '#fff'; c.beginPath(); c.arc(f.x, f.y, f.r * 0.4 * (1 - p), 0, 7); c.fill();
-      } else if (f.k === 'die') {
+      else if (f.k === 'spark') { if (!Art.fxAnim(c, f.r < 60 ? 'hit2' : 'hit', p, f.x, f.y, f.r * 3.2, f.r * 3.2, f.a, 1)) Art.fxImg(c, 'hit', f.x, f.y, f.r * 2.4 * (0.7 + p * 0.5), f.a, 1 - p); }
+      else if (f.k === 'die') {
         // 처치: 튕겨 나가며 쓰러진다
         c.globalAlpha = 1 - p;
         Art.drawSprite(c, f.e.mid && f.e.w.look ? Art.namedSprite(f.e.w.name, f.e.w.look, '#b5361f') : Art.soldierSprite(f.e.w), f.x + Math.cos(f.a) * 34 * p, f.y + Math.sin(f.a) * 34 * p - Math.sin(p * 3.14) * 22, f.e.mid ? 76 : 48, false, p * 1.5);
-      } else if (f.k === 'dash') { c.lineWidth = 16 * (1 - p); c.beginPath(); c.moveTo(f.x0, f.y0); c.lineTo(f.x1, f.y1); c.stroke(); }
-      else if (f.k === 'beam') {
-        // 직선 스킬: 앞머리가 달려 나가고 뒤로 잔광이 남는다
-        const head = Math.min(1, p * 2.6) * f.len, tail = Math.max(0, (p - 0.4) / 0.6) * f.len;
-        c.save(); c.translate(f.x, f.y); c.rotate(f.a);
-        const gr = c.createLinearGradient(tail, 0, head, 0); gr.addColorStop(0, f.c + '00'); gr.addColorStop(0.7, f.c + 'cc'); gr.addColorStop(1, '#ffffff');
-        c.globalAlpha = 1; c.fillStyle = gr; c.fillRect(tail, -f.w / 2, Math.max(1, head - tail), f.w);
-        c.fillStyle = '#fff'; c.globalAlpha = 0.8 * (1 - p); c.fillRect(tail, -f.w / 7, Math.max(1, head - tail), f.w / 3.5);
-        c.globalAlpha = 1 - p; c.fillStyle = '#fff'; c.beginPath(); c.arc(head - f.w * 0.45, 0, f.w * 0.7, -1.2, 1.2); c.arc(head - f.w * 0.75, 0, f.w * 0.6, 1.05, -1.05, true); c.closePath(); c.fill();
-        c.restore();
-      } else if (f.k === 'cone') {
-        // 부채꼴 스킬: 호가 바깥으로 퍼진다
-        for (let i = 0; i < 3; i++) {
-          const rr = f.r * Math.min(1, p * 1.5 + i * 0.16);
-          c.globalAlpha = (1 - p) * (0.5 - i * 0.12); c.beginPath(); c.moveTo(f.x, f.y); c.arc(f.x, f.y, rr, f.a - f.arc / 2, f.a + f.arc / 2); c.closePath(); c.fill();
-        }
-        c.globalAlpha = 1 - p; c.lineWidth = 8; c.strokeStyle = '#fff'; c.beginPath(); c.arc(f.x, f.y, f.r * Math.min(1, p * 1.5), f.a - f.arc / 2, f.a + f.arc / 2); c.stroke();
-        Art.fxImg(c, 'slash', f.x + Math.cos(f.a) * f.r * 0.55, f.y + Math.sin(f.a) * f.r * 0.55, f.r * 1.3, f.a + Math.PI / 2, (1 - p) * 1.5);
-      } else if (f.k === 'blast') {
-        // 지정 위치 스킬의 폭발
-        if (!Art.fxAnim(c, 'boom', p, f.x, f.y - f.r * 0.2, f.r * 3.4, f.r * 3.4, 0, 1)) Art.fxImg(c, 'boom', f.x, f.y, f.r * 2.6 * (0.7 + p * 0.5), p, (1 - p) * 1.4);
-        c.globalAlpha = (1 - p) * 0.7; c.beginPath(); c.arc(f.x, f.y, f.r * (0.6 + p * 0.5), 0, 7); c.fill();
-        c.globalAlpha = 1 - p; c.fillStyle = '#fff'; c.beginPath(); c.arc(f.x, f.y, f.r * 0.5 * (1 - p), 0, 7); c.fill();
-        c.lineWidth = 6; c.beginPath(); c.arc(f.x, f.y, f.r * (0.8 + p * 0.6), 0, 7); c.stroke();
-        for (let i = 0; i < 10; i++) { const a = i * 0.63, d1 = f.r * (0.5 + p), d2 = f.r * (0.7 + p * 1.2); c.lineWidth = 3; c.beginPath(); c.moveTo(f.x + Math.cos(a) * d1, f.y + Math.sin(a) * d1); c.lineTo(f.x + Math.cos(a) * d2, f.y + Math.sin(a) * d2); c.stroke(); }
-      } else if (f.k === 'aura') {
-        // 강화·보호·회복: 바닥 법진, 빛 고리와 위로 오르는 입자
-        Art.fxImg(c, 'magic', f.x, f.y + 20, f.r * 2.4, p * 2, (1 - p) * 1.2, 0.45);
-        c.lineWidth = 5; c.beginPath(); c.ellipse(f.x, f.y + 20, f.r * (0.5 + p * 0.5), f.r * 0.3 * (0.5 + p * 0.5), 0, 0, 7); c.stroke();
-        c.fillStyle = f.c;
-        for (let i = 0; i < 12; i++) { const a = i * 0.52, rr = f.r * 0.6; c.beginPath(); c.arc(f.x + Math.cos(a) * rr, f.y + 20 + Math.sin(a) * rr * 0.5 - p * 110 - (i % 3) * 14, 4, 0, 7); c.fill(); }
-      }
+      } else if (f.k === 'dash' && SK) {
+        // 돌진 자국: Kenney 빛줄기 그림을 출발점에서 도착점까지 늘여 그린다
+        const dx = f.x1 - f.x0, dy = f.y1 - f.y0;
+        SK.spr(c, 'trace_06', f.c, (f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2, 70 * (1 - p) + 16, Math.hypot(dx, dy) + 30, Math.atan2(dy, dx) + Math.PI / 2, 1 - p);
+      } else if (f.k === 'cone') Art.fxImg(c, 'slash', f.x + Math.cos(f.a) * f.r * 0.55, f.y + Math.sin(f.a) * f.r * 0.55, f.r * 1.3, f.a + Math.PI / 2, (1 - p) * 1.5);
+      else if (f.k === 'blast') { if (!Art.fxAnim(c, 'boom', p, f.x, f.y - f.r * 0.2, f.r * 3.4, f.r * 3.4, 0, 1)) Art.fxImg(c, 'boom', f.x, f.y, f.r * 2.6 * (0.7 + p * 0.5), p, (1 - p) * 1.4); Art.fxAnim(c, 'wave', p, f.x, f.y, f.r * 3.2, f.r * 3.2, 0, 1, null, { col: f.c, sy: 0.6 }); }
+      else if (f.k === 'aura') Art.fxImg(c, 'magic', f.x, f.y + 20, f.r * 2.4, p * 2, (1 - p) * 1.2, 0.45);
+      // (그림을 아직 못 받았을 때 도형으로 대신 그리던 것은 뺐다: 그림은 첫 화면에서 이미 받는다)
     }
     c.globalAlpha = 1;
     drawSkFlash(c);
