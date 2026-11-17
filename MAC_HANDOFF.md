@@ -7,7 +7,20 @@ git clone https://github.com/mikohatsu/samguk-rtd-mobile.git
 ```
 
 이미 받아 두었다면 `git pull`. `node_modules/`와 `www/`는 Mac에서 다시 만듭니다.
-게임 스튜디오 템플릿(`.claude/` 등)은 git에 없으므로 Mac에서 쓰려면 `~/.claude/ccgs/`를 옮긴 뒤 `bash ~/.claude/ccgs/install.sh`.
+게임 스튜디오 템플릿(`.claude/` 등)은 git에 없다. 이 Mac에는 2026-11-17에 깔았다(아래 0-1절). 다른 Mac에서는 템플릿을 `~/.claude/ccgs/template`에 받고 `install.sh`를 옮긴 뒤 저장소 맨 위에서 `bash ~/.claude/ccgs/install.sh`.
+
+## 0-1. Mac에서 확인한 것 (2026-11-17, MacBook Air M1, `/Users/miko/HSJ/samguk-rtd-mobile`)
+
+| 항목 | 결과 |
+|---|---|
+| 저장소 받기 | 완료(v0.2.26, 724ae51) |
+| `npm install` → `npm run build` → `npx cap sync ios` | 완료. 오류 없음, 플러그인 7개 인식, `www/`와 `ios/App/App/public/` 생성 |
+| Windows에서 손으로 고친 `project.pbxproj` | 문법 검사(`plutil -lint`) 통과. xcodeproj 라이브러리로 열어 확인: Resources에 `PrivacyInfo.xcprivacy`·`InfoPlist.strings` 등록, 지역 en·Base·ja·ko·zh-Hans, 가리키는 파일이 모두 실제로 있음, Debug·Release 둘 다 `CODE_SIGN_ENTITLEMENTS = App/App.entitlements`, Team은 비어 있음(본인이 고를 것) |
+| `Info.plist`·`App.entitlements`·`PrivacyInfo.xcprivacy`·`InfoPlist.strings` 4개 | 문법 검사 통과. SKAdNetwork 50개 확인 |
+| 게임 스튜디오 템플릿 v1.3.0 | 설치 완료(에이전트 49, 스킬 78). 원본 `~/.claude/ccgs/template`, 설치 스크립트 `~/.claude/ccgs/install.sh`(Mac용으로 새로 씀). Windows 쪽 `project.yaml`·`production/` 내용은 git에 없어 옮겨지지 않았고, 템플릿 기본값 + `modes.automation: guided`로 시작한다 |
+| **Xcode 빌드** | **아직 못 함.** 이 Mac에 Xcode가 없고(명령줄 도구만 있음) macOS가 13.2.1이라 지금 필요한 Xcode를 깔 수 없다 → 1절 0번 |
+
+Xcode가 실제로 프로젝트를 열고 빌드하는지, 서명·Sign in with Apple이 붙는지는 Xcode를 깐 뒤에야 확인된다.
 
 ## 0. 지금 상태
 
@@ -30,10 +43,11 @@ git clone https://github.com/mikohatsu/samguk-rtd-mobile.git
 
 ## 1. Mac 준비
 
-1. Xcode 최신판 설치 (App Store), 한 번 실행해 추가 구성요소 설치
-2. Node.js 22 LTS 설치 (`brew install node@22` 또는 nodejs.org)
+0. **macOS 올리기(본인이 할 일)**: 지금 13.2.1(Ventura). Capacitor 8과 App Store 제출에는 Xcode 26 이상이 필요하고, 그 Xcode는 Ventura에 깔리지 않는다. 시스템 설정 → 일반 → 소프트웨어 업데이트에서 최신 macOS(2026-11-17 기준 27.2.1, 약 15GB)로 올린다. 디스크 여유가 31GB뿐이라 macOS + Xcode + iOS 시뮬레이터를 받으려면 먼저 정리가 필요할 수 있다
+1. Xcode 최신판 설치 (App Store, Apple ID 로그인 필요 — 본인이 할 일), 한 번 실행해 추가 구성요소 설치. 그 뒤 `sudo xcode-select -s /Applications/Xcode.app`
+2. ~~Node.js 22 LTS 설치~~ → 이미 있음(v22.14.0)
 3. Apple Developer Program 가입(개인, 연 12,800엔). 이름은 HONGSUNGJAE로 표시됨
-4. 이 폴더에서:
+4. ~~`npm install`~~ → 완료(2026-11-17). Xcode를 깐 뒤 이 폴더에서 `npm run ios`만 하면 된다. 처음부터 다시 하려면:
 
 ```bash
 npm install
@@ -127,7 +141,7 @@ npm run ios
 ## 8. 사용자 본인만 할 수 있는 일 (순서대로)
 
 1. Apple Developer Program 가입(개인, 본인 인증). 스토어 판매자 이름은 본인 실명으로 나온다
-2. Mac + Xcode 준비 → `npm install`, `npm run ios`
+2. Mac 준비: macOS 올리기 → Xcode 설치(1절 0·1번) → `npm run ios` (`npm install`은 2026-11-17에 끝남)
 3. Xcode 한 번만(2절): Team·서명 고르기. (매니페스트·언어 파일·Localizations·Sign in with Apple은 2026-11-17에 프로젝트 파일에 넣어 둠 — 보이는지만 확인)
 4. Apple Developer 사이트: App ID에 Sign in with Apple 켜기, **Sign in with Apple용 키(.p8)** 발급 → Key ID·Team ID와 함께 서버 담당에게 전달(계정 삭제 때 토큰 철회용)
 5. AdMob: iOS 앱 등록, 앱 ID·전면 광고 단위 ID 발급, 광고 콘텐츠 등급, 결제·세금 정보 → ID를 팀에 전달(4절)
