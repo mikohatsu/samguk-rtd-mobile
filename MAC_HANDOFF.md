@@ -18,9 +18,10 @@ git clone https://github.com/mikohatsu/samguk-rtd-mobile.git
 | Windows에서 손으로 고친 `project.pbxproj` | 문법 검사(`plutil -lint`) 통과. xcodeproj 라이브러리로 열어 확인: Resources에 `PrivacyInfo.xcprivacy`·`InfoPlist.strings` 등록, 지역 en·Base·ja·ko·zh-Hans, 가리키는 파일이 모두 실제로 있음, Debug·Release 둘 다 `CODE_SIGN_ENTITLEMENTS = App/App.entitlements`, Team은 비어 있음(본인이 고를 것) |
 | `Info.plist`·`App.entitlements`·`PrivacyInfo.xcprivacy`·`InfoPlist.strings` 4개 | 문법 검사 통과. SKAdNetwork 50개 확인 |
 | 게임 스튜디오 템플릿 v1.3.0 | 설치 완료(에이전트 49, 스킬 78). 원본 `~/.claude/ccgs/template`, 설치 스크립트 `~/.claude/ccgs/install.sh`(Mac용으로 새로 씀). Windows 쪽 `project.yaml`·`production/` 내용은 git에 없어 옮겨지지 않았고, 템플릿 기본값 + `modes.automation: guided`로 시작한다 |
-| **Xcode 빌드** | **아직 못 함.** 이 Mac에 Xcode가 없고(명령줄 도구만 있음) macOS가 13.2.1이라 지금 필요한 Xcode를 깔 수 없다 → 1절 0번 |
-
-Xcode가 실제로 프로젝트를 열고 빌드하는지, 서명·Sign in with Apple이 붙는지는 Xcode를 깐 뒤에야 확인된다.
+| macOS·Xcode | 2026-11-18에 macOS 27.2.1, Xcode 27.2(27B52) 설치·사용권 동의 완료 |
+| **Xcode 빌드(시뮬레이터용, 서명 없이)** | **성공(2026-11-18).** `xcodebuild -scheme App -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`. 만들어진 `App.app`(111MB) 안에 `PrivacyInfo.xcprivacy`, `ja·en·ko·zh-Hans.lproj/InfoPlist.strings`(일본어 앱 이름·ATT 문구 확인), `public/`, `Assets.car`가 들어 있음. 첫 빌드는 패키지(Capacitor·Facebook SDK) 내려받기가 시간 초과로 한 번 실패했고 다시 돌리니 통과 |
+| 패키지 버전 고정 | `ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`를 저장소에 추가 |
+| 아직 안 한 것 | 시뮬레이터 실행(iOS 시뮬레이터 실행 환경이 안 깔려 있음: Xcode → Settings → Components에서 iOS 27.2 받기), 서명 빌드(Team 선택 필요 — `App.entitlements`의 Sign in with Apple은 서명해야 확인됨), 실기기 |
 
 ## 0. 지금 상태
 
@@ -43,7 +44,7 @@ Xcode가 실제로 프로젝트를 열고 빌드하는지, 서명·Sign in with 
 
 ## 1. Mac 준비
 
-0. **macOS 올리기(본인이 할 일)**: 지금 13.2.1(Ventura). Capacitor 8과 App Store 제출에는 Xcode 26 이상이 필요하고, 그 Xcode는 Ventura에 깔리지 않는다. 시스템 설정 → 일반 → 소프트웨어 업데이트에서 최신 macOS(2026-11-17 기준 27.2.1, 약 15GB)로 올린다. 디스크 여유가 31GB뿐이라 macOS + Xcode + iOS 시뮬레이터를 받으려면 먼저 정리가 필요할 수 있다
+0. ~~macOS 올리기·Xcode 설치~~ → 2026-11-18 완료(0-1절). 아래 0·1번은 기록용. 원래 13.2.1(Ventura)이었다. Capacitor 8과 App Store 제출에는 Xcode 26 이상이 필요하고, 그 Xcode는 Ventura에 깔리지 않는다. 시스템 설정 → 일반 → 소프트웨어 업데이트에서 최신 macOS(2026-11-17 기준 27.2.1, 약 15GB)로 올린다. 디스크 여유가 31GB뿐이라 macOS + Xcode + iOS 시뮬레이터를 받으려면 먼저 정리가 필요할 수 있다
 1. Xcode 최신판 설치 (App Store, Apple ID 로그인 필요 — 본인이 할 일), 한 번 실행해 추가 구성요소 설치. 그 뒤 `sudo xcode-select -s /Applications/Xcode.app`
 2. ~~Node.js 22 LTS 설치~~ → 이미 있음(v22.14.0)
 3. Apple Developer Program 가입(개인, 연 12,800엔). 이름은 HONGSUNGJAE로 표시됨
