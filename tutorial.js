@@ -73,7 +73,18 @@
     { key: 'rtd-tip-sage', k: 'tip_sage', at: '#rail [data-arg="sage"]',
       when: (c) => { const g = c.g, p = me(c); if (!g.sageMax() || g.sagesOf(p).length >= g.sageMax()) return false; const m = c.T.units.filter((d) => d.tier === 0 && !g.has(p, d.id)).map((d) => d.cost).sort((a, b) => a - b)[0]; return m != null && p.gold >= m; } },
     { key: 'rtd-tip-syn', k: 'tip_syn', at: () => (vis($('#synbar')) ? '#synbar' : null), when: (c) => Object.keys(me(c).syn || {}).length > 0 },
+    // 선택권을 처음 받았을 때
+    { key: 'rtd-tip-ticket', k: 'tip_ticket', at: '#rail [data-arg="ticket"]', when: (c) => !c.S.drawer && vis($('#rail')) && Object.values(me(c).tickets || {}).reduce((a, b) => a + b, 0) > 0 },
+    // 배속: 단계 안내가 다 끝난 뒤, 몇 라운드 지나서
+    { key: 'rtd-tip-speed', k: 'tip_speed', at: '#speedbtn', when: (c) => !steps.length && c.g.round >= 3 && vis($('#speedbtn')) },
+    // 서랍의 각 탭을 처음 열었을 때 그 탭이 무엇인지 한 번씩. 강화·도감은 단계 안내가 이미 설명하므로 안내 중에는 본 것으로 친다
+    tabTip('upgrade', true), tabTip('sage'), tabTip('ticket'), tabTip('book', true), tabTip('war'), tabTip('set'),
   ];
+  function tabTip(k, covered) {
+    const key = 'rtd-tip-tab-' + k;
+    return { key, k: 'tip_tab_' + k, at: `#tabs [data-arg="${k}"]`,
+      when: (c) => { if (!c.S.drawer || c.S.tab !== k || !vis($('#pane'))) return false; if (covered && steps.length) { set(key, '1'); return false; } return true; } };
+  }
   function moved(c, st) {
     return c.g.units.some((u) => { const f = st.from && st.from[u.id]; return f && c.S.sel.includes(u.id) && Math.hypot(u.x - f[0], u.y - f[1]) > 40; });
   }

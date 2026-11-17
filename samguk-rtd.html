@@ -359,7 +359,7 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 .rb .dot { position: absolute; top: -5px; right: -5px; min-width: 18px; padding: 0 4px; font: 700 11px/18px var(--ui); border-radius: 9px; background: var(--cinnabar); color: #fff; }
 .rb .sub2 { font-size: 9px; color: #ffd86a; }
 /* 아래 선택 막대: 유닛을 골랐을 때만 */
-#selbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: var(--sb); width: min(780px, calc(100% - 150px)); z-index: 4; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 4px 8px; padding: 6px 8px; border-radius: 12px; background: rgba(20, 14, 10, .92); border: 1px solid rgba(205, 167, 91, .6); box-shadow: 0 4px 16px rgba(0, 0, 0, .5); }
+#selbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: var(--sb); width: min(780px, calc(100% - 2 * (var(--sr) + var(--rw) + 10px))); z-index: 4; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 4px 8px; padding: 6px 8px; border-radius: 12px; background: rgba(20, 14, 10, .92); border: 1px solid rgba(205, 167, 91, .6); box-shadow: 0 4px 16px rgba(0, 0, 0, .5); }
 #selbar[hidden] { display: none; }
 #selbar #info { grid-column: 1; grid-row: 1; padding: 0; max-height: 50px; overflow: hidden; cursor: pointer; }
 #selbar #info .por { width: 44px; height: 44px; margin-right: 6px; }
@@ -463,7 +463,7 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 #perf[hidden] { display: none; }
 /* 라인에서 유닛을 골랐을 때: 조이스틱은 왼쪽 아래 구석, 선택 창은 그 오른쪽으로 비켜난다 */
 #stage.lanejoy #joy { bottom: calc(var(--sb) + 10px); left: calc(var(--sl, 0px) + 28px); z-index: 5; }
-#stage.lanejoy #selbar { left: calc(var(--sl, 0px) + 176px); transform: none; width: calc(100% - var(--sl, 0px) - 176px - 74px); }
+#stage.lanejoy #selbar { left: calc(var(--sl, 0px) + 176px); transform: none; width: calc(100% - var(--sl, 0px) - 176px - var(--sr) - var(--rw) - 10px); }
 #joy i { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: radial-gradient(circle at 45% 38%, rgba(255, 246, 225, .7), rgba(200, 170, 120, .45)); box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none; }
 #joy.on { border-color: rgba(255, 235, 200, .65); }
 /* 보스전 중 라인 화면: 오른쪽 버튼 열(#rail)에 가리지 않게 맨 윗줄, 메뉴 버튼 왼쪽에 둔다 */
@@ -480,7 +480,6 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
   .rb { width: 50px; height: 46px; }
   /* 낮은 화면에서는 버튼 열을 위에서부터 놓아 메뉴 버튼과 닿지 않게 한다 */
   #rail { top: calc(var(--st) + 52px); transform: none; }
-  #selbar { width: calc(100% - 140px); }
 }
 /* ===== 시작 화면: 오프라인/온라인, 계정, 언어 ===== */
 :root { --ui: "IBM Plex Sans KR", "Hiragino Sans", "Noto Sans JP", "PingFang SC", "Microsoft YaHei", "Malgun Gothic", sans-serif; }
@@ -767,6 +766,10 @@ html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
 #lsay { background: var(--pap); color: var(--ink2); border: 1px solid rgba(60,34,16,.45); border-radius: 8px; }
 /* ---- 게임 중 오른쪽 버튼(강화·명사·선택권·전황·자동): 테두리 선 없는 반투명 원형. 전장이 비쳐 보이고 아이콘만 또렷하다.
    이름은 아래 그림자 글씨. 자동이 켜지면 은은한 초록 빛줄기가 둘레를 돌고 화살표도 돈다 ---- */
+/* --rw = 오른쪽 버튼 열(#rail)의 폭. 선택 창(#selbar)이 이만큼과 오른쪽 안전 영역(--sr)을 비워 버튼을 가리지 않는다 */
+:root { --rw: 56px; }
+@media (max-height: 430px) { :root { --rw: 52px; } }
+@media (min-height: 600px) { :root { --rw: 72px; } }
 #rail { gap: 4px; }
 .rb { width: 56px; height: auto; padding: 0; gap: 1px; border: 0; border-radius: 0; background: none; box-shadow: none; color: #fff; font: 700 10px/1.2 var(--ui); overflow: visible; }
 .rb .rc { position: relative; box-sizing: border-box; width: 44px; height: 44px; padding: 0; margin: 0; border: 0; border-radius: 50%; display: grid; place-items: center; place-content: center; font-style: normal; line-height: 0; /* 다른 규칙에서 물려받는 안쪽 여백이 있으면 그림이 한쪽으로 밀린다 */ background: rgba(14, 10, 8, .66); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); transition: transform .08s, background .15s; }
