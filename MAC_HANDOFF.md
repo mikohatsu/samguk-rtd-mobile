@@ -1,7 +1,13 @@
 # Mac에서 이어서 할 일 (iOS 출시)
 
-Windows에서 할 수 있는 작업은 끝났습니다. 이 폴더를 통째로 Mac에 옮긴 뒤 아래 순서대로 진행합니다.
-`node_modules/`와 `www/`는 옮기지 않아도 됩니다(Mac에서 다시 만듦).
+Windows에서 할 수 있는 작업은 끝났습니다. Mac에서는 GitHub에서 받아 아래 순서대로 진행합니다.
+
+```bash
+git clone https://github.com/mikohatsu/samguk-rtd-mobile.git
+```
+
+이미 받아 두었다면 `git pull`. `node_modules/`와 `www/`는 Mac에서 다시 만듭니다.
+게임 스튜디오 템플릿(`.claude/` 등)은 git에 없으므로 Mac에서 쓰려면 `~/.claude/ccgs/`를 옮긴 뒤 `bash ~/.claude/ccgs/install.sh`.
 
 ## 0. 지금 상태
 
@@ -13,12 +19,13 @@ Windows에서 할 수 있는 작업은 끝났습니다. 이 폴더를 통째로 
 | 약관·개인정보처리방침 | https://34-146-124-57.sslip.io/terms , /privacy (`?lang=ja|en|ko|zh`) |
 | Capacitor 8 iOS 프로젝트 (`ios/`) | 생성됨. Swift Package Manager 방식이라 CocoaPods 필요 없음 |
 | Info.plist | 가로 전용, 상태 표시줄 숨김, 암호화 면제, AdMob **시험용** 앱 ID, ATT 문구, SKAdNetwork |
-| entitlements (Sign in with Apple) | **아직 없음** → Xcode에서 Capability 추가(2절 7번, 3-1절) |
+| entitlements (Sign in with Apple) | 완료(2026-11-17): `ios/App/App/App.entitlements`, 빌드 설정 `CODE_SIGN_ENTITLEMENTS`에 연결됨 |
 | 앱 아이콘·시작 화면 | 완료(`scripts/build-icons.py` → `ios/App/App/Assets.xcassets`) |
 | 채팅 | 로비 채널·방 채팅, 욕설 가림·광고 차단·도배 입막음, 줄마다 신고·차단. 계정 정지 기능은 아직 없음 |
 | 원보(유료 재화) | 첫 출시는 광고만. 상점 원보 탭과 잔액은 `lobby.js`의 `GEMS_ON = false`로 숨김. 결제(IAP) 없음 |
-| 언어별 ATT 문구·앱 이름 | `ios/App/App/{ja,en,ko,zh-Hans}.lproj/InfoPlist.strings` (**Xcode에 추가 필요**) |
-| 개인정보 매니페스트 | `ios/App/App/PrivacyInfo.xcprivacy` (**Xcode에 추가 필요**) |
+| 언어별 ATT 문구·앱 이름 | `ios/App/App/{ja,en,ko,zh-Hans}.lproj/InfoPlist.strings`, 프로젝트에 등록 완료(2026-11-17, Localizations 4개 포함) |
+| 개인정보 매니페스트 | `ios/App/App/PrivacyInfo.xcprivacy`, 타깃 Resources에 등록 완료(2026-11-17) |
+| SKAdNetwork | 구글 권장 전체 50개로 교체 완료(2026-11-17, 2026-01-30판 목록) |
 | 광고 | `native.js`: 앱에서는 AdMob 전면 광고(2판에 1번), ATT는 첫 실행에 한 번 물음. 지금은 **구글 시험용 광고 ID** |
 
 ## 1. Mac 준비
@@ -41,11 +48,9 @@ npm run ios
 
 ## 2. Xcode에서 한 번만 할 일
 
-1. 왼쪽 파일 목록에서 `App` 폴더에 다음을 끌어다 놓기(“Copy items if needed” 끄고, Target `App` 체크):
-   - `PrivacyInfo.xcprivacy`
-   - `ja.lproj`, `en.lproj`, `ko.lproj`, `zh-Hans.lproj` 폴더 (InfoPlist.strings)
-2. Project `App` → Info → Localizations에 Japanese, English, Korean, Chinese (Simplified) 추가
-3. Target `App` → Signing & Capabilities
+1. ~~`PrivacyInfo.xcprivacy`, `*.lproj` 4개를 타깃에 추가~~ → 프로젝트 파일에 이미 넣음(2026-11-17). Xcode 왼쪽 목록 `App` 아래에 `PrivacyInfo.xcprivacy`, `InfoPlist.strings`(4개 언어), `App.entitlements`가 보이는지만 확인
+2. ~~Localizations 4개~~ → 이미 넣음. Project `App` → Info → Localizations에 Japanese·Korean·Chinese (Simplified)가 보이는지만 확인
+3. Target `App` → Signing & Capabilities (**본인이 할 일**)
    - Team: 본인 개발자 계정
    - Bundle Identifier: `com.hongsungjae.sangokurtd` (바꾸려면 `capacitor.config.json`의 appId도 같이)
 4. Target `App` → General
@@ -54,7 +59,7 @@ npm run ios
    - iPhone·iPad 둘 다, Requires Full Screen 체크(이미 Info.plist에 있음)
 5. 앱 아이콘: `Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png`(1024×1024)에 이미 들어 있음(`scripts/build-icons.py`가 만듦). Xcode에서 투명 없이 보이는지만 확인
 6. 시작 화면: `Assets.xcassets/Splash.imageset`(2732×2732 3장)도 `scripts/build-icons.py`가 이미 만듦. 실기기에서 잘리지 않는지 확인. 배경색 `#1a120c`
-7. Target `App` → Signing & Capabilities → `+ Capability` → **Sign in with Apple** (3-1절. 이걸 빼면 Apple 로그인이 안 됨)
+7. ~~Sign in with Apple Capability~~ → `App.entitlements`로 이미 켜 둠. Team을 고르면 Signing & Capabilities에 **Sign in with Apple**이 보여야 한다. 서명 오류가 나면 Apple Developer 사이트의 App ID에서 Sign in with Apple을 켠다(3-1절 2번)
 
 ## 3. 실기기 확인 목록
 
@@ -76,7 +81,7 @@ npm run ios
 게스트 로그인은 지금 바로 됩니다. Apple·Google은 아래를 해야 켜집니다(코드는 다 들어가 있음: `native.js`의 `signIn`, 서버 `/api/auth/apple`·`/api/auth/google`).
 
 **Apple로 로그인**
-1. Xcode → Target `App` → Signing & Capabilities → `+ Capability` → **Sign in with Apple** 추가
+1. ~~Xcode에서 Capability 추가~~ → `App.entitlements`로 완료(2026-11-17)
 2. Apple Developer 사이트의 App ID(`com.hongsungjae.sangokurtd`)에도 Sign in with Apple이 켜졌는지 확인
 3. 서버는 앱 번들 ID를 받는 쪽으로 검증한다(기본값 그대로면 됨). 번들 ID를 바꾸면 서버 환경 변수 `APPLE_AUDS`도 같이
 4. **계정 삭제 시 토큰 철회(Apple 심사 요구):** Apple 키(.p8)를 만들어 서버에서 `https://appleid.apple.com/auth/revoke`를 부르게 해야 함 → 키 발급 후 말하기(서버 쪽 작업)
@@ -99,7 +104,7 @@ npm run ios
 1. https://admob.google.com 에서 앱 등록(iOS) → **앱 ID**와 **전면 광고 단위 ID** 발급
 2. `ios/App/App/Info.plist`의 `GADApplicationIdentifier`를 실제 앱 ID로
 3. `native.js`의 `AD.interstitial`을 실제 광고 단위 ID로, `testing: false`
-4. `SKAdNetworkItems`: 구글이 안내하는 전체 목록으로 교체 (https://developers.google.com/admob/ios/3p-skadnetworks)
+4. ~~`SKAdNetworkItems` 전체 목록으로 교체~~ → 완료(2026-11-17, 50개). 구글이 목록을 바꾸면 https://developers.google.com/admob/ios/3p-skadnetworks 와 다시 맞춘다
 5. AdMob의 `app-ads.txt`: 개발자 웹사이트에 올려야 함 → 서버에 `/app-ads.txt` 추가 필요(그때 말하기)
 6. 유럽(EEA)·영국에도 배포한다면 AdMob의 동의 메시지(UMP) 설정이 필요. 일본만이면 불필요
 
@@ -123,7 +128,7 @@ npm run ios
 
 1. Apple Developer Program 가입(개인, 본인 인증). 스토어 판매자 이름은 본인 실명으로 나온다
 2. Mac + Xcode 준비 → `npm install`, `npm run ios`
-3. Xcode 한 번만(2절): `PrivacyInfo.xcprivacy`와 `*.lproj` 4개를 타깃에 추가, Localizations 4개, Team·서명, **Sign in with Apple** Capability
+3. Xcode 한 번만(2절): Team·서명 고르기. (매니페스트·언어 파일·Localizations·Sign in with Apple은 2026-11-17에 프로젝트 파일에 넣어 둠 — 보이는지만 확인)
 4. Apple Developer 사이트: App ID에 Sign in with Apple 켜기, **Sign in with Apple용 키(.p8)** 발급 → Key ID·Team ID와 함께 서버 담당에게 전달(계정 삭제 때 토큰 철회용)
 5. AdMob: iOS 앱 등록, 앱 ID·전면 광고 단위 ID 발급, 광고 콘텐츠 등급, 결제·세금 정보 → ID를 팀에 전달(4절)
 6. (Google 로그인을 켜기로 하면) Google Cloud 콘솔: OAuth 동의 화면, iOS·웹 클라이언트 ID 2개(3-1절)
