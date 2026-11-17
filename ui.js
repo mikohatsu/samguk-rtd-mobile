@@ -2936,7 +2936,7 @@
   // 공격력·공격 간격이 무엇 때문에 바뀌었는지: [{ n: 이름, v: 비율 }] (강화·시너지·명사/패시브·오라·변형 규칙)
   function atkSources(u) {
     const d = u.def, p = g.players[u.owner], out = [];
-    const lv = g.upgradeLevel(p, d); if (lv) out.push({ n: I.t('upShort', { n: lv }), v: 0.2 * lv, mul: true });
+    const lv = g.upgradeLevel(p, d); if (lv) out.push({ n: I.t('upShort', { n: lv }), v: (g.diff.upPct || 0.2) * lv, mul: true });
     const seen = {};
     g.units.forEach((s) => { if (s.owner === p.idx) (s.def.p || []).forEach((x) => { if (x.k === 'globalAtk' && (x.fac === 'all' || x.fac === d.fac) && !seen[x.name]) { seen[x.name] = 1; out.push({ n: s.def.name, v: x.pct }); } }); });
     if (u.aura) { const src = g.units.find((s) => s.owner === u.owner && (s.def.p || []).some((x) => x.k === 'aura' && x.pct === u.aura && (!x.fac || x.fac === d.fac) && Math.hypot(u.x - s.x, u.y - s.y) <= x.r)); out.push({ n: src ? src.def.name : I.t('aura'), v: u.aura }); }
@@ -3860,7 +3860,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 튜토리얼 판은 자동 버튼을 가르치려고 꺼 둔 채 시작하고, 건너뛰면 켠다.
     const autoOnAll = () => ['t1', 't2', 't3'].forEach((k) => g.setAuto(g.me, k, true));
     let autoPref = true; try { autoPref = localStorage.getItem('rtd-auto') !== '0'; } catch (e) { /* 저장 불가 */ }
-    const tutOn = !!(window.RTD_TUT && S.saveOn && !opt.snap && window.RTD_TUT.maybeStart({ get g() { return g; }, S, t: I.t, onSkip: () => { autoOnAll(); toast(t('autoToastOn'), 'good'); dirty(); } }));
+    // 팁(명사·시너지)은 모든 판에서 보고, 단계 안내는 혼자 하는 오프라인 새 판에서만(tutorial)
+    const tutOn = !!(window.RTD_TUT && window.RTD_TUT.maybeStart({ get g() { return g; }, S, T, t: I.t, dirty, tutorial: S.saveOn && !opt.snap, onSkip: () => { autoOnAll(); toast(t('autoToastOn'), 'good'); dirty(); } }));
     if (!opt.snap && !tutOn && autoPref) autoOnAll();
     window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); }, tick, render, dom: () => { renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
     view.focus({ preventScroll: true });
@@ -3896,11 +3897,19 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       dirty(); const box = $('overlay'); box.dataset.key = '';
     }
   }
-  // 광고: 두 판에 한 번(시제품은 자리만). 실제 앱에서는 광고 SDK로 바꾼다.
+  // 판 끝 전면 광고: 판이 끝나 로비로 돌아갈 때만(판 도중에는 절대 안 띄운다).
+  // 덜 불편하게: 처음 2판은 없음, 앞 광고(보상형 포함)에서 5분이 안 지났으면 없음(빨리 다시 하기 반복 방지), 광고 제거를 샀으면 없음.
+  const AD_FREE_GAMES = 2, AD_GAP = 5 * 60000;
+  function noAds() {
+    const k = T.unlock && T.unlock.noAdsKey, me = ACC.me;
+    if (me && k) { const own = (me.owned || []).includes(k); try { localStorage.setItem('rtd-noads', own ? '1' : ''); } catch (e) { /* 저장 안 됨 */ } return own; }
+    try { return localStorage.getItem('rtd-noads') === '1'; } catch (e) { return false; }
+  }
   function adThen(next) {
-    let n = 0;
-    try { n = +(localStorage.getItem('rtd-games') || 0) + 1; localStorage.setItem('rtd-games', String(n)); } catch (e) { n = 1; }
-    if (n % 2) { next(); return; }
+    let n = 0, lastAd = 0; const now = Date.now();
+    try { n = +(localStorage.getItem('rtd-games') || 0) + 1; localStorage.setItem('rtd-games', String(n)); lastAd = +(localStorage.getItem('rtd-adT') || 0); } catch (e) { n = 1; }
+    if (n <= AD_FREE_GAMES || now - lastAd < AD_GAP || noAds()) { next(); return; }
+    try { localStorage.setItem('rtd-adT', String(now)); } catch (e) { /* 저장 안 됨 */ }
     // 앱에서는 AdMob 전면 광고, 웹·광고 준비 안 됨이면 아래 자리 표시
     if (window.RTD_NATIVE && window.RTD_NATIVE.on) { if (!window.RTD_NATIVE.interstitial(next)) next(); return; }
     const ov = $('adover'), btn = $('adclose');
@@ -4126,6 +4135,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     const repaintMap = () => { sizeMap(); };
     if (window.RTD_LOBBY) window.RTD_LOBBY.init({ api, ACC, saveAcc, t, I, T, cfg, getLobby: () => lobby, joinRoom: (code) => join(code), begin, refreshAcc, settingsHtml, errText, clock, repaintMap, repaintSetup: () => dr(), paintMini: (cv, theme) => paintMap(cv.getContext('2d'), cv.width, cv.height, theme || null) });
     dr();
+    // 로비 안내(처음) 또는 아직 못 받은 첫 신화 해금 연출
+    if (window.RTD_TUT && window.RTD_TUT.lobby) window.RTD_TUT.lobby({ t, T });
   }
   setupTitle();
   requestAnimationFrame(loop);

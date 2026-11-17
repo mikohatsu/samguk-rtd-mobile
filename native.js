@@ -45,6 +45,7 @@
     if (!rewardOn()) throw new Error('no_ad');
     await P.AdMob.prepareRewardVideoAd({ adId: AD.reward, isTesting: AD.testing });
     const r = await P.AdMob.showRewardVideoAd(); // @capacitor-community/admob 8.x: 보상을 받으면 resolve
+    try { localStorage.setItem('rtd-adT', String(Date.now())); } catch (e) { /* 저장 안 됨: 판 끝 광고 간격 계산에만 쓴다 */ }
     return r || {};
   }
 

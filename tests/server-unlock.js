@@ -23,8 +23,10 @@ async function waitUp() { for (let i = 0; i < 50; i++) { try { await fetch(`http
     ok(!!tok && reg.me.coins === 0, '계정 생성, 동전 0');
     let r = await api('/api/unlock', { id: 'gwakga' }, tok);
     ok(r.status === 400 && r.error === 'coins', '동전이 부족하면 해금 거절(coins)');
-    r = await api('/api/unlock', { id: 'join' }, tok);
-    ok(r.status === 400 && r.error === 'bad_item', '처음부터 열린 신화(조인)는 해금 대상이 아님');
+    r = await api('/api/unlock/starter', { want: ['join', 'yeopo', 'join'] }, tok);
+    ok(r.status === 200 && r.granted.length === 2 && r.granted[0] === 'join' && r.me.owned.includes('unl_join') && r.me.owned.includes('starter'), `첫 신화 2명: 원한 신화(조인)는 그대로, 불멸(여포)은 무시, 나머지 1명 랜덤 (${(r.granted || []).join(',')})`);
+    r = await api('/api/unlock/starter', {}, tok);
+    ok(r.status === 200 && r.granted.length === 0, '첫 신화는 계정마다 한 번만');
     r = await api('/api/unlock', { id: '../x' }, tok);
     ok(r.status === 400 && r.error === 'bad_item', '이상한 id 거절');
     let last = null;

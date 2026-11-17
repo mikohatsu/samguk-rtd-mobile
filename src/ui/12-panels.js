@@ -119,7 +119,7 @@
   // 공격력·공격 간격이 무엇 때문에 바뀌었는지: [{ n: 이름, v: 비율 }] (강화·시너지·명사/패시브·오라·변형 규칙)
   function atkSources(u) {
     const d = u.def, p = g.players[u.owner], out = [];
-    const lv = g.upgradeLevel(p, d); if (lv) out.push({ n: I.t('upShort', { n: lv }), v: 0.2 * lv, mul: true });
+    const lv = g.upgradeLevel(p, d); if (lv) out.push({ n: I.t('upShort', { n: lv }), v: (g.diff.upPct || 0.2) * lv, mul: true });
     const seen = {};
     g.units.forEach((s) => { if (s.owner === p.idx) (s.def.p || []).forEach((x) => { if (x.k === 'globalAtk' && (x.fac === 'all' || x.fac === d.fac) && !seen[x.name]) { seen[x.name] = 1; out.push({ n: s.def.name, v: x.pct }); } }); });
     if (u.aura) { const src = g.units.find((s) => s.owner === u.owner && (s.def.p || []).some((x) => x.k === 'aura' && x.pct === u.aura && (!x.fac || x.fac === d.fac) && Math.hypot(u.x - s.x, u.y - s.y) <= x.r)); out.push({ n: src ? src.def.name : I.t('aura'), v: u.aura }); }

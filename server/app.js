@@ -107,6 +107,7 @@ const unlockKey = (id) => UNL.key(id);
 // 결제 상품 ID → 넣어 줄 열쇠 목록(확정 구매만. 확률형 판매 없음)
 function iapItems(pid) {
   const locked = UNL.lockedIds(), tierOf = (id) => (THEME.units.find((d) => d.id === id) || {}).tier;
+  if (pid === UNL.iap.noads[0]) return [UNL.noAdsKey];
   if (pid === UNL.iap.all10[0]) return locked.filter((id) => tierOf(id) === 10).map(unlockKey);
   for (const t of [9, 10]) { const pre = UNL.iap[t][0]; if (pid.startsWith(pre)) { const id = pid.slice(pre.length); return locked.includes(id) && tierOf(id) === t ? [unlockKey(id)] : null; } }
   return null;
@@ -353,6 +354,19 @@ async function handle(req, res, url, query) {
     if (r === 'owned') return json(res, 409, { error: 'owned' });
     if (r === 'coins') return json(res, 400, { error: 'coins' });
     return json(res, 200, { me: profile(await store.getUser(u.id)) });
+  }
+  // 첫 신화 2명(튜토리얼 보상): 계정마다 한 번. want = 이 기기에서 이미 받은 신화(로그인 전 튜토리얼)면 그대로 이어 준다.
+  if (url === '/api/unlock/starter') {
+    if (limited('u:' + u.id, 'unls', 5, 600000)) return json(res, 429, { error: 'slow_down' });
+    const owned = u.owned || [];
+    if (owned.includes(UNL.starterKey)) return json(res, 200, { me: profile(u), granted: [] });
+    const pool = UNL.lockedIds().filter((id) => (THEME.units.find((d) => d.id === id) || {}).tier === 9 && !owned.includes(unlockKey(id)));
+    const want = (Array.isArray(b.want) ? b.want : []).map(String).filter((id) => pool.includes(id));
+    const pick = [...new Set(want)].slice(0, UNL.starterMyth);
+    const rest = pool.filter((id) => !pick.includes(id));
+    while (pick.length < UNL.starterMyth && rest.length) pick.push(rest.splice(crypto.randomInt(rest.length), 1)[0]);
+    const me = await store.grantItems(u.id, pick.map(unlockKey).concat([UNL.starterKey]));
+    return json(res, 200, { me: profile(me), granted: pick });
   }
   // 소급 해금: 이미 소환한 적 있는 잠금 장수(판 기록·불멸 소환 수)를 연다. 여러 번 불러도 같다.
   if (url === '/api/unlock/claim') {

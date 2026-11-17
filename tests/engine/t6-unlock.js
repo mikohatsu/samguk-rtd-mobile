@@ -19,19 +19,19 @@ try {
   const locked = UL.lockedIds(), imm = T.units.filter((d) => d.tier === 10).map((d) => d.id), myth = T.units.filter((d) => d.tier === 9).map((d) => d.id);
   ok(imm.every((id) => locked.includes(id)), `불멸 ${imm.length}명이 모두 잠김`);
   const mLocked = myth.filter((id) => locked.includes(id));
-  ok(mLocked.length >= 3 && mLocked.length <= 5, `신화는 대략 절반 잠김 (${mLocked.join(',')})`);
-  ok(UL.freeMyth.every((id) => myth.includes(id)), '처음 열린 신화 목록이 모두 실제 신화 장수');
-  ok(locked.every((id) => UL.price(id) > 0) && UL.price('join') === null && UL.price('cav') === null, '잠긴 장수만 가격이 있음');
+  ok(mLocked.length === myth.length && UL.freeMyth.length === 0 && UL.starterMyth === 2, `신화도 처음엔 전부 잠김, 튜토리얼로 2명 (${mLocked.length}/${myth.length})`);
+  ok(locked.every((id) => UL.price(id) > 0) && UL.price('cav') === null, '잠긴 장수만 가격이 있음');
 } catch (e) { ok(false, '데이터 확인 중 예외 — ' + L.errText(e)); }
 
 // 2) 아무것도 열지 않음: 상자에서 잠긴 장수 아이템이 안 나오고, 불멸 몫은 신화(열린 장수)로 대체
 try {
-  const g = new E.Game(T, { diff: 'easy', mode: 'solo', seed: 61, unlocked: [] });
+  // 첫 신화 2명(튜토리얼 보상)만 연 상태
+  const g = new E.Game(T, { diff: 'easy', mode: 'solo', seed: 61, unlocked: ['join', 'jangbi'] });
   const out = openMany(g, 600), items = Object.keys(out).filter((k) => itemUnit[k]);
   ok(items.every((it) => !g.isLocked(itemUnit[it])), `잠긴 장수의 조합 아이템이 상자에서 나오지 않음 (${JSON.stringify(out)})`);
   ok(items.every((it) => tierOfItem(it) === 9), '불멸이 모두 잠기면 불멸 몫이 신화 아이템으로 대체됨');
   ok(!out.rankUp, '열린 신화가 있으면 등급 상승권으로 넘어가지 않음 (확률은 그대로, 종류만 대체)');
-  ok(g.tierIds(10).length === 0 && g.tierIds(9).length === UL.freeMyth.length, `tierIds가 잠긴 장수를 뺌 (불멸 ${g.tierIds(10).length}, 신화 ${g.tierIds(9).length})`);
+  ok(g.tierIds(10).length === 0 && g.tierIds(9).length === 2, `tierIds가 잠긴 장수를 뺌 (불멸 ${g.tierIds(10).length}, 신화 ${g.tierIds(9).length})`);
   // 조합: 재료와 아이템을 다 갖춰도 잠긴 장수는 만들 수 없다
   const r = g.recipeOf('gwanu'); r.parts.forEach((x) => g.spawnUnit(g.me, x)); g.spawnDrop(g.me, 'item', { item: r.item });
   const st = g.recipeStatus(g.me, 'gwanu');

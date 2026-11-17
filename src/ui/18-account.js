@@ -27,11 +27,19 @@
       dirty(); const box = $('overlay'); box.dataset.key = '';
     }
   }
-  // 광고: 두 판에 한 번(시제품은 자리만). 실제 앱에서는 광고 SDK로 바꾼다.
+  // 판 끝 전면 광고: 판이 끝나 로비로 돌아갈 때만(판 도중에는 절대 안 띄운다).
+  // 덜 불편하게: 처음 2판은 없음, 앞 광고(보상형 포함)에서 5분이 안 지났으면 없음(빨리 다시 하기 반복 방지), 광고 제거를 샀으면 없음.
+  const AD_FREE_GAMES = 2, AD_GAP = 5 * 60000;
+  function noAds() {
+    const k = T.unlock && T.unlock.noAdsKey, me = ACC.me;
+    if (me && k) { const own = (me.owned || []).includes(k); try { localStorage.setItem('rtd-noads', own ? '1' : ''); } catch (e) { /* 저장 안 됨 */ } return own; }
+    try { return localStorage.getItem('rtd-noads') === '1'; } catch (e) { return false; }
+  }
   function adThen(next) {
-    let n = 0;
-    try { n = +(localStorage.getItem('rtd-games') || 0) + 1; localStorage.setItem('rtd-games', String(n)); } catch (e) { n = 1; }
-    if (n % 2) { next(); return; }
+    let n = 0, lastAd = 0; const now = Date.now();
+    try { n = +(localStorage.getItem('rtd-games') || 0) + 1; localStorage.setItem('rtd-games', String(n)); lastAd = +(localStorage.getItem('rtd-adT') || 0); } catch (e) { n = 1; }
+    if (n <= AD_FREE_GAMES || now - lastAd < AD_GAP || noAds()) { next(); return; }
+    try { localStorage.setItem('rtd-adT', String(now)); } catch (e) { /* 저장 안 됨 */ }
     // 앱에서는 AdMob 전면 광고, 웹·광고 준비 안 됨이면 아래 자리 표시
     if (window.RTD_NATIVE && window.RTD_NATIVE.on) { if (!window.RTD_NATIVE.interstitial(next)) next(); return; }
     const ov = $('adover'), btn = $('adclose');

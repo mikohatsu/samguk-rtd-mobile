@@ -222,7 +222,8 @@
       const r = this.rankOf[d.tier];
       if (!r) return 0;
       // 공격 속도가 다른 장수도 등급 표기 공격력은 초당 피해 기준으로 맞춘다
-      return r.atk * this.attackTime(d) * (1 + 0.2 * this.upgradeLevel(p, d));
+      // 강화 1단계당 공격력 증가율: 난이도별 upPct(없으면 0.2). 2026-11-17 보통·어려움 0.25(강화를 챙기는 쪽이 보상받게)
+      return r.atk * this.attackTime(d) * (1 + (this.diff.upPct || 0.2) * this.upgradeLevel(p, d));
     }
     unitAtk(u) {
       const p = this.players[u.owner];
@@ -331,9 +332,14 @@
     }
     sell(p, u) {
       if (u.def.tier !== 1 || this.inFight(u)) return 0;
-      const [a, b] = this.R.disbandGold, v = a + Math.floor(this.rand() * (b - a + 1));
+      const v = this.disbandValue();
       this.removeUnit(u); p.gold += v; if (p === this.me) this.stats.goldIn += v;
       return v;
+    }
+    // 1성 해산 금화: R.disbandGold 범위에 난이도별 sellGold(없으면 1)를 곱한다. 2026-11-17 보통·어려움 0.7(기본 수입을 줄이고 보스·명사 쪽 비중을 키움)
+    disbandValue() {
+      const [a, b] = this.R.disbandGold, v = a + Math.floor(this.rand() * (b - a + 1)), k = this.diff.sellGold || 1;
+      return k === 1 ? v : Math.max(1, Math.round(v * k));
     }
     upgradeCost(p, g) {
       const off = Math.min(0.5, this.teamPassives(p, 'discount').reduce((m, x) => Math.max(m, x.pct), 0) + (this.mut.upDisc || 0));
@@ -496,7 +502,9 @@
         const [a, x] = pts[i], [b, y] = pts[i + 1];
         if (r <= b) { v = Math.exp(Math.log(x) + ((Math.max(r, a) - a) / (b - a)) * (Math.log(y) - Math.log(x))); break; }
       }
-      return v * this.diff.lane * this.mut.laneHp;
+      // laneBump: 난이도별 [시작 라운드, 끝 라운드, 배율] 구간 보정(없으면 1). 2026-11-17 보통 R31~80 ×1.1(빌드 부족이 중반에 드러나게)
+      const bump = (this.diff.laneBump || []).reduce((m, [a, b, k]) => (r >= a && r <= b ? m * k : m), 1);
+      return v * this.diff.lane * bump * this.mut.laneHp;
     }
     monsterDef(r) { return Math.floor(r / 5) * (this.diff.mult / 0.4); }
     waveInfo(r) { let w = this.T.waves[0]; this.T.waves.forEach((x) => { if (r >= x.from) w = x; }); return w; }
@@ -597,7 +605,7 @@
       this.endedRound = this.round;
       this.players.forEach((p) => {
         for (let i = 0; i < (this.mut.roundT1 || 2) + this.sageVal(p, 'roundT1', 'n'); i++) {
-          if (p.auto.sell) { const [a, b] = this.R.disbandGold, v = a + Math.floor(this.rand() * (b - a + 1)); p.gold += v; if (p === this.me) this.stats.goldIn += v; }
+          if (p.auto.sell) { const v = this.disbandValue(); p.gold += v; if (p === this.me) this.stats.goldIn += v; }
           else this.spawnUnit(p, this.pick(this.tierIds(1)));
         }
         // 금화는 특수 유닛 효과로만 라운드마다 들어온다
@@ -872,7 +880,8 @@
       const m = this.diff.mult, scale = this.R.partyBossScale[Math.min(4, this.party - 1)];
       // 이동 중엔 공격하지 못하므로 실제 딜 시간 비율을 넣는다. hpx는 강화까지 고려해 보스별로 맞춘 체력 배율이다.
       // 그 난이도의 마지막 보스면 fhpx(5인 기준 최종 보스 맞춤)를 쓴다
-      const x = b.round === this.diff.rounds && b.fhpx ? b.fhpx : b.hpx || 1;
+      // bossHpx: 난이도별 라운드→보스 체력 보정(없으면 1). 2026-11-17 보통은 실패를 R90 육손에서 R55~80으로 나눔
+      const x = (b.round === this.diff.rounds && b.fhpx ? b.fhpx : b.hpx || 1) * ((this.diff.bossHpx || {})[b.round] || 1);
       const hp = b.reqDps * b.time * this.R.bossUptime * (m / 0.4) * scale * x * this.mut.bossHp;
       const specAtk = b.reqDps / 2;
       return { hp, def: specAtk * 0.25 * m, hit: this.rankOf[b.hitTier].hp * this.diff.bossAtk * this.mut.bossAtk };
@@ -1516,7 +1525,7 @@
       this.players.forEach((p) => {
         const r = Object.assign({}, rw);
         const bonus = this.teamPassives(p, 'bossGold').reduce((m, x) => Math.max(m, x.pct), 0);
-        if (r.gold) r.gold = Math.floor(r.gold * (1 + bonus) * this.mut.bossGold);
+        if (r.gold) r.gold = Math.floor(r.gold * (1 + bonus) * this.mut.bossGold * (this.diff.bossGold || 1));
         if (this.mut.bossChest) r.chest = (r.chest || 0) + this.mut.bossChest;
         if (this.mut.bossTicket && r.tickets) r.tickets = r.tickets.concat([[r.tickets[0][0], this.mut.bossTicket]]);
         if (this.mut.bossRankUp) r.cons = Object.assign({}, r.cons, { rankUp: ((r.cons || {}).rankUp || 0) + this.mut.bossRankUp });

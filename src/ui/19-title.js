@@ -214,6 +214,8 @@
     const repaintMap = () => { sizeMap(); };
     if (window.RTD_LOBBY) window.RTD_LOBBY.init({ api, ACC, saveAcc, t, I, T, cfg, getLobby: () => lobby, joinRoom: (code) => join(code), begin, refreshAcc, settingsHtml, errText, clock, repaintMap, repaintSetup: () => dr(), paintMini: (cv, theme) => paintMap(cv.getContext('2d'), cv.width, cv.height, theme || null) });
     dr();
+    // 로비 안내(처음) 또는 아직 못 받은 첫 신화 해금 연출
+    if (window.RTD_TUT && window.RTD_TUT.lobby) window.RTD_TUT.lobby({ t, T });
   }
   setupTitle();
   requestAnimationFrame(loop);

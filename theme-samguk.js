@@ -319,11 +319,14 @@
   // 열쇠: 계정 보유 목록(owned)에 'unl_<장수 id>'. 가격: 동전(coins), 결제 상품(iap: [상품 ID, 엔]).
   // 동전 기준: 보통 클리어 1판 = 동전 58(서버 xpFor). 신화 150 ≒ 2~4판, 불멸 700 ≒ 12~20판.
   const unlock = {
-    freeMyth: ['join', 'jangbi', 'joun', 'yukson', 'choseon'],
+    // 2026-11-17 사용자 결정: 신화도 처음엔 전부 잠김. 첫 튜토리얼(로비 안내 + 첫 판)을 마치거나 건너뛰면 신화 2명을 랜덤으로 연다(starterMyth).
+    freeMyth: [],
+    starterMyth: 2, starterKey: 'starter',
     tiers: [9, 10], // 이 등급에서 freeMyth에 없는 장수는 잠근다
     coins: { 9: 150, 10: 700 },
     ad: { coins: 30, daily: 5 }, // 보상형 광고 1회 = 동전 30, 하루 5회(서버가 막는다)
-    iap: { 9: ['unlock_myth_', 160], 10: ['unlock_imm_', 320], all10: ['unlock_imm_all', 1200] },
+    iap: { 9: ['unlock_myth_', 160], 10: ['unlock_imm_', 320], all10: ['unlock_imm_all', 1200], noads: ['remove_ads', 480] },
+    noAdsKey: 'noads', // 광고 제거: 판 끝 전면 광고만 없앤다(보상형 광고는 원할 때 보는 것이라 남긴다)
     key: (id) => 'unl_' + id,
     provider: null, // 화면(lobby.js)이 지금 이용자의 열린 목록을 돌려주는 함수를 넣는다. 엔진은 opt.unlocked가 없을 때 이것을 쓴다.
   };
@@ -331,11 +334,18 @@
   unlock.price = (id) => { const d = units.find((x) => x.id === id); return d && unlock.lockedIds().includes(id) ? unlock.coins[d.tier] : null; };
 
   // 2026-11-17 밸런스: 보통·어려움을 올렸다(보통 mult 0.75→0.85·lane 1.4→1.55·bossAtk 0.65→0.72, 어려움 mult 1→1.1·lane 1.75→1.9·bossAtk 0.85→0.92). 쉬움·악몽은 그대로. 측정: tests/balance/sim.js
+  // 2026-11-17 3차(최고 등급 기준): 보통 bossHpx 80 1.3→3.9·90 0.95→4.0(신화 없으면 R80~90에서 막힘), 어려움 90 1.1→4.4·100 1.05→4.2(불멸 없으면 R90~100에서 막힘). 근거: production/team/2026-11-17/balance-tiers.md
+  // 2026-11-17 2차(지렛대): 보통·어려움에만 선택 항목을 둔다(없으면 엔진 기본값 → 쉬움·악몽은 코드상 그대로).
+  //   upPct 강화 1단계당 공격력(기본 0.2), sellGold 1성 해산 금화 배율, bossGold 보스 토벌 금화 배율,
+  //   laneBump [시작R, 끝R, 배율] 라인 몹 체력 구간 보정, bossHpx {라운드: 배율} 보스 체력 보정. 근거: production/team/2026-11-17/balance-levers.md
   const difficulties = [
     { id: 'easy', name: '쉬움', rounds: 70, mult: 0.4, lane: 1, bossAtk: 0.45, startUnits: 6, level: 0 },
-    { id: 'normal', name: '보통', rounds: 90, mult: 0.85, lane: 1.55, bossAtk: 0.72, startUnits: 7, level: 1 },
-    { id: 'hard', name: '어려움', rounds: 100, mult: 1.1, lane: 1.9, bossAtk: 0.92, startUnits: 8, level: 2 },
-    { id: 'nightmare', name: '악몽', rounds: 120, mult: 1.4, lane: 2.2, bossAtk: 1.05, startUnits: 10, level: 3 },
+    { id: 'normal', name: '보통', rounds: 90, mult: 0.85, lane: 1.55, bossAtk: 0.72, startUnits: 7, level: 1,
+      upPct: 0.22, sellGold: 0.7, bossGold: 1.2, laneBump: [[31, 80, 1.1]], bossHpx: { 55: 1.25, 70: 1.3, 80: 3.9, 90: 4.0 } },
+    { id: 'hard', name: '어려움', rounds: 100, mult: 1.1, lane: 1.9, bossAtk: 0.92, startUnits: 8, level: 2,
+      upPct: 0.22, sellGold: 0.7, bossGold: 1.2, bossHpx: { 55: 1.1, 70: 1.2, 80: 1.2, 90: 4.4, 100: 4.2 } },
+    // 악몽: 사용자 '악몽도 지금 쉬움'(2026-11-17). 불멸이 있으면 R55~110이 거의 공짜라(balance-tiers.md) R90~110 보스 체력 ×2. 사람 시험으로 다시 맞출 것
+    { id: 'nightmare', name: '악몽', rounds: 120, mult: 1.4, lane: 2.2, bossAtk: 1.05, startUnits: 10, level: 3, bossHpx: { 90: 2, 100: 2, 110: 2 } },
   ];
 
   const upgrades = [
