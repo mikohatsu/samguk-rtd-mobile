@@ -159,7 +159,7 @@ ios/              Xcode 프로젝트
 
 ## 9. 장수 해금 — 보상형 광고·인앱 결제 (2026-11-17 추가)
 
-신화·불멸 전부가 잠겨 있고(신화는 첫 튜토리얼에서 2명 랜덤 해금, 서버 `/api/unlock/starter`), 동전·보상형 광고·인앱 결제(확정 구매만)로 연다. 목록·가격은 `theme-samguk.js`의 `unlock`.
+신화·불멸 전부가 잠겨 있고(신화는 쉬움 첫 클리어 뒤 상점 안내에서 2명 랜덤 해금, 서버 `/api/unlock/starter`), 동전·보상형 광고·인앱 결제(확정 구매만)로 연다. 목록·가격은 `theme-samguk.js`의 `unlock`.
 
 ### 보상형 광고
 - 이미 설치된 `@capacitor-community/admob`(8.x)의 `prepareRewardVideoAd`/`showRewardVideoAd`를 쓴다(`native.js` `rewardAd`). 지금은 구글 시험용 보상형 ID.
@@ -170,10 +170,10 @@ ios/              Xcode 프로젝트
 1. 플러그인 설치(메인/사용자): StoreKit 2의 서명 거래(JWS, `jwsRepresentation`)를 돌려주는 Capacitor 플러그인. 후보 `@capgo/native-purchases`(Capacitor 8 지원 여부·반환 필드 [확인 필요]) 또는 `cordova-plugin-purchase`(v13). 설치 후 `npx cap sync ios`.
 2. `native.js`의 `IAP.plugin`(플러그인 이름)과 `iapBuy`·`iapRestore` 안의 호출을 플러그인 API에 맞추고 `IAP.enabled = true`.
 3. App Store Connect > 앱 > 인앱 구입: **비소모성(Non-Consumable)** 상품 등록. ID와 가격(엔):
-   - `unlock_myth_<id>` (gwakga, join, sunuk, jangbi, joun, sonchaek, yukson, dongtak, choseon — 신화 9명 모두. 2026-11-17부터 신화도 처음엔 전부 잠기고 튜토리얼에서 2명만 랜덤으로 연다) — ¥160
+   - `unlock_myth_<id>` (gwakga, join, sunuk, jangbi, joun, macho, sonchaek, yukson, dongtak, choseon — 신화 10명 모두. 신화는 처음엔 전부 잠기고 쉬움을 처음 깨면 상점이 열리며 2명을 랜덤으로 연다) — ¥160
    - `unlock_imm_<id>` (jojo, samaui, yubi, gwanu, jegal, songwon, juyu, taesaja, janggak, yeopo) — ¥320
    - `unlock_imm_all` — ¥1,200
-   - `remove_ads` — ¥480 (광고 제거: 판 끝 전면 광고만 없앤다. 보상형 광고는 남는다. 계정에 'noads'로 저장, 복원 버튼으로 되살아남)
+   - `remove_ads` — ¥480 (광고 제거: 판 끝 전면 광고를 없애고, 동전 광고는 보지 않고 바로 받는다(하루 5회 같음). 계정에 'noads'로 저장, 복원 버튼으로 되살아남)
    - 상품 설명에 「プレイでも全員解放できます」(플레이로도 모두 열 수 있음)를 적는다. 심사용 스크린샷 필요.
 4. 계약·세금·은행(유료 앱 계약)이 활성이어야 결제가 된다.
 5. 서버 설정(VM `/opt/rtd-online`, systemd 환경 변수):

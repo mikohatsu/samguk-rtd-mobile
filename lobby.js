@@ -21,13 +21,15 @@
     soon: ['준비 중', '準備中', 'Soon', '准备中'],
     // 장수 해금(일본어는 글꼴 부분 파일 fonts/ja-*.woff2에 이미 있는 글자만 쓴다)
     unlockTab: ['장수 해금', '武将解放', 'Unlock generals', '解锁武将'],
+    shopLocked: ['쉬움 난이도를 클리어하면 상점이 열립니다', '「かんたん」をクリアするとショップが開きます', 'Clear Easy to open the Shop', '通关“简单”后开放商店'],
     unlockHint: ['잠긴 신화·불멸 장수는 조합할 수 없습니다(상자에서는 대신 열린 장수의 아이템이 나옵니다). 한 번 열면 이 계정에서 계속 나옵니다. 플레이로 모은 동전만으로도 모두 열 수 있습니다.', 'ロックされた神話・不滅の武将は組み合わせできません。解放すると、このアカウントではずっと登場します。プレイで集めた銅銭でも全員解放できます。', 'Locked Myth/Immortal generals cannot be crafted (chests give items for unlocked ones instead). Once unlocked they stay on this account. Everything can be unlocked with coins earned by playing.', '未解锁的神话·不灭武将无法合成（宝箱会改为给出已解锁武将的道具）。解锁后在本账号永久有效。只靠游戏获得的铜钱也能全部解锁。'],
     unlocked: ['해금됨', '解放済み', 'Unlocked', '已解锁'], unlockBtn: ['해금', '解放', 'Unlock', '解锁'], tMyth: ['신화', '神話', 'Myth', '神话'], tImm: ['불멸', '不滅', 'Immortal', '不灭'],
     adBtn: ['광고 보고 동전 +{n}', '広告を見て銅銭+{n}', 'Watch ad: +{n} coins', '看广告 铜钱+{n}'], adLeft: ['오늘 남은 횟수 {n}', '今日の残り{n}回', '{n} left today', '今日剩余{n}次'],
     adCap: ['오늘은 더 볼 수 없습니다.', '今日はこれ以上見られません。', 'No more ads today.', '今天已达上限。'], adFail: ['광고를 보여 주지 못했습니다.', '広告を表示できませんでした。', 'Could not show the ad.', '无法显示广告。'],
     iapAll: ['불멸 전원 해금', '不滅の武将を全員解放', 'Unlock all Immortals', '解锁全部不灭武将'], iapBtn: ['결제 ¥{y}', 'アプリ内決済 ¥{y}', 'Buy ¥{y}', '购买 ¥{y}'],
     noAds: ['광고 제거', '広告を削除', 'Remove ads', '移除广告'], noAdsOn: ['광고 제거됨', '広告削除済み', 'Ads removed', '已移除广告'],
-    noAdsHint: ['판이 끝날 때 나오는 광고가 없어집니다. 동전을 받는 광고는 그대로 볼 수 있습니다.', 'ゲーム終了時の広告が表示されなくなります。銅銭がもらえる広告は引き続き見られます。', 'Removes the ad shown after each game. Coin reward ads stay available.', '移除每局结束后的广告。可继续观看领取铜钱的广告。'],
+    noAdsHint: ['판이 끝날 때 나오는 광고가 없어지고, 동전 광고는 보지 않고 바로 받습니다.', 'ゲーム終了時の広告がなくなり、銅銭は広告なしでそのまま受け取れます。', 'Removes the ad after each game, and coin rewards are given without watching ads.', '移除每局结束后的广告，铜钱奖励无需观看广告即可领取。'],
+    adFree: ['동전 +{n} 받기', '銅銭+{n}を受け取る', 'Claim +{n} coins', '领取铜钱+{n}'],
     restore: ['결제 복원', '決済を復元', 'Restore purchases', '恢复购买'], iapFail: ['결제하지 못했습니다.', '決済できませんでした。', 'Purchase failed.', '购买失败。'],
     claimed: ['{a} 해금(이미 소환한 기록)', '{a}を解放しました（登場の記録あり）', 'Unlocked {a} (summoned before)', '已解锁{a}（曾召唤过）'], unlockedNew: ['{a} 해금!', '{a}を解放しました', 'Unlocked {a}!', '已解锁{a}！'],
     rLevel: ['계정 레벨', 'アカウントLv', 'Account level', '账号等级'], rClear: ['최단 클리어', '最速クリア', 'Fastest clear', '最快通关'], rImm: ['불멸 소환', '不滅の召喚', 'Immortal summons', '不灭召唤'],
@@ -149,6 +151,10 @@
   const loadJ = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') || d; } catch (e) { return d; } };
   const saveJ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 저장 불가 */ } };
   // 해금 진행도: 기기에서 깬 것과 계정에서 깬 것 중 높은 쪽
+  // 상점은 쉬움을 처음 클리어하면 열린다(기기·계정 진행도 중 높은 쪽)
+  const shopOpen = () => !!C && prog().clr >= 0;
+  // 첫 신화 2명을 이미 받았는지(로그인: 계정 보유 목록, 아니면 이 기기의 rtd-starter)
+  const hasStarter = () => { if (!C) return true; const me = C.ACC.me; if (me && C.ACC.token) return (me.owned || []).includes(UL().starterKey); return loadJ('rtd-starter', []).length > 0; };
   function prog() {
     const l = loadJ('rtd-prog', { clr: -1, nmx: -1 }), a = (C.ACC.me && C.ACC.me.prog) || { clr: -1, nmx: -1 };
     return { clr: Math.max(l.clr, a.clr), nmx: Math.max(l.nmx, a.nmx) };
@@ -213,7 +219,7 @@
     C.ACC.me = r.me; C.saveAcc(); unlockedList();
     if (r.granted && r.granted.length) toast(L('claimed', { a: r.granted.map((id) => unitOf(id).name || id).join(', ') }));
     // 이 기기에서 튜토리얼을 이미 마쳤는데 계정에 첫 신화가 없으면(로그인 전에 받은 경우) 같은 장수로 이어 준다
-    if (root.RTD_TUT && root.RTD_TUT.done() && !(C.ACC.me.owned || []).includes(UL().starterKey)) await grantStarter();
+    if ((shopOpen() || loadJ('rtd-starter', []).length) && !(C.ACC.me.owned || []).includes(UL().starterKey)) await grantStarter();
     if (panel === 'shop') renderPanel();
   }
   // 첫 신화 2명(튜토리얼을 마치거나 건너뛰면). 돌려주는 값: 이번에 새로 연 신화 id 목록(이미 받았으면 []).
@@ -242,7 +248,9 @@
   async function watchAd() {
     const N = root.RTD_NATIVE;
     if (adLeft === 0) { toast(L('adCap')); return; }
-    try { await N.rewardAd(); } catch (e) { toast(L('adFail')); return; }
+    // 광고 제거를 산 사람은 광고 없이 바로 받는다(하루 횟수 상한은 같음)
+    const me = C.ACC.me, free = !!(me && (me.owned || []).includes(UL().noAdsKey));
+    if (!free) { try { await N.rewardAd(); } catch (e) { toast(L('adFail')); return; } }
     const r = await C.api('/api/ad/reward', {});
     if (r.me) { adLeft = r.left; afterMe(r); toast(L('adLeft', { n: r.left })); } else { if (r.error === 'ad_cap') adLeft = 0; toast(r.error === 'ad_cap' ? L('adCap') : C.errText(r.error)); }
   }
@@ -260,7 +268,7 @@
     const U = UL(), N = root.RTD_NATIVE || {}, iap = !!(N.iapOn && N.iapOn()), owns = (id) => (me.owned || []).includes(U.key(id));
     let h = `<div class="lp-note">${L('unlockHint')}</div>`, bar = '';
     // 광고·결제 버튼은 앱에서만(웹 브라우저에서는 RTD_NATIVE.on이 false라 숨는다)
-    if (N.rewardOn && N.rewardOn()) bar += `<button class="btn go" type="button" data-adrw="1">${L('adBtn', { n: U.ad.coins })}${adLeft != null ? ' (' + L('adLeft', { n: adLeft }) + ')' : ''}</button>`;
+    if (N.rewardOn && N.rewardOn()) bar += `<button class="btn go" type="button" data-adrw="1">${L((me.owned || []).includes(U.noAdsKey) ? 'adFree' : 'adBtn', { n: U.ad.coins })}${adLeft != null ? ' (' + L('adLeft', { n: adLeft }) + ')' : ''}</button>`;
     if (iap && U.lockedIds().some((id) => unitOf(id).tier === 10 && !owns(id))) bar += `<button class="btn" type="button" data-iap="${U.iap.all10[0]}">${L('iapAll')} · ${L('iapBtn', { y: U.iap.all10[1] })}</button>`;
     if (iap) { const nk = U.noAdsKey, np = U.iap.noads; bar += (me.owned || []).includes(nk) ? `<span class="pr">${L('noAdsOn')}</span>` : `<button class="btn" type="button" data-iap="${np[0]}" title="${L('noAdsHint')}">${L('noAds')} · ${L('iapBtn', { y: np[1] })}</button>`; }
     if (iap) bar += `<button class="btn" type="button" data-iaprestore="1">${L('restore')}</button>`;
@@ -277,6 +285,7 @@
   // ---------- 상단 ----------
   const iconSrc = (id) => { const d = C.T.units.find((u) => u.id === id) || C.T.units.find((u) => u.id === 'cav'); return Art.portrait(d); };
   function renderTop() {
+    { const sb = document.querySelector('#lmenu [data-lp="shop"]'); if (sb) sb.classList.toggle('locked', !shopOpen()); }
     const me = C.ACC.me;
     // 금칙어 닉네임: 한 번 알려 준다(다른 사람에게는 *** 로 보임)
     if (me && me.nickBad && !renderTop.warned) { renderTop.warned = true; setTimeout(() => toast(L('nickBadHint')), 600); }
@@ -589,7 +598,7 @@
     $('chatin').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
     document.addEventListener('click', (e) => {
       if ($('title').hidden) return;
-      const lp = e.target.closest('[data-lp]'); if (lp) { if (!$('setup').hidden && lp.closest('#setup')) closeWizard(); openPanel(lp.dataset.lp); return; }
+      const lp = e.target.closest('[data-lp]'); if (lp) { if (lp.dataset.lp === 'shop' && !shopOpen()) { toast(L('shopLocked')); return; } if (!$('setup').hidden && lp.closest('#setup')) closeWizard(); openPanel(lp.dataset.lp); return; }
       const pt = e.target.closest('[data-ptab]'); if (pt) { ptab = pt.dataset.ptab; renderPanel(); return; }
       const rd = e.target.closest('[data-rdiff]'); if (rd) { rdiff = rd.dataset.rdiff; renderPanel(); return; }
       const ri = e.target.closest('[data-rimm]'); if (ri) { rimm = ri.dataset.rimm; renderPanel(); return; }
@@ -628,5 +637,5 @@
   const mapTheme = () => { const me = C && C.ACC.me, p = me && me.mapSkin && SHOP.MAP_SKINS[me.mapSkin]; return p && p.theme ? p.theme : null; };
   // 테마 그림이 뒤늦게 도착하면 상점의 지도 미리보기를 다시 그린다
   if (typeof window !== 'undefined') window.addEventListener('rtd-maptheme', () => { if (panel === 'shop' && ptab === 'maps') renderPanel(); });
-  root.RTD_LOBBY = { grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), close: () => { closeWizard(); closePanel(); } };
+  root.RTD_LOBBY = { shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), close: () => { closeWizard(); closePanel(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

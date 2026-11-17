@@ -1,9 +1,9 @@
-// 안내(튜토리얼). 로비 안내 → 첫 오프라인 판에서 '해 보면 넘어가는' 단계 → 끝나거나 건너뛰면 첫 신화 2명 해금(RTD_LOBBY.grantStarter)과 해금 연출.
+// 안내(튜토리얼). 로비 안내 → 첫 오프라인 판에서 '해 보면 넘어가는' 단계. 첫 신화 2명(RTD_LOBBY.grantStarter)은 쉬움을 처음 클리어해 상점이 열릴 때 상점 안내 중에 준다.
 // 실제 화면 요소를 비추고(#tutring) 말풍선(#tutbox)으로 설명한다. 설명하는 동안(hold)은 게임 시간이 멈춘다(S.tutHold).
 // 끝나거나 건너뛰면 localStorage 'rtd-tut'=1. 명사·시너지 팁은 판과 상관없이 처음 그 장면이 올 때 한 번씩('rtd-tip-sage', 'rtd-tip-syn').
 // 해금 연출은 기존 그림만 합성한다(장수 초상, gfx/ray_sun·pic_star, fxa_burst 프레임 애니메이션). 도형을 그려 만들지 않는다.
 (function (root) {
-  const KEY = 'rtd-tut', GIFT_SEEN = 'rtd-starter-seen';
+  const KEY = 'rtd-tut', GIFT_SEEN = 'rtd-starter-seen', SHOP_KEY = 'rtd-shoptut';
   const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* 저장 불가 */ } };
   const done = () => { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return true; } };
@@ -29,6 +29,12 @@
   const LOBBY = [
     { k: 'tut_l_hello', at: '#lmenu [data-lp="shop"]' },
     { k: () => [setupOpen() ? 'tut_l_wiz' : 'tut_l_battle'], at: () => (setupOpen() ? null : '#battlebtn'), pos: 'top', until: () => !titleOn(), noNext: true },
+  ];
+  // 상점 안내: 쉬움을 처음 클리어한 뒤 로비에서 한 번(또는 클리어했는데 첫 신화가 없을 때). 장수 해금 탭에서 첫 신화 2명을 연다.
+  const LB = () => root.RTD_LOBBY || {};
+  const SHOP = [
+    { k: 'shop_open', at: '#lmenu [data-lp="shop"]', until: () => LB().panel && LB().panel() === 'shop', noNext: true },
+    { k: 'shop_unlock', at: () => (vis($('#lpbody')) ? '#lpbody' : null), last: true, enter: () => gift(null) },
   ];
   const GAME = [
     { k: 'tut_hello', at: '#hud', hold: true },
@@ -92,10 +98,11 @@
   // 건너뛰기: 기록하고, 판이면 자동 배치를 켜 주고(안 켜면 유닛이 성 안에 서서 진다), 첫 신화를 연다
   function skipAll() {
     const c = ctx, inGame = mode === 'game';
+    if (mode === 'shop') { shopEnd(); gift(null); return; }
     endTut();
     if (inGame && c && c.onSkip) c.onSkip();
-    gift(inGame ? c : null);
   }
+  function shopEnd() { set(SHOP_KEY, '1'); hide(); steps = []; stDone = []; cur = null; }
   function endTut() { mark(); hide(); steps = []; stDone = []; cur = null; if (mode !== 'game') stop(); }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
   function next() {
@@ -103,7 +110,7 @@
     if (!cur) return;
     const i = steps.indexOf(cur); stDone[i] = true; const wasLast = cur.last || stDone.every(Boolean);
     hide(); cur = null;
-    if (wasLast && steps.length) { const c = ctx, inGame = mode === 'game'; endTut(); gift(inGame ? c : null); }
+    if (wasLast && steps.length) { if (mode === 'shop') shopEnd(); else endTut(); }
   }
 
   function textOf(st) { const r = typeof st.k === 'function' ? st.k(ctx) : [st.k]; return r; }
@@ -154,6 +161,8 @@
     if (mode === 'lobby') {
       if (!titleOn() && !steps.length) { hide(); stop(); return; }
       if (vis($('#lpanel'))) { hide(); return; } // 메뉴 창이 열려 있으면 잠시 숨긴다
+    } else if (mode === 'shop') {
+      if (!titleOn()) { hide(); stop(); return; }
     } else {
       if (!ctx || !ctx.g) return;
       // 판이 끝났는데 안내가 남았으면 마친 것으로 친다(첫 신화와 연출은 로비로 돌아갔을 때)
@@ -196,7 +205,8 @@
   function lobby(c) {
     ctx = c; mode = 'lobby'; t = c.t; tip = null; cur = null; shownKey = '';
     if (!done()) { steps = LOBBY.map((s) => Object.assign({}, s)); stDone = steps.map(() => false); run(); return; }
-    gift(null);
+    const L = LB();
+    if (L.shopOpen && L.shopOpen() && (get(SHOP_KEY) !== '1' || !L.hasStarter())) { mode = 'shop'; steps = SHOP.map((s) => Object.assign({}, s)); stDone = steps.map(() => false); run(); }
   }
 
   // ---------- 첫 신화 해금 연출 ----------

@@ -42,7 +42,7 @@
     u('seohwang', '서황', '晃', 'wei', 4), u('heojeo', '허저', '褚', 'wei', 4), u('hwangchung', '황충', '忠', 'shu', 4),
     u('gamnyeong', '감녕', '寧', 'wu', 4), u('gongson', '공손찬', '瓚', 'etc', 4),
     // 5성
-    u('hadon', '하후돈', '惇', 'wei', 5), u('macho', '마초', '超', 'shu', 5), u('nosuk', '노숙', '肅', 'wu', 5), u('wonso', '원소', '紹', 'etc', 5),
+    u('hadon', '하후돈', '惇', 'wei', 5), u('madae', '마대', '岱', 'shu', 5), u('nosuk', '노숙', '肅', 'wu', 5), u('wonso', '원소', '紹', 'etc', 5),
     // 6성: 패시브 1개, 보스전 이동기 사용 가능
     u('jangryo', '장료', '遼', 'wei', 6, { rng: 170, as: 0.85, title: '합비의 맹장', p: [pct('요래 공포', 'slow', { pct: 0.25, dur: 1.5, desc: '공격한 적의 이동속도 25% 감소' })] }),
     u('ganguy', '강유', '維', 'shu', 6, { rng: 230, as: 1.0, title: '천수의 기린아', p: [pct('구벌 정신', 'bossPct', { pct: 0.2, desc: '보스·중간보스 피해 20% 증가' })] }),
@@ -89,6 +89,9 @@
       sk: [{ n: '장판교 대갈', k: 'circle', r: 220, range: 0, mult: 4, delay: 0.2, stun: 1.2, cd: 18, fx: '#f0d060' }, { n: '사모 돌격', k: 'line', len: 420, w: 100, mult: 6, cd: 13, fx: '#88d8a8' }] }),
     u('joun', '조운', '雲', 'shu', 9, { rng: 170, as: 0.7, title: '상산의 일신시담', hz: '趙雲', qc: '吾乃常山趙子龍也', quote: '나는 상산의 조자룡이다!', p: [pct('칠진칠출', 'everyN', { n: 7, mult: 7, desc: '7번째 공격마다 7배 피해' }), pct('장판파의 기적', 'bossPct', { pct: 0.2, desc: '보스·중간보스 피해 20% 증가' })],
       sk: [{ n: '단기 돌파', k: 'line', len: 520, w: 90, mult: 5.5, cd: 11, dashThrough: true, fx: '#d4f4e0' }, { n: '용담', k: 'shield', dur: 1.4, cd: 22, fx: '#e8fff0' }] }),
+    // 마초: 2026-11-17 사용자 결정으로 5성에서 신화로 승격(신화 10명). 5성 촉 자리는 마대.
+    u('macho', '마초', '超', 'shu', 9, { rng: 170, as: 0.75, title: '금마초', hz: '馬超', qc: '誓殺曹賊 以報父仇', quote: '아버지의 원수, 조조를 반드시 베리라!', p: [pct('서량 돌격', 'everyN', { n: 6, mult: 5, desc: '6번째 공격마다 5배 피해' }), pct('신위천장군', 'crit', { ch: 0.25, mult: 2.4, desc: '25% 확률로 2.4배 피해' })],
+      sk: [{ n: '서량 철기 돌격', k: 'line', len: 500, w: 110, mult: 5.5, cd: 12, dashThrough: true, fx: '#e8d27a' }, { n: '금마초의 위용', k: 'buff', atk: 0.5, dur: 5, cd: 22, fx: '#ffe8a0' }] }),
     u('sonchaek', '손책', '策', 'wu', 9, { rng: 170, as: 0.75, title: '소패왕', hz: '孫策', qc: '決機於兩陣之間 與天下爭衡', quote: '두 진 사이에서 승부를 내고, 천하와 겨루는 일은 내가 한다.', p: [pct('소패왕의 기세', 'crit', { ch: 0.35, mult: 2.3, desc: '35% 확률로 2.3배 피해' }), pct('강동 평정', 'globalAtk', { pct: 0.12, fac: 'wu', desc: '모든 오 유닛 공격력 12% 증가' })],
       sk: [{ n: '패왕 돌격', k: 'line', len: 460, w: 110, mult: 6, cd: 12, dashThrough: true, fx: '#f09070' }] }),
     u('yukson', '육손', '遜', 'wu', 9, { rng: 280, as: 1.1, title: '서생 대도독', hz: '陸遜', qc: '火燒連營七百里', quote: '칠백 리 영채를 불길로 태우리라.', p: [pct('화공 연영', 'burn', { pct: 0.6, dur: 4, desc: '공격력 60%의 화상 4초' }), pct('화염 번짐', 'splash', { r: 130, pct: 0.5, desc: '주변 적에게 50% 범위 피해' })],
@@ -148,7 +151,7 @@
   const roleOf = {
     sunyu: 'skill', deungae: 'skill', seoseo: 'auto', gwanpyeong: 'support', jeongbo: 'auto', jegalgeun: 'debuff', gahu: 'debuff', maenghoek: 'tank',
     jeonwi: 'tank', munang: 'auto', hwangwol: 'healer', bangtong: 'skill', songyeon: 'auto', sonhyang: 'auto', yeoryeong: 'skill', chugyung: 'debuff',
-    gwakga: 'debuff', join: 'tank', sunuk: 'support', choseon: 'debuff', jangbi: 'tank', joun: 'auto', sonchaek: 'skill', yukson: 'skill', dongtak: 'auto',
+    gwakga: 'debuff', join: 'tank', sunuk: 'support', choseon: 'debuff', jangbi: 'tank', joun: 'auto', macho: 'auto', sonchaek: 'skill', yukson: 'skill', dongtak: 'auto',
     jojo: 'support', samaui: 'debuff', yubi: 'healer', gwanu: 'auto', jegal: 'skill', songwon: 'tank', juyu: 'skill', yeopo: 'auto', taesaja: 'auto', janggak: 'healer',
   };
   // 역할 키트: 같은 역할이라도 장수마다 패시브·스킬이 다르다. s = 등급 단계(7성 0 ~ 불멸 3).
@@ -210,6 +213,7 @@
     songyeon: (s) => ({ p: [haste(0.4), pierce(0.4)] }),
     sonhyang: (s) => ({ p: [haste(0.45), leech(0.015)] }),
     joun: (s) => ({ p: [haste(0.45), execute(0.4)] }),
+    macho: (s) => ({ p: [haste(0.45), pierce(0.4)] }),
     dongtak: (s) => ({ p: [haste(0.35), leech(0.02), smash] }),
     gwanu: (s) => ({ p: [haste(0.5), execute(0.5)] }),
     taesaja: (s) => ({ p: [haste(0.5), pierce(0.5)] }),
@@ -237,7 +241,7 @@
     '연환 화염': 'fireblast', '강동 호령': 'rally', '연환궁': 'arrows', '비연보': 'wind', '소화극 난무': 'blades', '비도 연속 투척': 'throw', '비도 난사': 'knives',
     '유계': 'rune', '요절의 예지': 'guard', '유계 간파': 'curse', '팔문금쇄진': 'guard', '철기 반격': 'blades', '팔문금쇄 방진': 'barrier',
     '구호탄랑': 'power', '이호경식': 'rune', '철벽 진형': 'barrier', '장판교 대갈': 'shock', '사모 돌격': 'thrust', '장판교 호통': 'roar',
-    '단기 돌파': 'thrust', '용담': 'guard', '패왕 돌격': 'thrust', '칠백리 화공': 'fireline', '인내의 진': 'guard', '폭정의 압살': 'quake',
+    '단기 돌파': 'thrust', '용담': 'guard', '서량 철기 돌격': 'charge', '금마초의 위용': 'power', '패왕 돌격': 'thrust', '칠백리 화공': 'fireline', '인내의 진': 'guard', '폭정의 압살': 'quake',
     '미인계': 'hearts', '연무': 'petals', '의천검': 'sword', '호표기 돌격': 'charge', '사기 진작': 'wind', '낭고상': 'rune', '농성 대기': 'guard', '고평릉의 함정': 'curse',
     '쌍고검': 'blades', '인덕의 전군 치료': 'heal', '오호 소집': 'rally', '청룡언월참': 'crescent', '수엄칠군': 'flood', '단도부회': 'guard',
     '동남풍': 'windfire', '팔진도': 'rune', '칠성단': 'heal', '합비의 일격': 'thrust', '용인술': 'rally', '합비 사수': 'reflect',
@@ -250,21 +254,21 @@
   // 예) 관평 130 → 95, 관우 170 → 155, 조조 240 → 272, 제갈량 300 → 380
   units.forEach((d) => { if (d.tier >= 7 && d.rng && d.rng !== 200) d.rng = Math.round(d.rng < 200 ? 200 - (200 - d.rng) * 1.5 : 200 + (d.rng - 200) * 1.8); });
 
-  // 7성 이상은 동일 유닛이 아니라 인연 있는 장수로 조합한다. 2026-11-09: 고등급 등장을 늦추려고 모두 같은 세력 5성 1기를 더 넣음(위 하후돈·촉 마초·오 노숙·군웅 원소), 조조는 등애 대신 전위. 7성은 가치 합 432(5성 3개) 이상, 전설은 576(5성 4개) 이상.
+  // 7성 이상은 동일 유닛이 아니라 인연 있는 장수로 조합한다. 2026-11-09: 고등급 등장을 늦추려고 모두 같은 세력 5성 1기를 더 넣음(위 하후돈·촉 마대·오 노숙·군웅 원소. 2026-11-17 마초가 신화로 올라가 촉 5성은 마대), 조조는 등애 대신 전위. 7성은 가치 합 432(5성 3개) 이상, 전설은 576(5성 4개) 이상.
   // 신화·불멸에는 인연이 분명한 전설만 재료로 넣는다(제갈량-황월영, 유비-방통, 손책·손권-손견).
   const recipes = {
     sunyu: ['hadon', 'hadon', 'heojeo', 'heojeo', 'seohwang', 'hayeon', 'janghap', 'akjin', 'hadon'],
     deungae: ['ganguy', 'hadon', 'janghap', 'hayeon', 'swd', 'swd', 'hadon'],
-    seoseo: ['macho', 'hadon', 'heojeo', 'hwangchung', 'hwangchung', 'wiyeon', 'janghap', 'juchang', 'spr', 'macho'],
-    gwanpyeong: ['yeomong', 'hwangchung', 'hwangchung', 'juchang', 'juchang', 'seohwang', 'wiyeon', 'wiyeon', 'macho'],
+    seoseo: ['madae', 'hadon', 'heojeo', 'hwangchung', 'hwangchung', 'wiyeon', 'janghap', 'juchang', 'spr', 'madae'],
+    gwanpyeong: ['yeomong', 'hwangchung', 'hwangchung', 'juchang', 'juchang', 'seohwang', 'wiyeon', 'wiyeon', 'madae'],
     jeongbo: ['nosuk', 'nosuk', 'gamnyeong', 'gamnyeong', 'gamnyeong', 'hwanggae', 'hwanggae', 'jutae', 'nosuk'],
     jegalgeun: ['yeomong', 'nosuk', 'neungtong', 'jutae', 'arc', 'nosuk'],
     gahu: ['wonso', 'hadon', 'gongson', 'gongson', 'hwawoong', 'hwawoong', 'munchu', 'munchu', 'anryang', 'wonso'],
-    maenghoek: ['macho', 'macho', 'wiyeon', 'wiyeon', 'wiyeon', 'hwangchung', 'gongson', 'hwawoong', 'cav', 'wonso'],
+    maenghoek: ['madae', 'madae', 'wiyeon', 'wiyeon', 'wiyeon', 'hwangchung', 'gongson', 'hwawoong', 'cav', 'wonso'],
     jeonwi: ['jangryo', 'heojeo', 'heojeo', 'hadon', 'seohwang', 'akjin', 'hadon'],
     munang: ['jangryo', 'hadon', 'hadon', 'janghap', 'hayeon', 'cav', 'cav', 'hadon'],
-    hwangwol: ['seoseo', 'macho', 'hwangchung', 'juchang', 'arc', 'arc', 'macho'],
-    bangtong: ['seoseo', 'wiyeon', 'wiyeon', 'hwangchung', 'hwangchung', 'hwangchung', 'juchang', 'macho'],
+    hwangwol: ['seoseo', 'madae', 'hwangchung', 'juchang', 'arc', 'arc', 'madae'],
+    bangtong: ['seoseo', 'wiyeon', 'wiyeon', 'hwangchung', 'hwangchung', 'hwangchung', 'juchang', 'madae'],
     songyeon: ['jeongbo', 'hwanggae', 'hwanggae', 'hwawoong', 'wonso', 'nosuk'],
     sonhyang: ['yeomong', 'gamnyeong', 'gamnyeong', 'gamnyeong', 'nosuk', 'neungtong', 'nosuk'],
     yeoryeong: ['jangryo', 'wonso', 'wonso', 'hwawoong', 'gongson', 'wonso'],
@@ -272,17 +276,18 @@
     gwakga: { parts: ['deungae', 'sunyu', 'jangryo', 'hadon'], item: 'yugye' },
     join: { parts: ['sunyu', 'jangryo', 'hadon', 'hadon'], item: 'geumswae' },
     sunuk: { parts: ['sunyu', 'deungae', 'hadon', 'hadon'], item: 'chanhap' },
-    jangbi: { parts: ['gwanpyeong', 'seoseo', 'macho', 'macho'], item: 'sapa' },
-    joun: { parts: ['seoseo', 'ganguy', 'macho', 'hwangchung', 'macho'], item: 'cheonggang' },
+    jangbi: { parts: ['gwanpyeong', 'seoseo', 'madae', 'madae'], item: 'sapa' },
+    joun: { parts: ['seoseo', 'ganguy', 'madae', 'hwangchung', 'madae'], item: 'cheonggang' },
+    macho: { parts: ['gwanpyeong', 'ganguy', 'madae', 'madae', 'gongson'], item: 'hodu' },
     sonchaek: { parts: ['jeongbo', 'songyeon', 'yeomong', 'nosuk'], item: 'gojeong' },
     yukson: { parts: ['jegalgeun', 'jeongbo', 'nosuk', 'nosuk'], item: 'hwagong' },
     dongtak: { parts: ['gahu', 'maenghoek', 'wonso', 'wonso'], item: 'seoryang' },
     choseon: { parts: ['gahu', 'jangryo', 'wonso', 'wonso'], item: 'pyewol' },
     jojo: { parts: ['jeonwi', 'sunyu', 'jangryo', 'hadon', 'hadon'], item: 'uicheon' },
     samaui: { parts: ['deungae', 'sunyu', 'jangryo', 'janghap', 'hadon'], item: 'nanggo' },
-    yubi: { parts: ['gwanpyeong', 'seoseo', 'bangtong', 'macho', 'macho'], item: 'ssanggo' },
-    gwanu: { parts: ['gwanpyeong', 'seoseo', 'macho', 'hwangchung', 'juchang', 'macho'], item: 'cheongryong' },
-    jegal: { parts: ['seoseo', 'maenghoek', 'ganguy', 'hwangwol', 'macho'], item: 'baekwoo' },
+    yubi: { parts: ['gwanpyeong', 'seoseo', 'bangtong', 'madae', 'madae'], item: 'ssanggo' },
+    gwanu: { parts: ['gwanpyeong', 'seoseo', 'madae', 'hwangchung', 'juchang', 'madae'], item: 'cheongryong' },
+    jegal: { parts: ['seoseo', 'maenghoek', 'ganguy', 'hwangwol', 'madae'], item: 'baekwoo' },
     songwon: { parts: ['jeongbo', 'jegalgeun', 'yeomong', 'nosuk', 'songyeon', 'nosuk'], item: 'obwang' },
     juyu: { parts: ['jegalgeun', 'jeongbo', 'yeomong', 'gamnyeong', 'hwanggae', 'nosuk'], item: 'jeokbyeok' },
     yeopo: { parts: ['gahu', 'maenghoek', 'wonso', 'hwawoong', 'wonso'], item: 'bangcheon' },
@@ -294,6 +299,7 @@
     { id: 'yugye', name: '곽가의 유계', tier: 9 }, { id: 'geumswae', name: '팔문금쇄진도', tier: 9 }, { id: 'chanhap', name: '빈 찬합', tier: 9 },
     { id: 'sapa', name: '장팔사모', tier: 9 }, { id: 'cheonggang', name: '청강검', tier: 9 }, { id: 'gojeong', name: '고정도', tier: 9 },
     { id: 'hwagong', name: '이릉 화공서', tier: 9 }, { id: 'seoryang', name: '서량 철기 병부', tier: 9 }, { id: 'pyewol', name: '폐월의 거울', tier: 9 },
+    { id: 'hodu', name: '호두잠금창', tier: 9 },
     { id: 'uicheon', name: '의천검', tier: 10 }, { id: 'nanggo', name: '낭고의 부절', tier: 10 }, { id: 'ssanggo', name: '쌍고검', tier: 10 },
     { id: 'cheongryong', name: '청룡언월도', tier: 10 }, { id: 'baekwoo', name: '백우선', tier: 10 }, { id: 'obwang', name: '오왕의 인수', tier: 10 },
     { id: 'jeokbyeok', name: '적벽 화공도', tier: 10 }, { id: 'bangcheon', name: '방천화극', tier: 10 }, { id: 'sinjeong', name: '신정의 단극', tier: 10 }, { id: 'taepyeong', name: '태평요술서', tier: 10 },
@@ -326,7 +332,7 @@
     coins: { 9: 150, 10: 700 },
     ad: { coins: 30, daily: 5 }, // 보상형 광고 1회 = 동전 30, 하루 5회(서버가 막는다)
     iap: { 9: ['unlock_myth_', 160], 10: ['unlock_imm_', 320], all10: ['unlock_imm_all', 1200], noads: ['remove_ads', 480] },
-    noAdsKey: 'noads', // 광고 제거: 판 끝 전면 광고만 없앤다(보상형 광고는 원할 때 보는 것이라 남긴다)
+    noAdsKey: 'noads', // 광고 제거: 판 끝 전면 광고를 없애고, 동전 광고는 보지 않고 바로 받는다(하루 횟수 상한은 같음)
     key: (id) => 'unl_' + id,
     provider: null, // 화면(lobby.js)이 지금 이용자의 열린 목록을 돌려주는 함수를 넣는다. 엔진은 opt.unlocked가 없을 때 이것을 쓴다.
   };
@@ -453,11 +459,11 @@
     yujin: ['sword', 'helm', 'short'], akjin: ['spear', 'guard'], juchang: ['guandao', 'bare', 'full', 'k'], jutae: ['sword', 'guard'], neungtong: ['twin', 'bare'], hwawoong: ['guandao', 'helm', 'full'],
     hayeon: ['bow', 'helm', 'short'], janghap: ['spear', 'helm'], wiyeon: ['guandao', 'helm', 'short', 'r'], hwanggae: ['flame', 'helm', 'white', null, W], munchu: ['spear', 'helm', 'full'], anryang: ['guandao', 'helm', 'short'],
     seohwang: ['axe', 'helm', 'short'], gamnyeong: ['twin', 'feather', 'short'], jeonwi: ['twin', 'bare', 'full', 'k'], heojeo: ['mace', 'bare', 'short'], hwangchung: ['bow', 'helm', 'white', null, W], taesaja: ['twin', 'helm', 'short'], gongson: ['lance', 'helm'],
-    hadon: ['spear', 'helm', 'short'], macho: ['lance', 'feather'], nosuk: ['scroll', 'scholar', 'short'], wonso: ['sword', 'crown', 'long'],
+    hadon: ['spear', 'helm', 'short'], madae: ['guandao', 'helm', 'short'], nosuk: ['scroll', 'scholar', 'short'], wonso: ['sword', 'crown', 'long'],
     jangryo: ['halberd', 'helm', 'short'], ganguy: ['spear', 'helm'], yeomong: ['sword', 'scholar'],
     sunyu: ['scroll', 'scholar', 'short'], gahu: ['fan', 'scholar', 'long'], munang: ['spear', 'helm'], deungae: ['spear', 'helm', 'short'], seoseo: ['sword', 'scholar'], gwanpyeong: ['guandao', 'bare'], jeongbo: ['spear', 'helm', 'white', null, W], jegalgeun: ['scroll', 'scholar', 'long'], janggak: ['thunder', 'turban', 'long'], maenghoek: ['mace', 'fur', 'full', 'k'],
     sunuk: ['scroll', 'scholar', 'short'], hwangwol: ['crossbow', 'bun', null, 'p', B, 1], bangtong: ['flame', 'scholar', 'short', 'k'], songyeon: ['sword', 'helm', 'short'], sonhyang: ['bow', 'bun', null, 'p', B, 1], yeoryeong: ['halberd', 'feather', null, 'p', '#3a1c2a', 1], chugyung: ['dagger', 'fur', null, 'k', '#3a1c14', 1],
-    gwakga: ['staff', 'scholar'], join: ['sword', 'helm', 'short'], jangbi: ['serpent', 'bare', 'full', 'k'], joun: ['spear', 'helm'], sonchaek: ['spear', 'feather'], yukson: ['flame', 'scholar'], dongtak: ['sword', 'crown', 'full', 'r'],
+    gwakga: ['staff', 'scholar'], join: ['sword', 'helm', 'short'], jangbi: ['serpent', 'bare', 'full', 'k'], joun: ['spear', 'helm'], macho: ['lance', 'feather'], sonchaek: ['spear', 'feather'], yukson: ['flame', 'scholar'], dongtak: ['sword', 'crown', 'full', 'r'],
     jojo: ['sword', 'crown', 'short'], samaui: ['staff', 'scholar', 'long'], yubi: ['twin', 'crown', 'short'], gwanu: ['guandao', 'guard', 'long', 'r'], jegal: ['fan', 'scholar', 'long'], songwon: ['sword', 'crown', 'long', null, B], juyu: ['flame', 'scholar'], yeopo: ['halberd', 'feather'],
     choseon: ['ribbon', 'bun', null, 'p', '#2a1c14', 1], hwata: ['needle', 'hood', 'white', null, W], samahwi: ['fan', 'hood', 'white', null, W], jwaja: ['staff', 'hood', 'white', null, W], ganong: ['fan', 'scholar', 'short'], songeon: ['scroll', 'scholar', 'long'], chaemunhui: ['lute', 'bun', null, 'p', '#2a1c14', 1],
     mijuk: ['scroll', 'scholar', 'short'], jingung: ['sword', 'scholar', 'long'], ugil: ['staff', 'hood', 'white', null, W], gyeonhui: ['ribbon', 'bun', null, 'p', '#1c1410', 1], daegyo: ['fan', 'bun', null, 'p', '#2a1c14', 1], sogyo: ['lute', 'bun', null, 'p', '#2a1c14', 1],
@@ -540,7 +546,7 @@
     ach('flash70', '전광석화: 호로관', '70라운드 보스 전에 전설~신화 제작', { type: 'speed', tier: 8, before: 70 }, { tickets: [[5, 1]] }),
     // 편성 업적: 1성을 섞어 5기를 동시에 갖춘다
     form('f_bow', '궁노 사수대', { arc: 3, hayeon: 1, hwangchung: 1 }, { tickets: [[3, 2]] }),
-    form('f_cav', '철기 돌격대', { cav: 3, gongson: 1, macho: 1 }, { tickets: [[4, 1]] }),
+    form('f_cav', '철기 돌격대', { cav: 3, gongson: 1, madae: 1 }, { tickets: [[4, 1]] }),
     form('f_shield', '방패 철벽진', { shd: 3, yujin: 1, seohwang: 1 }, { tickets: [[3, 2]] }),
     form('f_sword', '검술 결사대', { swd: 3, jutae: 1, neungtong: 1 }, { tickets: [[2, 2]] }),
     form('f_spear', '장창 방진', { spr: 3, janghap: 1, wiyeon: 1 }, { tickets: [[3, 2]] }),

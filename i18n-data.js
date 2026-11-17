@@ -29,6 +29,8 @@
 완성의 사수|宛城の死守|Last Stand at Wancheng|死守宛城
 악래|悪来|E Lai|恶来
 단기 돌파|単騎突破|Lone Breakthrough|单骑突破
+서량 철기 돌격|西涼鉄騎突撃|Xiliang Cavalry Charge|西凉铁骑突击
+금마초의 위용|錦馬超の威容|Splendor of Ma Chao|锦马超之威
 맹장의 피|猛将の血|Blood of a Warrior|猛将之血
 처형|処刑|Execute|处决
 목우유마|木牛流馬|Wooden Ox|木牛流马
@@ -59,6 +61,8 @@
 장팔사모|丈八蛇矛|Serpent Spear|丈八蛇矛
 장판교 위압|長坂橋の威圧|Changban Intimidation|长坂桥威压
 칠진칠출|七進七出|Seven In, Seven Out|七进七出
+서량 돌격|西涼突撃|Xiliang Charge|西凉突击
+신위천장군|神威天将軍|General of Divine Might|神威天将军
 장판파의 기적|長坂の奇跡|Miracle at Changban|长坂奇迹
 소패왕의 기세|小覇王の気勢|Little Conqueror's Spirit|小霸王之势
 강동 평정|江東平定|Pacify Jiangdong|平定江东
@@ -208,6 +212,7 @@
 왕좌지재|王佐の才|Talent to Aid a King|王佐之才
 만인지적|万人の敵|Match for Ten Thousand|万人敌
 상산의 일신시담|常山の一身是胆|All Courage of Changshan|常山一身是胆
+금마초|錦馬超|Splendid Ma Chao|锦马超
 소패왕|小覇王|Little Conqueror|小霸王
 서생 대도독|書生の大都督|Scholar Commander|书生大都督
 상국|相国|Chancellor|相国
@@ -239,6 +244,7 @@
 이릉 화공서|夷陵火攻書|Yiling Fire Manual|夷陵火攻书
 서량 철기 병부|西涼鉄騎の兵符|Xiliang Cavalry Seal|西凉铁骑兵符
 폐월의 거울|閉月の鏡|Moon-Hiding Mirror|闭月之镜
+호두잠금창|虎頭湛金槍|Tiger-Head Golden Spear|虎头湛金枪
 낭고의 부절|狼顧の割符|Wolf's Tally|狼顾符节
 백우선|白羽扇|White Feather Fan|白羽扇
 오왕의 인수|呉王の印綬|Seal of the King of Wu|吴王印绶
@@ -330,6 +336,7 @@
 천자를 받들어 백성의 바람을 따르는 것, 그것이 대의입니다.|主上を奉じて民望に従う、これこそ大義です。|Serve the Emperor and follow the people's hopes; that is the great cause.|奉主上以从民望，此乃大义。
 연인 장익덕이 여기 있다!|燕人張翼徳、ここにあり！|Zhang Yide of Yan is here!|燕人张翼德在此！
 나는 상산의 조자룡이다!|我こそは常山の趙子龍！|I am Zhao Zilong of Changshan!|吾乃常山赵子龙！
+아버지의 원수, 조조를 반드시 베리라!|父の仇、曹操は必ずこの手で討つ！|I will avenge my father and cut down Cao Cao!|父仇不共戴天，誓斩曹贼！
 두 진 사이에서 승부를 내고, 천하와 겨루는 일은 내가 한다.|両陣の間で勝負を決し、天下と争うのは我が役目。|Deciding battles between armies and contending for the realm is my task.|决机于两阵之间，与天下争衡，由我来。
 칠백 리 영채를 불길로 태우리라.|七百里の陣営を炎で焼き尽くそう。|I'll burn seven hundred li of camps.|火烧连营七百里。
 천하의 일이 내 손에 달려 있지 않더냐!|天下の事、我にあらずや！|Does not the fate of the realm rest with me?|天下之事，岂不在我！
@@ -404,7 +411,7 @@
 전광석화: 관도|電光石火：官渡|Lightning: Guandu|电光石火：官渡||55ラウンドのボス前に★6〜7を作る|Make a ★6–7 before the R55 boss|第55回合首领前制作6~7星
 전광석화: 호로관|電光石火：虎牢関|Lightning: Hulao|电光石火：虎牢关||70ラウンドのボス前に伝説〜神話を作る|Make a Legend–Myth before the R70 boss|第70回合首领前制作传说~神话
 궁노 사수대|弓弩射手隊|Crossbow Squad|弓弩射手队||弓兵3体・夏侯淵・黄忠を同時に所持|Hold 3 Archers, Xiahou Yuan, Huang Zhong|同时持有弓兵3个·夏侯渊·黄忠
-철기 돌격대|鉄騎突撃隊|Iron Cavalry|铁骑突击队||騎兵3体・公孫瓚・馬超を同時に所持|Hold 3 Cavalry, Gongsun Zan, Ma Chao|同时持有骑兵3个·公孙瓒·马超
+철기 돌격대|鉄騎突撃隊|Iron Cavalry|铁骑突击队||騎兵3体・公孫瓚・馬岱を同時に所持|Hold 3 Cavalry, Gongsun Zan, Ma Dai|同时持有骑兵3个·公孙瓒·马岱
 방패 철벽진|盾の鉄壁陣|Shield Wall|盾牌铁壁阵||盾兵3体・于禁・徐晃を同時に所持|Hold 3 Shieldmen, Yu Jin, Xu Huang|同时持有盾兵3个·于禁·徐晃
 검술 결사대|剣術決死隊|Sword Vanguard|剑术敢死队||剣兵3体・周泰・凌統を同時に所持|Hold 3 Swordsmen, Zhou Tai, Ling Tong|同时持有剑兵3个·周泰·凌统
 장창 방진|長槍方陣|Pike Square|长枪方阵||槍兵3体・張郃・魏延を同時に所持|Hold 3 Spearmen, Zhang He, Wei Yan|同时持有枪兵3个·张郃·魏延

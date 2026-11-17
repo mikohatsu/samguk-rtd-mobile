@@ -58,6 +58,7 @@
 - gfx/의 장수·보스 SD 그림, il_*, tex_*, ui_*, prop_*, rank_*, fx_*, vx_*, 로비 배경은 이미지 생성 도구로 만든 것(웹판 세션에서 제작). gfx/rig_*는 그 그림을 잘라 만든 것.
 - 도구: **Canva AI**(Canva 커넥터의 그림 생성, 배경 제거도 Canva). 웹판 세션 기록 기준 약 268회 생성, 작업 ID는 웹판 gfx/media.json·map.txt에 있다. ui_*, rank_*, 로비 배경은 모바일 세션에서 같은 방식으로 만들었다.
 - 요금제: Canva Pro(유료, 사용자 확인 2026-11-11).
+- gfx/madae.png(마대, 2026-11-17): Canva AI generate-image, 기존 gfx/macho.png를 참고 그림으로 올려 그림체를 맞추고 Canva 배경 제거. Canva 미디어 ID MAHbLX9tjGA(원본)·MAHbLVsnPuA(배경 제거). 원본 art_src/madae_canva.png.
 - 상업 이용: 가능. Canva AI Product Terms(https://www.canva.com/policies/ai-product-terms/)에 따르면 생성물은 사용자 소유이고 판매를 포함한 상업적 이용이 허용된다. 표기 의무 없음.
 - 한계: AI 생성물은 나라에 따라 저작권 보호를 못 받을 수 있고(남이 베껴도 막기 어려움), 독점권도 보장되지 않는다. 알아볼 수 있는 실존 인물·타사 캐릭터·상표가 들어가면 Canva가 권리를 보장해 주지 않는다.
 

@@ -412,6 +412,9 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 #tutbox b { color: #ffd86a; } #tutbox small { color: #cbb894; }
 #tutbox .tb { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 #tutbox .btn { min-height: 34px; padding: 4px 14px; } #tutbox .btn[hidden] { display: none; }
+/* 상점 잠김(쉬움 클리어 전): 기존 버튼 그림을 흐리게 하고 자물쇠 글자만 얹는다 */
+#lmenu button.locked { position: relative; filter: grayscale(1) brightness(.6); }
+#lmenu button.locked::after { content: '🔒'; position: absolute; right: 2px; top: 0; font-size: 16px; filter: none; }
 /* 첫 신화 해금 연출(tutorial.js): 그림은 캔버스에 합성, 여기서는 글자 배치와 나타나는 타이밍만 */
 #tutgift { position: fixed; inset: 0; z-index: 95; background: rgba(8, 5, 3, .82); color: #f4ecd8; touch-action: none; }
 #tutgift canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
