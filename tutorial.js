@@ -95,7 +95,7 @@
     });
   }
   function hide() { if (box) { box.hidden = true; ring.hidden = true; } if (ctx && ctx.S) ctx.S.tutHold = false; shownKey = ''; }
-  // 건너뛰기: 기록하고, 판이면 자동 배치를 켜 주고(안 켜면 유닛이 성 안에 서서 진다), 첫 신화를 연다
+  // 건너뛰기: 기록한다. 자동 배치는 켜 주지 않는다(기본은 끔, 전에 직접 켠 사람만 onSkip에서 다시 켜진다)
   function skipAll() {
     const c = ctx, inGame = mode === 'game';
     if (mode === 'shop') { shopEnd(); gift(null); return; }

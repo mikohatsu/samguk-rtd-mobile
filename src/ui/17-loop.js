@@ -133,12 +133,12 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     Snd.init();
     S.tutHold = false;
     // 첫 오프라인 혼자 하기(이어하기 제외)에서 튜토리얼
-    // 자동 배치(1~3성 자동 합성·정렬)는 기본으로 켠다. 직접 끈 사람은 그 선택을 기억한다('rtd-auto').
-    // 튜토리얼 판은 자동 버튼을 가르치려고 꺼 둔 채 시작하고, 건너뛰면 켠다.
+    // 자동 배치(1~3성 자동 합성·정렬)는 기본으로 꺼 둔다. 직접 켠 사람만 그 선택을 기억해 다음 판에도 켠다('rtd-auto' = '1').
+    // 튜토리얼이 자동 버튼을 가르친다. 건너뛰어도 켜지 않는다.
     const autoOnAll = () => ['t1', 't2', 't3'].forEach((k) => g.setAuto(g.me, k, true));
-    let autoPref = true; try { autoPref = localStorage.getItem('rtd-auto') !== '0'; } catch (e) { /* 저장 불가 */ }
+    let autoPref = false; try { autoPref = localStorage.getItem('rtd-auto') === '1'; } catch (e) { /* 저장 불가 */ }
     // 팁(명사·시너지)은 모든 판에서 보고, 단계 안내는 혼자 하는 오프라인 새 판에서만(tutorial)
-    const tutOn = !!(window.RTD_TUT && window.RTD_TUT.maybeStart({ get g() { return g; }, S, T, t: I.t, dirty, tutorial: S.saveOn && !opt.snap, onSkip: () => { autoOnAll(); toast(t('autoToastOn'), 'good'); dirty(); } }));
+    const tutOn = !!(window.RTD_TUT && window.RTD_TUT.maybeStart({ get g() { return g; }, S, T, t: I.t, dirty, tutorial: S.saveOn && !opt.snap, onSkip: () => { if (autoPref) autoOnAll(); dirty(); } }));
     if (!opt.snap && !tutOn && autoPref) autoOnAll();
     window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); }, tick, render, dom: () => { renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
     view.focus({ preventScroll: true });
