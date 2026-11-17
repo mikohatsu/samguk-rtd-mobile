@@ -66,6 +66,28 @@
   }
   // 묵직함을 더하는 낮은 '쿵'(큰 무기·타격에 겹친다)
   const thump = (f, vol, at) => tone(f, 0.12, 'sine', vol, { to: f * 0.45, at: at || 0 });
+  // 점점 커지는 소리(연출의 '뜸'): 음량이 0에서 vol까지 올라가다 끝에서 끊긴다
+  function swell(dur, f0, f1, vol, kind) {
+    if (!ac) return;
+    const t = ac.currentTime, g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + dur); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.06);
+    g.connect(sfxBus);
+    let src;
+    if (kind === 'noise') {
+      noise(0.001, 1000, 0.0001); // 잡음 버퍼 준비
+      src = ac.createBufferSource(); src.buffer = nb; src.loop = true;
+      const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.5; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      src.connect(f); f.connect(g);
+    } else {
+      src = ac.createOscillator(); src.type = kind || 'sawtooth'; src.frequency.setValueAtTime(f0, t); src.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      src.connect(g);
+    }
+    src.start(t); src.stop(t + dur + 0.1);
+  }
+  // 반짝이는 높은 음 몇 개(획득 순간의 '반짝')
+  const sparkle = (n, base, vol, at) => { for (let i = 0; i < n; i++) tone(base * [1, 1.26, 1.5, 2, 2.52, 3][i % 6] * (1 + Math.random() * 0.02), 0.25, 'sine', vol, { at: (at || 0) + i * 0.035 }); };
+  // 별이 박힐 때마다 한 음씩 올라간다(6·7성 등장)
+  const STAR_NOTES = [523, 587, 659, 784, 880, 1046, 1175];
   const SFX = {
     // 활·쇠뇌: 시위 튕기는 소리 + 화살 바람 소리
     bow() { tone(520, 0.08, 'triangle', 0.1, { to: 200 }); if (!sample('bow', 0.55, { rate: 1.15 })) noise(0.09, 2600, 0.06); },
@@ -112,7 +134,22 @@
     win() { [392, 523, 659, 784, 1046].forEach((f, i) => tone(f, 0.5, 'triangle', 0.16, { at: i * 0.13 })); },
     lose() { [294, 262, 220, 147].forEach((f, i) => tone(f, 0.6, 'sawtooth', 0.09, { at: i * 0.22 })); },
     click() { tone(900, 0.03, 'square', 0.03); },
+    // ---- 획득 연출 ----
+    pop45() { tone(880, 0.12, 'triangle', 0.09); tone(1318, 0.16, 'triangle', 0.08, { at: 0.06 }); },
+    gather() { swell(0.34, 220, 880, 0.12, 'triangle'); swell(0.34, 600, 4000, 0.1, 'noise'); },
+    legendHit() { [392, 494, 587, 784].forEach((f, i) => tone(f, 0.9, 'triangle', 0.1, { at: i * 0.015 })); sparkle(6, 1568, 0.04, 0.05); noise(0.5, 6000, 0.05, { to: 2500 }); },
+    rise() { swell(2.4, 300, 3800, 0.13, 'noise'); swell(2.4, 98, 392, 0.05, 'sawtooth'); },
+    jackpot() {
+      [262, 330, 392, 523, 659, 784].forEach((f, i) => tone(f, 1.6, 'triangle', 0.08, { at: i * 0.012 }));
+      tone(65, 1.2, 'sine', 0.35, { to: 40 }); sparkle(12, 1318, 0.04, 0.08); noise(0.9, 7000, 0.06, { to: 3000 });
+    },
+    shimmer() { sparkle(4, 1046, 0.05); },
+    pillar() { swell(0.32, 200, 1400, 0.16, 'noise'); thump(90, 0.3, 0.3); sparkle(6, 1318, 0.05, 0.3); },
+    // 신화·불멸 장수의 스킬에 겹치는 무게(낮은 쿵 + 터짐), 불멸은 쇳소리 울림을 더한다
+    skillHi() { thump(85, 0.32); noise(0.22, 400, 0.18, { type: 'lowpass', to: 80 }); },
+    skillMax() { SFX.skillHi(); tone(70, 0.5, 'sine', 0.25, { to: 35, at: 0.02 }); tone(1245, 0.5, 'sine', 0.03, { at: 0.03 }); tone(622, 0.6, 'triangle', 0.05, { at: 0.03 }); },
   };
+  STAR_NOTES.forEach((f, i) => { SFX['star' + i] = () => { tone(f, 0.22, 'triangle', 0.12); tone(f * 2, 0.14, 'sine', 0.04); thump(160, 0.12); }; });
   function play(name, gap) {
     if (!ac || !SFX[name] || st.sfx <= 0) return;
     const now = performance.now();

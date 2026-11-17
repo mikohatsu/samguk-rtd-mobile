@@ -1,5 +1,73 @@
+  // ---- 전장 위 등장 연출 ----
+  // 라인 유닛을 처음 그리는 순간부터 등급별 연출을 띄운다(게임 상태는 건드리지 않고 화면 쪽 WeakMap에만 기록).
+  // 1~3성 0.35초 톡, 4·5성 등급색 고리, 6·7성 빛기둥, 전설 금빛 기둥과 빛살, 신화·불멸은 등장 컷신이 끝난 뒤 큰 빛기둥·법진·흔들림.
+  const BIRTH_LEN = [0, 0.35, 0.35, 0.35, 0.55, 0.55, 0.9, 0.9, 1.1, 1.3, 1.6];
+  const BORN = new WeakMap();
+  let bornG = null, bornT0 = 0;
+  const bigPopWaiting = () => (S.pop && S.pop.def && S.pop.def.tier >= 9) || popQ.some((q) => q.def && q.def.tier >= 9);
+  function bornAge(u, t) {
+    // 라인의 실제 유닛만(보스전 장수는 uid가 있고, 남의 전장은 order가 없는 임시 묶음이다)
+    if (!u.order || u.uid != null || !u.def || !u.def.tier) return -1;
+    if (bornG !== g) { bornG = g; bornT0 = t; }
+    let b = BORN.get(u);
+    if (!b) { b = { t0: t, done: t - bornT0 < 0.6 }; BORN.set(u, b); } // 판 시작·이어하기 직후 이미 있던 유닛은 연출 없이
+    if (b.done) return -1;
+    const tier = u.def.tier;
+    if (tier >= 9 && bigPopWaiting()) { b.t0 = t; return -1; } // 컷신이 끝나면 터진다
+    if (!b.go) {
+      b.go = 1;
+      if (tier >= 9) { Snd.play('pillar', 200); S.shake = Math.max(S.shake || 0, tier >= 10 ? 0.9 : 0.6); }
+      else if (tier >= 6) { Snd.play('shimmer', 120); if (tier >= 7) S.shake = Math.max(S.shake || 0, tier >= 8 ? 0.4 : 0.25); }
+    }
+    const age = t - b.t0;
+    if (age >= BIRTH_LEN[Math.min(10, tier)]) { b.done = true; return -1; }
+    return age;
+  }
+  function birthFx(c, x, y, r, tier, col, age, front) {
+    const L = BIRTH_LEN[Math.min(10, tier)], k = age / L, fy = y + r * 0.72, SK = window.RTD_SKFX, low = Q.level === 'low';
+    const bell = Math.sin(Math.min(1, k) * Math.PI), quick = Math.max(0, 1 - age / 0.18);
+    if (front) {
+      // 몸이 하얗게 번쩍했다 빠진다(6성부터) + 위로 튀는 반짝이
+      if (tier >= 6 && SK && quick > 0) SK.spr(c, 'light_01', '#ffffff', x, y - r * 0.4, r * 4, r * 4, 0, quick * (tier >= 9 ? 1 : 0.75));
+      if (tier >= 4 && SK && !low) {
+        const n = Math.round((tier >= 9 ? 10 : tier >= 6 ? 6 : 3) * qPart());
+        for (let i = 0; i < n; i++) { const an = i * 2.4 + tier, d = r * (0.6 + k * (tier >= 8 ? 2.4 : 1.6)); SK.spr(c, 'star_04', i % 2 ? '#ffffff' : col, x + Math.cos(an) * d, y - r * 0.3 + Math.sin(an) * d * 0.6 - k * r * 1.2, 14 + tier, 14 + tier, 0, 1 - k); }
+      }
+      return;
+    }
+    // 발밑에 퍼지는 고리(모든 등급). 1~3성은 흰 고리 하나로 가볍게.
+    c.save(); c.globalAlpha = 1 - k; c.strokeStyle = tier <= 3 ? '#fff6dc' : col; c.lineWidth = tier <= 3 ? 2 : tier <= 5 ? 3 : 4;
+    c.beginPath(); c.ellipse(x, fy, r * (0.6 + k * (tier <= 3 ? 1.1 : 1.8)), r * (0.26 + k * (tier <= 3 ? 0.5 : 0.8)), 0, 0, 7); c.stroke(); c.restore();
+    if (tier < 4 || !SK) return;
+    SK.spr(c, 'circle_02', col, x, fy, r * (1 + k * 3), r * (1 + k * 3), 0, (1 - k) * 0.8, true, 0.45);
+    if (tier >= 6) {
+      // 빛기둥: 순식간에 솟았다가 가늘어지며 사라진다
+      const hgt = r * (tier >= 9 ? 14 : tier >= 8 ? 10 : 7), wid = r * (tier >= 9 ? 2.4 : tier >= 8 ? 1.8 : 1.3) * (1 - k * 0.6), pa = Math.min(1, age / 0.06) * (1 - k);
+      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = pa; c.drawImage(pillarSprite(col), x - wid / 2, fy - hgt, wid, hgt);
+      if (tier >= 8) { c.globalAlpha = pa * 0.8; c.drawImage(pillarSprite('#ffffff'), x - wid / 5, fy - hgt, wid / 2.5, hgt); }
+      c.restore();
+    }
+    if (tier >= 8) {
+      SK.spr(c, 'star_09', tier === 8 ? '#ffd27a' : col, x, y - r * 0.4, r * 6 * (0.6 + k * 0.6), r * 6 * (0.6 + k * 0.6), k * 1.5, bell * 0.9);
+      SK.spr(c, 'flare_01', '#fff0c8', x, fy - r * (tier >= 9 ? 12 : 8), r * 3, r * 3, k * 3, bell * 0.8);
+    }
+    if (tier >= 9) {
+      SK.spr(c, 'magic_01', col, x, fy, r * (2 + ease2(k) * 4), r * (2 + ease2(k) * 4), k * 3, (1 - k) * 0.9, true, 0.42);
+      if (tier >= 10) SK.spr(c, 'magic_03', '#fff0c8', x, fy, r * (1.5 + ease2(k) * 3), r * (1.5 + ease2(k) * 3), -k * 4, (1 - k), true, 0.42);
+      SK.spr(c, 'circle_02', '#ffffff', x, fy, r * (1 + k * 6), r * (1 + k * 6), 0, (1 - k) * 0.6, true, 0.45);
+    }
+  }
+  const ease2 = (p) => 1 - (1 - p) * (1 - p);
+  // 등장 순간 몸이 톡 커졌다 돌아온다(높은 등급일수록 크게)
+  function birthScale(tier, age) {
+    const up = tier <= 3 ? 0.12 : 0.16, big = tier <= 3 ? 1.12 : tier <= 7 ? 1.2 : 1.3;
+    if (age < up) return 0.55 + (big - 0.55) * (age / up);
+    return Math.max(1, big - (age - up) * (tier <= 3 ? 1.2 : 0.9));
+  }
   function poseOf(u, t, r) {
     const f = u.face == null ? Math.PI / 2 : u.face, dir = Art.facing(f), p = { flip: !!dir.flip, v: dir.v, frame: 0, x: 0, y: 0, rot: 0, sy: 1 };
+    const ba = bornAge(u, t);
+    if (ba >= 0) { p.born = ba; p.bornS = birthScale(u.def.tier, ba); }
     if (u.moveT > 0) { const w = t * 15 + (u.id || u.uid || 0); p.y -= Math.abs(Math.sin(w)) * r * 0.12; p.frame = Math.sin(w) > 0 ? 1 : 2; p.sy = 1 + Math.abs(Math.cos(w)) * 0.03; }
     if (u.atkT > 0) {
       // 무기 계열마다 다른 공격 동작: q는 동작 진행(0→1)
@@ -121,6 +189,8 @@
       c.save(); c.strokeStyle = '#fff0c8'; c.lineWidth = 1.5; c.globalAlpha = 0.7; c.setLineDash([3, 9]); c.lineDashOffset = t * 40;
       c.beginPath(); c.ellipse(x, y + r * 0.72, r * 1.7, r * 0.78, 0, 0, 7); c.stroke(); c.restore();
     }
+    const pb = opt.pose && opt.pose.born >= 0 ? opt.pose : null;
+    if (pb) birthFx(c, x, y, r, tier, col, pb.born, false);
     // 발밑 원판: 등급 색으로 멀리서도 구별된다
     { const sp = discSprite(col, tier >= 6), k = (r * 0.95) / 46; c.drawImage(sp, x - 50 * k, y + r * 0.72 - 24 * k, 100 * k, 48 * k); }
     const p = opt.pose || { x: 0, y: 0 };
@@ -131,8 +201,9 @@
     if (RG && (opt.rig || (p.v === 2 && Q.level !== 'low')) && RG.has(d.id)) {
       const st = opt.rig || { state: p.frame ? 'walk' : 'idle', t };
       c.save(); c.translate(x + (opt.rig ? 0 : p.x), y + (opt.rig ? 0 : p.y)); if (!opt.rig && p.rot) c.rotate(p.rot);
-      RG.draw(c, d.id, 0, 0, r * 3.7, p.flip, st); c.restore();
-    } else Art.drawSprite(c, Art.unitSprite(d, p.v, p.frame), x + p.x, y + p.y + Math.sin(t * 3 + x) * 0.6, r * 3.7, p.flip, p.rot, p.sy);
+      RG.draw(c, d.id, 0, 0, r * 3.7 * (p.bornS || 1), p.flip, st); c.restore();
+    } else Art.drawSprite(c, Art.unitSprite(d, p.v, p.frame), x + p.x, y + p.y + Math.sin(t * 3 + x) * 0.6, r * 3.7 * (p.bornS || 1), p.flip, p.rot, p.sy);
+    if (pb) birthFx(c, x, y, r, tier, col, pb.born, true);
     if (ownerAI) { c.fillStyle = '#7fd4ff'; c.fillRect(x - r, y - r * 1.5, r * 2, 2.5); }
   }
   function bar(c, x, y, w, h, f, col) {

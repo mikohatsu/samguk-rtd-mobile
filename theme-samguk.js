@@ -311,10 +311,11 @@
     { w: 27, kind: 'item', tier: 10 }, { w: 73, kind: 'item', tier: 9 },
   ];
 
+  // 2026-11-17 밸런스: 보통·어려움을 올렸다(보통 mult 0.75→0.85·lane 1.4→1.55·bossAtk 0.65→0.72, 어려움 mult 1→1.1·lane 1.75→1.9·bossAtk 0.85→0.92). 쉬움·악몽은 그대로. 측정: tests/balance/sim.js
   const difficulties = [
     { id: 'easy', name: '쉬움', rounds: 70, mult: 0.4, lane: 1, bossAtk: 0.45, startUnits: 6, level: 0 },
-    { id: 'normal', name: '보통', rounds: 90, mult: 0.75, lane: 1.4, bossAtk: 0.65, startUnits: 7, level: 1 },
-    { id: 'hard', name: '어려움', rounds: 100, mult: 1, lane: 1.75, bossAtk: 0.85, startUnits: 8, level: 2 },
+    { id: 'normal', name: '보통', rounds: 90, mult: 0.85, lane: 1.55, bossAtk: 0.72, startUnits: 7, level: 1 },
+    { id: 'hard', name: '어려움', rounds: 100, mult: 1.1, lane: 1.9, bossAtk: 0.92, startUnits: 8, level: 2 },
     { id: 'nightmare', name: '악몽', rounds: 120, mult: 1.4, lane: 2.2, bossAtk: 1.05, startUnits: 10, level: 3 },
   ];
 

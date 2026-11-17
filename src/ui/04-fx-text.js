@@ -1,10 +1,35 @@
+  // 스킬 이펙트를 쓴 장수의 등급(이펙트 모양 vx와 색이 같은 스킬을 가진 결투장 장수 중 가장 높은 등급). 처음 볼 때 한 번 찾고,
+  // 그때 신화·불멸이면 흔들림과 묵직한 소리를 더한다. 게임 객체에는 아무것도 붙이지 않는다.
+  const SKT = new WeakMap();
+  function skillTier(f) {
+    let v = SKT.get(f);
+    if (v != null) return v;
+    v = 0;
+    const fi = g.fight;
+    if (fi) for (const ch of fi.champs) if (ch.def.tier > v && (ch.def.sk || []).some((s) => s.vx === f.vx && s.fx === f.c)) v = ch.def.tier;
+    SKT.set(f, v);
+    if (v >= 9 && f.t < 0.15) {
+      S.shake = Math.max(S.shake || 0, v >= 10 ? 0.9 : 0.6);
+      Snd.play(v >= 10 ? 'skillMax' : 'skillHi', 120);
+      if (v >= 10) S.skFlash = { t: 0, c: f.c };
+    }
+    return v;
+  }
+  // 불멸 스킬: 화면이 스킬 색으로 0.25초 옅게 물든다(전체 화면 사각형 하나)
+  function drawSkFlash(c) {
+    const fl = S.skFlash;
+    if (!fl) return;
+    fl.t += S.fdt;
+    if (fl.t > 0.25) { S.skFlash = null; return; }
+    c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.22 * (1 - fl.t / 0.25); c.fillStyle = fl.c; c.fillRect(-W, -H, W * 3, H * 3); c.restore();
+  }
   function drawFx(c) {
     if (window.RTD_SKFX) window.RTD_SKFX.setQuality(Q.level === 'low' ? 0.5 : Q.level === 'mid' ? 0.75 : 1);
     for (const f of g.fx) {
       if (f.t < 0) continue;
       const p = f.t / f.life;
       // 스킬 연출: 새 이펙트(skillfx.js)가 그리면 기존 모양은 건너뛴다
-      if (f.vx && window.RTD_SKFX && window.RTD_SKFX.fx(c, f, p)) { c.globalAlpha = 1; continue; }
+      if (f.vx && window.RTD_SKFX && window.RTD_SKFX.fx(c, f, p, skillTier(f))) { c.globalAlpha = 1; continue; }
       if (f.k === 'shot') { c.globalAlpha = Math.min(1, (1 - p) * 3); Art.shot(c, f); c.globalAlpha = 1; continue; }
       c.globalAlpha = 1 - p;
       c.strokeStyle = f.c; c.fillStyle = f.c;
@@ -55,6 +80,7 @@
       }
     }
     c.globalAlpha = 1;
+    drawSkFlash(c);
   }
   // 작은 화면(휴대폰)에서는 전장이 축소돼 글씨가 깨알만 해진다. 전장 위 글씨·막대를 그만큼 키우는 배율(1~1.7).
   const uiS = () => Math.max(1, Math.min(1.7, 0.62 / ((S.base && S.base.s0 ? S.base.s0 : 1) * (S.cam ? S.cam.z : 1))));

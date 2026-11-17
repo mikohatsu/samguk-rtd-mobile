@@ -87,6 +87,13 @@
   }
   view.addEventListener('pointerdown', (e) => {
     if (!g) return;
+    // 신화·불멸 등장 컷신: 섬광(3.3초)이 지난 뒤 화면을 누르면 넘긴다. 멈춘 시간도 남은 만큼 덜어 낸다.
+    const pp = S.pop;
+    if (pp && pp.def && pp.def.tier >= 9 && !pp.skip && pp.t > 3.3 && pp.dur - pp.t > 0.4) {
+      const cut = pp.dur - pp.t - 0.3; pp.skip = 1; pp.dur = pp.t + 0.3;
+      if (S.freeze > 0) S.freeze = Math.max(0, S.freeze - cut);
+      return;
+    }
     view.focus({ preventScroll: true });
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { view.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }

@@ -1,4 +1,43 @@
-  function queuePop(def, who) { if (def.tier >= 9) { illust(def); try { document.fonts.load('400 200px "Yuji Boku"', '不滅神話'); } catch (e) {} vx('ring'); vx(def.tier === 10 ? 'burst_imm' : 'burst_myth'); ['flame_01', 'flame_02', 'flame_03', 'flame_04', 'flame_05', 'flame_06', 'smoke_04', 'smoke_07', 'exp0', 'exp1', 'exp2', 'exp3', 'exp4', 'exp5', 'exp6', 'exp7', 'exp8', 'bsm0', 'bsm4', 'bsm8', 'bsm12', 'bsm16', 'bsm20'].forEach((n) => kn(n, '255,255,255')); } popQ.push({ def, who, t: 0, dur: POP_DUR[def.tier] || 2.4, hits: {}, fire: [], shake: 0 }); }
+  function queuePop(def, who) { if (def.tier >= 9) { illust(def); try { document.fonts.load('400 200px "Yuji Boku"', '不滅神話'); } catch (e) {} vx('ring'); vx(def.tier === 10 ? 'burst_imm' : 'burst_myth'); ['flame_01', 'flame_02', 'flame_03', 'flame_04', 'flame_05', 'flame_06', 'smoke_04', 'smoke_07', 'exp0', 'exp1', 'exp2', 'exp3', 'exp4', 'exp5', 'exp6', 'exp7', 'exp8', 'bsm0', 'bsm4', 'bsm8', 'bsm12', 'bsm16', 'bsm20'].forEach((n) => kn(n, '255,255,255')); } popQ.push({ def, who, t: 0, dur: (def.tier <= 8 && POP_LO[def.tier]) || POP_DUR[def.tier] || 2.4, hits: {}, fire: [], shake: 0 }); }
+  // 신화 아래 등급의 알림 길이: 흔한 4·5성은 짧고 빠르게, 등급이 오를수록 길게(신화·불멸은 POP_DUR 그대로: 시간 멈춤과 맞춘다)
+  const POP_LO = { 4: 1.4, 5: 1.6, 6: 2.3, 7: 2.8, 8: 3.0 };
+  // 쾅 하는 순간: 흔들림 + 짧은 멈칫(혼자 할 때만, 협동은 계산 시계를 맞춰야 해서 멈추지 않는다) + 진동
+  function impact(p, shake, stop, buzz) {
+    p.shake = Math.max(p.shake, shake);
+    if (stop && !net && g && g.phase === 'wave') S.hitStop = Math.max(S.hitStop || 0, stop);
+    if (buzz && navigator.vibrate) { try { navigator.vibrate(buzz); } catch (e) { /* 진동 없음 */ } }
+  }
+  // 빛살: 가운데에서 뻗는 가는 삼각형들이 천천히 돈다(더하기 합성, 그라디언트 없음)
+  // 딱딱한 삼각형이 그대로 보이지 않게: 작은 캔버스에 한 번 그려 가운데서 바깥으로 사라지게 지우고, 키워 그려 가장자리를 흐린다(색·개수별로 한 번만 만든다).
+  const rayCache = {};
+  function raySheet(col, n) {
+    const key = col + n; if (rayCache[key]) return rayCache[key];
+    const S2 = 160, cv = document.createElement('canvas'); cv.width = cv.height = S2 * 2; const x = cv.getContext('2d');
+    x.translate(S2, S2); x.fillStyle = col;
+    for (let i = 0; i < n; i++) { const t0 = (i / n) * Math.PI * 2 + (i % 4) * 0.06, w = 0.035 + (i % 3) * 0.02, rr = S2 * (0.6 + ((i * 7) % 5) * 0.1); x.globalAlpha = i % 2 ? 0.5 : 1; x.beginPath(); x.moveTo(0, 0); x.lineTo(Math.cos(t0 - w) * rr, Math.sin(t0 - w) * rr); x.lineTo(Math.cos(t0 + w) * rr, Math.sin(t0 + w) * rr); x.closePath(); x.fill(); }
+    x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'destination-in';
+    const fg = x.createRadialGradient(S2, S2, 0, S2, S2, S2); fg.addColorStop(0, 'rgba(0,0,0,1)'); fg.addColorStop(0.35, 'rgba(0,0,0,0.75)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = fg; x.fillRect(0, 0, S2 * 2, S2 * 2);
+    return (rayCache[key] = cv);
+  }
+  function rays(c, x, y, R, col, a, rot, n) {
+    if (!(a > 0.01)) return;
+    c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a * 1.3); c.translate(x, y); c.rotate(rot);
+    c.drawImage(raySheet(col, n), -R, -R, R * 2, R * 2);
+    c.restore();
+  }
+  // 다음 알림 꺼내기: 신화·불멸을 먼저(시간 멈춤과 어긋나지 않게), 이어 쌓인 7성 이하 알림은 하나로 묶어 가장 높은 것을 보여 주고 나머지는 +N
+  function nextPop() {
+    let i = popQ.findIndex((q) => q.def && q.def.tier >= 9);
+    if (i < 0) i = 0;
+    let p = popQ.splice(i, 1)[0];
+    if (p.def && p.def.tier <= 7) {
+      const all = [p];
+      while (popQ.length && popQ[0].def && popQ[0].def.tier <= 7) all.push(popQ.shift());
+      if (all.length > 1) { p = all.reduce((m, q) => (q.def.tier >= m.def.tier ? q : m)); p.more = all.length - 1; }
+    }
+    return p;
+  }
   function star(c, x, y, r) {
     c.beginPath();
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? r * 0.44 : r; c[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
@@ -9,7 +48,7 @@
     const tt = p.t - at;
     if (tt < 0) return;
     const f = Math.min(1, tt / 0.18), s = 3.2 - 2.2 * f;
-    if (f >= 1 && !p.hits[key]) { p.hits[key] = 1; p.shake = big ? 1 : 0.5; Snd.play(big ? 'bigslam' : 'slam', 20); }
+    if (f >= 1 && !p.hits[key]) { p.hits[key] = 1; p.shake = Math.max(p.shake, big ? 1 : 0.35); Snd.play(big ? 'bigslam' : 'star' + Math.min(6, key), 20); }
     c.globalAlpha = 0.4 + 0.6 * f; c.fillStyle = col; c.strokeStyle = '#fff'; c.lineWidth = 2;
     star(c, x, y, r * s); c.fill(); c.stroke();
     if (f >= 1 && tt < 0.55) { c.globalAlpha = 1 - (tt - 0.18) / 0.37; c.lineWidth = 4; c.strokeStyle = col; c.beginPath(); c.arc(x, y, r * (1 + (tt - 0.18) * 6), 0, 7); c.stroke(); }
@@ -25,6 +64,8 @@
     c.fillStyle = '#fff'; c.font = `400 ${size}px "Black Han Sans", sans-serif`;
     c.fillText(I.t('appears', { a: (p.who ? I.t('whose', { w: p.who }) : '') + p.def.name }), W / 2, y); c.globalAlpha = 1;
   }
+  // 묶인 알림 수(+N): 등급 색 작은 글자
+  function popMore(c, txt, y, col, a) { c.globalAlpha = a; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = col; c.font = '400 30px "Black Han Sans", sans-serif'; c.fillText(txt, W / 2, y); c.globalAlpha = 1; }
   const glowCache = {};
   function softGlow(rgb) {
     if (glowCache[rgb]) return glowCache[rgb];
@@ -145,13 +186,17 @@
     c.save();
     if (p.shake > 0) c.translate((Math.random() - 0.5) * 26 * p.shake, (Math.random() - 0.5) * 26 * p.shake);
     c.globalAlpha = fade; c.fillStyle = '#050304'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+    // 뜸: 처음 0.35초는 금빛(전설인 줄 알게)으로 지나가다 진짜 등급 색으로 바뀐다. 명대사가 찍히는 동안 소리가 차오르고 섬광에서 터진다.
+    const tease = T0 < 0.35;
+    if (!tease && !p.hits.tease) { p.hits.tease = 1; Snd.play('shimmer'); }
+    if (T0 > 0.5 && !p.hits.rise) { p.hits.rise = 1; Snd.play('rise'); }
     // 1) 빛줄기가 화면을 가로지른다
     if (T0 < 0.95) {
       const q = Math.min(1, T0 / 0.8), k = q * q * (3 - 2 * q), x = -500 + (W + 1000) * k;
       c.globalCompositeOperation = 'lighter';
       c.save(); c.translate(x, H / 2); c.rotate(-0.32);
       const gr = c.createLinearGradient(-160, 0, 160, 0);
-      gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.45, `rgba(${C.mid},.5)`); gr.addColorStop(0.5, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, `rgba(${C.mid},.5)`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      gr.addColorStop(0, 'rgba(255,255,255,0)'); const sc = tease ? '255,190,80' : C.mid; gr.addColorStop(0.45, `rgba(${sc},.5)`); gr.addColorStop(0.5, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, `rgba(${sc},.5)`); gr.addColorStop(1, 'rgba(255,255,255,0)');
       c.globalAlpha = fade * (1 - Math.max(0, T0 - 0.75) / 0.2); c.fillStyle = gr; c.fillRect(-160, -H * 1.4, 320, H * 2.8);
       c.restore();
       // 가로 섬광선
@@ -185,7 +230,7 @@
       }
     }
     // 3) 섬광
-    if (T0 >= 2.95 && T0 < 3.5) slamOnce(p, 'flash', true);
+    if (T0 >= 2.95 && T0 < 3.5 && !p.hits.flash) { slamOnce(p, 'flash', true); Snd.play('jackpot'); p.shake = 1.6; if (navigator.vibrate) { try { navigator.vibrate([30, 40, 60]); } catch (e) { /* 진동 없음 */ } } }
     if (T0 >= 2.95) {
       const rx = W * 0.3, ry = H * 0.36, rank = rankName(d.tier);
       const pulse = 0.8 + Math.sin(t * (imm ? 9 : 6)) * 0.12;
@@ -396,6 +441,10 @@
         }
       }
     }
+    // 잭팟 충격파: 등급 글자 자리에서 화면 밖까지 두 겹 고리가 퍼진다
+    if (T0 >= 2.95 && T0 < 3.85) {
+      for (let i = 0; i < 2; i++) { const q = (T0 - 2.95 - i * 0.12) / 0.75; if (q <= 0 || q >= 1) continue; c.globalAlpha = fade * (1 - q); c.strokeStyle = i ? '#fff' : C.hex; c.lineWidth = 26 * (1 - q) + 2; c.beginPath(); c.arc(W * 0.3, H * 0.36, 80 + ease(q) * W * 1.1, 0, 7); c.stroke(); }
+    }
     // 섬광은 맨 위에 덮는다
     if (T0 >= 2.95 && T0 < 3.5) { c.globalAlpha = fade * Math.pow(1 - (T0 - 2.95) / 0.55, 2); c.fillStyle = '#fff'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); }
     c.globalAlpha = 1; c.shadowBlur = 0; c.restore();
@@ -434,11 +483,13 @@
     // 보스 등장 중에는 유닛 등장 알림을 꺼내지 않고(끝난 뒤 이어서 보여 준다), 이미 떠 있는 알림은 0.3초 안에 닫는다
     const inIntro = g && g.phase === 'bossIntro';
     if (inIntro && S.pop && !S.pop.vic && !S.pop.cut) { S.pop.cut = 1; S.pop.dur = Math.min(S.pop.dur, S.pop.t + 0.3); }
+    // 신화·불멸이 기다리면 지금 떠 있는 낮은 알림은 0.25초 안에 닫는다
+    if (S.pop && S.pop.def && S.pop.def.tier < 9 && !S.pop.cut2 && popQ.some((q) => q.def && q.def.tier >= 9)) { S.pop.cut2 = 1; S.pop.dur = Math.min(S.pop.dur, S.pop.t + 0.25); }
     if (!S.pop && popQ.length && !inIntro) {
-      S.pop = popQ.shift();
+      S.pop = nextPop();
       const tier = S.pop.def ? S.pop.def.tier : 0;
-      if (tier >= 9) Snd.play('legend'); else if (tier === 8) Snd.play('craft');
-      else if (tier && tier <= 5) Snd.play('combine');
+      if (tier >= 9) Snd.play('legend'); else if (tier === 8) Snd.play('gather');
+      else if (tier === 4 || tier === 5) Snd.play('pop45');
     }
     const p = S.pop;
     if (!p) return;
@@ -449,33 +500,75 @@
     if (d.tier >= 9) return drawCutscene(c, p, t, dt);
     c.save();
     if (p.shake > 0) c.translate((Math.random() - 0.5) * 22 * p.shake, (Math.random() - 0.5) * 22 * p.shake);
+    const T0 = p.t, more = p.more ? '+' + p.more : '';
     if (d.tier <= 5) {
+      // 4·5성: 가볍고 빠르게. 별이 0.05초 간격으로 톡톡 튀어나온다.
       popBand(c, 150, 200, a);
-      for (let i = 0; i < d.tier; i++) { c.globalAlpha = a; c.fillStyle = col; star(c, W / 2 + (i - (d.tier - 1) / 2) * 62, 220, 25); c.fill(); }
+      for (let i = 0; i < d.tier; i++) {
+        const k = Math.min(1, Math.max(0, (T0 - i * 0.05) / 0.12)), s = k < 1 ? 0.4 + k * 0.9 : 1.3 - Math.min(0.3, (T0 - i * 0.05 - 0.12) * 3);
+        if (k <= 0) continue;
+        c.globalAlpha = a; c.fillStyle = col; star(c, W / 2 + (i - (d.tier - 1) / 2) * 62, 220, 25 * s); c.fill();
+      }
       c.globalAlpha = 1; popName(c, p, 292, 46, a);
+      if (more) popMore(c, more, 330, col, a);
     } else if (d.tier === 6) {
+      // 6성: 별 여섯이 음을 올리며 빠르게 박힌다
       popBand(c, 150, 340, a);
-      for (let i = 0; i < 6; i++) slamStar(c, p, i, W / 2 + (i - 2.5) * 96, 260, 40, col, 0.1 + i * 0.2);
-      popName(c, p, 390, 62, Math.min(1, Math.max(0, (p.t - 1.4) * 4)) * a);
+      for (let i = 0; i < 6; i++) slamStar(c, p, i, W / 2 + (i - 2.5) * 96, 260, 40, col, 0.08 + i * 0.12);
+      popName(c, p, 390, 62, Math.min(1, Math.max(0, (T0 - 0.95) * 4)) * a);
+      if (more) popMore(c, more, 440, col, a);
     } else if (d.tier === 7) {
+      // 7성: 별 여섯 → 큰 별이 떨어져 쾅(빛살·섬광·멈칫)
       popBand(c, 90, 420, a);
-      [-310, -215, -120, 120, 215, 310].forEach((o, i) => slamStar(c, p, i, W / 2 + o, 290, 40, col, 0.1 + i * 0.2));
-      const fall = Math.min(1, Math.max(0, (p.t - 1.5) / 0.3));
+      const land = 1.2, fall = Math.min(1, Math.max(0, (T0 - 0.95) / (land - 0.95)));
+      if (T0 > land) rays(c, W / 2, 225, 520, col, a * 0.3 * Math.min(1, (T0 - land) * 4), T0 * 0.25, 18);
+      [-310, -215, -120, 120, 215, 310].forEach((o, i) => slamStar(c, p, i, W / 2 + o, 290, 40, col, 0.08 + i * 0.13));
       if (fall > 0) {
         const y = -160 + (225 + 160) * fall * fall;
-        if (fall >= 1 && !p.hits.big) { p.hits.big = 1; p.shake = 1.2; Snd.play('bigslam', 20); }
+        if (fall >= 1 && !p.hits.big) { p.hits.big = 1; impact(p, 1.3, 0.08, 18); Snd.play('bigslam', 20); Snd.play('shimmer'); }
         c.globalAlpha = a; c.fillStyle = '#fff'; c.shadowColor = col; c.shadowBlur = 40; star(c, W / 2, y, 86); c.fill(); c.fillStyle = col; star(c, W / 2, y, 76); c.fill(); c.shadowBlur = 0; c.globalAlpha = 1;
+        if (fall >= 1 && T0 < land + 0.5) { const q = (T0 - land) / 0.5; c.globalAlpha = a * (1 - q); c.strokeStyle = col; c.lineWidth = 6 * (1 - q) + 1; c.beginPath(); c.arc(W / 2, 225, 90 + q * 360, 0, 7); c.stroke(); }
       }
-      popName(c, p, 420, 66, Math.min(1, Math.max(0, (p.t - 1.9) * 4)) * a);
-    } else {
-      popBand(c, 150, 360, a);
-      const sweep = (p.t * 1.1) % 1.6 - 0.3, gr = c.createLinearGradient(W / 2 - 320, 0, W / 2 + 320, 0);
-      gr.addColorStop(0, '#d98a1e'); gr.addColorStop(Math.max(0, Math.min(1, sweep)), '#fff6c8'); gr.addColorStop(1, '#ffb347');
-      c.globalAlpha = a; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.shadowColor = '#ffb347'; c.shadowBlur = 34 + Math.sin(t * 7) * 14; c.fillStyle = gr;
-      c.font = '400 150px "East Sea Dokdo", "Black Han Sans", serif'; c.fillText(d.name, W / 2, 300);
-      c.shadowBlur = 0; c.fillStyle = '#ffe2a8'; c.font = '700 32px "Gowun Batang", serif'; c.fillText((p.who ? I.t('whose', { w: p.who }) : '') + I.t('legendAppear', { title: d.title ? '· ' + d.title + ' ' : '' }), W / 2, 410);
+      if (T0 > land && T0 < land + 0.18) { c.globalAlpha = a * (1 - (T0 - land) / 0.18) * 0.7; c.fillStyle = '#fff'; c.fillRect(-OVER.x, 90, W + OVER.x * 2, 420); }
       c.globalAlpha = 1;
+      popName(c, p, 420, 66, Math.min(1, Math.max(0, (T0 - 1.35) * 4)) * a);
+      if (more) popMore(c, more, 470, col, a);
+    } else {
+      // 전설: 금빛이 모여들고(뜸 0.35초) → 이름이 쾅 박히며 섬광·빛살·흔들림·멈칫 → 광택이 훑는다
+      const HIT = 0.35, cy = 300;
+      popBand(c, 130, 400, a);
+      if (T0 < HIT) {
+        const k = T0 / HIT;
+        c.save(); c.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 16; i++) { const an = i * 0.39 + i * i * 0.07, rr = (1 - k * k) * (260 + (i % 4) * 70); c.globalAlpha = a * k; c.drawImage(softGlow('255,190,90'), W / 2 + Math.cos(an) * rr * 1.6 - 12, cy + Math.sin(an) * rr * 0.6 - 12, 24, 24); }
+        const gs = 60 + k * 160; c.globalAlpha = a * k * 0.8; c.drawImage(softGlow('255,220,140'), W / 2 - gs, cy - gs, gs * 2, gs * 2);
+        c.restore();
+      } else {
+        if (!p.hits.lg) { p.hits.lg = 1; impact(p, 1.3, 0.09, 22); Snd.play('bigslam', 20); Snd.play('legendHit'); }
+        const k = T0 - HIT;
+        rays(c, W / 2, cy, 700, '#ffb347', a * 0.28 * Math.min(1, k * 5), T0 * 0.18, 22);
+        // 퍼지는 충격 고리와 튀는 불티
+        if (k < 0.6) {
+          const q = k / 0.6; c.globalAlpha = a * (1 - q) * (1 - q) * 0.6; c.strokeStyle = '#ffe2a8'; c.lineWidth = 14 * (1 - q) + 1;
+          c.beginPath(); c.ellipse(W / 2, cy, 120 + q * 640, 60 + q * 220, 0, 0, 7); c.stroke();
+          c.save(); c.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 18; i++) { const an = i * 0.349 + 0.2, rr = 60 + q * (300 + (i % 3) * 120); c.globalAlpha = a * (1 - q); c.drawImage(softGlow(i % 3 ? '255,180,80' : '255,245,210'), W / 2 + Math.cos(an) * rr * 1.5 - 10, cy + Math.sin(an) * rr * 0.55 - 10, 20, 20); }
+          c.restore();
+        }
+        const sk = Math.min(1, k / 0.14), ns = sk < 1 ? 2.1 - 1.1 * ease(sk) : 1;
+        const sweep = (T0 * 1.1) % 1.6 - 0.3, gr = c.createLinearGradient(W / 2 - 320, 0, W / 2 + 320, 0);
+        gr.addColorStop(0, '#d98a1e'); gr.addColorStop(Math.max(0, Math.min(1, sweep)), '#fff6c8'); gr.addColorStop(1, '#ffb347');
+        c.save(); c.translate(W / 2, cy); c.scale(ns, ns);
+        c.globalAlpha = a * Math.min(1, sk * 2); c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.shadowColor = '#ffb347'; c.shadowBlur = 34 + Math.sin(t * 7) * 14; c.fillStyle = gr;
+        c.font = '400 150px "East Sea Dokdo", "Black Han Sans", serif'; c.fillText(d.name, 0, 0);
+        c.restore(); c.shadowBlur = 0;
+        const ka = Math.min(1, Math.max(0, (k - 0.25) * 4));
+        c.globalAlpha = a * ka; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#ffe2a8'; c.font = '700 32px "Gowun Batang", serif'; c.fillText((p.who ? I.t('whose', { w: p.who }) : '') + I.t('legendAppear', { title: d.title ? '· ' + d.title + ' ' : '' }), W / 2, 410);
+        // 섬광(띠 안쪽만)
+        if (k < 0.2) { c.globalAlpha = a * Math.pow(1 - k / 0.2, 2) * 0.85; c.fillStyle = '#fff'; c.fillRect(-OVER.x, 130, W + OVER.x * 2, 400); }
+        c.globalAlpha = 1;
+      }
     }
     c.restore();
   }

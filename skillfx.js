@@ -302,12 +302,28 @@
     },
   };
 
+  // 신화·불멸 장수 스킬의 무게: 착탄 지점 섬광과 바닥 충격파(불멸은 한 겹 더). 스킬 모양 자체(판정 크기)는 그대로 둔다.
+  function heavy(c, f, p, tier) {
+    if (tier < 9 || !ready(['flare_01', 'circle_02', 'light_01'])) return;
+    const big = tier >= 10, hp = f.k === 'beam' ? Math.min(1, p * 2.2) : 1;
+    const ix = f.k === 'beam' ? f.x + Math.cos(f.a) * f.len * hp : f.k === 'cone' ? f.x + Math.cos(f.a) * f.r * 0.6 : f.x;
+    const iy = f.k === 'beam' ? f.y + Math.sin(f.a) * f.len * hp : f.k === 'cone' ? f.y + Math.sin(f.a) * f.r * 0.6 : f.y;
+    const R = f.k === 'beam' ? f.w * 2.2 : f.r || 120;
+    spr(c, 'flare_01', WHITE, ix, iy, R * (big ? 2.6 : 2), R * (big ? 2.6 : 2), p * 2, bell(cl(p * 1.8)) * 0.9);
+    spr(c, 'circle_02', f.c, ix, iy + 10, R * (0.6 + ease(cl(p * 1.4)) * 2.6) * 2, R * (0.6 + ease(cl(p * 1.4)) * 2.6) * 2, 0, (1 - cl(p * 1.4)) * 0.9, true, 0.5);
+    if (big) {
+      spr(c, 'light_01', f.c, ix, iy, R * 3.2, R * 3.2, 0, bell(cl(p * 1.4)) * 0.6);
+      const q = cl(p * 1.4 - 0.2); spr(c, 'circle_02', WHITE, ix, iy + 10, R * (0.5 + ease(q) * 3.4) * 2, R * (0.5 + ease(q) * 3.4) * 2, 0, (1 - q) * 0.7, true, 0.5);
+    }
+  }
   // g.fx 한 개를 그린다(그렸으면 true)
-  function fx(c, f, p) {
+  function fx(c, f, p, tier) {
     const tab = f.k === 'beam' ? BEAM : f.k === 'cone' ? CONE : f.k === 'blast' ? BLAST : f.k === 'aura' ? AURA : null;
     const fn = tab && (tab[f.vx] || (f.k === 'blast' ? BLAST.burst : null));
     if (!fn || !ready(['circle_02', 'light_01', 'star_09'])) return false;
-    return fn(c, f, p) !== false;
+    const ok = fn(c, f, p) !== false;
+    if (ok && tier >= 9) heavy(c, f, p, tier);
+    return ok;
   }
   // 원 스킬(내 장판)이 터지기 전 표시: 바닥에 도는 법진과 차오르는 고리
   function tele(c, h, p, fired) {
@@ -327,6 +343,8 @@
     const fy = y + r * 0.72, pulse = 1 + Math.sin(t * 3 + seed) * 0.08;
     spr(c, 'light_02', col, x, fy, r * (tier >= 9 ? 4.4 : tier >= 8 ? 3.8 : 3.2) * pulse, r * 3.2 * pulse, t * 0.4, tier >= 8 ? 0.7 : 0.55, true, 0.45);
     if (tier >= 7) spr(c, 'magic_02', col, x, fy, r * 3, r * 3, t * 0.9, 0.75, true, 0.42);
+    // 전설 이상: 몇 초마다 몸에서 십자 반짝임이 한 번 번쩍인다(멀리서도 '좋은 유닛'이 눈에 띄게). 등급이 높을수록 자주.
+    if (tier >= 8) { const ph = (t * (tier >= 10 ? 0.45 : tier >= 9 ? 0.35 : 0.25) + seed * 0.159) % 1; if (ph < 0.1) spr(c, 'star_09', '#ffffff', x, y - r * 0.7, r * (tier >= 10 ? 3.4 : 2.6), r * (tier >= 10 ? 3.4 : 2.6), ph * 8, Math.sin((ph / 0.1) * Math.PI) * 0.9); }
     if (lod === 0) { if (tier >= 10) spr(c, 'trace_06', col, x, y - r * 1.2, r * 2.2, r * 5, 0, 0.6); return true; }
     if (tier >= 8) {
       spr(c, 'twirl_01', col, x, y, r * 3, r * 3, t * 2.2, 0.6);

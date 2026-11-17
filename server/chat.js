@@ -21,7 +21,13 @@ const okRe = new RegExp(OK.map(escRe).join('|'), 'g');
 const stars = (m) => '*'.repeat(Array.from(m).length);
 // 닉네임 검사용(기존 규칙 그대로): 띄어쓰기·기호·숫자를 빼고 어디든 들어 있으면 나쁜 닉네임
 const squash = (s) => String(s || '').toLowerCase().replace(/[\s\d_\-.·,!?~*'"`^()[\]{}|/\\+=:;@#$%&]/g, '');
-const nickBad = (n) => { const q = squash(n); return BAD.concat(BAD_WORD).some((w) => q.includes(w.toLowerCase())); };
+// 닉네임에만 막는 말: 채팅에서는 평범한 말일 수 있지만 랭킹·협동 화면에 이름으로 걸리면 곤란한 것(성적 은어, 혐오).
+// 닉네임은 '고추장'처럼 걸리는 것이 생겨도 다른 이름을 고르면 되므로 넓게 막는다.
+const NICK_ONLY = ['고추', '꼬추', '젖꼭지', '딸딸이', '자위', '야동', '성기', '음경', '똥꼬', '항문', '강간', '보빨', '자빨', '일베', '운지', '틀딱', '한남충', '김치녀', '쪽바리', '짱깨', '나치', '히틀러',
+  'penis', 'vagina', 'boobs', 'hitler', 'nazi', // 'rape'·'cum'·'anal'은 grape·document·banal 같은 말에 걸려서 뺐다
+  'ちんちん', 'おっぱい', 'レイプ', 'うんこ', 'ヒトラー', 'ナチス', 'シナ人',
+  '强奸', '奶子', '阴茎', '希特勒'];
+const nickBad = (n) => { const q = squash(n); return BAD.concat(BAD_WORD, NICK_ONLY).some((w) => q.includes(w.toLowerCase())); };
 
 // 글을 다듬는다: 제어 문자·꺾쇠 제거, 80자, 같은 글자 늘이기 줄임, 욕설 가림
 function mask(txt) {
