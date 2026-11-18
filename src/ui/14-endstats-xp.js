@@ -17,6 +17,7 @@
       if (pb.clr < 0) lines.push(I.t('goalShop'));
     }
     const me = ACC.token && ACC.me;
+    if (me && S.msClaim) lines.push(I.t('goalMission'));
     if (me) {
       const trk = me.track === 'civ' ? 'civ' : 'mil';
       if (me.rank >= 0 && me.rank < 10) lines.push(I.t('goalRank', { a: esc(t('rk_' + trk + (me.rank + 1))), n: num(Math.max(0, xpAt(RANK_LV[me.rank + 1]) - (me.xp || 0))) }));

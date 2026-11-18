@@ -850,13 +850,25 @@ html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
 @media (min-height: 600px) { .rb { width: 72px; font-size: 12.5px; } .rb .rc { width: 58px; height: 58px; } .rb .ri { width: 52px; height: 52px; } .rb .ic { width: 31px; height: 31px; } .rb > span:not(.dot) { max-width: 76px; } #rail { gap: 7px; } }
 /* ---- 로비 5차: 메뉴는 그린 물건 아이콘(돈주머니·투구·죽간), 창은 비단 두루마리, 탭은 군기 모양 ----
    그림: gfx/ic_shop.png, ic_rank.png, ic_hist.png(아이콘), ui_silk.jpg(구름무늬 비단) */
-#lmenu { grid-template-columns: repeat(3, 84px); gap: 10px; }
+#lmenu { grid-template-columns: repeat(4, 84px); gap: 10px; }
 #lmenu button i { width: 72px; height: 72px; font-size: 0; color: transparent; border-radius: 50%; box-shadow: none; transform: none !important; transition: transform .12s;
   background: var(--pap); border: 2px solid #7a4a22; box-shadow: inset 0 0 0 2px rgba(251,238,218,.7), 0 5px 12px rgba(40,14,6,.45); position: relative; box-sizing: border-box; }
 #lmenu button i::after { content: ''; position: absolute; inset: -4px -2px 2px; background: center/contain no-repeat; filter: drop-shadow(0 4px 5px rgba(40,14,6,.5)); }
 #lmenu button[data-lp="shop"] i::after { background-image: url(gfx/ic_shop.png); }
 #lmenu button[data-lp="rank"] i::after { background-image: url(gfx/ic_rank.png); }
 #lmenu button[data-lp="history"] i::after { background-image: url(gfx/ic_hist.png); }
+#lmenu button[data-lp="mission"] i::after { background-image: url(gfx/ic_mission.png); }
+/* 미션 버튼(4번째)의 빨간 점: 받을 수 있는 보상이 있을 때 */
+#lmenu button { position: relative; }
+#lmenu button .dot { position: absolute; top: 0; right: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--cinnabar); box-shadow: 0 0 0 2px #1a120c; z-index: 1; }
+#lmenu button .dot[hidden] { display: none; }
+/* 미션 창: 한 줄 = 이름 · 진행 · 보상 · 받기 */
+.ms-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 12px 0 4px; color: #ffd86a; font-weight: 700; }
+.ms-head small { color: var(--dim); font-weight: 400; font-size: 12px; }
+.ms-row { display: grid; grid-template-columns: 1fr auto auto 96px; gap: 10px; align-items: center; min-height: 48px; padding: 2px 6px; border-bottom: 1px solid rgba(201,164,92,.18); }
+.ms-row .pg { color: var(--dim); font-size: 12px; } .ms-row .rw { color: #ffe9a8; font-weight: 700; white-space: nowrap; } .ms-row .rw i { font-style: normal; color: #ffd86a; }
+.ms-row .btn { min-height: 44px; padding: 0 10px; } .ms-row .ms-got { text-align: center; color: #7dff8e; font-weight: 700; font-size: 13px; }
+.ms-row.got .nm, .ms-row.got .rw { opacity: .55; } .ms-row.done .pg { color: #7dff8e; }
 #lmenu button:active i { transform: scale(.93) !important; }
 #lmenu button span { border-radius: 2px; border-top: 2px solid #7a4a22; border-bottom: 2px solid #7a4a22; padding: 2px 9px; font-family: var(--serif); font-weight: 700; }
 /* 창: 위아래 나무 축에 걸린 비단 두루마리 */
@@ -894,8 +906,8 @@ html[lang="en"] .es-win span, html[lang="en"] .es-lose span, html[lang="zh"] .es
 #end .es h3 { color: #f3deb0; border-bottom: 1px solid rgba(201,164,92,.4); font: 700 15px var(--serif); }
 #end .es-again { min-width: 300px; height: 84px; margin: 12px auto 14px; padding: 0 40px 4px; border: 0; border-image: none; background: url(gfx/ui_ink.png) center/100% 100% no-repeat; color: #fbeeda; font: 400 40px/1 "East Sea Dokdo", "Black Han Sans", serif; letter-spacing: .04em; text-shadow: 0 1px 0 #000; filter: drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
 html[lang="en"] #end .es-again, html[lang="zh"] #end .es-again { font-size: 28px; }
-@media (max-height: 430px) { .es-win span, .es-lose span { font-size: 40px; } .es-win, .es-lose { padding: 8px 54px 11px; margin: 4px 0 0; } #lmenu { grid-template-columns: repeat(3, 72px); } #lmenu button i { width: 60px; height: 60px; } .lp-head b, .wz-head b { font-size: 26px; line-height: 30px; } }
-@media (min-height: 600px) { #lmenu { grid-template-columns: repeat(3, 116px); } #lmenu button i { width: 100px; height: 100px; } }
+@media (max-height: 430px) { .es-win span, .es-lose span { font-size: 40px; } .es-win, .es-lose { padding: 8px 54px 11px; margin: 4px 0 0; } #lmenu { grid-template-columns: repeat(4, 72px); } #lmenu button i { width: 60px; height: 60px; } .lp-head b, .wz-head b { font-size: 26px; line-height: 30px; } }
+@media (min-height: 600px) { #lmenu { grid-template-columns: repeat(4, 116px); } #lmenu button i { width: 100px; height: 100px; } }
 /* 일본어: 제목이 길어 글씨를 줄이고, 버튼 글자가 이미 '出陣'이라 인장은 뺀다 */
 #lbrand h1 { max-width: 62vw; }
 html[lang="ja"] #lbrand h1 { font-size: clamp(30px, 4.6vw, 60px); }
@@ -906,7 +918,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
   #lgear { width: 56px; height: 56px; } #lgear svg { width: 28px; height: 28px; }
   #lcur .cur { font-size: 16px; padding: 5px 12px 5px 5px; }
   #lbrand { top: 84px; } #lbrand .seal { width: 64px; height: 64px; font-size: 28px; }
-  #lmenu { grid-template-columns: repeat(3, 108px); gap: 16px; }
+  #lmenu { grid-template-columns: repeat(4, 108px); gap: 16px; }
   #lmenu button i { width: 96px; height: 96px; font-size: 0; border-radius: 50%; } #lmenu button span { font-size: 15px; padding: 3px 10px; }
   #battlebtn { min-width: 440px; height: 128px; font-size: 62px; padding: 0 84px 6px 52px; } #battlebtn::after { right: 40px; width: 32px; font-size: 16px; line-height: 32px; }
   html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 44px; }
@@ -917,7 +929,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
   #lbrand { top: 50px; } #lbrand h1 { font-size: clamp(40px, 6.4vw, 60px); } #lbrand .seal { width: 40px; height: 40px; font-size: 18px; }
   html[lang="en"] #lbrand h1, html[lang="zh"] #lbrand h1 { font-size: clamp(28px, 4.6vw, 44px); } html[lang="ja"] #lbrand h1 { font-size: clamp(26px, 4.2vw, 40px); }
   /* 이어하기(44) + 간격(8) + 전투 버튼(76) + 아래 여백(16~21) 위로 메뉴를 올린다 */
-  #lmenu { grid-template-columns: repeat(3, 74px); gap: 10px; top: auto; bottom: 160px; transform: none; }
+  #lmenu { grid-template-columns: repeat(4, 74px); gap: 10px; top: auto; bottom: 160px; transform: none; }
   #lmenu button { height: auto; padding: 0; gap: 5px; background: none; } #lmenu button i { width: 62px; height: 62px; font-size: 0; }
   #battlebtn { min-width: 270px; height: 76px; padding: 0 56px 3px 32px; border-width: 0; font-size: 38px; } #battlebtn::after { right: 24px; font-size: 11px; line-height: 22px; width: 22px; }
   html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 28px; }
@@ -1012,6 +1024,89 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 #selbar .cmd[data-act="sell"] { border-color: #c8402e; color: #ffb0a0; margin-right: 12px; }
 /* 도감: 잠긴 장수 조합식의 안내 */
 .lockn { display: block; margin-top: 3px; color: #ffcf8a; }
+/* ---- 협동 입장 대기 화면(#match, src/ui/18b-match.js) ----
+   참가자 카드가 나란히 서고, 계급이 높을수록 화려하다(.t0 ~ .t4). 연출은 있는 그림만 움직인다:
+   ray_sun(빛살)·pic_star(별)은 흰 그림이라 마스크로 써서 금색을 입히고, fxa_ring(5×4칸)·fxa_burst(6×5칸)은 steps()로 칸을 넘긴다(칸 수는 art.js FXA_META).
+   글꼴은 전부 기본 글꼴(닉네임에 붓글씨 글꼴에 없는 글자가 섞인다). */
+#match { position: fixed; inset: 0; z-index: 58; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; box-sizing: border-box; padding: calc(var(--st, 0px) + 6px) calc(var(--sr, 0px) + 12px) calc(var(--sb, 0px) + 6px) calc(var(--sl, 0px) + 12px); background: linear-gradient(rgba(10, 7, 5, .8), rgba(10, 7, 5, .9)), #120c08 url(gfx/lobby_bg.jpg?v=3) center / cover no-repeat; color: #f4ecd8; overflow: hidden; }
+#match[hidden] { display: none; }
+#match, #match * { font-family: var(--ui) !important; letter-spacing: 0 !important; }
+#match i { font-style: normal; }
+.mt-head { flex: none; display: flex; align-items: center; gap: 12px; }
+.mt-diff { padding: 5px 34px 6px; background: url(gfx/ui_title.png) center / 100% 100% no-repeat; font-size: 15px; font-weight: 700; line-height: 1.3; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.mt-wait { font-size: 13px; color: #e9dcc0; text-shadow: 0 1px 3px #000; animation: mtBlink 1.6s ease-in-out infinite; }
+.mt-row { flex: none; display: grid; grid-auto-columns: minmax(0, 132px); grid-template-rows: auto auto; justify-content: center; align-items: center; column-gap: 12px; row-gap: 6px; width: 100%; padding: 24px 0 0; }
+.mt-slot { --sc: 1; grid-row: 1; position: relative; min-width: 0; transform: scale(var(--sc)); transform-origin: 50% 100%; animation: mtIn .5s cubic-bezier(.2, .9, .3, 1.2) var(--d, 0s) backwards; }
+.mt-still .mt-slot { animation: none; }
+.mt-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; box-sizing: border-box; height: 214px; padding: 0 2px 2px; border-style: solid; border-width: 9px; border-image: url(gfx/ui_frame.png) 20 fill stretch; text-align: center; }
+.mt-glow { position: absolute; inset: -6px; overflow: hidden; pointer-events: none; }
+.mt-emb { position: relative; flex: none; width: 100%; height: 98px; display: grid; place-items: center; }
+.mt-rk { position: relative; z-index: 1; width: 62px; height: 62px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .7)); }
+.mt-ic { position: absolute; z-index: 2; right: 8px; bottom: 2px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(205, 167, 91, .7); background: #2b1f15; object-fit: cover; }
+.mt-nm { position: relative; z-index: 1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; line-height: 1.35; color: #f4ecd8; text-shadow: 0 1px 2px #000; }
+.mt-gr { position: relative; z-index: 1; max-width: 100%; min-height: 15px; font-size: 11px; line-height: 1.3; color: #d8c79c; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mt-lv { position: relative; z-index: 1; font-size: 11px; line-height: 1.3; color: #b9ab8c; font-variant-numeric: tabular-nums; }
+.mt-st { position: relative; z-index: 1; margin-top: auto; font-size: 11px; line-height: 1.4; color: #b9ab8c; animation: mtBlink 1.2s ease-in-out infinite; }
+.mt-st.ok { color: #7dff8e; font-weight: 700; animation: none; }
+.mt-tag { position: absolute; z-index: 3; top: -6px; padding: 0 6px; border-radius: 3px; font-size: 10px; font-weight: 700; line-height: 16px; }
+.mt-tag.host { left: -6px; background: #c99a2e; color: #14100d; }
+.mt-tag.mine { right: -6px; background: #7dff8e; color: #0c2410; }
+.mt-slot.me .mt-card { outline: 2px solid #7dff8e; outline-offset: 1px; }
+.mt-next { grid-row: 2; align-self: start; word-break: keep-all; min-height: 30px; font-size: 11px; line-height: 1.35; color: #e9dcc0; text-align: center; text-shadow: 0 1px 2px #000; }
+.mt-next b { color: #ffd86a; }
+.mt-tip { flex: none; max-width: 100%; font-size: 12px; line-height: 1.4; color: #cdbf9f; text-shadow: 0 1px 2px #000; text-align: center; }
+/* 빛살·별: 그림을 마스크로 쓰고 색을 입힌다 */
+.mt-ray, .mt-aura, .mt-star { position: absolute; display: block; pointer-events: none; background-color: var(--gc, #ffd86a); -webkit-mask: var(--mk) center / contain no-repeat; mask: var(--mk) center / contain no-repeat; }
+.mt-ray, .mt-aura { --mk: url(gfx/ray_sun.png?v=1); left: 50%; aspect-ratio: 1; animation: mtSpin 26s linear infinite; }
+.mt-ray { top: 55px; width: var(--rw, 150px); margin: calc(var(--rw, 150px) / -2) 0 0 calc(var(--rw, 150px) / -2); opacity: var(--ro, .4); }
+.mt-ray.r2 { --gc: #fff3c4; animation-duration: 15s; animation-direction: reverse; opacity: .55; }
+.mt-aura { top: 64px; width: 290px; margin: -145px 0 0 -145px; opacity: var(--ao, .3); animation-duration: 40s; animation-direction: reverse; }
+.mt-star { --mk: url(gfx/pic_star.png?v=1); z-index: 2; width: 11px; height: 11px; margin: -5px 0 0 -5px; opacity: 0; animation: mtStar 3.4s ease-in-out infinite; }
+/* 프레임 시트: i가 한 칸만 보이게 자르고, b가 줄(세로)을, img가 칸(가로)을 넘긴다. 가로 한 바퀴 시간 = 세로 한 줄 시간 */
+.mt-fx { position: absolute; left: 50%; top: 50%; display: block; overflow: hidden; pointer-events: none; }
+.mt-fx b { display: block; width: 100%; }
+.mt-fx img { display: block; height: 100%; max-width: none; }
+/* 고리(5칸 × 4줄, 1.6초 돌고 1.6초 쉰다): 파란 그림이라 색조를 금빛으로 돌린다 */
+.mt-ring { width: 150px; height: 150px; margin: -75px 0 0 -75px; filter: hue-rotate(205deg) saturate(1.5) brightness(1.5); opacity: .9; }
+.mt-ring b { height: 400%; animation: mtRows 3.2s linear infinite; }
+.mt-ring img { width: 500%; animation: mtCols .4s steps(5) infinite; }
+/* 터짐(6칸 × 5줄): 카드가 나타날 때 한 번 */
+.mt-burst { z-index: 3; width: 230px; height: 230px; margin: -115px 0 0 -115px; opacity: 0; animation: mtBurst 1s ease-out var(--d, 0s) 1; }
+.mt-burst b { height: 500%; animation: mtY 1s steps(5) var(--d, 0s) 1 both; }
+.mt-burst img { width: 600%; animation: mtCols .2s steps(6) var(--d, 0s) 5; }
+.mt-still .mt-burst { display: none; }
+/* 계급 단계 */
+.mt-slot.t1 { --rw: 128px; --ro: .42; --gc: #e2c27a; }
+.mt-slot.t1 .mt-card { box-shadow: 0 0 0 1px #c99a2e; }
+.mt-slot.t2 { --sc: 1.03; --rw: 176px; --ro: .6; z-index: 1; }
+.mt-slot.t2 .mt-card { box-shadow: 0 0 0 1px #e6c067, 0 0 12px rgba(255, 216, 106, .3); }
+.mt-slot.t2 .mt-rk { width: 70px; height: 70px; }
+.mt-slot.t3 { --sc: 1.06; --rw: 200px; --ro: .72; --ao: .26; z-index: 2; }
+.mt-slot.t3 .mt-card { box-shadow: 0 0 0 2px #ffd86a, 0 0 16px rgba(255, 216, 106, .45); }
+.mt-slot.t3 .mt-rk { width: 76px; height: 76px; }
+.mt-slot.t4 { --sc: 1.1; --rw: 236px; --ro: .9; --ao: .46; z-index: 3; }
+.mt-slot.t4 .mt-card { box-shadow: 0 0 0 2px #ffe9a8, 0 0 22px rgba(255, 216, 106, .7); }
+.mt-slot.t4 .mt-rk { width: 86px; height: 86px; animation: mtPulse 2.6s ease-in-out infinite; }
+.mt-slot.t4 .mt-nm { color: #ffd86a; font-size: 15px; text-shadow: 0 0 8px rgba(255, 200, 80, .8), 0 1px 2px #000; }
+.mt-slot.t3 .mt-gr, .mt-slot.t4 .mt-gr { color: #ffe9a8; }
+@keyframes mtIn { from { opacity: 0; transform: translateY(22px) scale(calc(var(--sc) * .86)); } }
+@keyframes mtBlink { 50% { opacity: .45; } }
+@keyframes mtSpin { to { transform: rotate(360deg); } }
+@keyframes mtPulse { 50% { transform: scale(1.07); } }
+@keyframes mtStar { 0% { opacity: 0; transform: translateY(12px) scale(.4) rotate(0deg); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-44px) scale(1.1) rotate(50deg); } }
+@keyframes mtCols { to { transform: translateX(-100%); } }
+@keyframes mtY { to { transform: translateY(-100%); } }
+@keyframes mtRows { 0% { transform: translateY(0); animation-timing-function: steps(4); } 50%, 100% { transform: translateY(-100%); } }
+@keyframes mtBurst { 0% { opacity: 1; transform: scale(.5); } 70% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
+/* 낮은 화면(가로 폰 320~340px 높이): 카드를 줄인다 */
+@media (max-height: 350px) { .mt-card { height: 190px; } .mt-emb { height: 80px; } .mt-ray { top: 46px; } .mt-row { padding-top: 19px; } .mt-tip { font-size: 11px; } }
+@media (max-width: 700px) { .mt-row { column-gap: 7px; } .mt-ic { width: 28px; height: 28px; right: 2px; } .mt-slot.t2 { --sc: 1.02; } .mt-slot.t3 { --sc: 1.03; } .mt-slot.t4 { --sc: 1.05; } }
+/* 움직임 줄이기: 전부 멈추고 프레임 그림은 뺀다(별은 제자리에) */
+@media (prefers-reduced-motion: reduce) { #match *, #match { animation: none !important; } .mt-fx { display: none; } .mt-star { opacity: .8; } }
+/* 계정 창 관직 표의 계급 문장(작게) */
+.acc-tree td.rk { white-space: nowrap; }
+.acc-tree td.rk img { width: 22px; height: 22px; margin: -4px 4px -4px 0; vertical-align: middle; object-fit: contain; }
+/* ---- 협동 입장 대기 화면 끝 ---- */
 </style>
 
 <div id="app" hidden>
@@ -1064,6 +1159,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
     <button type="button" data-lp="shop"><i>市</i><span data-i18n="lb_shop"></span></button>
     <button type="button" data-lp="rank"><i>榜</i><span data-i18n="lb_rank"></span></button>
     <button type="button" data-lp="history"><i>戰</i><span data-i18n="lb_history"></span></button>
+    <button type="button" data-lp="mission"><i></i><span data-i18n="lb_mission"></span><b class="dot" hidden></b></button>
   </nav>
   <button id="lchatbar" type="button" data-lp="lchat" hidden></button>
   <div id="lplay"><button class="btn" id="contbtn" type="button" hidden></button><button class="btn go" id="battlebtn" type="button"><span data-i18n="lb_battle"></span></button></div>
@@ -1107,6 +1203,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 </div>
 <div id="adover" hidden><div class="adbox"><b data-i18n="ad"></b><div class="adslot"></div><small data-i18n="adProto"></small><button class="btn" id="adclose" type="button" disabled></button></div></div>
 
+<div id="match" hidden></div>
 <script src="config.js"></script>
 <script src="version.js"></script>
 <script src="theme-samguk.js"></script>

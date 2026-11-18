@@ -17,9 +17,10 @@ const api = async (p, body, tok) => {
   return Object.assign({ status: r.status }, j);
 };
 async function waitUp() { for (let i = 0; i < 50; i++) { try { await fetch(`http://127.0.0.1:${PORT}/health`); return; } catch (e) { await new Promise((r) => setTimeout(r, 200)); } } throw new Error('서버가 뜨지 않음'); }
-// 서버와 같은 방식으로 표를 서명한다(agoSec초 전에 발급된 것처럼)
-function forge(uid, diff, mut, agoSec, key) {
-  const body = Buffer.from(JSON.stringify({ u: uid, d: diff, m: mut, t: Date.now() - agoSec * 1000, n: crypto.randomBytes(9).toString('base64url') })).toString('base64url');
+// 서버와 같은 방식으로 표를 서명한다(agoSec초 전에 발급된 것처럼). k = 판 인원(안 적으면 옛 표처럼 없음 = 오프라인 배율 ×0.5, 2 = 온라인 2인 ×1.0)
+function forge(uid, diff, mut, agoSec, key, k) {
+  const o = { u: uid, d: diff, m: mut, t: Date.now() - agoSec * 1000, n: crypto.randomBytes(9).toString('base64url') }; if (k !== undefined) o.k = k;
+  const body = Buffer.from(JSON.stringify(o)).toString('base64url');
   return body + '.' + crypto.createHmac('sha256', key || fs.readFileSync(path.join(DATA, 'ticket.key'))).update(body).digest('base64url');
 }
 (async () => {
@@ -53,11 +54,11 @@ function forge(uid, diff, mut, agoSec, key) {
 
     // 순위 조작: 판 시간을 터무니없이 짧게 적은 클리어(다른 계정) → 보상은 주되 순위에는 올리지 않는다
     const g3 = await api('/api/guest/new', { nick: 'tk3', agree: true });
-    r = await api('/api/result', { ticket: forge(g3.me.id, 'easy', 0, 3600), round: 70, win: true, time: 100 }, g3.token);
+    r = await api('/api/result', { ticket: forge(g3.me.id, 'easy', 0, 3600, null, 2), round: 70, win: true, time: 100 }, g3.token);
     ok(r.gained > 0, '판 시간을 100초라고 적은 클리어: 보상은 줌');
 
-    // 정상: 1시간 전에 받은 쉬움 표로 70라운드 클리어
-    const t1 = forge(uid, 'easy', 0, 3600);
+    // 정상: 1시간 전에 받은 쉬움 표(온라인 2인 판 = 배율 ×1.0)로 70라운드 클리어
+    const t1 = forge(uid, 'easy', 0, 3600, null, 2);
     r = await api('/api/result', { ticket: t1, round: 70, win: true, time: 3200, diff: 'nightmare', mutLv: 5 }, tok);
     ok(r.gained === 131 && r.coins === 46 && r.me.prog.clr === 0, `정상 판(쉬움 70R 클리어): 경험치 131·동전 46, 보통이 열림. 보고에 적은 난이도(악몽+5)는 무시 (받은 값 ${r.gained}/${r.coins})`);
     r = await api('/api/result', { ticket: t1, round: 70, win: true, time: 3200 }, tok);
@@ -73,18 +74,20 @@ function forge(uid, diff, mut, agoSec, key) {
     await new Promise((x) => setTimeout(x, 30));
     const t2 = forge(uid, 'nightmare', 5, 0.01);
     r = await api('/api/result', { ticket: t2, round: 1, win: false, time: 30 }, tok);
-    ok(r.gained === Math.round((15 + 0.8) * 1.3), `안 열린 악몽 +5 표: 보통 배율로만 쳐 줌 (받은 값 ${r.gained})`);
+    // 판 인원이 안 적힌 표 = 오프라인 배율(×0.5): 기본 21 → 11, 동전 4 → 2
+    ok(r.gained === Math.round(Math.round((15 + 0.8) * 1.3) * 0.5) && r.coins === 2, `안 열린 악몽 +5 표: 보통 배율로만 쳐 줌(오프라인 ×0.5) (받은 값 ${r.gained}/${r.coins})`);
 
     // 이긴 척: 마지막 라운드가 아닌데 win
     await new Promise((x) => setTimeout(x, 30));
     r = await api('/api/result', { ticket: forge(other.me.id, 'easy', 0, 0.01), round: 1, win: true, time: 30 }, other.token);
-    ok(r.me.prog.clr === -1 && r.me.wins === 0 && r.gained === 16, '1라운드에서 이겼다는 보고: 승리로 치지 않음(난이도 진행·승수 그대로, 경험치는 진 판만큼)');
+    ok(r.me.prog.clr === -1 && r.me.wins === 0 && r.gained === 8, '1라운드에서 이겼다는 보고: 승리로 치지 않음(난이도 진행·승수 그대로, 경험치는 진 판만큼 = 기본 16 × 오프라인 0.5)');
 
     // 전적(오프라인 판)
     r = await api('/api/history', { diff: 'hard', round: 100, win: true, time: 5000 }, tok);
     ok(r.me.prog.clr === 0, '표 없는 전적: 난이도 진행 그대로');
     r = await api('/api/history', { ticket: forge(uid, 'normal', 0, 7200), round: 90, win: true, time: 4100 }, tok);
-    ok(r.me.prog.clr === 1 && r.me.coins === 46 + 4, `표 있는 전적(보통 90R 클리어): 어려움이 열림, 동전은 그대로 (동전 ${r.me.coins})`);
+    // 이 표는 앞선 보상보다 먼저 발급됐다(겹치는 판) → 전적·난이도 진행만 남고 보상은 없다
+    ok(r.me.prog.clr === 1 && r.me.coins === 46 + 2, `표 있는 전적(보통 90R 클리어, 앞선 보상과 겹침): 어려움이 열림, 동전은 그대로 (동전 ${r.me.coins})`);
   } catch (e) { ok(false, '예외 ' + e.message); }
   srv.kill();
   try { fs.rmSync(DATA, { recursive: true, force: true }); } catch (e) { /* 무시 */ }

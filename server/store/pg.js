@@ -67,6 +67,7 @@ module.exports = function pgStore(pool) {
 
   return {
     kind: 'pg',
+    ...require('./mod-pg')(pool, (id) => hydrate(id)), // 운영 제재(채팅 금지·계정 정지)·신고 열람: mod-pg.js
     flush: async () => {},
     close: async () => { if (pool.end) await pool.end(); },
     async userByToken(t) {
@@ -195,6 +196,40 @@ module.exports = function pgStore(pool) {
         }
         return true;
       }).catch((e) => { if (e.code === '23505') return false; throw e; });
+    },
+    // ---------- 미션(2026-11-18): 일일 미션 진행·받기, 첫 클리어 보상 받기. json.js와 함수 모양이 같다 ----------
+    // day = 일본 시간 날짜 글자('2026-11-18'). 지난 날의 줄은 진행을 적을 때 지운다(계정마다 그날 것만 남는다).
+    async missionProgress(uid, day, ids) {
+      await tx(async (qq) => {
+        await qq('DELETE FROM mission_daily WHERE account_id = $1 AND day <> $2', [uid, day]);
+        for (const id of ids) {
+          await qq(`INSERT INTO mission_daily (account_id, day, mission_id, n) VALUES ($1, $2, $3, 1)
+                    ON CONFLICT (account_id, day, mission_id) DO UPDATE SET n = mission_daily.n + 1`, [uid, day, id]);
+        }
+      });
+    },
+    async missionState(uid, day) {
+      const d = await q('SELECT mission_id, n, claimed_at FROM mission_daily WHERE account_id = $1 AND day = $2', [uid, day]);
+      const f = await q('SELECT mission_id FROM mission_claims WHERE account_id = $1', [uid]);
+      const daily = {}; d.rows.forEach((r) => (daily[r.mission_id] = { n: r.n, claimed: !!r.claimed_at }));
+      return { daily, firsts: f.rows.map((r) => r.mission_id) };
+    },
+    // m = { id, coins, day, need }(일일: 그날 need번 채웠고 아직 안 받았을 때만) 또는 { id, coins }(첫 클리어: 한 번만. 조건은 부르는 쪽이 본다). 'ok' | 'no'
+    // 받았다는 표시와 동전 지급·원장 기록을 트랜잭션 하나로 한다(동시에 두 번 와도 한 번만).
+    async missionClaim(uid, m) {
+      return tx(async (qq) => {
+        await qq('SELECT 1 FROM accounts WHERE id = $1 FOR UPDATE', [uid]);
+        if (m.day) {
+          const up = await qq('UPDATE mission_daily SET claimed_at = $5 WHERE account_id = $1 AND day = $2 AND mission_id = $3 AND n >= $4::int AND claimed_at IS NULL RETURNING n', [uid, m.day, m.id, m.need, new Date()]);
+          if (!up.rows.length) return 'no';
+        } else {
+          const ins = await qq('INSERT INTO mission_claims (account_id, mission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING mission_id', [uid, m.id]);
+          if (!ins.rows.length) return 'no';
+        }
+        const a = await qq('UPDATE accounts SET coins = coins + $2::int WHERE id = $1 RETURNING coins', [uid, m.coins]);
+        await ledger(qq, uid, 'coin', m.coins, a.rows[0].coins, 'mission', m.day ? m.day + ':' + m.id : m.id);
+        return 'ok';
+      }).catch((e) => { if (e.code === '23505') return 'no'; throw e; });
     },
     async deleteUser(uid) { await q('DELETE FROM accounts WHERE id = $1', [uid]); },
     async rankLevel(n) {

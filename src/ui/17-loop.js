@@ -141,7 +141,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
         const saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo';
         const mine = g, waits = TICKET_RETRY_MS.slice();
         S.tkWant = true;
-        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0 }).then((r) => {
+        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, room: (opt.net && opt.net.code) || undefined }).then((r) => {
           if (g !== mine) return; // 그 사이 다른 판이 시작됐다
           if (r.ticket) { S.gameTk = r.ticket; if (saveOn) { try { localStorage.setItem('rtd-save-tk', r.ticket); } catch (e) { /* 저장 불가 */ } } return; }
           // 로그인이 풀렸거나(401) 요청이 잘못됐으면(400) 다시 해도 같다

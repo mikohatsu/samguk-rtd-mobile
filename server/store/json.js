@@ -22,6 +22,7 @@ module.exports = function jsonStore(dir) {
 
   return {
     kind: 'json',
+    ...require('./mod-json')(dir, () => db), // 운영 제재(채팅 금지·계정 정지)·신고 열람: mod-json.js
     flush: () => P(flush()),
     close: () => { clearInterval(timer); flush(); return P(); },
     userByToken: (t) => { const x = t && tok(t); return P(x && x.exp > Date.now() ? user(x.uid) : null); },
@@ -93,6 +94,31 @@ module.exports = function jsonStore(dir) {
     rankLevel: (n) => P(Object.values(db.users).sort((a, b) => b.xp - a.xp).slice(0, n)),
     rankClear: (diff, n) => P((db.clears[diff] || []).slice(0, n).map((c) => ({ time: c.time, mut: c.mut, at: c.at, members: c.members.map((m) => ({ id: m.id, nick: m.nick, icon: m.icon, user: user(m.id) })) }))),
     rankImm: (id, n) => P(Object.values(db.users).filter((u) => u.imm && u.imm[id] > 0).sort((a, b) => b.imm[id] - a.imm[id]).slice(0, n).map((u) => ({ user: u, n: u.imm[id] }))),
+    // ---------- 미션(2026-11-18): 일일 미션 진행·받기, 첫 클리어 보상 받기. pg.js와 함수 모양이 같다 ----------
+    // day = 일본 시간 날짜 글자('2026-11-18'). 계정의 ms = { day, n: { 미션 id: 횟수 }, got: [받은 일일 미션] }(날이 바뀌면 새로), firsts = [받은 첫 클리어 보상]
+    missionProgress: (uid, day, ids) => {
+      const u = user(uid); if (!u.ms || u.ms.day !== day) u.ms = { day, n: {}, got: [] };
+      ids.forEach((id) => (u.ms.n[id] = (u.ms.n[id] || 0) + 1)); mark(); return P();
+    },
+    missionState: (uid, day) => {
+      const u = user(uid) || {}, m = u.ms && u.ms.day === day ? u.ms : { n: {}, got: [] }, daily = {};
+      Object.keys(m.n).forEach((id) => (daily[id] = { n: m.n[id], claimed: m.got.includes(id) }));
+      return P({ daily, firsts: (u.firsts || []).slice() });
+    },
+    // m = { id, coins, day, need }(일일: 그날 need번 채웠고 아직 안 받았을 때만) 또는 { id, coins }(첫 클리어: 한 번만. 조건은 부르는 쪽이 본다). 'ok' | 'no'
+    missionClaim: (uid, m) => {
+      const u = user(uid);
+      if (m.day) {
+        const s = u.ms && u.ms.day === m.day ? u.ms : null;
+        if (!s || (s.n[m.id] || 0) < m.need || s.got.includes(m.id)) return P('no');
+        s.got.push(m.id);
+      } else {
+        u.firsts = u.firsts || [];
+        if (u.firsts.includes(m.id)) return P('no');
+        u.firsts.push(m.id);
+      }
+      u.coins = (u.coins || 0) + m.coins; mark(); return P('ok');
+    },
     // 시험·이전용
     _raw: () => db,
   };

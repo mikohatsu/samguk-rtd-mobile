@@ -125,7 +125,7 @@
     const RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];
     function treeHtml(m) {
       const mine = m.track === 'civ' ? 'civ' : 'mil';
-      const rows = RANK_LV.map((lv, i) => `<tr class="${m.rank === i ? 'cur' : ''}"><td>${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${lv}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
+      const rows = RANK_LV.map((lv, i) => `<tr class="${m.rank === i ? 'cur' : ''}"><td class="rk"><img alt="" src="gfx/rank_${i}.png" onerror="this.remove()">${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${lv}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
       return `<table><thead><tr><th>${t('treeStage')}</th><th class="n">${t('treeLv')}</th><th class="n">${t('treeXp')}</th><th class="${mine === 'mil' ? 'me' : ''}">${t('trackMil')}</th><th class="${mine === 'civ' ? 'me' : ''}">${t('trackCiv')}</th></tr></thead><tbody>${rows}</tbody></table><div class="note">${t('treeNote', { xp: Math.round(m.xp).toLocaleString() })}</div>`;
     }
     const setErr = (e) => { const el = $('acc-err'); if (el) el.textContent = e ? errText(e) : ''; };
@@ -299,10 +299,18 @@
       bar(0.55); say('boot_account');
       let netDown = false;
       // 로그인 상태 새로 받기(등급이 다른 기기에서 올랐을 수 있다). 토큰이 만료됐으면(401) api()가 지운다
-      if (ACC.token) { const r = await api('/api/me'); if (r.me) { ACC.me = r.me; saveAcc(); } else if (r.status === 0) netDown = true; }
+      let ban = null; // 정지된 계정(403 banned): 아래에서 안내만 보이고 멈춘다
+      if (ACC.token) { const r = await api('/api/me'); if (r.me) { ACC.me = r.me; saveAcc(); } else if (r.status === 0) netDown = true; else if (r.error === 'banned') ban = r; }
       if (!ACC.token && GUEST && GUEST.id) {
         const r = await api('/api/guest/login', { id: GUEST.id, secret: GUEST.secret });
-        if (r.token) setAcc(r); else if (r.status === 401) saveGuest(null); else if (r.status === 0) netDown = true;
+        if (r.token) setAcc(r); else if (r.status === 401) saveGuest(null); else if (r.status === 0) netDown = true; else if (r.error === 'banned') ban = r;
+      }
+      if (ban) {
+        // 계정 정지: 언제까지인지 보여 주고 로비로 넘어가지 않는다(50년 넘게 남았으면 무기한)
+        const card = $('bootcard'), perm = !(ban.until < Date.now() + 50 * 365 * 86400000);
+        B.classList.add('form'); $('bootload').hidden = true; card.hidden = false;
+        card.innerHTML = `<p>${esc(t('err_banned'))}</p><p>${esc(perm ? t('ban_perm') : t('ban_until', { d: new Date(ban.until).toLocaleString() }))}</p>`;
+        await new Promise(() => {});
       }
       bar(0.9);
       const has = !!(ACC.token && ACC.me);
@@ -348,7 +356,8 @@
       $('roster').textContent = '';
       const show = () => dr();
       lobby.onLobby = show; show();
-      lobby.onStart = (d) => { saveLast(); begin({ diff: d.diff, mode: 'multi', seed: d.seed, net: lobby, muts: d.muts || [], mutLv: d.mutLv || 0, online: true, key: code + '-' + d.seed }); };
+      // 시작 신호 → 입장 대기 화면(18b-match.js)에서 모두의 준비를 기다린 뒤 판을 시작한다. 그 사이 방을 나갔으면(lobby !== l) 시작하지 않는다
+      lobby.onStart = (d) => { saveLast(); matchIntro(l, d, () => begin({ diff: d.diff, mode: 'multi', seed: d.seed, net: l, muts: d.muts || [], mutLv: d.mutLv || 0, online: true, key: code + '-' + d.seed }), () => lobby === l); };
       return '';
     };
     $('mk').onclick = () => join(Math.random().toString(36).slice(2, 7));

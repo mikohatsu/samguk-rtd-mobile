@@ -10,6 +10,14 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.2.34', d: '2026-11-18', items: [
+      ['협동 판을 시작할 때 참가자의 닉네임과 계급이 나오는 입장 화면이 생겼습니다. 계급이 높을수록 화려합니다.', '協力プレイの開始時に、参加者のニックネームと官職が表示される入場画面を追加しました。官職が高いほど華やかになります。', 'Co-op games now open with an entry screen showing each player’s nickname and rank. The higher the rank, the flashier the card.', '合作对局开始时新增了显示参与者昵称和官职的入场画面。官职越高越华丽。'],
+      ['함께하는 인원이 많을수록 판 보상(경험치·동전)이 커집니다. 온라인 5인 협동이 가장 많이 받습니다.', '一緒に遊ぶ人数が多いほど、バトル報酬（経験値・銅銭）が増えます。オンライン5人協力が一番多くもらえます。', 'Game rewards (XP and coins) now grow with party size. A full 5-player online co-op game pays the most.', '一起游玩的人数越多，对局奖励（经验、铜钱）越多。在线5人合作获得最多。'],
+      ['오프라인 판(혼자·AI 동맹)도 로그인해 서버에 연결되어 있으면 경험치와 동전을 받습니다.', 'オフラインのバトル（ひとり・AI同盟）も、ログインしてサーバーに接続していれば経験値と銅銭をもらえます。', 'Offline games (solo or with AI allies) now earn XP and coins when you are signed in and connected.', '离线对局（单人、AI同盟）在登录并连接服务器时也能获得经验和铜钱。'],
+      ['보통·어려움·악몽과 악몽 +1~+5를 처음 클리어하면 동전 보상을 받습니다. 이미 클리어한 난이도도 받을 수 있습니다.', '「ふつう」「むずかしい」「悪夢」と悪夢+1〜+5を初めてクリアすると、銅銭の報酬をもらえます。すでにクリアした難易度の分も受け取れます。', 'First clears of Normal, Hard, Nightmare and Nightmare +1 to +5 now give coin rewards. Difficulties you already cleared count too.', '首次通关普通、困难、噩梦以及噩梦+1~+5可获得铜钱奖励。已经通关的难度也可以领取。'],
+      ['매일 바뀌는 오늘의 미션이 생겼습니다. 로비의 미션 버튼에서 보상을 받으세요(일본 시간 0시에 초기화).', '毎日変わる「今日のミッション」を追加しました。ロビーのミッションボタンから報酬を受け取ってください（日本時間0時にリセット）。', "Added daily missions. Claim rewards from the Missions button in the lobby (resets at midnight Japan time).", '新增了每日更换的今日任务。请在大厅的任务按钮领取奖励（日本时间0点重置）。'],
+      ['「결제 복원」 버튼이 설정에도 생겼습니다.', '「購入を復元」ボタンを設定にも追加しました。', 'Added a Restore purchases button to Settings.', '设置中也新增了“恢复购买”按钮。'],
+    ] },
     { v: '0.2.33', d: '2026-11-18', items: [
       ['판 도중 선택권을 쓰면 그 판의 보상을 못 받던 문제를 고쳤습니다.', 'バトル中に選択券を使うと、そのバトルの報酬を受け取れなかった不具合を修正しました。', 'Fixed rewards being lost when you used a ticket during a game.', '修复了对局中使用选择券后无法获得该局奖励的问题。'],
       ['결과 화면 맨 위에 다음 목표가 나옵니다(진 곳, 새로 열린 것, 다음 관직까지 경험치).', 'リザルト画面の上部に次の目標が表示されます（敗因、新しく開いたもの、次の官職までの経験値）。', 'The result screen now shows your next goals (where you lost, what unlocked, XP to the next rank).', '结算画面顶部会显示下一个目标（失败原因、新解锁内容、距下一官职的经验）。'],
