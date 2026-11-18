@@ -251,17 +251,19 @@
   // 화면 장식 낱장 그림(gfx/이름.png): 보스 체력 막대 틀·경고 띠·선택 표시·아레나 테두리와 바닥 문양·먹 띠 등.
   // 처음 부를 때 받고, 아직 없거나 못 받았으면 null(부른 쪽은 예전 모양으로 그린다). 받기 실패는 다시 시도하지 않는다.
   const UIP = {};
+  // 그림별 판 번호(주소의 ?v=). 같은 이름으로 그림을 바꾸면 올려서 옛 캐시를 피한다. 없으면 1(v0.2.38: arena_mark 새 그림)
+  const PIC_VER = { arena_mark: 2 };
   function pic(name, ext) {
     let o = UIP[name];
     if (!o) {
       if (typeof Image === 'undefined') return null;
       o = UIP[name] = { im: new Image(), ok: false };
-      o.im.onload = () => { o.ok = true; }; o.im.src = 'gfx/' + name + '.' + (ext || 'png') + '?v=1';
+      o.im.onload = () => { o.ok = true; }; o.im.src = 'gfx/' + name + '.' + (ext || 'png') + '?v=' + (PIC_VER[name] || 1);
     }
     return o.ok && o.im.width ? o.im : null;
   }
   // 보스전 전에 다 받아지도록 판을 시작할 때 미리 부른다
-  ['ui_bossbar', 'vs_warn', 'ui_select', 'arena_rim', 'ui_ink', 'ui_title', 'ui_tab', 'defeat_plank'].forEach((n) => pic(n));
+  ['ui_bossbar', 'vs_warn', 'ui_select', 'arena_rim', 'arena_mark', 'ui_ink', 'ui_title', 'ui_tab', 'defeat_plank'].forEach((n) => pic(n));
   // 보스전 바닥 타일(gfx/flr_*.jpg): 1024px 이음매 없는 밝기 무늬(CC0 Poly Haven 재질을 art_src/build-floor.py로 가공). 경기장 무늬(motif)마다 하나를 쓴다.
   const FLOOR = { altar: 'flr_slab', bagua: 'flr_slab', palace: 'flr_slab', gate: 'flr_brick', city: 'flr_brick', wagon: 'flr_gravel', river: 'flr_gravel', forest: 'flr_forest', cliff: 'flr_earth' };
   const floorTex = (motif) => (FLOOR[motif] ? pic(FLOOR[motif], 'jpg') : null);

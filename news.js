@@ -10,6 +10,10 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.2.38', d: '2026-11-19', items: [
+      ['장각·제갈량·사마의 경기장 바닥에 팔괘 문양이 돌아왔습니다. 조조전과 여포전의 바닥 색을 다듬었습니다.', '張角・諸葛亮・司馬懿の闘技場の床に八卦の紋様が戻りました。曹操戦と呂布戦の床の色を調整しました。', 'The bagua emblem is back on the floors of the Zhang Jiao, Zhuge Liang and Sima Yi arenas, and the Cao Cao and Lu Bu arena floor colors were adjusted.', '张角、诸葛亮、司马懿的场地地面重新加入了八卦纹样，并调整了曹操战和吕布战的地面颜色。'],
+      ['보스전에서 장수가 1명일 때는 왼쪽 아래 장수 전환 카드를 숨겨 보스와 조이스틱을 가리지 않게 했습니다.', 'ボス戦で武将が1人のときは左下の武将切り替えカードを隠し、ボスやスティックの邪魔にならないようにしました。', 'In boss fights with a single general, the general-switch card in the lower left is now hidden so it no longer covers the boss or the joystick.', 'Boss战中只有1名武将时，隐藏左下角的武将切换卡片，不再遮挡Boss和摇杆。'],
+    ] },
     { v: '0.2.37', d: '2026-11-19', items: [
       ['보스전 경기장을 다시 만들었습니다. 바닥이 화면 끝까지 이어지고, 난간과 바닥 그림이 늘어나 보이지 않게 고해상도로 바꿨으며, 보스마다 바닥 재질과 색이 다릅니다. 카메라가 조금 가까이에서 내 장수를 따라갑니다.', 'ボス戦の闘技場を作り直しました。床が画面の端まで広がり、柵と床の絵が引き伸ばされないよう高解像度にし、ボスごとに床の質感と色が変わります。カメラが少し寄って自分の武将を追いかけます。', 'Rebuilt the boss arena: the floor now extends to the screen edges, the railing and floor art are high-resolution so nothing looks stretched, and each boss has its own floor texture and color. The camera now follows your general a little closer.', '重做了Boss战场地：地面延伸到屏幕边缘，栏杆和地面换成高清图不再拉伸，每个Boss的地面材质和颜色各不相同。镜头稍微拉近并跟随自己的武将。'],
       ['보스전 조작이 가벼워졌습니다. 조이스틱과 버튼이 작아지고 평소에는 반투명하며, 화면 왼쪽 아래 아무 곳이나 누르면 그 자리에 조이스틱이 나타납니다.', 'ボス戦の操作を軽くしました。スティックとボタンを小さく、普段は半透明にし、画面左下のどこを押してもその場所にスティックが出ます。', 'Lighter boss controls: the joystick and buttons are smaller and semi-transparent when idle, and the joystick appears wherever you touch in the lower left.', 'Boss战操作更轻快：摇杆和按钮变小，平时半透明，按下屏幕左下任意位置摇杆就会出现在那里。'],

@@ -138,7 +138,9 @@
     $('backbtn').hidden = !viewedPeer();
     renderHud();
     const sbar = $('selbar'), boss = inBoss() && g.phase === 'boss' && !!g.fight;
-    const selVis = !g.over && (boss || (laneOn() && (S.sel.length > 0 || !!S.dropSel || !!(viewedPeer() && S.rsel))));
+    // 보스전에서 내 장수가 1명이고 쓰러지지 않았으면 장수 전환 카드를 숨긴다(왼쪽 아래 보스를 가리고 조이스틱 영역을 막아서). 2명 이상·쓰러짐(교체 출진 안내)이면 보인다.
+    const myCh = boss ? g.localChamps() : null, soloCh = !!myCh && myCh.length === 1 && !myCh[0].dead;
+    const selVis = !g.over && ((boss && !soloCh) || (laneOn() && (S.sel.length > 0 || !!S.dropSel || !!(viewedPeer() && S.rsel))));
     if (sbar.hidden !== !selVis) sbar.hidden = !selVis;
     sbar.classList.toggle('boss', boss); sbar.classList.toggle('exp', !!S.selExp);
     renderSkillBar();

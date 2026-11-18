@@ -1747,16 +1747,22 @@
   };
   const hslCss = (h, s, l) => `hsl(${Math.round(h)},${Math.round(s * 100)}%,${Math.round(l * 100)}%)`;
   // 보스(경기장)별 바닥 색상(도)과 밝기: 아트 디렉터 지정값(재검수 2026-11-19 art-review-v37b). 표에 없는 보스는 theme의 원래 색상.
-  const FLOOR_HUE = { b_janggak: 200, b_hwawoong: 30, b_dongtak: 15, b_wonso: 75, b_yeopo: 280, b_jojo: 204, b_yukson: 140, b_jegal: 235, b_deungae: 15, b_samaui: 335 };
+  const FLOOR_HUE = { b_janggak: 200, b_hwawoong: 30, b_dongtak: 15, b_wonso: 75, b_yeopo: 280, b_jojo: 215, b_yukson: 140, b_jegal: 235, b_deungae: 15, b_samaui: 335 };
   const FLOOR_LUM = { b_dongtak: 0.31 };
+  // 채도 상한을 따로 낮춘 경기장(기본 28%). 여포: 보라 갑옷과 바닥 색상이 가까워 바닥 채도를 낮춰 갑옷이 뜨게(2026-11-19 QA).
+  // (조조 바닥 색상은 204 → 215: 장각 200과 거의 같은 색이라는 QA 지적, 아트 디렉터 제안값)
+  const FLOOR_SAT = { b_yeopo: 0.14 };
+  // 가운데 팔괘 문양을 넣는 경기장 무늬(flr_slab), 문양 지름(단위), 곱하기 투명도(그늘색 밝기 22%와 함께 먹선 자리를 약 40% 어둡게)
+  const MARK_MOTIF = { altar: 1, bagua: 1, palace: 1 }, MARK_D = 600, MARK_A = 0.52;
   function floorCols(a, id) {
     const G = hexHsl(a.ground), K = hexHsl(a.sky), h = FLOOR_HUE[id] != null ? FLOOR_HUE[id] : G[0];
-    const s = Math.min(0.28, G[1]), l = FLOOR_LUM[id] || Math.max(0.32, Math.min(0.38, G[2]));
-    return { ground: hslCss(h, s, l), sky: hslCss(h, Math.min(0.28, K[1]), l * Math.max(0.5, Math.min(0.8, K[2] / Math.max(0.01, G[2])))) };
+    const sm = FLOOR_SAT[id] || 0.28, s = Math.min(sm, G[1]), l = FLOOR_LUM[id] || Math.max(0.32, Math.min(0.38, G[2]));
+    return { ground: hslCss(h, s, l), mark: hslCss(h, Math.min(0.35, s + 0.08), 0.22), sky: hslCss(h, Math.min(sm, K[1]), l * Math.max(0.5, Math.min(0.8, K[2] / Math.max(0.01, G[2])))) };
   }
   function arenaFloor(c, a, id) {
     const flr = Art.floorTex(a.motif), old = !flr && Art.img('tex_' + a.motif), col = floorCols(a, id);
-    const key = a.motif + col.ground + col.sky + qArena() + (flr ? 'f' : old ? 't' : '');
+    const mark = flr && MARK_MOTIF[a.motif] ? Art.pic('arena_mark') : null;
+    const key = a.motif + col.ground + col.sky + qArena() + (flr ? 'f' : old ? 't' : '') + (mark ? 'm' : '');
     if (arenaKey !== key) {
       arenaKey = key;
       if (!arenaCv) arenaCv = document.createElement('canvas');
@@ -1787,9 +1793,17 @@
         x.globalAlpha = 1; x.globalCompositeOperation = 'multiply'; x.fillStyle = '#9a9288'; x.fillRect(AR.x, AR.y, w, h);
         x.globalCompositeOperation = 'source-over';
       }
-      // (가운데 팔괘 원판 gfx/arena_mark는 뺐다: 실제 정보량 184px짜리를 765단위로 키워 흐렸다.)
-      // ★ 가운데 문양을 다시 넣을 자리는 여기다(바닥 무늬 다음, 명암 층 앞): 1024px 이상 그림을 지름 600단위로 경기장 가운데에,
-      //   multiply·투명도 0.35~0.45로, 무늬가 flr_slab인 경기장(altar·bagua·palace)에만. art.js의 미리 받기 목록에 'arena_mark'도 다시 넣는다.
+      // 가운데 팔괘 문양(gfx/arena_mark, 1024px 먹선, art_src/build-arena-mark.py): 무늬가 flr_slab인 경기장(altar·bagua·palace)에만,
+      // 지름 MARK_D단위로 경기장 가운데에 새김처럼 찍는다. 검정을 그대로 찍지 않고 이 경기장 바닥 색의 깊은 그늘색으로 물들여 곱하기로 얹어
+      // 먹선 자리가 바닥보다 약 40% 어두워진다(바닥 결은 그대로 비친다. 장판 예고보다 눈에 띄지 않게). 저장본에 한 번만 그린다.
+      if (mark) {
+        const mc = document.createElement('canvas'); mc.width = mark.width; mc.height = mark.height;
+        const m = mc.getContext('2d'); m.drawImage(mark, 0, 0);
+        m.globalCompositeOperation = 'source-in'; m.fillStyle = col.mark; m.fillRect(0, 0, mc.width, mc.height);
+        const mx = (ARENA.x0 + ARENA.x1) / 2, my = (ARENA.y0 + ARENA.y1) / 2;
+        x.save(); x.globalCompositeOperation = 'multiply'; x.globalAlpha = MARK_A;
+        x.drawImage(mc, mx - MARK_D / 2, my - MARK_D / 2, MARK_D, MARK_D); x.restore();
+      }
       // 큰 명암 층: 무늬 몇 칸을 덮는 크기의 얼룩이라 같은 무늬가 같은 밝기로 반복되는 게 덜 보인다
       const blobs = Q.level === 'low' ? 5 : 9;
       for (let i = 0; i < blobs; i++) {
@@ -4333,7 +4347,9 @@
     $('backbtn').hidden = !viewedPeer();
     renderHud();
     const sbar = $('selbar'), boss = inBoss() && g.phase === 'boss' && !!g.fight;
-    const selVis = !g.over && (boss || (laneOn() && (S.sel.length > 0 || !!S.dropSel || !!(viewedPeer() && S.rsel))));
+    // 보스전에서 내 장수가 1명이고 쓰러지지 않았으면 장수 전환 카드를 숨긴다(왼쪽 아래 보스를 가리고 조이스틱 영역을 막아서). 2명 이상·쓰러짐(교체 출진 안내)이면 보인다.
+    const myCh = boss ? g.localChamps() : null, soloCh = !!myCh && myCh.length === 1 && !myCh[0].dead;
+    const selVis = !g.over && ((boss && !soloCh) || (laneOn() && (S.sel.length > 0 || !!S.dropSel || !!(viewedPeer() && S.rsel))));
     if (sbar.hidden !== !selVis) sbar.hidden = !selVis;
     sbar.classList.toggle('boss', boss); sbar.classList.toggle('exp', !!S.selExp);
     renderSkillBar();
