@@ -25,6 +25,9 @@ async function waitUp() { for (let i = 0; i < 50; i++) { try { await fetch(`http
     ok(r.status === 400 && r.error === 'coins', '동전이 부족하면 해금 거절(coins)');
     r = await api('/api/unlock/starter', { want: ['join', 'yeopo', 'join'] }, tok);
     ok(r.status === 200 && r.granted.length === 2 && r.granted[0] === 'join' && r.me.owned.includes('unl_join') && r.me.owned.includes('starter'), `첫 신화 2명: 원한 신화(조인)는 그대로, 불멸(여포)은 무시, 나머지 1명 랜덤 (${(r.granted || []).join(',')})`);
+    // 아래에서 동전으로 살 신화: 첫 신화로 받지 않은 것 중 하나(첫 신화 1명은 랜덤이라 고정하면 가끔 겹친다)
+    const TH = require('../theme-samguk.js');
+    const buyId = TH.unlock.lockedIds().find((id) => TH.units.find((d) => d.id === id).tier === 9 && !r.me.owned.includes('unl_' + id));
     r = await api('/api/unlock/starter', {}, tok);
     ok(r.status === 200 && r.granted.length === 0, '첫 신화는 계정마다 한 번만');
     r = await api('/api/unlock', { id: '../x' }, tok);
@@ -34,18 +37,17 @@ async function waitUp() { for (let i = 0; i < 50; i++) { try { await fetch(`http
     ok(last.status === 200 && last.me.coins === 150 && last.left === 0, `광고 5회 = 동전 150 (지금 ${last.me && last.me.coins}, 남은 ${last.left})`);
     r = await api('/api/ad/reward', {}, tok);
     ok(r.status === 429 && r.error === 'ad_cap', '하루 6번째 광고는 거절(ad_cap)');
-    r = await api('/api/unlock', { id: 'gwakga' }, tok);
-    ok(r.status === 200 && r.me.coins === 0 && r.me.owned.includes('unl_gwakga'), '동전 150으로 곽가 해금, owned에 unl_gwakga');
-    r = await api('/api/unlock', { id: 'gwakga' }, tok);
+    r = await api('/api/unlock', { id: buyId }, tok);
+    ok(r.status === 200 && r.me.coins === 0 && r.me.owned.includes('unl_' + buyId), `동전 150으로 신화(${buyId}) 해금, owned에 열쇠`);
+    r = await api('/api/unlock', { id: buyId }, tok);
     ok(r.status === 409 && r.error === 'owned', '이미 연 장수는 다시 살 수 없음');
     r = await api('/api/unlock', { id: 'jojo' }, tok);
     ok(r.status === 400 && r.error === 'coins', '불멸(700)은 동전 부족');
-    // 소급 해금: 소환 기록(전적의 myth)이 있으면 연다
-    await api('/api/history', { diff: 'easy', round: 70, win: true, time: 3000, myth: { yeopo: 1, sunuk: 2 } }, tok);
+    // 소급 해금은 닫혔다(2026-11-18 보안): 가짜 전적을 보내도 전적이 안 남고, 불러도 아무것도 열리지 않는다
+    r = await api('/api/history', { diff: 'nightmare', round: 120, win: true, time: 9000, myth: { yeopo: 1, sunuk: 2 } }, tok);
+    ok(r.status === 200 && r.me.prog.clr === -1, '표 없는 전적 보고는 난이도 진행을 올리지 못함');
     r = await api('/api/unlock/claim', {}, tok);
-    ok(r.status === 200 && r.me.owned.includes('unl_yeopo') && r.me.owned.includes('unl_sunuk') && r.granted.length === 2, `소급 해금: 소환 기록이 있는 여포·순욱이 열림 (${(r.granted || []).join(',')})`);
-    r = await api('/api/unlock/claim', {}, tok);
-    ok(r.status === 200 && r.granted.length === 0, '소급 해금을 다시 불러도 더 주지 않음');
+    ok(r.status === 200 && r.granted.length === 0 && !r.me.owned.includes('unl_yeopo') && !r.me.owned.includes('unl_sunuk'), '소급 해금: 가짜 전적으로 여포·순욱이 열리지 않음');
     r = await api('/api/iap/verify', { signed: 'a.b.c' }, tok);
     ok(r.status === 503 && r.error === 'not_configured', '결제 설정이 없으면 503(not_configured)');
     r = await api('/api/unlock', { id: 'gwakga' });

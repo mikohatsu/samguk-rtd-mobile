@@ -2877,6 +2877,7 @@
     const p = g.me, tick = Object.values(p.tickets).reduce((a, b) => a + b, 0);
     const tabs = [['upgrade', t('upgrade')], ['sage', t('sage')], ['ticket', t('ticket')], ['book', t('book')], ['war', t('war')], ['set', t('settings')]];
     if (!S.tab) S.tab = 'upgrade';
+    $('pane').dataset.tab = S.tab; // CSS가 탭별로 글꼴 등을 다르게 줄 수 있게(설정 탭은 기본 글꼴)
     const tb = $('tabs'), th = tabs.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}" type="button">${n}${k === 'ticket' && tick ? `<span class="dot">${tick}</span>` : ''}</button>`).join('');
     if (tb.dataset.html !== th) { tb.innerHTML = th; tb.dataset.html = th; } // 같은 내용이면 버튼을 다시 만들지 않는다(누르는 도중 교체 방지)
     let h = '';
@@ -3679,7 +3680,7 @@
       else if (e.type === 'pop') { queuePop(e.def, e.who || (net ? net.name : null)); if (e.def.tier >= 9 && g.phase !== 'boss') S.freeze = (S.freeze || 0) + POP_DUR[e.def.tier]; if (net && !e.remote) net.send('pop', { id: e.def.id, name: net.name }); }
       else if (e.type === 'round') { Snd.play('round'); saveGame(); }
       else if (e.type === 'bossIntro') { Snd.play('gong'); Snd.setBoss(true); }
-      else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); reportResult(); if (window.RTD_LOBBY) window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo'); if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
+      else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); reportResult(); if (window.RTD_LOBBY) window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.ticket); if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
       else if (e.type === 'banner') S.banner = { text: e.text, sub: e.sub, t: 3 };
       else if (e.type === 'dmgtext') {
         // 숫자가 같은 자리에 겹쳐 안 읽히지 않게 조금씩 흩어 놓는다
@@ -3851,6 +3852,15 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     g = opt.snap ? E.Game.restore(T, opt.snap) : new E.Game(T, opt);
     // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기)
     S.saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo'; S.saveT = 0;
+    // 판 표: 로그인해 있으면 서버에서 받아 둔다(결과·전적은 이 표가 있어야 서버가 받는다). 이어하기는 저장해 둔 표를 다시 쓴다.
+    S.ticket = null;
+    if (ACC.token) {
+      if (opt.snap) { try { S.ticket = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
+      else {
+        const saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo';
+        api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0 }).then((r) => { if (r.ticket) { S.ticket = r.ticket; if (saveOn) { try { localStorage.setItem('rtd-save-tk', r.ticket); } catch (e) { /* 저장 불가 */ } } } });
+      }
+    }
     S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;
     if (opt.net) { net = opt.net; net.onLobby = null; net.attach(g); speed = 1; }
     Snd.init();
@@ -3890,7 +3900,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   async function reportResult() {
     if (!S.online || !ACC.token || S.reported) return;
     S.reported = true;
-    const r = await api('/api/result', { myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {} });
+    const r = await api('/api/result', { ticket: S.ticket, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {} });
     if (r.me) {
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained;
       if (r.gained > 0) { S.xpPlaying = true; playXp(r.me.xp - r.gained, r.me.xp, r.coins, () => { S.xpPlaying = false; S.xpDone = true; dirty(); $('overlay').dataset.key = ''; }); }

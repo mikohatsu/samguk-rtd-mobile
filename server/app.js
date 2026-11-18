@@ -176,6 +176,59 @@ const timeOf = (b) => Math.min(86400, Math.max(0, Math.round(+b.time || 0)));
 // 정상 판이 걸리지 않게 그 절반(7초)을 쓴다. round에 닿으려면 그 앞의 (round - 1)개 라운드를 지나야 한다.
 const MIN_ROUND_SEC = 7;
 const tooFast = (round, time) => time > 0 && time < (round - 1) * MIN_ROUND_SEC;
+
+// ---------- 판 표(ticket): 결과·전적은 서버가 판 시작 때 내준 표로만 받는다 ----------
+// 기기가 보낸 난이도·시간을 그대로 믿지 않으려는 것(2026-11-18 보안 점검). 표 = 계정·난이도·악몽 단계·발급 시각·번호를 서버 비밀값으로 서명한 글자.
+// - 난이도·악몽 단계는 표의 값만 쓴다. 서버 기록으로 아직 안 열린 난이도는 열린 데까지만 쳐 준다(보상 배율·해금 진행).
+// - 걸린 시간은 서버 시계(지금 - 발급 시각)로 잰다: 라운드당 WALL_ROUND_SEC(45초 라운드, 3배속이면 15초, 여유 20%)보다 빠르면 아무것도 주지 않는다.
+// - 표 하나에 보고 한 번. 보상 받은 판끼리는 시간이 겹칠 수 없다(표를 여러 장 받아 두고 한꺼번에 내는 것 방지). 하루 동전 상한.
+// 비밀값은 DATA_DIR/ticket.key(없으면 만든다). 서버를 다시 켜도 진행 중인 판의 표가 살아 있다.
+const WALL_ROUND_SEC = 12, GAME_ROUND_SEC = 40, TICKET_MAX_MS = 24 * 3600000, RESULT_COINS_DAY = 3000;
+const ROUNDS = {}; THEME.difficulties.forEach((d) => { ROUNDS[d.id] = d.rounds; });
+let ticketKey = null;
+function ticketSecret() {
+  if (ticketKey) return ticketKey;
+  const f = path.join(DATA, 'ticket.key');
+  try { ticketKey = fs.readFileSync(f); } catch (e) { ticketKey = null; }
+  if (!ticketKey || ticketKey.length < 32) {
+    ticketKey = crypto.randomBytes(32);
+    try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(f, ticketKey, { mode: 0o600 }); } catch (e) { console.warn('[sec] ticket.key를 저장하지 못했다(다시 켜면 진행 중인 판의 표가 무효가 된다):', e.message); }
+  }
+  return ticketKey;
+}
+const tkSign = (body) => crypto.createHmac('sha256', ticketSecret()).update(body).digest('base64url');
+function makeTicket(uid, diff, mut) {
+  const body = Buffer.from(JSON.stringify({ u: uid, d: diff, m: mut, t: Date.now(), n: crypto.randomBytes(9).toString('base64url') })).toString('base64url');
+  return body + '.' + tkSign(body);
+}
+function readTicket(raw, uid) {
+  const s = String(raw || ''); if (s.length > 400) return null;
+  const i = s.indexOf('.'); if (i < 1) return null;
+  const body = s.slice(0, i), sig = Buffer.from(s.slice(i + 1)), want = Buffer.from(tkSign(body));
+  if (sig.length !== want.length || !crypto.timingSafeEqual(sig, want)) return null;
+  let t; try { t = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch (e) { return null; }
+  if (!t || t.u !== uid || !DIFFS.includes(t.d) || typeof t.t !== 'number' || typeof t.n !== 'string') return null;
+  if (Date.now() - t.t > TICKET_MAX_MS || t.t > Date.now() + 60000) return null;
+  return t;
+}
+const usedTickets = new Map(); // 번호 → 쓴 시각(전적 보고의 중복 방지. 결과 보고는 저장소가 열쇠로 한 번 더 막는다)
+const lastReward = new Map(); // 계정 → 마지막으로 보상을 준 시각
+const dayCoins = new Map(); // 계정 → { day, n }
+setInterval(() => { const now = Date.now(); usedTickets.forEach((at, k) => { if (now - at > TICKET_MAX_MS) usedTickets.delete(k); }); lastReward.forEach((at, k) => { if (now - at > TICKET_MAX_MS) lastReward.delete(k); }); }, 3600000);
+// 표와 보고를 맞춰 본다. 돌려주는 값: null(받지 않음) 또는 { diff(쳐 주는 난이도), mut, round, time, rankOk, nonce, start }
+function judge(u, b, what) {
+  const t = readTicket(b.ticket, u.id);
+  if (!t) { if (b.ticket) warnSome('ticket_bad', 20, `uid=${u.id} ${what}`); return null; }
+  if (usedTickets.has(t.n)) return null;
+  const pg = progOf(u), played = DIFFS.indexOf(t.d), di = Math.min(played, pg.clr + 1), diff = DIFFS[di];
+  const mut = diff === 'nightmare' && played === di ? Math.min(Math.max(0, t.m | 0), 5, pg.nmx + 1) : 0;
+  const round = Math.min(ROUNDS[t.d] || 200, Math.max(0, b.round | 0)), time = timeOf(b), wall = (Date.now() - t.t) / 1000;
+  if (wall < (round - 1) * WALL_ROUND_SEC) { warnSome('result_fast', 20, `uid=${u.id} ${what} round=${round} wall=${Math.round(wall)} diff=${t.d} win=${!!b.win}`); return null; }
+  const win = !!b.win && round >= (ROUNDS[t.d] || 0);
+  // 순위에 올릴 수 있는 기록: 고른 난이도 그대로 쳐 준 판이고, 판 시간이 라운드 수에 맞고, 벽시계보다 3배속 넘게 빠르지 않다
+  const rankOk = win && played === di && (t.m | 0) === mut && time >= (round - 1) * GAME_ROUND_SEC && time <= wall * 3 + 60;
+  return { diff, mut, round, time, win, rankOk, nonce: t.n, start: t.t };
+}
 // 순위 응답을 30초 동안 기억한다(로그인 없이 부르는 주소라, 부를 때마다 DB 질의 수백 개가 나가지 않게).
 // 같은 열쇠를 동시에 여러 번 불러도 질의는 한 번만 나간다(약속을 기억한다).
 const RANK_MS = 30000;
@@ -235,8 +288,10 @@ function readBody(req, cb) {
   req.on('data', (c) => { n += c.length; if (n > 8192) { req.destroy(); return; } parts.push(c); });
   req.on('end', () => { try { cb(JSON.parse(Buffer.concat(parts).toString('utf8') || '{}')); } catch (e) { cb(null); } });
 }
+// 모든 응답에 붙이는 보안 헤더: HTTPS만 쓰게(HSTS), 내용 종류를 추측하지 않게, 다른 사이트로 나갈 때 주소 전체를 넘기지 않게
+const SEC_HEAD = { 'Strict-Transport-Security': 'max-age=31536000', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin' };
 function json(res, code, obj) {
-  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type' });
+  res.writeHead(code, { ...SEC_HEAD, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type' });
   res.end(JSON.stringify(obj));
 }
 const ID_RE = /^[a-z0-9_]{4,16}$/;
@@ -278,7 +333,7 @@ async function handle(req, res, url, query) {
     return u ? json(res, 200, { me: profile(u) }) : json(res, 401, { error: 'auth' });
   }
   if (req.method !== 'POST') return json(res, 404, { error: 'not_found' });
-  const b = await new Promise((r) => readBody(req, r));
+  let b = await new Promise((r) => readBody(req, r));
   if (!b) return json(res, 400, { error: 'bad_body' });
   // 게스트: 기기에만 보관하는 비밀값으로 다시 들어온다(비밀값은 서버에 해시로만 둔다)
   if (url === '/api/guest/new') {
@@ -343,10 +398,20 @@ async function handle(req, res, url, query) {
   }
   if (url === '/api/history') {
     // 오프라인 판도 로그인해 있으면 전적에 남긴다(경험치·동전·랭킹은 없음)
+    // 표가 없거나 맞지 않으면 아무것도 바꾸지 않는다(옛 앱·가짜 보고). 난이도 진행은 여기서도 오르므로 결과 보고와 같은 검사를 한다
     if (limited(ip + u.id, 'hist', 20, 600000)) return json(res, 429, { error: 'slow_down' });
-    return json(res, 200, { me: profile(await store.addHistory(u.id, histOf(b, false))) });
+    const j = judge(u, b, 'history');
+    if (!j) return json(res, 200, { me: profile(u) });
+    usedTickets.set(j.nonce, Date.now());
+    return json(res, 200, { me: profile(await store.addHistory(u.id, histOf(Object.assign({}, b, { diff: j.diff, mutLv: j.mut, round: j.round, win: j.win }), false))) });
   }
   if (url === '/api/hist') return json(res, 200, { hist: await store.history(u.id), prog: progOf(u) });
+  // 판 시작: 표를 내준다(계정당 10분에 20장)
+  if (url === '/api/game/start') {
+    if (limited('u:' + u.id, 'tk', 20, 600000)) return json(res, 429, { error: 'slow_down' });
+    if (!DIFFS.includes(b.diff)) return json(res, 400, { error: 'bad_diff' });
+    return json(res, 200, { ticket: makeTicket(u.id, b.diff, Math.min(5, Math.max(0, b.mutLv | 0))) });
+  }
   // 빠른 대전 주소는 계정당 분당 90번까지(기기는 2초마다 확인한다 = 분당 30번)
   if (url.startsWith('/api/match/') && limited('u:' + u.id, 'match', 90, 60000)) return json(res, 429, { error: 'slow_down' });
   if (url === '/api/match/join') {
@@ -399,12 +464,11 @@ async function handle(req, res, url, query) {
     const me = await store.grantItems(u.id, pick.map(unlockKey).concat([UNL.starterKey]));
     return json(res, 200, { me: profile(me), granted: pick });
   }
-  // 소급 해금: 이미 소환한 적 있는 잠금 장수(판 기록·불멸 소환 수)를 연다. 여러 번 불러도 같다.
+  // 소급 해금(없앰)
   if (url === '/api/unlock/claim') {
     if (limited('u:' + u.id, 'unlc', 10, 600000)) return json(res, 429, { error: 'slow_down' });
-    const locked = UNL.lockedIds(), ever = (await store.everMyth(u.id)).filter((id) => locked.includes(id) && !(u.owned || []).includes(unlockKey(id)));
-    const me = ever.length ? await store.grantItems(u.id, ever.map(unlockKey)) : u;
-    return json(res, 200, { me: profile(me), granted: ever });
+    // 2026-11-18 닫음: 근거가 기기가 보낸 전적이라, 가짜 전적으로 유료 장수를 전부 열 수 있었다. 옛 앱이 불러도 오류가 나지 않게 빈 답만 준다.
+    return json(res, 200, { me: profile(u), granted: [] });
   }
   // 보상형 광고 1회 = 동전. 서버는 시청을 검증할 수 없어(AdMob SSV는 나중) 하루 횟수만 막는다.
   if (url === '/api/ad/reward') {
@@ -466,22 +530,27 @@ async function handle(req, res, url, query) {
   if (url === '/api/result') {
     // 판 하나에 한 번만: 같은 방·판 열쇠로 두 번 보내면 무시
     if (limited('u:' + u.id, 'res', 6, 600000)) return json(res, 429, { error: 'slow_down' }); // 계정 기준(주소를 바꿔도 같은 한도)
-    const key = String(b.key || '').slice(0, 40);
-    if (!key) return json(res, 200, { me: profile(u), gained: 0 });
-    const gained = xpFor(b), coins = Math.round(gained / 5) + (b.win ? 20 : 0); // 동전: 경험치의 1/5 + 클리어 20
+    // 난이도·악몽 단계·걸린 시간은 표와 서버 시계로 정한다(judge). 표가 없거나 맞지 않으면 아무것도 주지 않는다.
+    const j = judge(u, b, 'result');
+    if (!j) return json(res, 200, { me: profile(u), gained: 0 });
+    // 보상 받는 판끼리는 시간이 겹칠 수 없다: 이 표가 앞선 보상보다 먼저 발급됐으면 받지 않는다
+    if (j.start < (lastReward.get(u.id) || 0)) { warnSome('result_overlap', 20, `uid=${u.id}`); return json(res, 200, { me: profile(u), gained: 0 }); }
+    const key = 'tk-' + j.nonce;
+    b = Object.assign({}, b, { diff: j.diff, mutLv: j.mut, round: j.round, win: j.win });
+    const gained = xpFor(b);
+    // 동전: 경험치의 1/5 + 클리어 20. 하루(일본 시간) 상한을 넘는 만큼은 주지 않는다
+    const day = jstDayStart(), dc = dayCoins.get(u.id), had = dc && dc.day === day ? dc.n : 0;
+    const coins = Math.max(0, Math.min(Math.round(gained / 5) + (b.win ? 20 : 0), RESULT_COINS_DAY - had));
     // 불멸 장수를 이번 판에 몇 번 소환했는지(장수별로 쌓는다)
     const imm = {}; if (b.imm && typeof b.imm === 'object') Object.keys(b.imm).slice(0, 12).forEach((id) => { const n = Math.min(20, b.imm[id] | 0); if (/^[a-z]{2,16}$/.test(id) && n > 0) imm[id] = n; });
     // 클리어 시간: 같은 판(같은 열쇠)을 마친 파티원을 한 줄에 모은다
-    const diff = String(b.diff || ''), time = timeOf(b), round = Math.min(200, Math.max(0, b.round | 0));
-    // 시간이 라운드 수에 비해 불가능하게 짧은 보고는 아무것도 주지 않는다(경험치·동전·순위·전적). 까닭은 알려 주지 않고 기록만 남긴다.
-    // 시간이 없는 보고는 전처럼 클리어 순위에서만 뺀다(아래 time > 60).
-    if (tooFast(round, time)) {
-      warnSome('result_fast', 20, `uid=${u.id} round=${round} time=${time} diff=${diff.slice(0, 12)} win=${!!b.win}`);
-      return json(res, 200, { me: profile(u), gained: 0 });
-    }
-    const clear = b.win && DIFF_MUL[diff] && time > 60 ? { diff, party: String(b.party || key).slice(0, 40), time, mut: Math.min(5, Math.max(0, b.mutLv | 0)) } : null;
+    const diff = j.diff, time = j.time, round = j.round;
+    // 클리어 순위: 표와 시간이 맞는 판만(judge의 rankOk). 같은 방 사람들은 방 열쇠(party)로 한 줄에 모인다
+    const clear = j.rankOk ? { diff, party: String(b.party || key).slice(0, 40), time, mut: j.mut } : null;
+    usedTickets.set(j.nonce, Date.now());
     const done = await store.recordResult(u.id, { key, xp: gained, coins, win: !!b.win, round, hist: histOf(b, true), imm, clear });
     if (!done) return json(res, 200, { me: profile(u), gained: 0 });
+    lastReward.set(u.id, Date.now()); dayCoins.set(u.id, { day, n: had + coins });
     return json(res, 200, { me: profile(await store.getUser(u.id)), gained, coins });
   }
   if (url === '/api/delete') {
@@ -522,7 +591,7 @@ const server = http.createServer((req, res) => {
   if (!file || file.startsWith('server/')) { res.writeHead(404); res.end('not found'); return; }
   load(file, (err, ent) => {
     if (err) { res.writeHead(404); res.end('not found'); return; }
-    const head = { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': query && /(^|&)v=/.test(query) ? 'public, max-age=31536000, immutable' : 'no-cache', ETag: ent.etag, Vary: 'Accept-Encoding' };
+    const head = { ...SEC_HEAD, 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': query && /(^|&)v=/.test(query) ? 'public, max-age=31536000, immutable' : 'no-cache', ETag: ent.etag, Vary: 'Accept-Encoding' };
     if (req.headers['if-none-match'] === ent.etag) { res.writeHead(304, head); res.end(); return; }
     // 배경음(mp3): 구간 요청(Range)에 답한다. 사파리는 구간 요청이 안 되면 소리를 틀지 않는다.
     if (/\.mp3$/.test(file)) {

@@ -60,6 +60,7 @@
     const p = g.me, tick = Object.values(p.tickets).reduce((a, b) => a + b, 0);
     const tabs = [['upgrade', t('upgrade')], ['sage', t('sage')], ['ticket', t('ticket')], ['book', t('book')], ['war', t('war')], ['set', t('settings')]];
     if (!S.tab) S.tab = 'upgrade';
+    $('pane').dataset.tab = S.tab; // CSS가 탭별로 글꼴 등을 다르게 줄 수 있게(설정 탭은 기본 글꼴)
     const tb = $('tabs'), th = tabs.map(([k, n]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}" type="button">${n}${k === 'ticket' && tick ? `<span class="dot">${tick}</span>` : ''}</button>`).join('');
     if (tb.dataset.html !== th) { tb.innerHTML = th; tb.dataset.html = th; } // 같은 내용이면 버튼을 다시 만들지 않는다(누르는 도중 교체 방지)
     let h = '';

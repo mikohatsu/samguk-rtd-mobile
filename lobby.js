@@ -170,7 +170,7 @@
     return { kills: s.kills | 0, midKill: s.midKill | 0, midMiss: s.midMiss | 0, lifeLost: s.lifeLost | 0, goldIn: s.goldIn | 0, combines: s.combines | 0, crafts: (s.crafts || []).length, best: s.best | 0, tickets: s.tickets | 0, chests: s.chests | 0, bosses: (s.bosses || []).length, bossWins: (s.bosses || []).filter((b) => b.win).length, fast: (s.bosses || []).filter((b) => b.fast).length };
   }
   // 판이 끝날 때: 기기에 남기고, 로그인한 오프라인 판은 서버에도(온라인 판은 결과 보고에 같이 간다)
-  function recordGame(g, online, mode) {
+  function recordGame(g, online, mode, ticket) {
     const rec = { at: Date.now(), diff: g.diff.id, mut: g.mutLv || 0, mutLv: g.mutLv || 0, round: g.round, win: g.over === 'win', time: Math.round(g.time), online: !!online, mode, myth: (g.stats && g.stats.myth) || {}, st: statsOf(g) };
     const h = loadJ('rtd-hist', []); h.unshift(rec); saveJ('rtd-hist', h.slice(0, 20));
     const p = loadJ('rtd-prog', { clr: -1, nmx: -1, plays: {}, clears: {} });
@@ -178,7 +178,7 @@
     p.plays[rec.diff] = (p.plays[rec.diff] || 0) + 1;
     if (rec.win) { p.clears[rec.diff] = (p.clears[rec.diff] || 0) + 1; p.clr = Math.max(p.clr, DIFFS.indexOf(rec.diff)); if (rec.diff === 'nightmare') p.nmx = Math.max(p.nmx, rec.mut); }
     saveJ('rtd-prog', p);
-    if (!online && C.ACC.token) C.api('/api/history', rec).then((r) => { if (r.me) { C.ACC.me = r.me; C.saveAcc(); } });
+    if (!online && C.ACC.token && ticket) C.api('/api/history', Object.assign({ ticket }, rec)).then((r) => { if (r.me) { C.ACC.me = r.me; C.saveAcc(); } });
   }
   // 난이도 버튼에 잠금 표시
   function markLocks() {
@@ -209,15 +209,11 @@
     const l = new Set(loadJ('rtd-unl', []).concat(loadJ('rtd-starter', []))); loadJ('rtd-hist', []).forEach((h) => Object.keys((h && h.myth) || {}).forEach((id) => l.add(id)));
     return locked.filter((id) => l.has(id));
   }
-  // 소급 해금: 로그인한 계정마다 한 번, 서버가 이미 소환한 기록을 보고 연다
+  // (소급 해금은 2026-11-18에 없앴다: 기기가 보낸 전적이 근거라 조작할 수 있었다)
   let claimedFor = null, adLeft = null;
   async function claimOld() {
     const me = C.ACC.me; if (!me || !C.ACC.token || claimedFor === me.id) return;
     claimedFor = me.id;
-    const r = await C.api('/api/unlock/claim', {});
-    if (!r.me) { claimedFor = null; return; }
-    C.ACC.me = r.me; C.saveAcc(); unlockedList();
-    if (r.granted && r.granted.length) toast(L('claimed', { a: r.granted.map((id) => unitOf(id).name || id).join(', ') }));
     // 이 기기에서 튜토리얼을 이미 마쳤는데 계정에 첫 신화가 없으면(로그인 전에 받은 경우) 같은 장수로 이어 준다
     if ((shopOpen() || loadJ('rtd-starter', []).length) && !(C.ACC.me.owned || []).includes(UL().starterKey)) await grantStarter();
     if (panel === 'shop') renderPanel();

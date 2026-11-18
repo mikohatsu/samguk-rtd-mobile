@@ -922,6 +922,11 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
   html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 28px; }
   #lplay #contbtn { min-height: 44px; padding: 4px 12px; font-size: 13px; }
 }
+/* ---- 기본 글꼴만 쓰는 곳(2026-11-18 사용자 요청): 전투 시작 창(모드·난이도 고르기), 로비 창(설정·상점·랭킹·전적·계정), 판 안 설정 탭.
+   붓글씨·제목용 글꼴은 한글이 일부만 들어 있어 빠진 글자가 다른 글꼴로 섞여 깨져 보였다. 닉네임처럼 사용자가 적은 글자도 같은 까닭으로 기본 글꼴로 쓴다. ---- */
+#setup, #setup *, #lpanel, #lpanel *, #pane[data-tab="set"], #pane[data-tab="set"] *, #lnick, .lb-slot, .lb-slot *, .rank-list, .rank-list * { font-family: var(--ui) !important; letter-spacing: 0 !important; }
+.lp-head b, .wz-head b { font-size: 20px !important; font-weight: 700 !important; }
+#setup .choice button, #setup .wz-foot .btn, #setup .btn, #startbtn, #contbtn, #lnick { font-weight: 700 !important; }
 </style>
 
 <div id="app" hidden>

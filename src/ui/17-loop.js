@@ -128,6 +128,15 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     g = opt.snap ? E.Game.restore(T, opt.snap) : new E.Game(T, opt);
     // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기)
     S.saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo'; S.saveT = 0;
+    // 판 표: 로그인해 있으면 서버에서 받아 둔다(결과·전적은 이 표가 있어야 서버가 받는다). 이어하기는 저장해 둔 표를 다시 쓴다.
+    S.ticket = null;
+    if (ACC.token) {
+      if (opt.snap) { try { S.ticket = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
+      else {
+        const saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo';
+        api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0 }).then((r) => { if (r.ticket) { S.ticket = r.ticket; if (saveOn) { try { localStorage.setItem('rtd-save-tk', r.ticket); } catch (e) { /* 저장 불가 */ } } } });
+      }
+    }
     S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;
     if (opt.net) { net = opt.net; net.onLobby = null; net.attach(g); speed = 1; }
     Snd.init();
