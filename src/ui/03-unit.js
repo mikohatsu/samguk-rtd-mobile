@@ -108,25 +108,32 @@
     if (u.coverT > 0) list.push(['cover', u.coverT, u.coverMax || 4]);
     if (u.pshT > 0) list.push(['psh', u.pshT, u.pshMax || 3]);
     if (u.hasteT > 0) list.push(['haste', u.hasteT, u.hasteMax || 6]);
+    const SK = window.RTD_SKFX;
     list.forEach(([k, left, max], i) => {
       const L = BUFF_LOOK[k], rx = 48 + i * 12, ry = rx * 0.45, cy = u.y + 24, frac = Math.max(0, Math.min(1, left / (max || left)));
+      if (!SK) return;
+      // 바닥 장판: Kenney 빛 그림(물들임)을 눕혀 은은하게 맥동
+      SK.spr(c, 'light_02', L.c, u.x, cy, rx * 2.3, rx * 2.3, t * 0.5 + i, 0.55 + Math.sin(t * 6 + i) * 0.15, true, 0.45);
+      // 남은 시간: 고리 그림을 남은 비율만큼만 보이게 잘라 그린다(선으로 호를 긋지 않는다)
       c.save();
-      // 바닥 장판: 은은하게 맥동
-      const spr = glowSprite('b' + L.c, [[0, L.c + '00'], [0.7, L.c + '44'], [0.98, L.c + 'aa'], [1, L.c + '00']]);
-      c.globalAlpha = 0.75 + Math.sin(t * 6 + i) * 0.15; c.drawImage(spr, u.x - rx, cy - ry, rx * 2, ry * 2);
-      // 남은 시간 호
-      c.globalAlpha = 1; c.strokeStyle = L.c; c.lineWidth = 3; c.shadowColor = L.c; c.shadowBlur = 10;
-      c.beginPath(); c.ellipse(u.x, cy, rx, ry, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac); c.stroke();
-      // 도는 문양 점
-      c.fillStyle = '#fff';
-      for (let j = 0; j < 3; j++) { const a = t * 2.5 + (j * Math.PI * 2) / 3 + i; c.beginPath(); c.arc(u.x + Math.cos(a) * rx, cy + Math.sin(a) * ry, 2.5, 0, 7); c.fill(); }
+      c.beginPath(); c.moveTo(u.x, cy); c.ellipse(u.x, cy, rx * 1.3, ry * 1.3, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac); c.closePath(); c.clip();
+      ringSpr(c, 'circle_02', L.c, u.x, cy, rx, 0, 0.95, true, 0.45);
       c.restore();
-      if (k === 'shield') { c.save(); c.strokeStyle = L.c; c.globalAlpha = 0.6; c.lineWidth = 3; c.beginPath(); c.arc(u.x, u.y - 10, 40, 0, 7); c.stroke(); c.restore(); }
+      // 도는 빛 구슬 3개(작은 빛 그림)
+      for (let j = 0; j < 3; j++) { const a = t * 2.5 + (j * Math.PI * 2) / 3 + i; SK.spr(c, 'circle_05', '#ffffff', u.x + Math.cos(a) * rx, cy + Math.sin(a) * ry, 16, 16, 0, 0.9); }
+      // 방패: 몸을 감싸는 빛 막(고리 그림)
+      if (k === 'shield') ringSpr(c, 'circle_03', L.c, u.x, u.y - 10, 40, t, 0.45 + Math.sin(t * 4) * 0.1);
     });
-    // 머리 위에 걸린 버프 이름
+    // 머리 위에 걸린 버프 이름: 어두운 금속 판 그림(gfx/ui_tab) 위에. 휴대폰에서는 키운다.
     if (list.length) {
-      c.save(); c.font = '700 13px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center';
-      list.forEach(([k, left], i) => { const L = BUFF_LOOK[k]; c.fillStyle = 'rgba(16,10,6,.7)'; c.fillRect(u.x - 34, u.y - 96 - i * 17, 68, 15); c.fillStyle = L.c; c.fillText(`${L.n} ${Math.ceil(left)}s`, u.x, u.y - 84 - i * 17); });
+      const us = uiS(), plate = Art.pic('ui_tab');
+      c.save(); c.translate(u.x, u.y - 84); c.scale(us, us);
+      c.font = '700 13px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+      list.forEach(([k, left], i) => {
+        const L = BUFF_LOOK[k], y = -i * 18, txt = `${L.n} ${Math.ceil(left)}s`, w = Math.max(68, c.measureText(txt).width + 14);
+        if (plate) Art.nine(c, plate, -w / 2, y - 13, w, 17, 12, 4); else { c.fillStyle = 'rgba(16,10,6,.7)'; c.fillRect(-w / 2, y - 12, w, 15); }
+        c.fillStyle = L.c; c.fillText(txt, 0, y);
+      });
       c.restore();
     }
   }
@@ -135,15 +142,15 @@
     const s = (u.def.sk || []).find((x) => (k === 'buff' ? x.k === 'buff' : k === 'taunt' ? x.k === 'taunt' : x.k === 'shield'));
     return s ? s.dur : 0;
   }
-  // 발밑 원판은 색·굵기별로 한 번 그려 두고 찍는다(유닛마다 매 프레임 타원을 채우고 테두리를 긋던 것)
+  // 발밑 원판은 색·굵기별로 한 번 그려 두고 찍는다(유닛마다 매 프레임 타원을 채우고 테두리를 긋던 것). 겹쳐 선 유닛이 한 명씩 구분되게 진하게 칠한다.
   const DISC = {};
   function discSprite(col, thick) {
     const key = col + (thick ? 't' : '');
     if (DISC[key]) return DISC[key];
     const cv = document.createElement('canvas'); cv.width = 100; cv.height = 48;
     const x = cv.getContext('2d');
-    x.fillStyle = col; x.globalAlpha = 0.72; x.beginPath(); x.ellipse(50, 24, 46, 20.3, 0, 0, 7); x.fill();
-    x.globalAlpha = 1; x.strokeStyle = 'rgba(20,12,6,.75)'; x.lineWidth = thick ? 3.8 : 1.9; x.stroke();
+    x.fillStyle = col; x.globalAlpha = 0.86; x.beginPath(); x.ellipse(50, 24, 45, 20, 0, 0, 7); x.fill();
+    x.globalAlpha = 1; x.strokeStyle = 'rgba(14,8,4,.9)'; x.lineWidth = thick ? 4 : 2.8; x.stroke();
     return (DISC[key] = cv);
   }
   function piece(c, x, y, r, d, t, ownerAI, opt) {
@@ -164,6 +171,7 @@
     if (tier >= 9 && !kAura) Art.fxImg(c, 'magic', x, y + r * 0.72, r * 3.4, t * 0.8, 0.55, 0.42);
     const pb = opt.pose && opt.pose.born >= 0 ? opt.pose : null;
     if (pb) birthFx(c, x, y, r, tier, col, pb.born, false);
+    if (ownerAI) allyMark(c, x, y, r);
     // 발밑 원판: 등급 색으로 멀리서도 구별된다
     { const sp = discSprite(col, tier >= 6), k = (r * 0.95) / 46; c.drawImage(sp, x - 50 * k, y + r * 0.72 - 24 * k, 100 * k, 48 * k); }
     const p = opt.pose || { x: 0, y: 0 };
@@ -177,9 +185,49 @@
       RG.draw(c, d.id, 0, 0, r * 3.7 * (p.bornS || 1), p.flip, st); c.restore();
     } else Art.drawSprite(c, Art.unitSprite(d, p.v, p.frame), x + p.x, y + p.y + Math.sin(t * 3 + x) * 0.6, r * 3.7 * (p.bornS || 1), p.flip, p.rot, p.sy);
     if (pb) birthFx(c, x, y, r, tier, col, pb.born, true);
-    if (ownerAI) { c.fillStyle = '#7fd4ff'; c.fillRect(x - r, y - r * 1.5, r * 2, 2.5); }
   }
+  // Kenney 고리 그림에서 고리가 지나는 반지름(그림 폭의 절반에 대한 비율). 고리를 반지름 R에 맞춰 그릴 때 쓴다.
+  const RING_R = { circle_01: 0.68, circle_02: 0.58, circle_03: 0.73, light_02: 0.63 };
+  function ringSpr(c, n, col, x, y, R, rot, a, add, sy) {
+    const SK = window.RTD_SKFX, s = (2 * R) / (RING_R[n] || 1);
+    return SK ? SK.spr(c, n, col, x, y, s, s, rot || 0, a, add, sy) : false;
+  }
+  // 두 점 사이에 빛줄기 그림(Kenney trace_06)을 늘여 깐다. thick·len은 눈에 보이는 굵기·길이(그림의 빈 여백을 셈에 넣었다).
+  function streak(c, col, x0, y0, x1, y1, thick, a) {
+    const SK = window.RTD_SKFX, L = Math.hypot(x1 - x0, y1 - y0);
+    if (!SK || L < 1) return false;
+    return SK.spr(c, 'trace_06', col, (x0 + x1) / 2, (y0 + y1) / 2, thick / 0.15, L / 0.54, Math.atan2(y1 - y0, x1 - x0) + Math.PI / 2, a);
+  }
+  // AI·동료 장수 표시: 머리 위 선 대신 발밑에 하늘색 빛 고리(그림)를 깐다(piece 안에서 원판보다 먼저).
+  function allyMark(c, x, y, r) {
+    ringSpr(c, 'circle_02', '#7fd4ff', x, y + r * 0.72, r * 1.05, 0, 0.85, true, 0.42);
+  }
+  // 고른 유닛 발밑 표시(gfx/ui_select, 위에서 본 금색 원 문양). 살짝 맥동한다. 그림이 없으면 초록 법진 그림.
+  function selMark(c, x, y, r, t, col) {
+    const im = Art.pic('ui_select'), us = uiS(), s = r * 3.2 * (0.85 + 0.15 * us) * (1 + Math.sin(t * 5) * 0.05);
+    if (im) {
+      c.save(); c.globalAlpha = 0.95; c.translate(x, y); c.scale(1, 0.42); c.rotate(t * 0.25);
+      c.drawImage(im, -s / 2, -s / 2, s, s); c.restore();
+      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.45 + Math.sin(t * 5) * 0.2; c.translate(x, y); c.scale(1, 0.42); c.rotate(t * 0.25); c.drawImage(im, -s / 2, -s / 2, s, s); c.restore();
+      return;
+    }
+    Art.fxPic(c, 'mc_rune2', x, y, s, s, t * 0.6, 0.9, { col: col || '#7dff8e', sy: 0.45 });
+  }
+  // 사거리: 선 대신 옅게 빛나는 원판 그림(Kenney circle_01)
+  function rangeMark(c, x, y, R, col, a) {
+    ringSpr(c, 'circle_01', col, x, y, R, 0, a);
+  }
+  // 그림자: 부드러운 점 그림을 검게 물들여 눕힌다(적·떨어진 물건 발밑)
+  function blobShadow(c, x, y, w, a) {
+    const SK = window.RTD_SKFX;
+    if (SK) SK.spr(c, 'circle_05', '#000000', x, y, w * 1.5, w * 1.5, 0, a, false, 0.36);
+  }
+  // 체력·게이지 막대: 틀은 어두운 금속 판 그림(gfx/ui_tab, 9조각으로 늘임), 채움만 사각형. 그림이 없으면 예전 막대.
   function bar(c, x, y, w, h, f, col) {
+    const fr = Art.pic('ui_tab');
+    if (fr) { const p = Math.max(1.5, h * 0.4); Art.nine(c, fr, x - w / 2 - p, y - p, w + p * 2, h + p * 2, 12, Math.max(2, p * 1.4)); }
     c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(x - w / 2, y, w, h);
-    c.fillStyle = col; c.fillRect(x - w / 2, y, w * Math.max(0, f), h);
+    c.fillStyle = col; c.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, f)), h);
+    // 위쪽 절반을 밝게 한 줄 덮어 납작한 띠가 아니라 둥근 막대처럼 보이게
+    c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, f)), h * 0.4);
   }

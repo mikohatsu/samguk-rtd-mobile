@@ -6,6 +6,7 @@
 
   // 빌드 패턴. fac: 그 진영 조합법을 처음부터 노린다. econ: 해산·영입으로 금화를 먼저 굴린다. rush: 아끼지 않고 바로 합친다.
   const BUILDS = [
+    // name은 코드 안 설명용. 화면에 보이는 동맹 이름은 문구표 ai_<id>(i18n.js, 4개 언어)를 쓴다(17-loop)
     { id: 'wei', name: '위 정예', fac: 'wei' },
     { id: 'shu', name: '촉 정예', fac: 'shu' },
     { id: 'wu', name: '오 정예', fac: 'wu' },

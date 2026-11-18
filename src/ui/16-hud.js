@@ -17,7 +17,7 @@
     const cell = (l, v, cls) => `<div class="hs ${cls || ''}"><small>${l}</small><b>${v}</b></div>`;
     let h = `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${g.phase === 'boss' && !S.laneView ? '' : cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '') + cell(t('troops'), own)}</div>`;
     const hd = S.hudNext || {};
-    const chips = (hd.mids || []).map((m) => `<span class="nc mid" data-act="drawer" data-arg="war">${esc(m)}</span>`).join('') + (hd.boss ? `<span class="nc boss" data-act="drawer" data-arg="war">${t('nextBoss')}<br><b>${esc(hd.boss)}</b></span>` : '');
+    const chips = (hd.mids || []).map((m) => `<span class="nc mid" data-act="drawer" data-arg="war">${Array.isArray(m) ? `<span class="nw">${esc(m[0])}</span> <span class="nw">${esc(m[1])}</span>` : esc(m)}</span>`).join('') + (hd.boss ? `<span class="nc boss" data-act="drawer" data-arg="war">${t('nextBoss')}<br><b>${esc(hd.boss)}</b></span>` : '');
     // 자리 비운 동료(앱을 내림)
     const aw = net && net.awayList ? net.awayList().map((p) => `<span class="nc mid">${esc(p.state.name || '?')} · ${t('away')}</span>`).join('') : '';
     if (chips || aw) h += `<div class="hrow">${chips}${aw}</div>`;
@@ -29,12 +29,21 @@
         const en = pp.me ? g.enemyCount() : ln ? ln.n | 0 : st.enemies == null ? null : st.enemies | 0, lv = pp.me ? g.lives : ln ? ln.l | 0 : null; // 남이 보낸 값은 숫자로만 쓴다
         const d = defOf[st.ic] || defOf.cav, rk = /(\d+)$/.exec(st.gr || '') ? +/(\d+)$/.exec(st.gr)[1] : null;
         const on = pp.me ? !S.view : S.view === pp.id;
-        return `<button class="pm ${on ? 'on' : ''} ${st.away ? 'away' : ''}" data-act="viewPeer" data-arg="${pp.me ? 'me' : esc(pp.id)}" type="button"><img class="pi" alt="" src="${Art.portrait(d)}"><span class="pn">${rk != null ? `<img class="rkm" alt="" src="gfx/rank_${rk}.png" onerror="this.remove()">` : ''}${esc(st.name || '?')}</span><span class="ps">${t('front')} ${en == null ? '-' : en}/${lim} · ${t('lives')} ${lv == null ? '-' : lv}</span></button>`;
+        return `<button class="pm ${on ? 'on' : ''} ${st.away ? 'away' : ''}" data-act="viewPeer" data-arg="${pp.me ? 'me' : esc(pp.id)}" type="button"><img class="pi" alt="" src="${Art.portrait(d)}"><span class="pn">${rk != null ? `<img class="rkm" alt="" src="gfx/rank_${rk}.png" onerror="this.remove()">` : ''}${esc(st.name || '?')}</span><span class="ps">${t('front')} ${en == null ? '-' : en}/${lim} <span class="lf" aria-label="${esc(t('lives'))}">♥${lv == null ? '-' : lv}</span></span></button>`;
       }).join('');
       if (ros.length > 1) h += `<div class="party">${rows}</div>`;
     }
     const box = $('hud');
     box.style.display = g.over ? 'none' : ''; // 결과창 위에 겹치지 않게
+    // 첫 라운드에 아직 아무 유닛도 고르지 않았으면 화면 아래에 한 줄 힌트(한 번 고르면 이 판에서는 다시 안 나온다). 안내 말풍선이 떠 있으면 숨긴다
+    if (S.sel.length) S.everSel = true;
+    { const lh = $('lanehint'), tb = document.getElementById('tutbox'), on = !!lh && laneOn() && !vp && !S.drawer && !g.over && g.round <= 1 && !S.everSel && !(tb && !tb.hidden);
+      if (lh) { if (on && !lh.textContent) lh.textContent = t('laneHint'); if (lh.hidden !== !on) lh.hidden = !on; } }
+    // 전선이 75%를 넘으면 한 판에 한 번 알림 줄로 경고(칸이 빨개지는 것만으로는 놓치기 쉽다)
+    if (!vp && !S.frontWarned && g.phase === 'wave' && !g.over && en > g.limit * 0.75) { S.frontWarned = true; toast(t('frontWarn'), 'warn'); }
+    // 보스 처치 뒤: 미뤄 둔 알림을 내보내고, 討伐成功 패널이 떠 있는 동안 알림 줄을 아래로(패널과 겹치지 않게)
+    { const n0 = performance.now(); if (S.toastQ && S.toastQ.length && n0 >= (S.toastHoldUntil || 0)) { const q = S.toastQ; S.toastQ = []; q.forEach(([a, b]) => toast(a, b)); }
+      const vic = n0 < (S.vicUntil || 0), stg = $('stage'); if (stg.classList.contains('vic') !== vic) stg.classList.toggle('vic', vic); }
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
     // 오른쪽 버튼 열: 라인 화면에서만
     const rail = $('rail'), p = g.me, show = laneOn() && !vp && !g.over;
@@ -97,6 +106,10 @@
       const late = performance.now() - S.pzAt > 10000;
       key = 'z' + net.clock.pz + (late ? 'L' : '') + (S.quitArm ? 'A' : '');
       h = `<div class="over pzwait"><div class="sheet"><h2>${I.t('waitTitle')}</h2><div>${I.t('waitPz', { a: esc(net.clock.pz) })}</div>${late ? `<div class="warnline">${I.t('waitSelf')}</div>` : ''}<div class="dim">${I.t('quitHintRoom')}</div><button class="btn ${S.quitArm ? 'warn' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitGame')}</button></div></div>`;
+    } else if (g.over && performance.now() < (S.endHoldUntil || 0)) {
+      // 패배 연출(09-render-camera가 S.endHoldUntil = 패배 순간 + 1.6초로 둔다)이 끝날 때까지 결과 창을 미룬다
+      if (S.drawer) { S.drawer = null; $('drawer').hidden = true; }
+      key = 'oh'; h = '';
     } else if (g.over) {
       if (S.drawer) { S.drawer = null; $('drawer').hidden = true; } // 오른쪽 서랍이 결과·경험치 연출을 가리지 않게
       // 온라인 판은 경험치 연출이 끝난 뒤 결과창(서버 답이 4초 넘게 없으면 그냥 결과창)
@@ -162,7 +175,7 @@
       // 장수 스킬 이름은 이미 장수 머리 위에 크게 뜬다. 알림 줄까지 띄우면 보스 기술 이름(피해야 할 경고)을 가려서, 화타 치료 같은 것만 알림으로 보인다.
       else if (e.type === 'skill') { if (!(g.fight && g.fight.champs.some((c) => (c.def.sk || []).some((s) => s.n === e.name)))) toast(e.name); }
       else if (e.type === 'bossPick') { S.pick = []; setSel([]); }
-      else if (e.type === 'bossWin') { const rows = meterRows(e.dealt, e.total); (S.bossRows = S.bossRows || {})[e.boss.round] = rows; Snd.setBoss(false); Snd.play('win'); popQ.push({ vic: e, rows, t: 0, dur: 5.5, hits: {}, shake: 0 }); }
+      else if (e.type === 'bossWin') { { const n0 = performance.now(); S.toastHoldUntil = n0 + 1300; S.vicUntil = n0 + 1300 + 5500; } const rows = meterRows(e.dealt, e.total); (S.bossRows = S.bossRows || {})[e.boss.round] = rows; Snd.setBoss(false); Snd.play('win'); popQ.push({ vic: e, rows, t: 0, dur: 5.5, hits: {}, shake: 0 }); }
       else if (e.type === 'bossFail') { if (g.fight) (S.bossRows = S.bossRows || {})[g.fight.def.round] = meterRows(g.fight.dealt, g.fight.total); }
       else if (e.type === 'removed') { S.sel = S.sel.filter((i) => i !== e.id); }
       else if (e.type === 'dropGone') { if (S.dropSel === e.id) S.dropSel = null; }

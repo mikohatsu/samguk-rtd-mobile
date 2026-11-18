@@ -231,6 +231,7 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 .lb-slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
 .lb-slot { position: relative; min-height: 74px; padding: 8px 4px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); font-size: 12px; text-align: center; }
 .lb-slot.in { border-color: #c99a2e; background: linear-gradient(180deg, rgba(201,154,46,.18), var(--panel)); animation: lbjoin .45s ease-out; }
+.lb-slot .host { top: 2px; right: 4px; font-size: 11px; }
 .lb-slot.me { border-color: #7dff8e; }
 .lb-slot .av { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #3a2a1c; font: 400 17px "Black Han Sans", sans-serif; color: #ffe2a8; }
 .lb-slot.empty { color: var(--dim); border-style: dashed; }
@@ -669,67 +670,21 @@ html:not([lang=ko]) .rkf { font: 900 22px/1 "Hiragino Mincho ProN", "Yu Mincho",
 .setlist .h { margin-top: 10px; color: var(--brass); font-weight: 700; }
 @media (max-height: 430px) { #lmenu { grid-template-columns: repeat(4, 64px); top: auto; bottom: 100px; transform: none; } #lmenu button { height: 60px; } #battlebtn { height: 60px; min-width: 190px; font-size: 22px; } #lbrand h1 { font-size: 30px; } #lbrand { top: 56px; } }
 
-/* ---- 로비 2차: 톱니바퀴, 메뉴 3칸, 글자 넘침 방지, 철 재질 ---- */
-#lgear { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #e8e0d0; }
-#lmenu { grid-template-columns: repeat(3, 84px); }
+/* ---- 로비 2·3차(철 재질·철괴 9-slice 틀)는 4·5차가 덮어써 보이지 않던 규칙이라 걷어 냈다(2026-11-18). 아래는 그중 아직 쓰이는 배치 규칙만 ---- */
+#lgear { display: grid; place-items: center; }
 #title button, #title .btn { overflow-wrap: anywhere; word-break: keep-all; line-height: 1.2; }
-#lmenu button span { font-size: 11px; padding: 0 4px; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lmenu button span { text-align: center; white-space: nowrap; }
 #setup .choice button { height: auto; min-height: 52px; padding: 8px 8px; white-space: normal; }
 #setup .choice button small { display: block; white-space: normal; line-height: 1.25; margin-top: 2px; }
 #battlebtn span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 10px; }
 #lprof span { min-width: 0; max-width: 40vw; } #lprof b, #lprof small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 철 재질: 어두운 쇠 바탕에 위쪽 빛 반사, 금빛 테두리, 모서리 리벳 */
-.iron, #lmenu button, #lprof, #lcur .cur, #lgear, .lp-box, .wz-box, #lptabs button, .lp-card, .wz-foot .btn:not(.go), #setup .choice button {
-  background: radial-gradient(circle at 7px 7px, #b9a27a 0 2px, transparent 2.6px), radial-gradient(circle at calc(100% - 7px) 7px, #b9a27a 0 2px, transparent 2.6px),
-    radial-gradient(circle at 7px calc(100% - 7px), #b9a27a 0 2px, transparent 2.6px), radial-gradient(circle at calc(100% - 7px) calc(100% - 7px), #b9a27a 0 2px, transparent 2.6px),
-    repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 1px, rgba(0,0,0,.03) 1px 3px),
-    linear-gradient(180deg, #5c5e62 0%, #3a3c40 18%, #26282c 60%, #1a1b1e 100%);
-  border: 1px solid #8a7a58; box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 0 rgba(0,0,0,.45), 0 4px 12px rgba(0,0,0,.5); color: #efe4cc;
-}
-#lgear, #lcur .cur { background: linear-gradient(180deg, #5c5e62, #26282c); }
-.lp-box, .wz-box { border: 2px solid #8a7a58; }
-#setup .choice button.on, #lptabs button.on, .lp-card.on { border-color: #ffd86a; box-shadow: inset 0 0 0 1px #ffd86a, 0 0 12px rgba(255,216,106,.35); color: #ffe9a8; }
-#battlebtn, .wz-foot .btn.go { background: radial-gradient(circle at 8px 8px, #e8c88a 0 2px, transparent 2.6px), radial-gradient(circle at calc(100% - 8px) 8px, #e8c88a 0 2px, transparent 2.6px), linear-gradient(180deg, #a03a28 0%, #7a2418 45%, #4e140c 100%); border: 1px solid #e0b060; box-shadow: inset 0 1px 0 rgba(255,220,180,.35), inset 0 -3px 0 rgba(0,0,0,.4), 0 6px 18px rgba(160,40,20,.45); color: #fff0d0; }
-#lmenu button i { text-shadow: 0 1px 0 #000; }
-/* ---- 로비 3차: 생성 그림(gfx/ui_sheet.jpg)에서 잘라낸 철괴 틀. 가장자리는 두고 가운데만 늘린다(9-slice) ---- */
+.lp-head b, .wz-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lpclose, #wzclose { overflow: hidden; }
+#lgear { margin-left: auto; } #lcur:not([hidden]) ~ #lgear { margin-left: 0; }
+#lpbody .hs-sum b { word-break: keep-all; overflow-wrap: normal; }
+/* 3차가 하던 바탕 지우기(맨 앞 기본 규칙의 둥근 상자·그림자가 다시 보이지 않게). 바탕·테두리는 아래 4·5·6차가 다시 정한다 */
 #lmenu button, #lprof, #lcur .cur, #lgear, .lp-box, .wz-box, #lptabs button, .lp-card, .wz-foot .btn, #setup .choice button, .lp-sel button,
 .lp-head button, .wz-head button, #battlebtn, #setup .sec, .hs-sum div, .hs-det, #chat, .hs-row { background: none; border-radius: 0; box-shadow: none; }
-#lprof, #lcur .cur, .hs-row { border-style: solid; border-width: 9px; border-image: url(gfx/ui_menu.png) 12 fill stretch; }
-#lprof { padding: 0 10px 0 0; gap: 6px; }
-#lprof img { width: 50px; height: 50px; padding: 8px; margin: -9px 0 -9px -9px; border: 0; border-radius: 50%; box-sizing: border-box; background: url(gfx/ui_round.png) center/100% 100% no-repeat; }
-#lcur .cur { padding: 0 6px 0 0; color: #efe4cc; }
-#lgear { width: 50px; height: 50px; border: 0; background: url(gfx/ui_round.png) center/100% 100% no-repeat; color: #d8c8a8; }
-#lmenu { grid-template-columns: repeat(3, 76px); }
-#lmenu button { height: 92px; border: 0; padding: 18px 0 0; justify-content: flex-start; gap: 18px; background: url(gfx/ui_round.png) center top/68px 68px no-repeat; }
-#lmenu button span { color: #e8dcc0; text-shadow: 0 1px 2px #000, 0 0 6px #000; }
-#battlebtn { min-width: 250px; height: 92px; padding: 0; border-style: solid; border-width: 28px 32px; border-image: url(gfx/ui_battle.png) 38 fill stretch; color: #ffe6b0; text-shadow: 0 2px 4px #000, 0 0 12px rgba(255,140,40,.6); }
-.lp-box, .wz-box { border-style: solid; border-width: 20px; border-image: url(gfx/ui_frame.png) 20 fill stretch; filter: drop-shadow(0 10px 24px rgba(0,0,0,.6)); }
-.lp-head, .wz-head { background: none; border-bottom: 0; padding: 0 0 6px; }
-.lp-head b, .wz-head b { flex: 1; min-width: 0; text-align: center; line-height: 44px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 30px; background: url(gfx/ui_title.png) center/min(100%, 300px) 100% no-repeat; text-shadow: 0 2px 3px #000; }
-#lpclose, #wzclose { width: 40px; height: 36px; border: 0; color: transparent; overflow: hidden; background: url(gfx/ui_close.png) center/100% 100% no-repeat; }
-#wzback { width: 44px; height: 36px; border-style: solid; border-width: 9px; border-image: url(gfx/ui_sort.png) 10 fill stretch; padding: 0; line-height: 1; }
-#lptabs button, .lp-sel button { border-style: solid; border-width: 8px; border-image: url(gfx/ui_tab.png) 10 fill stretch; padding: 0 6px; color: #e8dcc0; }
-#lptabs button.on, .lp-sel button.on { color: #ffd86a; filter: drop-shadow(0 0 5px rgba(255,140,40,.7)); }
-#setup .choice button, .lp-card { border-style: solid; border-width: 12px; border-image: url(gfx/ui_slot.png) 14 fill stretch; color: #e8dcc0; }
-#setup .choice button.on, .lp-card.on { color: #ffe9a8; box-shadow: 0 0 0 2px #e08a2a, 0 0 14px rgba(255,140,40,.5); }
-#setup .sec, .hs-sum div, .hs-det, #chat { border-style: solid; border-width: 10px; border-image: url(gfx/ui_slot.png) 14 fill stretch; }
-.wz-foot { border-top: 0; padding: 6px 0 0; }
-#lgear { margin-left: auto; } #lcur:not([hidden]) ~ #lgear { margin-left: 0; }
-#lplay #contbtn { height: 60px; background: none; border-radius: 0; box-shadow: none; }
-#setup .wz-foot .btn, #lplay #contbtn { min-height: 54px; border-style: solid; border-width: 14px 16px; border-image: url(gfx/ui_big.png) 15 fill stretch; color: #efe4cc; text-shadow: 0 2px 3px #000; }
-#setup .wz-foot .btn.go { background: none; box-shadow: none; color: #ffe6b0; filter: drop-shadow(0 0 6px rgba(255,140,40,.55)); }
-.hs-row { margin-bottom: 4px; padding: 2px 6px; }
-#lpbody .hs-sum div, #lpbody .hs-det { background: none; border-radius: 0; border-style: solid; border-width: 10px; border-image: url(gfx/ui_slot.png) 14 fill stretch; }
-#lpbody .hs-sum b { word-break: keep-all; overflow-wrap: normal; }
-/* 설정 칸: 갈색 바탕 대신 창과 같은 쇠 칸, 작은 선택 버튼은 탭 틀 */
-#lpbody .setlist .row { background: none; border-style: solid; border-width: 8px; border-image: url(gfx/ui_slot.png) 14 fill stretch; border-radius: 0; margin-bottom: 4px; padding: 2px 6px; }
-#lpbody .setlist .h { color: #e8b860; text-shadow: 0 1px 2px #000; }
-#lpbody .zb { background: none; border-radius: 0; border-style: solid; border-width: 6px 7px; border-image: url(gfx/ui_tab.png) 10 fill stretch; color: #d8cbb0; padding: 0 4px; }
-#lpbody .setlist button:not(.zb) { background: none; border-radius: 0; border-style: solid; border-width: 7px 9px; border-image: url(gfx/ui_sort.png) 10 fill stretch; color: #efe4cc; box-shadow: none; }
-#lpbody .zb.on { color: #ffd86a; filter: drop-shadow(0 0 4px rgba(255,140,40,.7)); }
-#lpbody .hs-row { border-style: solid; border-width: 9px; border-image: url(gfx/ui_menu.png) 12 fill stretch; }
-#setup .wz .btn, #lpbody .btn { background: none; border-radius: 0; box-shadow: none; border-style: solid; border-width: 7px 9px; border-image: url(gfx/ui_sort.png) 10 fill stretch; color: #efe4cc; }
-@media (max-height: 430px) { #lmenu { grid-template-columns: repeat(3, 64px); } #lmenu button { height: 76px; padding-top: 15px; gap: 14px; background-size: 56px 56px; } #battlebtn { height: 78px; min-width: 214px; border-width: 24px 28px; } }
 /* 전적 */
 .hs-sum { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; margin-bottom: 10px; }
 .hs-sum div { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: rgba(0,0,0,.25); font-size: 12px; } .hs-sum b { display: block; font-size: 16px; color: #ffe9a8; }
@@ -968,7 +923,8 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 .acc-tree .note { padding: 5px 6px; font-size: 11px; color: var(--dim); border-top: 1px solid rgba(201, 164, 92, .15); }
 /* ---- 출시 전 UX 점검(2026-11-18): 누르는 곳 44px, 확인·진행 표시, 결과창 '다음 목표' 칸 등. 그림은 새로 쓰지 않는다 ---- */
 /* 누르는 곳 44px: 보이는 크기를 그대로 둘 곳은 ::after로 누르는 범위만 넓힌다 */
-#lpclose, #wzclose, #wzback, .acc-track .acc-q, .sypg button, .sdbtn, #lchatbar { position: relative; }
+/* #lchatbar는 왼쪽 아래 absolute 그대로 둔다(relative를 주면 맨 위 흐름으로 올라가 프로필을 덮는다. absolute도 ::after의 기준이 된다) */
+#lpclose, #wzclose, #wzback, .acc-track .acc-q, .sypg button, .sdbtn { position: relative; }
 #lpclose::after, #wzclose::after, #wzback::after, #lnews::after { content: ''; position: absolute; inset: -5px; }
 .acc-track .acc-q { margin-left: 10px; }
 .acc-track .acc-q::after { content: ''; position: absolute; inset: -9px; }
@@ -1107,6 +1063,272 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 .acc-tree td.rk { white-space: nowrap; }
 .acc-tree td.rk img { width: 22px; height: 22px; margin: -4px 4px -4px 0; vertical-align: middle; object-fit: contain; }
 /* ---- 협동 입장 대기 화면 끝 ---- */
+/* ==== 6차 다듬기(2026-11-18, 팀 점검 polish-art·polish-ux·polish-ingame) ====
+   틀은 둘: 밝은 한지(로비 위에 얹는 작은 조각·말풍선·알림) / 어두운 비단 두루마리(창 전부: 첫 설정·로비 창·전투 시작·결과).
+   버튼은 넷: 주 버튼(주홍 + 금테) / 보통(어두운 바탕 + 금테) / 선택 칸(보통과 같고 고르면 주홍) / 위험(테두리·글자만 경고색). 로비의 먹 붓자국 출진은 따로.
+   색은 변수로: 주홍 --verm(눌림 --verm-d), 금 3단계 --gold-line(선) · --gold-txt(글자) · --gold-hi(강조). 둥글기는 --r-s 4px / --r-m 6px / 원.
+   그림: gfx/ui_logo.png(제목 현판), ui_rod.png(두루마리 축), ic_coin·ic_news·ic_lock·ic_close·ic_back·ic_gear(작은 아이콘), ui_joy·ui_knob·ic_attack(보스전 조작).
+   그림이 아직 없으면 lobby.js가 <html>에 noic-<이름>을 붙이고, 아래 규칙이 예전 글자·모양으로 돌아간다. */
+:root {
+  --verm: #b8301c; --verm-d: #8a2112; --cinnabar: var(--verm);
+  --gold-line: #c9a45c; --gold-txt: #f3deb0; --gold-hi: #ffd86a; --brass: var(--gold-line);
+  --r-s: 4px; --r-m: 6px;
+  --ink2: #23130a; --cream: #fbeeda; --pap: url(gfx/ui_paper.jpg) center/260px;
+  --silk: linear-gradient(180deg, rgba(22,13,8,.5), rgba(22,13,8,.72)), url(gfx/ui_silk.jpg) center/230px;
+  --silk-edge: inset 0 0 0 1px rgba(201,164,92,.55), inset 0 0 0 6px rgba(20,12,8,.85), inset 0 0 0 7px rgba(201,164,92,.25), 0 18px 50px rgba(20,8,4,.75);
+}
+#title { --verm: #b8301c; --gline: var(--gold-line); }
+/* 일본어 본문 글꼴: 일본어 고딕을 먼저(숫자·가나·한자가 한 글꼴에서 나오게) */
+html[lang="ja"] { --ui: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Noto Sans JP", "Yu Gothic UI", "Meiryo", "IBM Plex Sans KR", sans-serif; }
+
+/* ---- 작은 아이콘 그림 ---- */
+.ico { display: inline-block; width: 1.25em; height: 1.25em; vertical-align: -.28em; flex: none; font-style: normal; background: center / contain no-repeat; }
+.ico.coin { background-image: url(gfx/ic_coin.png); } .ico.news { background-image: url(gfx/ic_news.png); } .ico.lock { background-image: url(gfx/ic_lock.png); }
+.ico.close { background-image: url(gfx/ic_close.png); } .ico.back { background-image: url(gfx/ic_back.png); } .ico.gear { background-image: url(gfx/ic_gear.png); }
+.ico::after { display: block; text-align: center; line-height: inherit; font-weight: 700; }
+.noic-coin .ico.coin::after { content: '銅'; } .noic-news .ico.news::after { content: '報'; } .noic-lock .ico.lock::after { content: '🔒'; font-size: .8em; }
+.noic-close .ico.close::after { content: '✕'; } .noic-back .ico.back::after { content: '‹'; font-size: 1.3em; line-height: .9; } .noic-gear .ico.gear::after { content: '⚙'; }
+
+/* ---- 버튼 넷(공통) ---- */
+.btn { border-radius: var(--r-m); transition: transform .08s, filter .12s; }
+.btn.go { background: var(--verm); border-color: #e9c98a; color: #fff3dc; }
+.btn.warn { background: transparent; border-color: #c8402e; color: #ffb0a0; }
+.btn:disabled { opacity: .45; }
+#setup .wz .btn, #lpbody .btn, #lpbody .setlist button:not(.zb), #lpbody .zb, .boot-card .btn, #accbox .btn, #lpbody .unb {
+  border: 1px solid rgba(201,164,92,.6); border-radius: var(--r-m); background: rgba(20,12,8,.72); color: #efe4cc; }
+#setup .wz .btn.go, #lpbody .btn.go, .boot-card .btn.go, #accbox .btn.go, #setup .wz-foot .btn.go, #lpbody .zb.on, #lpbody .setlist .toggle.on {
+  background: var(--verm); border-color: #e9c98a; color: #fff3dc; filter: none; }
+#lpbody .btn.warn, #accbox .btn.warn, .boot-card .btn.warn, #lpbody .btn.arm, .cl .op button.arm { background: transparent; border-color: #c8402e; color: #ffb0a0; }
+.boot-card .btn.sub { background: transparent; border-color: rgba(201,164,92,.35); }
+/* Apple·Google: 회사 버튼 색(로고 파일은 공식 것을 받아 넣을 자리) */
+.boot-card .btn.sso.apple, #accbox .btn.sso.apple { background: #fff; color: #000; border-color: #fff; }
+.boot-card .btn.sso.google, #accbox .btn.sso.google { background: #fff; color: #1f1f1f; border-color: #747775; }
+/* 선택 칸: 고르면 주홍 채움 + 금테 + 밝은 글자(초록은 '받음·완료'에만) */
+#setup .choice button, .lp-card, .boot-track button, .acc-track button[data-track] { border: 1px solid rgba(201,164,92,.45); border-radius: var(--r-m); background: rgba(20,12,8,.55); color: #e8dcc0; box-shadow: none; }
+#setup .choice button.on, .lp-card.on, .boot-track button.on, .acc-track button[data-track].on { background: var(--verm); border-color: #e9c98a; color: #fff3dc; box-shadow: inset 0 0 0 1px #e9c98a; }
+.boot-track button.on b { color: #fff3dc; }
+/* 눌림: 0.96배 + 조금 어둡게(네 가지 버튼 모두 같은 규칙) */
+.btn:not(:disabled):active, .toggle:not(:disabled):active, .zb:active, .choice button:not(:disabled):active, .lp-sel button:active, #lptabs button:active,
+.hb:active, .cmd:not(:disabled):not(.info):active, #drawer #tabs button:active, #dclose:active, #lpclose:active, #wzclose:active, #wzback:active, #lgear:active, #lnews:active,
+#lprof:active, #lchatbar:active, .boot-track button:active, .acc-track button:active, #hud .pm:active, .nc:active, .unb:active { transform: scale(.96); filter: brightness(.85); }
+#backbtn:active, #tutgift .btn:active { transform: translateX(-50%) scale(.96); }
+.hb, .toggle, .zb, .choice button, #lptabs button, .lp-sel button, .cmd { transition: transform .08s, filter .12s; }
+
+/* ---- 로딩 화면: 제목 현판 · 한지 진행 막대 · 첫 설정은 두루마리 ---- */
+/* 현판은 9-slice: 네 모서리 장식(위 구름무늬·아래 술)은 그대로, 가운데만 늘어난다 */
+.logo { border-style: solid; border-color: transparent; border-width: 18px 46px 28px; border-image: url(gfx/ui_logo.png) 22% 15% 32% 15% fill / 18px 46px 28px stretch; padding: 0 4px; }
+.boot-brand h1, #lbrand h1 { color: #ffe9b0; text-shadow: 0 2px 0 #3a1408, 0 0 10px rgba(0,0,0,.7), 0 0 2px #000; }
+.boot-bar { height: 14px; padding: 2px; border: 1px solid rgba(60,34,16,.6); border-image: none; border-radius: 7px; background: var(--pap); box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+.boot-bar i { border-radius: 5px; }
+#bootmsg { font-size: 13.5px; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
+.boot-card { border: 0; border-image: none; border-radius: var(--r-s); background: var(--silk); box-shadow: var(--silk-edge); filter: none; padding: 0 18px 10px; }
+.boot-card h2 { font: 700 19px/1.3 var(--serif); color: var(--gold-txt); }
+.boot-card .step { color: var(--gold-line); letter-spacing: .3em; }
+.boot-card input[type="text"], #accbox input:not([type="checkbox"]), #lchat .inline input, #chat .inline input, #setup #code {
+  background: rgba(10,6,4,.6); border: 1px solid rgba(201,164,92,.55); border-radius: var(--r-m); color: var(--paper); padding: 6px 10px; }
+.boot-card input[type="checkbox"], #accbox .agree input { accent-color: var(--verm); }
+@media (max-height: 400px) { .boot-card { border-width: 0; } }
+
+/* ---- 두루마리 창: 위아래 나무 축 그림(가운데만 늘어난다) ---- */
+.lp-box::before, .lp-box::after, .wz-box::before, .wz-box::after, #end .sheet.es::before, #end .sheet.es::after, .boot-card::before, .boot-card::after {
+  content: ''; flex: none; height: 16px; border-radius: 0; background: none; box-shadow: none; z-index: 3;
+  border-style: solid; border-color: transparent; border-width: 0 24px; border-image: url(gfx/ui_rod.png) 0 12% fill / 0 24px / 0 stretch; filter: drop-shadow(0 2px 3px rgba(0,0,0,.55)); }
+.boot-card::before, .boot-card::after { margin: 0 -18px; }
+.boot-card::before { position: sticky; top: 0; }
+/* 창 크기 고정: 단계·탭이 바뀌어도 창이 튀지 않는다. 열릴 때 살짝 커지며 나타난다 */
+#lpanel, #setup { background: rgba(14,6,3,.74); grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+.lp-box, .wz-box { width: min(760px, 100%); height: min(100%, 540px); justify-self: center; align-self: center; animation: winIn .18s ease-out; }
+#lpbody { flex: 1 1 auto; min-height: 0; }
+@keyframes winIn { from { opacity: 0; transform: scale(.965); } to { opacity: 1; transform: none; } }
+/* 창 제목 한 줄만 명조(고정 문구라 빠지는 글자가 없다). 닉네임·본문은 기본 고딕 그대로 */
+#lpanel .lp-head b, #setup .wz-head b { font-family: var(--serif) !important; font-weight: 700 !important; font-size: 22px !important; letter-spacing: .08em !important; color: var(--gold-txt); text-shadow: 0 2px 4px rgba(0,0,0,.7); }
+#lpclose, #wzclose, #wzback { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border: 1px solid rgba(201,164,92,.7); border-radius: 50%; background: rgba(20,12,8,.78); color: var(--gold-txt); font-size: 18px; }
+#lpclose .ico, #wzclose .ico, #wzback .ico { width: 26px; height: 26px; line-height: 26px; }
+#wzsteps { color: var(--gold-line); font-size: 11px; letter-spacing: .25em; }
+/* 탭: 게임 안 서랍과 같은 군기 그림(ui_c_flag_*) + 글자. 고른 탭은 붉은 깃발·금 글자·금 밑줄 */
+#lptabs { gap: 2px; padding: 2px 16px 0; align-items: flex-end; border-bottom: 1px solid rgba(201,164,92,.2); }
+#lptabs button { clip-path: none; display: inline-flex; align-items: center; gap: 5px; min-height: 44px; padding: 4px 10px 4px 6px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: #d8c8a8; font-weight: 700; font-size: 13px; }
+#lptabs button::before { content: ''; flex: none; width: 18px; height: 24px; background: url(gfx/ui_c_flag_off.png) center / contain no-repeat; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+#lptabs button.on { background: none; color: var(--gold-hi); border-bottom-color: var(--gold-hi); box-shadow: none; }
+#lptabs button.on::before { background-image: url(gfx/ui_c_flag_on.png); }
+/* 탭 아래 세부 고르기(랭킹 모드·난이도): 탭보다 한 단계 약하게(테두리만, 고르면 금테 + 밑줄) */
+.lp-sel button { background: transparent; border: 1px solid rgba(201,164,92,.35); border-radius: var(--r-m); color: #d8cbb0; }
+.lp-sel button.on { background: rgba(201,164,92,.12); border-color: var(--gold-hi); color: var(--gold-hi); text-decoration: underline; text-underline-offset: 3px; filter: none; }
+/* 빈 화면: 가운데 */
+.lp-empty { padding: 48px 0; text-align: center; font-size: 14px; color: var(--dim); }
+/* 일본어 줄바꿈: 낱말 가운데·문장 끝 한두 글자가 넘어가지 않게(지원 안 되는 기기에서는 그대로) */
+.lp-note, .hint2, #tutbox .tt, .boot-card p, .boot-card .agree span, #end .es-goal, #end .es-lost, .acc-link .hint2, .news li, #lsay, #ltoast { text-wrap: pretty; word-break: auto-phrase; }
+/* 창 스크롤 막대: 얇은 금색 */
+#lpbody, .wz-box .wz, #end .es-body, #drawer #pane, #drawer #timers, .boot-card, #lclog, #chatlog { scrollbar-width: thin; scrollbar-color: rgba(201,164,92,.6) transparent; }
+
+/* ---- 로비 ---- */
+/* 제목: 옻칠 현판 위에 금빛 글자, 인장은 현판 왼쪽(로딩 화면과 같은 자리) */
+#lbrand { top: 52px; gap: 10px; }
+#lbrand .seal { order: 0; }
+@media (max-height: 430px) { #lbrand { top: 48px; } .logo { border-width: 14px 38px 22px; border-image-width: 14px 38px 22px; } }
+/* 캐릭터: 프로필 카드가 올린 손을 가리지 않게 조금 아래로, 노을빛에 맞춰 채도를 살짝 낮춘다 */
+#lchar { height: calc(100% - 56px); }
+#lcharcv { filter: saturate(.9) sepia(.06); }
+/* 위 줄 오른쪽(재화·소식·설정): 같은 한지 틀, 그림 아이콘 */
+#lcur .cur i.ico { width: 26px; height: 26px; border-radius: 0; background: url(gfx/ic_coin.png) center / contain no-repeat; font-size: 12px; line-height: 26px; }
+.noic-coin #lcur .cur i.ico { background: #a0702a; border-radius: 50%; color: #fff3c8; }
+#lnews, #lgear { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border: 1px solid rgba(60,34,16,.5); border-radius: 50%; background: var(--pap); color: var(--ink2); box-shadow: 0 3px 10px rgba(40,14,6,.35); }
+#lnews .ico, #lgear .ico { width: 32px; height: 32px; font-size: 17px; line-height: 32px; }
+#lnews .dot { top: 0; right: 0; width: 11px; height: 11px; }
+/* 채팅 줄: 왼쪽 아래 한지 띠 */
+#lchatbar { border: 1px solid rgba(60,34,16,.5); border-radius: var(--r-s); background: var(--pap); color: var(--ink2); box-shadow: 0 3px 10px rgba(40,14,6,.35); }
+#lchatbar b { color: var(--verm); } #lchatbar span { color: #4a3220; }
+/* 메뉴 이름표: 폭을 맞춘다. 잠긴 메뉴는 회색 대신 채도 낮춤 + 어둡게 + 가운데 자물쇠, 이름표 아래에 여는 조건 */
+#lmenu button span { min-width: 76px; }
+#lmenu button.locked { filter: none; }
+#lmenu button.locked i { filter: saturate(.25) brightness(.62); }
+#lmenu button.locked::after { content: ''; right: auto; left: 50%; top: 16px; width: 34px; height: 34px; margin-left: -17px; background: url(gfx/ic_lock.png) center / contain no-repeat; filter: drop-shadow(0 2px 3px rgba(0,0,0,.8)); font-size: 22px; text-align: center; line-height: 34px; }
+.noic-lock #lmenu button.locked::after { content: '🔒'; background: none; }
+#lmenu .lkn { margin-top: -3px; font: 700 10px/1.2 var(--ui); color: #fff3dc; text-shadow: 0 1px 2px #000, 0 0 4px #000; white-space: nowrap; }
+#lmenu .lkn[hidden] { display: none; }
+/* 알림: 제목에 겹치지 않게 맨 위 가운데, 한지 띠, 위에서 내려온다 */
+#ltoast { top: max(10px, env(safe-area-inset-top)); max-width: min(560px, 76vw); padding: 8px 18px; border: 1px solid rgba(60,34,16,.5); border-radius: var(--r-s); background: var(--pap); color: var(--ink2); box-shadow: 0 4px 14px rgba(20,8,4,.5); font-weight: 700; text-align: center; }
+#ltoast.in { animation: ltoastIn .22s ease-out; }
+@keyframes ltoastIn { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+/* 안내 말풍선: 한지(로비의 캐릭터 말풍선과 같은 틀), 버튼은 공통 버튼 */
+#tutbox { border: 1px solid rgba(60,34,16,.55); border-radius: var(--r-m); background: var(--pap); color: var(--ink2); box-shadow: 0 8px 24px rgba(0,0,0,.55); }
+#tutbox b { color: var(--verm); } #tutbox small { color: #6b4a2c; }
+#tutbox .btn { border: 1px solid rgba(60,34,16,.5); background: rgba(255,250,240,.55); color: var(--ink2); }
+#tutbox .btn.go { border-color: #e9c98a; background: var(--verm); color: #fff3dc; }
+
+/* ---- 로비 창 안 ---- */
+/* 계정: 이름 / 관직·레벨 두 줄, 관직 문장, 10px 경험치 막대 + 다음 관직까지 */
+.acc-card { grid-template-columns: 60px minmax(0, 1fr); gap: 2px 12px; }
+.acc-card .badge { grid-row: 1 / 5; width: 60px; height: 60px; border-radius: 0; background: none; box-shadow: none; color: var(--gold-hi); font-size: 24px; }
+.acc-card .badge img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 5px rgba(0,0,0,.6)); }
+.acc-nm { display: flex; align-items: baseline; gap: 8px; min-width: 0; } .acc-nm b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 700; color: #f4ecd8; }
+.acc-card .gr { font-size: 13px; }
+.acc-card .xpbar { height: 10px; border-radius: 5px; border: 1px solid rgba(201,164,92,.4); background: rgba(0,0,0,.35); }
+.acc-nx { font-size: 11.5px; color: var(--dim); }
+.acc-link { border: 1px solid rgba(201,164,92,.3); border-radius: var(--r-m); background: rgba(0,0,0,.2); }
+/* 계정 창 줄 순서: 아이콘 고르기를 위로, 계정 삭제는 맨 아래(경고색) */
+#lpanel[data-kind="account"] #lpbody { display: flex; flex-direction: column; gap: 4px; }
+#lpanel[data-kind="account"] #accbox { display: contents; }
+#lpanel[data-kind="account"] #lpicons { order: 1; }
+#lpanel[data-kind="account"] .acc-danger, #lpanel[data-kind="account"] #acc-delbox, #lpanel[data-kind="account"] #acc-err, #lpanel[data-kind="account"] .rank-list { order: 2; }
+#lpanel[data-kind="account"] .acc-danger { margin-top: 18px; }
+#lpbody .lp-card.on .btn:disabled { opacity: 1; color: var(--gold-hi); border-color: var(--gold-hi); background: rgba(0,0,0,.3); }
+#lpbody .lp-card.on .btn:disabled::before { content: '✓ '; }
+/* 미션: 진행 막대 + n/m, 받을 수 있을 때만 받기 버튼 */
+.ms-row { grid-template-columns: minmax(0, 1fr) 118px auto 96px; }
+.ms-row .pg { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.ms-bar { display: block; flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+.ms-bar b { display: block; height: 100%; background: linear-gradient(90deg, #c99a2e, #ffe9a8); }
+.ms-row.done .ms-bar b, .ms-row.got .ms-bar b { background: var(--good); }
+.ms-row .rw .ico, .lp-bal .ico, .lp-card .btn .ico { margin-right: 3px; }
+.ms-row .ms-got { color: var(--good); }
+/* 전적 요약: 다섯 칸 한 줄, 큰 숫자 + 작은 설명 */
+#lpbody .hs-sum { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+#lpbody .hs-sum div { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; text-align: center; }
+.hs-sum span { font-size: 11.5px; color: #d8cbb0; } .hs-sum b { font-size: 18px; } .hs-sum small { font-size: 10px; color: var(--dim); }
+/* 설정: 음량 −/+는 작게, 판 안 설정 탭은 버튼 줄이 넘치면 아랫줄로(겹치지 않게) */
+.setlist .volrow .toggle, #pane[data-tab="set"] .volrow .toggle { min-width: 40px; min-height: 36px; padding: 0; font-size: 16px; }
+#pane[data-tab="set"] .row { flex-wrap: wrap; } #pane[data-tab="set"] .row > div:first-child { flex: 1 1 150px; }
+/* 업데이트 내역 목록 점: 금색 '・' */
+.news ul { list-style: none; padding-left: 2px; } .news li { position: relative; margin: 4px 0; padding-left: 14px; } .news li::before { content: '・'; position: absolute; left: 0; color: var(--gold-hi); }
+
+/* ---- 전투 시작 창 ---- */
+#setup .wz-foot .btn { min-width: 150px; min-height: 46px; padding: 0 20px; border-radius: var(--r-m); font: 700 16px var(--ui); letter-spacing: 0; text-shadow: none; box-shadow: none; }
+#setup #startbtn { background: var(--verm); border: 1px solid #e9c98a; color: #fff3dc; }
+#diffs button .lk .ico.lock, #mutlv .lk .ico.lock { width: 14px; height: 14px; margin-right: 3px; vertical-align: -2px; }
+/* 방: 들어온 뒤에는 겹친 제목·코드 입력 줄을 숨기고 여백을 줄여 참가자 카드가 한 화면에 */
+#setup.inroom #netbox > .label, #setup.inroom #netbox > .inline { display: none; }
+#setup.inroom .wz { padding-top: 6px; padding-bottom: 6px; gap: 6px; }
+#setup.inroom #netbox { padding: 6px 8px; }
+#setup.inroom #lobby { margin-top: 0; padding: 6px 8px; }
+#setup #lbcode { font-weight: 800; font-size: 24px; letter-spacing: .18em !important; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+.lb-slot { min-height: 70px; padding: 6px 4px 5px; border-radius: var(--r-m); }
+.lb-slot .av { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; object-position: top; background: #2a1d14; border: 1px solid rgba(201,164,92,.6); }
+.lb-slot.me { border-color: var(--gold-hi); box-shadow: 0 0 0 1px var(--gold-hi), 0 0 10px rgba(255,216,106,.3); }
+#setup.inroom #chatlog { height: 72px; }
+
+/* ---- 결과 화면: 머리·본문은 스크롤, 버튼은 고정 바닥 줄(통계를 가리지 않음). 창과 카드가 차례로 나타난다 ---- */
+#end .sheet.es { overflow: hidden; display: flex; flex-direction: column; gap: 0; animation: winIn .22s ease-out; }
+#end .sheet.es > .es-body, #end .sheet.es > .es-foot { margin-left: 0; margin-right: 0; }
+#end .es-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 0 16px 10px; }
+#end .es-foot { flex: none; display: flex; justify-content: center; gap: 12px; padding: 8px 16px 6px; border-top: 1px solid rgba(201,164,92,.3); }
+#end .es-foot .btn { position: static; min-width: 170px; height: auto; min-height: 46px; margin: 0; padding: 0 22px; border: 1px solid var(--gold-line); border-image: none; border-radius: var(--r-m); background: rgba(20,12,8,.78); color: #efe4cc; font: 700 16px var(--ui); letter-spacing: 0; text-shadow: none; filter: none; }
+#end .es-foot .btn.go { background: var(--verm); border-color: #e9c98a; color: #fff3dc; }
+#end .es-lost { margin-top: -4px; text-align: center; font-weight: 700; font-size: 13.5px; color: #ffb39a; }
+#end .es-cards .es-card { background: url(gfx/ui_paper.jpg) center / 260px; animation: esCard .3s ease-out backwards; }
+#end .es-card.es-rw b { color: var(--verm); }
+#end .es-card .ico { width: 15px; height: 15px; vertical-align: -3px; margin-right: 2px; }
+#end .es-cards .es-card:nth-child(2) { animation-delay: .04s; } #end .es-cards .es-card:nth-child(3) { animation-delay: .08s; } #end .es-cards .es-card:nth-child(4) { animation-delay: .12s; }
+#end .es-cards .es-card:nth-child(5) { animation-delay: .16s; } #end .es-cards .es-card:nth-child(6) { animation-delay: .2s; } #end .es-cards .es-card:nth-child(7) { animation-delay: .24s; }
+#end .es-cards .es-card:nth-child(8) { animation-delay: .28s; } #end .es-cards .es-card:nth-child(9) { animation-delay: .32s; } #end .es-cards .es-card:nth-child(n+10) { animation-delay: .36s; }
+@keyframes esCard { from { opacity: 0; transform: translateY(8px); } }
+@media (max-height: 430px) { #end .es-foot .btn { min-height: 44px; min-width: 150px; font-size: 15px; } #end .es-foot { padding: 6px 12px 4px; } }
+
+/* ---- 게임 안(CSS만): 알림 줄 · 첫 힌트 · HUD 칸 · 선택 창 · 서랍 · 보스전 버튼 · 조이스틱 ---- */
+/* 알림 줄: 가운데 정렬, 글 길이만큼, 위에서 살짝 내려온다. 동시에 3줄까지만 */
+#toasts { width: auto; max-width: min(440px, 64%); align-items: center; }
+.toast { width: fit-content; max-width: 100%; padding: 4px 12px; text-align: center; border: 1px solid rgba(201,164,92,.55); border-radius: var(--r-s); background: rgba(20,13,8,.88); animation: toastDrop .2s ease-out, fade 3.6s forwards; }
+.toast.good { border-color: rgba(126,208,140,.8); } .toast.warn { border-color: rgba(239,106,88,.85); }
+.toast:nth-last-child(n+4) { display: none; }
+@keyframes toastDrop { from { transform: translateY(-8px); } }
+#lanehint { position: absolute; left: 50%; bottom: calc(var(--sb) + 14px); transform: translateX(-50%); z-index: 4; max-width: 64%; padding: 8px 16px; border: 1px solid rgba(201,164,92,.6); border-radius: var(--r-m); background: rgba(20,13,8,.88); color: #f4ecd8; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; animation: hintIn .3s ease-out; }
+#lanehint[hidden] { display: none; }
+@keyframes hintIn { from { opacity: 0; transform: translate(-50%, 6px); } }
+/* HUD 왼쪽 칸: 이름이 꺾이지 않게. 동맹 줄 글자 11px, 중간보스 칸은 묶음 단위로만 줄바꿈 */
+.hs small { white-space: nowrap; }
+#hud .pm { width: 128px; } #hud .pm .ps { font-size: 10.5px; letter-spacing: -.01em; } #hud .pm .ps .lf { color: #ff9a8a; }
+.nc .nw { white-space: nowrap; }
+/* 선택 창: 왼쪽 HUD 칸(118px) 뒤에서 시작해 동맹 목록을 덮지 않는다 */
+#selbar { left: max(calc(var(--sl) + 136px), calc(50% - 390px)); transform: none; width: min(780px, calc(100% - var(--sl) - 136px - var(--sr) - var(--rw) - 10px)); border-color: rgba(201,164,92,.6); background: rgba(20,13,8,.92); }
+#selbar .cmd { background: rgba(20,12,8,.8); border: 1px solid rgba(201,164,92,.5); }
+#selbar .cmd.on { border-color: var(--gold-hi); background: rgba(120,84,30,.7); }
+/* 조합식 줄: 밝은 두루마리 줄 대신 창과 같은 어두운 줄 */
+.rc { border-radius: var(--r-s); border-top: 1px solid rgba(201,164,92,.35); border-bottom: 1px solid rgba(201,164,92,.35); background: rgba(255,240,210,.06); color: #efe4cc; }
+.rc .rp { color: #cbb894; } .rc .rp b { color: #9be89a; }
+/* 서랍: 버튼은 나무판과 어울리는 작은 판(금테 + 어두운 바탕), 전황 줄도 나무판, 닫기는 그림 */
+#drawer .btn, #drawer .toggle, #drawer .zb { border: 1px solid rgba(201,164,92,.6); border-radius: var(--r-m); background: rgba(20,12,8,.8); color: var(--gold-txt); }
+#drawer .btn.go, #drawer .toggle.on, #drawer .zb.on { background: var(--verm); border-color: #e9c98a; color: #fff3dc; }
+#drawer .btn.warn { background: transparent; border-color: #c8402e; color: #ffb0a0; }
+#drawer .btn:disabled { opacity: .5; }
+#drawer #tlist .tr { margin: 2px 6px; border-style: solid; border-width: 6px 10px; border-image: url(gfx/ui_c_tablet.png) 34 46 fill stretch; color: #efe2c6; }
+#drawer #tlist .tr.now { background: none; filter: drop-shadow(0 0 4px rgba(255,205,60,.6)); }
+#dclose { display: grid; place-items: center; }
+#dclose .ico { width: 26px; height: 26px; line-height: 26px; font-size: 18px; }
+/* 보스전 라인 전환 버튼('自分のラインへ'·'ボス戦に戻る'): 배속·메뉴 버튼(.hb)과 같은 판 */
+#bossbtn, #backbtn { height: 44px; min-height: 44px; padding: 0 14px; border: 1px solid rgba(205,167,91,.6); border-radius: 10px; background: rgba(16,11,8,.84); color: #f4ecd8; font: 700 13px var(--ui); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+#backbtn { border-color: #e9c98a; background: rgba(150,40,22,.88); }
+/* 조이스틱·공격 버튼: 그림(그림이 없으면 예전 모양) */
+html:not(.noic-joy) #joy { border: 0; background: url(gfx/ui_joy.png) center / contain no-repeat; }
+html:not(.noic-knob) #joy i { background: url(gfx/ui_knob.png) center / contain no-repeat; box-shadow: none; }
+html:not(.noic-joy) #joy.on { filter: brightness(1.15); }
+html:not(.noic-attack) #skillbar .sk.atk { border: 0; background: url(gfx/ic_attack.png) center / contain no-repeat; box-shadow: none; }
+html:not(.noic-attack) #skillbar .sk.atk .skic { display: none; }
+html:not(.noic-attack) #skillbar .sk.atk.on { filter: brightness(1.2); }
+/* 협동 기다림 창(.pzwait): 두루마리 바탕 */
+.over.pzwait .sheet { border: 0; border-radius: var(--r-s); background: var(--silk); box-shadow: var(--silk-edge); }
+/* 움직임 줄이기: 등장 움직임을 끈다 */
+@media (prefers-reduced-motion: reduce) {
+  .lp-box, .wz-box, #end .sheet.es, #end .es-cards .es-card, #ltoast.in, #lanehint { animation: none !important; }
+  .toast { animation: fade 3.6s forwards; }
+}
+/* 협동 입장 대기 화면(18b): 카드도 두루마리 바탕, 내 카드 표시는 금색(초록은 '준비 완료'에만) */
+.mt-card { border: 0; border-image: none; border-radius: var(--r-s); background: var(--silk); box-shadow: inset 0 0 0 1px rgba(201,164,92,.55), inset 0 0 0 4px rgba(20,12,8,.85), 0 8px 20px rgba(0,0,0,.6); padding: 6px 4px 4px; }
+.mt-slot.me .mt-card { outline: 2px solid var(--gold-hi); }
+.mt-tag.mine { background: var(--gold-hi); color: #2a1a08; }
+.mt-diff { background: var(--pap); color: var(--ink2); text-shadow: none; border: 1px solid rgba(60,34,16,.5); border-radius: var(--r-s); padding: 4px 18px 5px; }
+/* 보스 처치 뒤 討伐成功 패널이 떠 있는 동안(#stage.vic, 16-hud): 알림 줄을 화면 아래로 내려 패널 제목을 가리지 않게 */
+#stage.vic #toasts { top: auto; bottom: calc(var(--sb) + 12px); flex-direction: column-reverse; }
+/* ---- 새 그림에 맞춘 조정(2026-11-18): 닫기·뒤로·설정은 그림 자체가 옻칠 원 버튼이라 CSS 원 테두리·바탕을 뺀다. 두루마리 축은 양 끝 마개 11% ---- */
+.lp-box::before, .lp-box::after, .wz-box::before, .wz-box::after, #end .sheet.es::before, #end .sheet.es::after, .boot-card::before, .boot-card::after {
+  height: 18px; border-width: 0 19px; border-image: url(gfx/ui_rod.png) 0 11% fill / 0 19px / 0 stretch; }
+html:not(.noic-close) #lpclose, html:not(.noic-close) #wzclose, html:not(.noic-back) #wzback, html:not(.noic-close) #dclose { border: 0; background: none; box-shadow: none; }
+#lpclose .ico, #wzclose .ico, #wzback .ico { width: 40px; height: 40px; line-height: 40px; }
+html:not(.noic-close) #dclose .ico { width: 34px; height: 34px; }
+html:not(.noic-gear) #lgear { border: 0; background: none; box-shadow: none; }
+html:not(.noic-gear) #lgear .ico { width: 44px; height: 44px; filter: drop-shadow(0 3px 6px rgba(40,14,6,.45)); }
+@media (min-height: 600px) { html:not(.noic-gear) #lgear .ico { width: 56px; height: 56px; } }
+/* 낮은 화면의 보스전: 조이스틱 판(그림)이 왼쪽 파티 목록과 겹치지 않게 아래로 내린다 */
+@media (max-height: 430px) { #joy { bottom: calc(var(--sb) + 12px); } }
 </style>
 
 <div id="app" hidden>
@@ -1117,6 +1339,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
     <div id="rail"></div>
     <div id="synbar" hidden></div>
     <div id="toasts"></div>
+    <div id="lanehint" hidden></div>
     <div id="achpop" hidden></div>
     <button id="backbtn" class="btn go" data-act="myview" data-i18n="myField" type="button" hidden>내 전장으로</button>
     <button id="bossbtn" class="btn" data-act="laneView" type="button" hidden></button>
@@ -1127,7 +1350,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
     <div id="overlay"></div>
   </div>
   <aside id="drawer" hidden>
-    <div id="dhead"><div id="tabs"></div><button id="dclose" data-act="drawerClose" type="button" aria-label="닫기" data-i18n-aria="close">✕</button></div>
+    <div id="dhead"><div id="tabs"></div><button id="dclose" data-act="drawerClose" type="button" aria-label="닫기" data-i18n-aria="close"><i class="ico close" aria-hidden="true"></i></button></div>
     <div id="pane"></div>
     <div id="timers" hidden><div class="tt" data-i18n="timers">보스 타이머</div><div id="tlist"></div><div class="tt" data-i18n="synergy">인연 시너지</div><div id="synlist"></div><div class="tt" id="mutt" hidden></div><div id="mutlist"></div></div>
     <div id="allies"></div>
@@ -1137,7 +1360,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 
 <!-- 로딩 화면: 그림·계정을 불러온 뒤 로비를 보여 준다. 처음이면 여기서 로그인 → 닉네임 → 관직 갈래(19-title.js boot) -->
 <div id="boot">
-  <div class="boot-brand"><div class="seal">天下</div><h1 id="boottitle"></h1></div>
+  <div class="boot-brand logo"><div class="seal">天下</div><h1 id="boottitle"></h1></div>
   <div class="boot-card" id="bootcard" hidden></div>
   <div class="boot-load" id="bootload"><div class="boot-bar"><i id="bootfill"></i></div><div id="bootmsg"></div></div>
 </div>
@@ -1149,12 +1372,12 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
   <div id="lchar"><canvas id="lcharcv"></canvas><div id="lsay" hidden></div></div>
   <header id="ltop">
     <button id="lprof" type="button" data-lp="account"><img id="lico" alt=""><span><b id="lnick"></b><small id="lrank"></small></span></button>
-    <div id="lcur"><span class="cur coin"><i>銅</i><b id="lcoins">0</b></span><span class="cur gem"><i>寶</i><b id="lgems">0</b></span></div>
+    <div id="lcur"><span class="cur coin"><i class="ico coin" aria-hidden="true"></i><b id="lcoins">0</b></span><span class="cur gem"><i>寶</i><b id="lgems">0</b></span></div>
     <select id="langsel" aria-label="Language" hidden></select>
-    <button id="lnews" type="button" data-lp="news" aria-label="Update notes"><i>報</i><b class="dot" hidden></b></button>
-    <button id="lgear" type="button" data-lp="settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M4.6 4.6l1.9 1.9M17.5 17.5l1.9 1.9M2.5 12h2.6M18.9 12h2.6M4.6 19.4l1.9-1.9M17.5 6.5l1.9-1.9"/><circle cx="12" cy="12" r="7"/></svg></button>
+    <button id="lnews" type="button" data-lp="news" aria-label="Update notes" data-i18n-aria="newsLbl"><i class="ico news" aria-hidden="true"></i><b class="dot" hidden></b></button>
+    <button id="lgear" type="button" data-lp="settings" aria-label="Settings" data-i18n-aria="settingsLbl"><i class="ico gear" aria-hidden="true"></i></button>
   </header>
-  <div id="lbrand"><div class="seal">天下</div><h1 id="gametitle">삼국 랜덤 디펜스</h1></div>
+  <div id="lbrand" class="logo"><div class="seal">天下</div><h1 id="gametitle">삼국 랜덤 디펜스</h1></div>
   <nav id="lmenu">
     <button type="button" data-lp="shop"><i>市</i><span data-i18n="lb_shop"></span></button>
     <button type="button" data-lp="rank"><i>榜</i><span data-i18n="lb_rank"></span></button>
@@ -1163,12 +1386,12 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
   </nav>
   <button id="lchatbar" type="button" data-lp="lchat" hidden></button>
   <div id="lplay"><button class="btn" id="contbtn" type="button" hidden></button><button class="btn go" id="battlebtn" type="button"><span data-i18n="lb_battle"></span></button></div>
-  <div id="lpanel" hidden><div class="lp-box"><div class="lp-head"><b id="lptitle"></b><button type="button" id="lpclose">✕</button></div><div id="lptabs"></div><div id="lpbody"></div></div></div>
+  <div id="lpanel" hidden><div class="lp-box"><div class="lp-head"><b id="lptitle"></b><button type="button" id="lpclose" aria-label="閉じる" data-i18n-aria="close"><i class="ico close" aria-hidden="true"></i></button></div><div id="lptabs"></div><div id="lpbody"></div></div></div>
   <div id="lhold" hidden><div class="sec" id="accbox"></div></div>
   <!-- 전투 시작: 온라인/싱글 → 모드 → 난이도(방이면 방에서) → 시작 -->
   <section id="setup" hidden>
     <div class="wz-box">
-      <div class="wz-head"><button type="button" id="wzback">‹</button><b id="wztitle"></b><span id="wzsteps"></span><button type="button" id="wzclose">✕</button></div>
+      <div class="wz-head"><button type="button" id="wzback" aria-label="戻る" data-i18n-aria="back"><i class="ico back" aria-hidden="true"></i></button><b id="wztitle"></b><span id="wzsteps"></span><button type="button" id="wzclose" aria-label="閉じる" data-i18n-aria="close"><i class="ico close" aria-hidden="true"></i></button></div>
       <div class="wz" data-step="play"><div class="choice two playmode" id="playmode"></div><div class="hint2" id="playhint"></div><div class="hint2 wzgate" id="wzgate" hidden></div></div>
       <div class="wz" data-step="mode">
         <div class="sec" id="modesec"><div class="choice two modes" id="modes"></div></div>

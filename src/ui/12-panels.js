@@ -2,6 +2,8 @@
   let needs = true, lastDom = 0;
   const dirty = () => (needs = true);
   const toast = (text, tone) => {
+    // 보스 처치 연출 중(S.toastHoldUntil, 16-hud bossWin)이면 미뤘다가 16-hud renderHud가 한꺼번에 내보낸다
+    if (performance.now() < (S.toastHoldUntil || 0)) { (S.toastQ = S.toastQ || []).push([text, tone]); return; }
     const box = $('toasts');
     // 같은 알림이 연달아 오면 줄을 쌓지 않고 ×N으로 합친다(전선 포화로 라이프가 연속으로 깎일 때 화면을 덮던 문제)
     const prev = box.lastElementChild;

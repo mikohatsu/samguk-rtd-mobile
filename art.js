@@ -248,6 +248,34 @@
     blit(c, im, 0, 0, im.width, im.height, x, y, w, h, rot, alpha, o);
     return true;
   }
+  // 화면 장식 낱장 그림(gfx/이름.png): 보스 체력 막대 틀·경고 띠·선택 표시·아레나 테두리와 바닥 문양·먹 띠 등.
+  // 처음 부를 때 받고, 아직 없거나 못 받았으면 null(부른 쪽은 예전 모양으로 그린다). 받기 실패는 다시 시도하지 않는다.
+  const UIP = {};
+  function pic(name) {
+    let o = UIP[name];
+    if (!o) {
+      if (typeof Image === 'undefined') return null;
+      o = UIP[name] = { im: new Image(), ok: false };
+      o.im.onload = () => { o.ok = true; }; o.im.src = 'gfx/' + name + '.png?v=1';
+    }
+    return o.ok && o.im.width ? o.im : null;
+  }
+  // 보스전 전에 다 받아지도록 판을 시작할 때 미리 부른다
+  ['ui_bossbar', 'vs_warn', 'ui_select', 'arena_rim', 'arena_mark', 'ui_ink', 'ui_title', 'ui_tab', 'defeat_plank'].forEach(pic);
+  // 낱장 그림을 색으로 물들인 것(원본 크기 그대로. 없으면 null)
+  function picTint(name, col) { const im = pic(name); return im ? tinted('u' + name, im, col) : null; }
+  // 9조각 그리기: 원본 가장자리 sl px을 굵기 b로 고정하고 변·가운데만 늘인다(틀 그림을 어떤 크기에도 모서리가 찌그러지지 않게).
+  // slx·sly를 따로 줄 수 있다(가로로 긴 막대 틀). hollow면 가운데 칸은 그리지 않는다.
+  function nine(c, im, x, y, w, h, sl, b, o) {
+    const iw = im.width, ih = im.height, slx = Math.min(iw / 2 - 1, (o && o.slx) || sl), sly = Math.min(ih / 2 - 1, (o && o.sly) || sl);
+    const bx = Math.min(w / 2, (o && o.bx) || b), by = Math.min(h / 2, (o && o.by) || b);
+    const sx = [0, slx, iw - slx, iw], sy = [0, sly, ih - sly, ih], dx = [x, x + bx, x + w - bx, x + w], dy = [y, y + by, y + h - by, y + h];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      if (o && o.hollow && i === 1 && j === 1) continue;
+      const dw = dx[i + 1] - dx[i], dh = dy[j + 1] - dy[j];
+      if (dw > 0.5 && dh > 0.5) c.drawImage(im, sx[i], sy[j], sx[i + 1] - sx[i], sy[j + 1] - sy[j], dx[i], dy[j], dw, dh);
+    }
+  }
   function fxImg(c, name, x, y, size, rot, alpha, sy) {
     const im = gimg['fx_' + name];
     if (!ok(im)) return false;
@@ -341,5 +369,5 @@
     const o = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
     return [{ v: 2 }, { v: 1 }, { v: 0 }, { v: 1, flip: true }, { v: 2, flip: true }, { v: 3, flip: true }, { v: 4 }, { v: 3 }][o];
   }
-  root.RTD_ART = { facing, unitSprite, namedSprite, soldierSprite, portrait, drawSprite, shot, fxImg, fxAnim, fxPic, img, ready };
+  root.RTD_ART = { facing, unitSprite, namedSprite, soldierSprite, portrait, drawSprite, shot, fxImg, fxAnim, fxPic, img, ready, pic, picTint, nine };
 })(typeof window !== 'undefined' ? window : globalThis);

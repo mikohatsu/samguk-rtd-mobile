@@ -2,73 +2,80 @@
     const c = ctx;
     blitBg(c, mapCv, 'map', mapVer);
     drawFlags(c);
-    for (const p of S.pings) { p.t += S.fdt; c.strokeStyle = p.c; c.globalAlpha = 1 - p.t / 0.5; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, 8 + p.t * 40, 0, 7); c.stroke(); c.globalAlpha = 1; }
+    // 터치 자리: 퍼지는 충격파 고리 그림(fxa_wave, 물들임)
+    for (const p of S.pings) { p.t += S.fdt; const k = Math.min(0.99, p.t / 0.5), s0 = (30 + p.t * 120) * uiS(); Art.fxAnim(c, 'wave', k, p.x, p.y, s0, s0, 0, 1 - k * 0.6, null, { col: p.c, sy: 0.6 }); }
     S.pings = S.pings.filter((p) => p.t < 0.5);
+    const us = uiS(), SK = window.RTD_SKFX;
     for (const e of g.enemies) {
       if (e.mid) {
-        c.strokeStyle = '#e8c15a'; c.lineWidth = 3; c.beginPath(); c.ellipse(e.x, e.y + 20, 28, 12, 0, 0, 7); c.stroke();
+        // 중간보스 발밑: 금색 법진 그림이 천천히 돈다
+        blobShadow(c, e.x, e.y + 22, 70, 0.55);
+        Art.fxPic(c, 'mc_rune1', e.x, e.y + 20, 96, 96, t * 0.5, 0.75, { col: '#e8c15a', sy: 0.42 });
         const v = [2, 0, 2, 4][e.seg], fr = Math.sin(t * 13) > 0 ? 1 : 2, img = e.w.look ? Art.namedSprite(e.w.name, e.w.look, '#b5361f', v, fr) : Art.soldierSprite({ name: e.w.name, color: '#b5361f', hat: 'helm', weapon: 'guandao' }, v, fr);
         // 놓치기 10초 전: 붉은 오라가 발밑에서 천천히 차올랐다가 가라앉기를 2초마다 되풀이(깜빡임·떨림 없음)
         const warn = e.midT <= 10;
-        if (warn) {
-          const w = (1 - Math.cos(t * Math.PI)) / 2, top = e.y + 26 - (30 + w * 70), base = e.y + 26;
-          c.save(); c.globalCompositeOperation = 'lighter';
-          const gr = c.createLinearGradient(0, base, 0, top);
-          gr.addColorStop(0, 'rgba(255,50,30,.55)'); gr.addColorStop(0.6, 'rgba(255,60,30,.22)'); gr.addColorStop(1, 'rgba(255,60,30,0)');
-          c.fillStyle = gr; c.beginPath(); c.ellipse(e.x, (base + top) / 2, 40, (base - top) / 2 + 6, 0, 0, 7); c.fill();
-          c.globalAlpha = 0.5; c.strokeStyle = '#ff4a3a'; c.lineWidth = 3; c.beginPath(); c.ellipse(e.x, e.y + 20, 36, 15, 0, 0, 7); c.stroke();
-          c.restore();
+        if (warn && SK) {
+          // 붉은 빛기둥(Kenney 빛줄기)과 붉은 법진이 함께 차올랐다 가라앉는다(깜빡임 없음)
+          const w = (1 - Math.cos(t * Math.PI)) / 2, hgt = 50 + w * 90;
+          SK.spr(c, 'trace_06', '#ff3a24', e.x, e.y + 26 - hgt / 2, 110, hgt, 0, 0.45 + w * 0.4);
+          SK.spr(c, 'light_02', '#ff4a30', e.x, e.y + 20, 120, 120, t, 0.35 + w * 0.35, true, 0.42);
+          Art.fxPic(c, 'mc_rune2', e.x, e.y + 20, 104, 104, -t * 1.2, 0.5 + w * 0.4, { col: '#ff4a3a', sy: 0.42 });
         }
         Art.drawSprite(c, img, e.x, e.y, 96, e.seg === 2);
-        bar(c, e.x, e.y - 50, 74, 6, e.hp / e.mhp, '#ff6a50');
-        c.textAlign = 'center';
-        if (warn) { c.fillStyle = '#ff6a50'; c.font = '400 22px "Black Han Sans", sans-serif'; c.fillText(I.t('midLeft', { name: e.w.name, n: Math.ceil(e.midT) }), e.x, e.y - 60); }
-        else { c.fillStyle = '#ffe9a8'; c.font = '700 15px "IBM Plex Sans KR", sans-serif'; c.fillText(`${e.w.name} ${Math.ceil(e.midT)}`, e.x, e.y - 58); }
+        bar(c, e.x, e.y - 50, 74 * us, 6 * us, e.hp / e.mhp, '#ff6a50');
+        // 이름·남은 시간: 휴대폰에서도 읽히게 배율을 곱하고 먹 테두리를 두른다
+        c.save(); c.translate(e.x, e.y - 50 - 5 * us); c.scale(us, us);
+        c.textAlign = 'center'; c.textBaseline = 'alphabetic'; c.lineJoin = 'round'; c.strokeStyle = 'rgba(20,12,6,.9)'; c.lineWidth = 4;
+        const mt = warn ? I.t('midLeft', { name: e.w.name, n: Math.ceil(e.midT) }) : `${e.w.name} ${Math.ceil(e.midT)}`;
+        c.font = warn ? '400 22px "Black Han Sans", sans-serif' : '700 16px "IBM Plex Sans KR", sans-serif';
+        c.strokeText(mt, 0, 0); c.fillStyle = warn ? '#ff7a60' : '#ffe9a8'; c.fillText(mt, 0, 0);
+        c.restore();
       } else {
         const hit = (e.hitT || 0) / 0.14, ex = e.x + Math.cos(e.hitA || 0) * 7 * hit, ey = e.y + Math.sin(e.hitA || 0) * 7 * hit - Math.abs(Math.sin(t * 12 + e.id)) * 3;
         const v = [2, 0, 2, 4][e.seg], img = Art.soldierSprite(e.w, v, Math.sin(t * 11 + e.id) > 0 ? 1 : 2), sz = e.elite ? 96 : 60;
-        if (e.elite) {
-          // 군웅할거 정예: 중간보스만 한 크기에 금빛 오라(바닥 빛 + 발밑 고리 + 솟는 빛)
+        // 발밑 그림자: 누런 길 위에서도 적이 바탕에서 떠 보이게
+        blobShadow(c, ex, ey + (e.elite ? 26 : 16), sz * 0.7, 0.5);
+        if (e.elite && SK) {
+          // 군웅할거 정예: 장수 후광과 같은 방식(그림) — 금빛 바닥 빛 + 금색 법진 + 솟는 빛 알갱이
           const pu = 0.75 + Math.sin(t * 4 + e.id) * 0.25;
-          c.save(); c.globalCompositeOperation = 'lighter';
-          const gr = c.createRadialGradient(ex, ey + 4, 6, ex, ey + 4, 64);
-          gr.addColorStop(0, `rgba(255,216,106,${0.5 * pu})`); gr.addColorStop(0.55, `rgba(255,170,60,${0.22 * pu})`); gr.addColorStop(1, 'rgba(255,150,40,0)');
-          c.fillStyle = gr; c.beginPath(); c.arc(ex, ey + 4, 64, 0, 7); c.fill();
-          for (let i = 0; i < 4; i++) { const ph = (t * 0.9 + i / 4 + e.id * 0.13) % 1; c.globalAlpha = Math.sin(ph * Math.PI) * 0.7; c.fillStyle = '#ffe9a8'; c.beginPath(); c.arc(ex + Math.sin(i * 1.9 + t) * 22, ey + 20 - ph * 70, 2.5, 0, 7); c.fill(); }
-          c.restore();
-          c.strokeStyle = '#ffd86a'; c.lineWidth = 3; c.beginPath(); c.ellipse(ex, ey + 22, 30, 12, 0, 0, 7); c.stroke();
+          SK.spr(c, 'light_01', '#ffd86a', ex, ey + 4, 128, 128, t * 0.3, 0.45 * pu);
+          Art.fxPic(c, 'mc_rune3', ex, ey + 22, 84, 84, t * 0.7, 0.75, { col: '#ffd86a', sy: 0.42 });
+          for (let i = 0; i < 4; i++) { const ph = (t * 0.9 + i / 4 + e.id * 0.13) % 1; SK.spr(c, 'star_04', '#ffe9a8', ex + Math.sin(i * 1.9 + t) * 22, ey + 20 - ph * 70, 14, 14, 0, Math.sin(ph * Math.PI) * 0.8); }
         }
         Art.drawSprite(c, img, ex, ey, sz, e.seg === 2, hit * 0.25);
         if (hit > 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = hit * 0.8; Art.drawSprite(c, img, ex, ey, sz, e.seg === 2, hit * 0.25); c.restore(); }
-        if (e.elite) bar(c, e.x, e.y - 50, 74, 6, e.hp / e.mhp, '#ffd86a');
-        else if (e.hp < e.mhp) bar(c, e.x, e.y - 30, 28, 3, e.hp / e.mhp, '#ff6a50');
+        // 적 체력 막대: 휴대폰 배율을 곱한다(예전 28×3은 화면에서 1px 남짓이었다)
+        if (e.elite) bar(c, e.x, e.y - 50, 74 * us, 6 * us, e.hp / e.mhp, '#ffd86a');
+        else if (e.hp < e.mhp) bar(c, e.x, e.y - 30 - 2 * us, 32 * us, 4 * us, e.hp / e.mhp, '#ff6a50');
       }
     }
     for (const d of g.drops) {
       if (d.owner !== 0) continue;
       const bob = Math.sin(t * 3 + d.id) * 2, selected = S.dropSel === d.id;
-      if (selected) { c.strokeStyle = '#7dff8e'; c.lineWidth = 2; c.beginPath(); c.ellipse(d.x, d.y + 3, 27, 22, 0, 0, 7); c.stroke(); }
+      if (selected) selMark(c, d.x, d.y + 16, 24, t);
       const dimg = Art.img(d.kind === 'chest' ? 'prop_chest' : d.kind === 'item' ? 'prop_scroll' : 'prop_' + d.kind);
-      if (dimg) { c.fillStyle = 'rgba(0,0,0,.35)'; c.beginPath(); c.ellipse(d.x, d.y + 16, 20, 7, 0, 0, 7); c.fill(); c.drawImage(dimg, d.x - 24, d.y - 26 + bob, 48, 48 * (dimg.height / dimg.width)); continue; }
+      if (dimg) { blobShadow(c, d.x, d.y + 16, 40, 0.5); c.drawImage(dimg, d.x - 24, d.y - 26 + bob, 48, 48 * (dimg.height / dimg.width)); continue; }
       c.fillStyle = d.kind === 'chest' ? '#7a3b1c' : '#2a2140'; c.strokeStyle = '#ffd86a'; c.lineWidth = 2.5;
       c.fillRect(d.x - 17, d.y - 15 + bob, 34, 30); c.strokeRect(d.x - 17, d.y - 15 + bob, 34, 30);
       c.fillStyle = '#ffe9a8'; c.font = '900 21px "Noto Serif KR", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText(d.kind === 'chest' ? T.chestMark : d.kind === 'item' ? T.itemMark : T.consumables[d.kind].mark, d.x, d.y + 1 + bob);
     }
     const sel = new Set(S.sel);
-    for (const u of g.units) {
+    // 겹쳐 선 유닛은 아래쪽(y가 큰 쪽)을 나중에 그려 앞뒤가 맞게 한다(배치는 그대로, 그리는 순서만)
+    const order = g.units.length > 1 ? g.units.slice().sort((a, b) => a.y - b.y || a.id - b.id) : g.units;
+    for (const u of order) {
       // 라인 유닛 크기(등급이 높을수록 큼). 폰에서 알아보기 쉽게 15% 키웠다(1.3 → 1.5). 정렬 칸 간격(42)은 그대로라 줄 세우면 살짝 겹친다.
       const r = (15 + Math.min(u.def.tier, 10) * 0.8) * 1.5;
-      if (sel.has(u.id)) { c.strokeStyle = '#7dff8e'; c.lineWidth = 2; c.beginPath(); c.ellipse(u.x, u.y + 3, r + 7, r + 4, 0, 0, 7); c.stroke(); }
+      if (sel.has(u.id)) selMark(c, u.x, u.y + (u.def.tier ? r * 0.72 : 22), u.def.tier ? r : 30, t);
       const away = g.inFight(u);
       if (away) c.globalAlpha = 0.35;
       piece(c, u.x, u.y + (u.def.tier ? 0 : Math.sin(t * 3 + u.x) * 3), u.def.tier ? r : 30, u.def, t, u.owner === 1, { pose: poseOf(u, t, r) });
-      if (away) { c.globalAlpha = 1; c.fillStyle = '#ffd86a'; c.font = '700 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText(I.t('deployed'), u.x, u.y - r - 10); }
+      if (away) { c.globalAlpha = 1; c.save(); c.translate(u.x, u.y - r - 10); c.scale(us, us); c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,12,6,.9)'; c.lineWidth = 4; c.lineJoin = 'round'; c.font = '700 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.strokeText(I.t('deployed'), 0, 0); c.fillText(I.t('deployed'), 0, 0); c.restore(); }
       if (!u.def.tier) { c.fillStyle = '#ffe9a8'; c.strokeStyle = 'rgba(32,21,12,.85)'; c.lineWidth = 4; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.strokeText(u.def.name, u.x, u.y + 46); c.fillText(u.def.name, u.x, u.y + 46); }
     }
     if (S.sel.length === 1) {
       const u = g.units.find((x) => x.id === S.sel[0]);
-      if (u && u.def.tier > 0) { c.strokeStyle = 'rgba(125,255,142,.28)'; c.lineWidth = 1; c.beginPath(); c.arc(u.x, u.y, g.range(u.def), 0, 7); c.stroke(); }
+      if (u && u.def.tier > 0) rangeMark(c, u.x, u.y, g.range(u.def), '#7dff8e', 0.22);
     }
     drawFx(c);
     if (g.mut.night) drawNight(c);
@@ -107,11 +114,11 @@
       y -= k >= 100 ? 0 : Math.abs(Math.sin(t * 12 + id)) * 3;
       if (k >= 100) {
         const m = T.midbosses[k - 100], img = Art.namedSprite(m.name, T.midLooks[m.name], '#b5361f', v, fr);
-        c.strokeStyle = '#e8c15a'; c.lineWidth = 3; c.beginPath(); c.ellipse(x, y + 20, 28, 12, 0, 0, 7); c.stroke();
-        Art.drawSprite(c, img, x, y, 76, seg === 2); bar(c, x, y - 50, 74, 6, h / 20, '#ff6a50');
+        Art.fxPic(c, 'mc_rune1', x, y + 20, 84, 84, t * 0.5, 0.75, { col: '#e8c15a', sy: 0.42 });
+        Art.drawSprite(c, img, x, y, 76, seg === 2); bar(c, x, y - 50, 74 * uiS(), 6 * uiS(), h / 20, '#ff6a50');
       } else {
         Art.drawSprite(c, Art.soldierSprite(T.waves[k] || T.waves[0], v, fr), x, y, 48, seg === 2);
-        if (h < 20) bar(c, x, y - 30, 28, 3, h / 20, '#ff6a50');
+        if (h < 20) bar(c, x, y - 30, 32 * uiS(), 4 * uiS(), h / 20, '#ff6a50');
       }
     });
     // 다른 사령관 유닛은 클릭해서 정보만 볼 수 있다
@@ -120,7 +127,7 @@
     fr0.u.forEach(({ id, i, x, y, f, m, a, atk }) => {
       const d = T.units[i]; if (!d) return;
       const r = d.tier ? (15 + Math.min(d.tier, 10) * 0.8) * 1.3 : 30;
-      if (rs && rs.id === id) { found = true; rs.atk = atk; c.strokeStyle = '#ffd86a'; c.lineWidth = 2; c.beginPath(); c.ellipse(x, y + 3, r + 7, r + 4, 0, 0, 7); c.stroke(); }
+      if (rs && rs.id === id) { found = true; rs.atk = atk; selMark(c, x, y + r * 0.72, r, t, '#ffd86a'); }
       piece(c, x, y, r, d, t, false, { pose: poseOf({ face: f / 10, moveT: m ? 0.1 : 0, atkT: a ? 0.1 : 0, id, def: d }, t, r) });
       hits.push({ id, x, y, d, atk });
     });
@@ -149,10 +156,10 @@
   function drawMeter(c, rows) {
     if (!rows.length) return;
     const x = W - 66 - 300, w = 300, top = rows[0].v || 1, sum = rows.reduce((a, b) => a + b.v, 0) || 1;
-    c.fillStyle = 'rgba(16, 11, 8, .72)'; c.fillRect(x - 10, 66, w + 20, 44 + rows.length * 34);
-    c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillStyle = '#e6c578'; c.font = '700 20px "Gowun Batang", serif'; c.fillText(I.t('meter'), x, 88);
+    c.fillStyle = 'rgba(16, 11, 8, .72)'; c.fillRect(x - 10, 96, w + 20, 44 + rows.length * 34);
+    c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillStyle = '#e6c578'; c.font = '700 20px "Gowun Batang", serif'; c.fillText(I.t('meter'), x, 118);
     rows.slice(0, 5).forEach((r, i) => {
-      const y = 108 + i * 34;
+      const y = 138 + i * 34;
       c.fillStyle = r.me ? 'rgba(125,255,142,.4)' : 'rgba(255,190,90,.36)'; c.fillRect(x, y, (w * r.v) / top, 28);
       c.fillStyle = '#fff'; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'left'; c.fillText(r.name, x + 8, y + 15);
       c.textAlign = 'right'; c.fillText(`${fmt(r.v)} (${Math.round((r.v / sum) * 100)}%)`, x + w - 8, y + 15);

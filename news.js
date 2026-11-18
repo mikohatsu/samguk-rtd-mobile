@@ -10,6 +10,12 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.2.36', d: '2026-11-18', items: [
+      ['화면 전체를 다듬었습니다. 제목 현판, 창 틀·버튼·아이콘을 한 가지 화풍으로 맞추고, 창이 열릴 때와 버튼을 누를 때 움직임을 넣었습니다.', '画面全体を磨き上げました。タイトルの扁額、ウィンドウの枠・ボタン・アイコンを一つの画風にそろえ、ウィンドウが開くときやボタンを押したときの動きを加えました。', 'Polished the whole interface: a title plaque, and window frames, buttons and icons in one consistent style, with motion when windows open and buttons are pressed.', '全面打磨了画面：标题匾额、窗口边框、按钮和图标统一为同一画风，并为打开窗口和按下按钮加入了动效。'],
+      ['보스전이 새로워졌습니다. 보스 체력 막대·조이스틱·공격 버튼·경기장 테두리와 바닥 문양을 새 그림으로 바꾸고, 장판 예고와 낙뢰 같은 기술 연출을 그림으로 다시 만들었습니다.', 'ボス戦を一新しました。ボスの体力ゲージ・スティック・攻撃ボタン・闘技場の縁と床の紋様を新しい絵にし、範囲予告や落雷などの技の演出を描き直しました。', 'Boss fights got a makeover: new art for the boss health bar, joystick, attack button and arena border and floor, and redrawn warning zones and lightning effects.', 'Boss战焕然一新：Boss血条、摇杆、攻击按钮、场地边框和地面纹样换成新图，范围预警和落雷等技能演出也重新绘制。'],
+      ['라운드 전환, 목숨을 잃을 때, 보스 처치, 패배 순간에 연출이 생겼고, 판 화면의 작은 글자와 체력 막대가 휴대폰에서 잘 보이게 커졌습니다.', 'ラウンドの切り替え、ライフを失ったとき、ボス討伐、敗北の瞬間に演出が付き、戦場の小さな文字や体力ゲージがスマホで見やすくなりました。', 'Added effects for new rounds, losing a life, defeating a boss and defeat, and enlarged small battlefield text and health bars for phones.', '回合切换、失去生命、击败Boss和失败时加入了演出，战场上的小字和血条在手机上更清晰。'],
+      ['결과 화면에 「같은 설정으로 다시」 버튼이 생기고, 받은 경험치·동전이 맨 앞에 나옵니다. AI 동맹 이름이 각 언어로 나오고, 싱글 판에서는 내 닉네임이 보입니다.', '結果画面に「同じ設定でもう一度」ボタンを追加し、獲得した経験値・銅銭を先頭に表示します。AI同盟の名前が各言語で表示され、シングルプレイでは自分のニックネームが表示されます。', 'The results screen now has a "Play again with same settings" button and shows XP and coins earned first. AI ally names are translated, and your nickname appears in single-player games.', '结算画面新增「相同设置再来一局」按钮，并优先显示获得的经验和铜钱。AI同盟名称按语言显示，单人模式显示自己的昵称。'],
+    ] },
     { v: '0.2.35', d: '2026-11-18', items: [
       ['최단 클리어 랭킹이 「온라인 협동」(2인 이상)과 「솔로」(혼자·AI 동맹)로 나뉘었습니다.', '最速クリアランキングを「オンライン協力」（2人以上）と「ソロ」（ひとり・AI同盟）に分けました。', 'The Fastest clear ranking is now split into Online co-op (2+ players) and Solo (alone or with AI allies).', '最快通关排行榜分为“在线协作”（2人以上）和“单人”（独自或AI同盟）。'],
       ['보스전에서 AI 동맹의 장수들이 한 점에 겹쳐 움직이지 않고, 서로 자리를 벌려 싸웁니다.', 'ボス戦でAI同盟の武将が一か所に重ならず、間隔をあけて戦うようになりました。', 'In boss fights, AI allies no longer stack on one spot; they spread out around the boss.', 'Boss战中AI同盟的武将不再重叠在一点，而是分散站位作战。'],

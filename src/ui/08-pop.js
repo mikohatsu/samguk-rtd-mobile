@@ -54,7 +54,11 @@
     if (f >= 1 && tt < 0.55) wave(c, (tt - 0.18) / 0.37, x, y, r * 6, col, 1);
     c.globalAlpha = 1;
   }
+  // 이름 뒤 먹 띠: 붓으로 그은 먹 그림(gfx/ui_ink)을 화면 폭으로 늘여 깐다. 그림이 없으면 예전 그라디언트 띠.
   function popBand(c, y, h, a) {
+    const ink = Art.pic('ui_ink');
+    // 높은 띠(토벌 성공 패널, 높이 300 넘음)는 먹 그림을 세로로 늘이거나 겹치면 얼룩·줄무늬가 되어 글자를 가린다(캡처로 확인). 그때만 예전 바탕 덮개.
+    if (ink && h <= 300) { c.save(); c.globalAlpha = Math.min(1, a) * 0.93; c.drawImage(ink, W / 2 - W * 0.6, y - h * 0.08, W * 1.2, h * 1.16); c.restore(); return; }
     const g2 = c.createLinearGradient(0, y, 0, y + h);
     g2.addColorStop(0, 'rgba(10,6,4,0)'); g2.addColorStop(0.2, 'rgba(10,6,4,.86)'); g2.addColorStop(0.8, 'rgba(10,6,4,.86)'); g2.addColorStop(1, 'rgba(10,6,4,0)');
     c.globalAlpha = a; c.fillStyle = g2; c.fillRect(-OVER.x, y, W + OVER.x * 2, h); c.globalAlpha = 1;
@@ -514,6 +518,8 @@
     }
     const p = S.pop;
     if (!p) return;
+    // 보스 처치 순간(07-arena drawKillCam)이 끝날 때까지 토벌 성공 패널을 기다린다
+    if (p.vic && killOn()) return;
     p.t += dt; p.shake = Math.max(0, p.shake - dt * 3);
     if (p.t >= p.dur) { S.pop = null; return; }
     if (p.vic) return drawVictory(c, p, t);
@@ -598,11 +604,18 @@
   function drawBanner() {
     const b = S.banner, c = ctx;
     if (!b) return;
+    if (b.len == null) b.len = b.t;
+    if (killOn()) return; // 보스 처치 순간이 끝난 뒤에 띄운다
     b.t -= S.fdt;
     if (b.t <= 0) { S.banner = null; return; }
-    c.globalAlpha = Math.min(1, b.t * 2); c.textAlign = 'center'; c.textBaseline = 'middle';
-    { const pg = c.createLinearGradient(W / 2 - 340, 0, W / 2 + 340, 0); pg.addColorStop(0, 'rgba(15,10,8,0)'); pg.addColorStop(0.25, 'rgba(15,10,8,.72)'); pg.addColorStop(0.75, 'rgba(15,10,8,.72)'); pg.addColorStop(1, 'rgba(15,10,8,0)'); c.fillStyle = pg; c.fillRect(W / 2 - 340, 170, 680, 86); } // 상자 모서리가 보이지 않게 양옆을 흐린다
-    c.fillStyle = '#ffd86a'; c.font = '400 40px "Black Han Sans", sans-serif'; c.fillText(b.text, W / 2, 200);
-    c.fillStyle = '#e8dcc0'; c.font = '400 20px "Gowun Batang", serif'; c.fillText(b.sub || '', W / 2, 236);
-    c.globalAlpha = 1;
+    // 등장: 먹 띠가 가운데에서 양옆으로 그어지고(0.22초) 제목이 살짝 크게 박혔다 돌아온다. 사라질 때는 흐려진다.
+    const el = b.len - b.t, sw = 1 - Math.pow(1 - Math.min(1, el / 0.22), 3), ts = el < 0.3 ? 1 + 0.25 * (1 - el / 0.3) : 1;
+    c.save(); c.globalAlpha = Math.min(1, b.t * 2); c.textAlign = 'center'; c.textBaseline = 'middle';
+    const ink = Art.pic('ui_ink');
+    if (ink) { c.save(); c.beginPath(); c.rect(W / 2 - 400 * sw, 140, 800 * sw, 150); c.clip(); c.globalAlpha *= 0.92; c.drawImage(ink, W / 2 - 400, 160, 800, 108); c.restore(); }
+    else { const pg = c.createLinearGradient(W / 2 - 340, 0, W / 2 + 340, 0); pg.addColorStop(0, 'rgba(15,10,8,0)'); pg.addColorStop(0.25, 'rgba(15,10,8,.72)'); pg.addColorStop(0.75, 'rgba(15,10,8,.72)'); pg.addColorStop(1, 'rgba(15,10,8,0)'); c.fillStyle = pg; c.fillRect(W / 2 - 340 * sw, 170, 680 * sw, 86); } // 상자 모서리가 보이지 않게 양옆을 흐린다
+    c.globalAlpha *= Math.min(1, el / 0.15);
+    c.save(); c.translate(W / 2, 200); c.scale(ts, ts); c.lineJoin = 'round'; c.lineWidth = 5; c.strokeStyle = 'rgba(14,9,6,.85)'; c.font = '400 40px "Black Han Sans", sans-serif'; c.strokeText(b.text, 0, 0); c.fillStyle = '#ffd86a'; c.fillText(b.text, 0, 0); c.restore();
+    c.fillStyle = '#e8dcc0'; c.font = '400 20px "Gowun Batang", serif'; c.fillText(b.sub || '', W / 2, 238);
+    c.restore();
   }

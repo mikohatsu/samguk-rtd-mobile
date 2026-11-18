@@ -1,13 +1,20 @@
   // ---- 결과창 맨 위 '다음 목표' 칸(글 2~4줄, 그림 없음): 진 곳 · 이번 판으로 새로 열린 것(난이도·상점) · 다음 관직까지 남은 경험치 · 가장 싼 잠긴 장수까지 남은 동전.
   // S.progBefore = 이 판을 기록하기 직전의 해금 진행도(16-hud drainEvents의 'over'). 로그인하지 않은 판은 열린 것과 진 곳만 나온다.
+  function lostLine() {
+    if (g.over === 'win') return '';
+    const b = g.stats.bosses[g.stats.bosses.length - 1], f = g.fight;
+    if (b && !b.win && b.round === g.round) {
+      const p = f && f.boss && f.def && f.def.round === b.round && f.boss.mhp > 0 ? Math.max(1, Math.min(100, Math.ceil((f.boss.hp / f.boss.mhp) * 100))) : 0;
+      return I.t(p ? 'goalLostBossHp' : 'goalLostBoss', { r: b.round, a: esc(b.name), p });
+    }
+    return I.t(g.lives <= 0 ? 'goalLostLane' : 'goalLost', { r: g.round });
+  }
   function goalBox() {
     const DF = ['easy', 'normal', 'hard', 'nightmare'], win = g.over === 'win', lines = [], num = (n) => Math.round(n).toLocaleString();
     if (!win) {
-      const b = g.stats.bosses[g.stats.bosses.length - 1], f = g.fight;
-      if (b && !b.win && b.round === g.round) {
-        const p = f && f.boss && f.def && f.def.round === b.round && f.boss.mhp > 0 ? Math.max(1, Math.min(100, Math.ceil((f.boss.hp / f.boss.mhp) * 100))) : 0;
-        lines.push(I.t(p ? 'goalLostBossHp' : 'goalLostBoss', { r: b.round, a: esc(b.name), p }));
-      } else lines.push(I.t(g.lives <= 0 ? 'goalLostLane' : 'goalLost', { r: g.round }));
+      // 진 판: 이미 있는 통계로 한 줄 조언(강화를 한 번도 안 했으면 강화, 합성을 한 번도 안 했으면 합성)
+      const ups = Object.values(g.me.upgrades || {}).reduce((a, b) => a + b, 0);
+      if (!ups) lines.push(I.t('tipUpgrade')); else if (!g.stats.combines) lines.push(I.t('tipCombine'));
     }
     const pb = S.progBefore, mut = g.mutLv || 0;
     if (win && pb) {
@@ -32,8 +39,10 @@
   // 판 끝 통계: 요약 · 보스전 기록(순위) · 라인 피해 순위 · 강화·조합 기록
   function endStats() {
     const s = g.stats, win = g.over === 'win', mm = Math.floor(g.time / 60), ss = Math.floor(g.time % 60);
-    const card = (l, v, sub) => `<div class="es-card"><small>${l}</small><b>${v}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
-    const cards = [
+    const card = (l, v, sub, cls) => `<div class="es-card ${cls || ''}"><small>${l}</small><b>${v}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
+    // 받은 경험치·동전: 통계 카드 맨 앞에(로그인한 판만)
+    const reward = S.xpGained != null && ACC.me ? card(I.t('rewardHead'), `+${fmt(S.xpGained)} XP`, (S.coinGained ? `<i class="ico coin" aria-hidden="true"></i>+${fmt(S.coinGained)} · ` : '') + `${esc(t(ACC.me.grade))} ${t('level', { n: ACC.me.level })}`, 'es-rw') : '';
+    const cards = reward + [
       card(I.t('reachRound'), `${g.round} / ${g.diff.rounds}`), card(I.t('playTime'), `${mm}:${String(ss).padStart(2, '0')}`),
       card(I.t('kills'), fmt(s.kills)), card(I.t('midboss'), I.t('midKills', { n: s.midKill }), s.midMiss ? I.t('midMiss', { n: s.midMiss }) : I.t('noMiss')),
       card(I.t('lifeLost'), `${s.lifeLost}`, I.t('livesLeft', { n: g.lives })), card(I.t('bestTier'), s.bestName ? `${esc(s.bestName)}` : '-', s.best ? rankName(s.best) : ''),
@@ -52,18 +61,24 @@
     // 라인 피해 순위(유닛 종류별)
     const du = Object.keys(s.dmgUnit).map((id) => ({ d: defOf[id], v: s.dmgUnit[id] })).filter((x) => x.d).sort((a, b) => b.v - a.v), dsum = du.reduce((a, x) => a + x.v, 0) || 1, top = du[0] ? du[0].v : 1;
     const dmgRows = du.slice(0, 10).map((x, i) => `<div class="es-bar"><span class="n" style="color:${tierColor(x.d.tier)}">${i + 1}. ${esc(x.d.name)} ${rankTag(x.d.tier)}</span><span class="b"><i style="width:${(x.v / top) * 100}%;background:${tierColor(x.d.tier)}"></i></span><span class="v">${fmt(x.v)} · ${Math.round((x.v / dsum) * 100)}%</span></div>`).join('');
-    const ups = T.upgrades.map((u) => `<span class="chip">${esc(u.name)} ${I.t('lvN', { n: g.me.upgrades[u.id] || 0 })}</span>`).join('');
-    const crafts = s.crafts.length ? s.crafts.map((n) => `<span class="chip">${esc(n)}</span>`).join('') : `<span class="dim">${I.t('none')}</span>`;
+    // 내용이 없는 칸은 제목째 숨긴다. 강화는 1단계 이상 올린 것만
+    const ups = T.upgrades.filter((u) => (g.me.upgrades[u.id] || 0) > 0).map((u) => `<span class="chip">${esc(u.name)} ${I.t('lvN', { n: g.me.upgrades[u.id] || 0 })}</span>`).join('');
+    const crafts = s.crafts.map((n) => `<span class="chip">${esc(n)}</span>`).join('');
+    // '같은 설정으로 다시': 이 판이 마지막에 시작한 설정(rtd-last)과 같은 싱글 판일 때만(협동 방·빠른 대전·이어하기는 숨김)
+    let last = null; try { last = JSON.parse(localStorage.getItem('rtd-last') || 'null'); } catch (e) { last = null; }
+    const againOk = !!last && !S.fromSnap && !S.online && last.play === 'offline' && last.diff === g.diff.id && (bots.length ? last.mode === 'ai' : !net && last.mode === 'solo');
+    const lost = lostLine();
     // 승리: 철괴 제목판을 키워 글씨를 얹는다. 패배: 기울어진 부서진 나무판(흰 깃발 그림)에 '전선 붕괴'.
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
-    return `<div class="over" id="end"><div class="sheet es">
-      ${head}${goalBox()}${S.xpGained != null && ACC.me ? `<div class="dim" style="color:#ffd86a">${t('xpGain', { n: S.xpGained })} · ${esc(t(ACC.me.grade))} ${t('level', { n: ACC.me.level })}</div>` : ''}${S.tkMiss ? `<div class="dim" style="color:#ff9d8a">${t('noTicket')}</div>` : ''}<div class="es-cards">${cards}</div>
+    // 창 = 스크롤되는 본문(.es-body) + 고정 바닥 줄(.es-foot). 버튼이 통계 카드를 가리지 않는다
+    return `<div class="over" id="end"><div class="sheet es"><div class="es-body">
+      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${goalBox()}${S.tkMiss ? `<div class="dim" style="color:#ff9d8a">${t('noTicket')}</div>` : ''}<div class="es-cards">${cards}</div>
       ${g.mutLv && g.muts && g.muts.length ? `<div class="es-mutpop" hidden><b>${esc(I.t('mutHead', { n: g.mutLv }))}</b>${g.muts.map((m, i) => mutCard(m.id, i)).join('')}</div>` : ''}
-      <h3>${I.t('bossLog')}</h3>${bossRows ? `<table class="es-boss"><tr><th>${I.t('thBoss')}</th><th>${I.t('thResult')}</th><th>${I.t('thTime')}</th><th>${I.t('thChamp')}</th><th>${I.t('dmgRank')}</th></tr>${bossRows}</table>` : `<div class="dim">${I.t('noBossLog')}</div>`}
-      <h3>${I.t('laneDmgRank')}</h3>${dmgRows || `<div class="dim">${I.t('noRecord')}</div>`}
-      <h3>${I.t('upgrade')}</h3><div class="chips">${ups}</div>
-      <h3>${I.t('craftedHead')}</h3><div class="chips">${crafts}</div>
-      <button class="btn go es-again" data-act="restart" type="button">${t('quitGame')}</button></div></div>`;
+      ${bossRows ? `<h3>${I.t('bossLog')}</h3><table class="es-boss"><tr><th>${I.t('thBoss')}</th><th>${I.t('thResult')}</th><th>${I.t('thTime')}</th><th>${I.t('thChamp')}</th><th>${I.t('dmgRank')}</th></tr>${bossRows}</table>` : ''}
+      ${dmgRows ? `<h3>${I.t('laneDmgRank')}</h3>${dmgRows}` : ''}
+      ${ups ? `<h3>${I.t('upgrade')}</h3><div class="chips">${ups}</div>` : ''}
+      ${crafts ? `<h3>${I.t('craftedHead')}</h3><div class="chips">${crafts}</div>` : ''}
+      </div><div class="es-foot"><button class="btn es-again" data-act="restart" type="button">${t('quitGame')}</button>${againOk ? `<button class="btn go es-again2" data-act="again" type="button">${I.t('againSame')}</button>` : ''}</div></div></div>`;
   }
   // ---- 판 끝 경험치 연출: 화면을 어둡게 흐리고, 지금 계급 문양 ─ 경험치 막대 ─ 다음 계급 문양.
   // +경험치가 뜬 뒤 막대가 그만큼 차오르고(계급이 오르면 문양이 바뀜), 잠시 뒤 사라지며 결과창이 나온다.

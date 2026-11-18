@@ -93,8 +93,11 @@
         continue;
       }
       if (d.t > 0.8) { S.dmg.splice(i, 1); continue; }
-      c.globalAlpha = 1 - d.t / 0.8; c.fillStyle = d.big ? '#ffd86a' : '#fff';
-      c.font = `900 ${Math.round((d.big ? 30 : 20) * us)}px "Noto Serif KR", serif`; c.fillText(typeof d.v === 'string' ? d.v : fmt(d.v), d.x, d.y - d.t * 50);
+      // 라인 피해 숫자: 전장 위 숫자는 굵은 제목 글꼴 하나로(명조를 섞지 않는다) + 먹 테두리
+      const tx = typeof d.v === 'string' ? d.v : fmt(d.v);
+      c.globalAlpha = 1 - d.t / 0.8; c.lineJoin = 'round'; c.lineWidth = 4 * us; c.strokeStyle = 'rgba(16,8,4,.85)';
+      c.font = `400 ${Math.round((d.big ? 30 : 20) * us)}px "Black Han Sans", sans-serif`; c.strokeText(tx, d.x, d.y - d.t * 50);
+      c.fillStyle = d.big ? '#ffd86a' : '#fff'; c.fillText(tx, d.x, d.y - d.t * 50);
     }
     c.globalAlpha = 1;
   }
@@ -182,7 +185,8 @@
         // 그림 깃발: 높이를 맞춰 세우고 천 가운데에 글자를 쓴다
         const hh = kind === 'bond' ? 50 : 66, ww = (hh * sp.width) / sp.height, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
         c.drawImage(sp, kind === 'bond' ? -2 : -4, -hh, ww, hh);
-        c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,14,10,.85)'; c.lineWidth = 3.5; c.font = `700 ${label.length > 2 ? 13 : 15}px "IBM Plex Sans KR", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+        // 깃발 글자: 휴대폰에서 깨알이 되지 않게 천 폭에 맞는 한도에서 키우고 굵은 제목 글꼴로
+        c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 5; c.font = `400 ${label.length > 2 ? 17 : 21}px "Black Han Sans", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
         const tx = (kind === 'bond' ? -2 : -4) + ww * AT[0], ty = -hh + hh * AT[1];
         c.strokeText(label, tx, ty); c.fillText(label, tx, ty);
         if (done) { c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 3; c.font = '900 19px "Noto Serif KR", serif'; c.strokeText('★', ww - 4, -hh + 6); c.fillText('★', ww - 4, -hh + 6); }

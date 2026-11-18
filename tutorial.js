@@ -82,7 +82,7 @@
   ];
   function tabTip(k, covered) {
     const key = 'rtd-tip-tab-' + k;
-    return { key, k: 'tip_tab_' + k, at: `#tabs [data-arg="${k}"]`,
+    return { key, tab: true, k: 'tip_tab_' + k, at: `#tabs [data-arg="${k}"]`,
       when: (c) => { if (!c.S.drawer || c.S.tab !== k || !vis($('#pane'))) return false; if (covered && steps.length) { set(key, '1'); return false; } return true; } };
   }
   function moved(c, st) {
@@ -105,7 +105,7 @@
       // 건너뛰기는 안내 전체를 끝내므로 한 번 누르면 '한 번 더'로 바뀌고, 3초 안에 다시 눌러야 끝낸다('다음' 바로 옆이라 잘못 누르기 쉽다)
       if (b.dataset.tut === 'skip') {
         if (b.dataset.armed) { delete b.dataset.armed; skipAll(); return; }
-        b.dataset.armed = '1'; b.textContent = t('quitAgain');
+        b.dataset.armed = '1'; b.textContent = t('tut_skipAgain');
         setTimeout(() => { if (b.dataset.armed) { delete b.dataset.armed; b.textContent = t('tut_skip'); } }, 3000);
       } else next();
     });
@@ -126,6 +126,7 @@
     if (!cur) return;
     const i = steps.indexOf(cur); stDone[i] = true; const wasLast = cur.last || stDone.every(Boolean);
     hide(); cur = null;
+    if (mode === 'lobby') { if (stDone.every(Boolean)) steps = []; return; }
     if (wasLast && steps.length) { if (mode === 'shop') shopEnd(); else endTut(); }
   }
 
@@ -141,16 +142,38 @@
       sb.textContent = t('tut_skip'); sb.hidden = isTip || !!st.last; delete sb.dataset.armed;
     }
     box.hidden = false;
-    const W = innerWidth, H = innerHeight, bw = Math.min(360, W - 24);
+    const W = innerWidth, H = innerHeight, cs = getComputedStyle(document.documentElement);
+    const SL = Math.max(12, parseFloat(cs.getPropertyValue('--sl')) || 0), SR = Math.max(12, parseFloat(cs.getPropertyValue('--sr')) || 0);
+    const bw = Math.min(360, W - SL - SR);
     box.style.width = bw + 'px';
+    box.classList.toggle('lobby', mode === 'lobby' || mode === 'shop');
+    if (mode === 'lobby' && !r) {
+      // 비출 곳이 없는 로비 말풍선(첫 인사, 전투 시작 창 안내): 첫 인사는 캐릭터 옆 왼쪽 가운데, 창 안내는 위쪽 가운데
+      ring.hidden = true;
+      const wiz = setupOpen(), mn = $('#lmenu'), mr = vis(mn) ? mn.getBoundingClientRect() : null;
+      // 메뉴 왼쪽 끝 앞에서 끝나게(메뉴·이름표를 가리지 않음). 자리가 모자라면 폭을 줄인다
+      if (!wiz && mr) { const w2 = Math.max(260, Math.min(bw, mr.left - SL - 12)); box.style.width = w2 + 'px'; box.style.left = Math.max(SL, mr.left - w2 - 12) + 'px'; }
+      else box.style.left = (W - bw) / 2 + 'px';
+      box.style.top = (wiz ? 10 : Math.max(60, H * 0.5 - box.offsetHeight / 2)) + 'px';
+      return;
+    }
+    if (mode === 'lobby' && r) {
+      // 출진 버튼: 버튼 왼쪽에 둔다(위에 두면 메뉴 이름표를 가린다)
+      ring.hidden = false;
+      Object.assign(ring.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' });
+      const bh = box.offsetHeight;
+      box.style.left = Math.max(SL, r.left - bw - 16) + 'px';
+      box.style.top = Math.max(8, Math.min(H - bh - 8, r.top + r.height / 2 - bh / 2)) + 'px';
+      return;
+    }
     if (r) {
       ring.hidden = false;
       Object.assign(ring.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' });
       const bh = box.offsetHeight, below = r.bottom + 12 + bh < H - 8;
-      let x = Math.min(W - bw - 12, Math.max(12, r.left + r.width / 2 - bw / 2));
+      let x = Math.min(W - bw - SR, Math.max(SL, r.left + r.width / 2 - bw / 2));
       let y = below ? r.bottom + 12 : Math.max(8, r.top - bh - 12);
       // 대상이 화면 높이를 거의 다 차지하면(서랍 등) 옆에 둔다
-      if (!below && r.top - bh - 12 < 8) { y = Math.max(8, H / 2 - bh / 2); x = r.left > W / 2 ? Math.max(12, r.left - bw - 12) : Math.min(W - bw - 12, r.right + 12); }
+      if (!below && r.top - bh - 12 < 8) { y = Math.max(8, H / 2 - bh / 2); x = r.left > W / 2 ? Math.max(SL, r.left - bw - 12) : Math.min(W - bw - SR, r.right + 12); }
       box.style.left = x + 'px'; box.style.top = y + 'px';
     } else {
       ring.hidden = true;
@@ -190,15 +213,19 @@
         const i = steps.indexOf(st);
         if (st !== cur) { cur = st; st._t = now; st._late = false; if (st.enter) st.enter(ctx, st); }
         if (st.until && st.until(ctx, st)) { stDone[i] = true; cur = null; hide(); if (mode === 'lobby' && stDone.every(Boolean)) steps = []; return; }
-        if (st.until && !st._late && now - st._t > 20000) st._late = true;
+        if (st.until && !st._late && mode !== 'lobby' && now - st._t > 20000) st._late = true; // 로비 단계에는 늦은 '다음'을 보이지 않는다
         if (mode === 'game') ctx.S.tutHold = !!st.hold;
         place(st);
         return;
       }
       if (cur) { cur = null; hide(); }
       // 팁: 안내 단계가 보이지 않을 때만, 판 안에서
-      if (mode === 'game' && !ctx.g.over) tip = TIPS.find((x) => get(x.key) !== '1' && x.when(ctx)) || null;
+      // 보스전(라운드 진행 중이 아닐 때)에는 팁을 띄우지 않는다: 경기장 가운데를 가린다
+      if (mode === 'game' && !ctx.g.over && ctx.g.phase === 'wave' && !((ctx.S.vicUntil || 0) > performance.now())) tip = TIPS.find((x) => get(x.key) !== '1' && x.when(ctx)) || null;
     }
+    if (tip && tip.tab && mode === 'game' && !tip.when(ctx)) { set(tip.key, '1'); tip = null; hide(); return; }
+    // 떠 있던 팁도 보스전에 들어가면 접어 둔다(본 것으로 치지 않으므로 라운드로 돌아오면 다시 뜬다)
+    if (tip && !tip.tab && mode === 'game' && ctx.g.phase !== 'wave') { tip = null; hide(); return; }
     if (tip) {
       if (mode === 'game') ctx.S.tutHold = !!ctx.S.saveOn;
       place(tip, true);

@@ -9,6 +9,10 @@
   // 빠른 대전: 이만큼 기다려도 상대가 없으면 '혼자 시작' 버튼을 보인다(ms)
   const ALONE_MS = 15000;
   const LI = () => ({ ko: 0, ja: 1, en: 2, zh: 3 }[C.I.lang] || 0);
+  // 새 UI 그림(gfx/ic_*·ui_*)이 아직 없으면 <html>에 noic-<이름>을 붙인다. 그러면 CSS가 예전 글자(✕·‹·銅·報 등)나 예전 모양(조이스틱·공격 버튼)을 보인다
+  if (typeof document !== 'undefined') [['coin', 'ic_coin'], ['news', 'ic_news'], ['lock', 'ic_lock'], ['close', 'ic_close'], ['back', 'ic_back'], ['gear', 'ic_gear'], ['joy', 'ui_joy'], ['knob', 'ui_knob'], ['attack', 'ic_attack']].forEach(([k, f]) => {
+    const im = new Image(); im.onerror = () => document.documentElement.classList.add('noic-' + k); im.src = 'gfx/' + f + '.png';
+  });
   const nm = (arr) => arr[LI()] || arr[0];
   // 로비 전용 문구 [ko, ja, en, zh]
   const S = {
@@ -23,7 +27,7 @@
     mission: ['미션', 'ミッション', 'Missions', '任务'],
     msDaily: ['오늘의 미션', '今日のミッション', "Today's missions", '今日任务'], msFirsts: ['도전 과제', 'チャレンジ', 'Challenges', '挑战'],
     msReset: ['초기화까지 {h}시간 {m}분', 'リセットまで{h}時間{m}分', 'Resets in {h}h {m}m', '{h}小时{m}分后重置'],
-    ms_d_play: ['판 1번 끝내기 (10라운드 이상)', 'バトルを1回終える（10ラウンド以上）', 'Finish 1 game (round 10 or later)', '完成1局（到达第10回合以上）'],
+    ms_d_play: ['10라운드 이상 간 판을 1번 끝내기', '10ラウンド以上のバトルを1回終える', 'Finish 1 game reaching round 10 or later', '完成1局到达第10回合以上的对局'],
     ms_d_r30: ['한 판에서 30라운드 도달', '1回のバトルで30ラウンドに到達', 'Reach round 30 in one game', '单局到达第30回合'],
     ms_d_coop: ['온라인 협동(2인 이상) 판 1번 끝내기', 'オンライン協力（2人以上）のバトルを1回終える', 'Finish 1 online co-op game (2+ players)', '完成1局在线合作（2人以上）'],
     msFirst: ['{a} 첫 클리어', '{a} 初クリア', 'First clear: {a}', '首次通关{a}'], msFirstMut: ['{a} +{n} 첫 클리어', '{a}+{n} 初クリア', 'First clear: {a} +{n}', '首次通关{a}+{n}'],
@@ -34,6 +38,7 @@
     // 장수 해금(일본어는 글꼴 부분 파일 fonts/ja-*.woff2에 이미 있는 글자만 쓴다)
     unlockTab: ['장수 해금', '武将解放', 'Unlock generals', '解锁武将'],
     shopLocked: ['쉬움 난이도를 클리어하면 상점이 열립니다', '「かんたん」をクリアするとショップが開きます', 'Clear Easy to open the Shop', '通关“简单”后开放商店'],
+    shopLockShort: ['쉬움 클리어로 열림', 'かんたんクリアで開放', 'Clear Easy to open', '通关简单后开放'],
     unlockHint: ['잠긴 신화·불멸 장수는 조합할 수 없습니다(상자에서는 대신 열린 장수의 아이템이 나옵니다). 한 번 열면 이 계정에서 계속 나옵니다. 플레이로 모은 동전만으로도 모두 열 수 있습니다.', 'ロック中の神話・不滅の武将は合成できません（宝箱からは、解放済みの武将のアイテムが代わりに出ます）。一度解放すると、このアカウントではずっと使えます。プレイで集めた銅銭だけでも全員解放できます。', 'Locked Myth/Immortal generals cannot be crafted (chests give items for unlocked ones instead). Once unlocked they stay on this account. Everything can be unlocked with coins earned by playing.', '未解锁的神话·不灭武将无法合成（宝箱会改为给出已解锁武将的道具）。解锁后在本账号永久有效。只靠游戏获得的铜钱也能全部解锁。'],
     unlocked: ['해금됨', '解放済み', 'Unlocked', '已解锁'], unlockBtn: ['해금', '解放', 'Unlock', '解锁'], tMyth: ['신화', '神話', 'Myth', '神话'], tImm: ['불멸', '不滅', 'Immortal', '不灭'],
     adBtn: ['광고 보고 동전 +{n}', '広告を見て銅銭+{n}', 'Watch ad: +{n} coins', '看广告 铜钱+{n}'], adLeft: ['오늘 남은 횟수 {n}', '今日の残り{n}回', '{n} left today', '今日剩余{n}次'],
@@ -53,12 +58,13 @@
     restoreNone: ['복원할 구매가 없습니다.', '復元できる購入がありません。', 'No purchases to restore.', '没有可恢复的购买。'],
     restoreFail: ['구매를 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.', '購入を確認できませんでした。しばらくしてからもう一度お試しください。', 'Could not check your purchases. Please try again later.', '无法确认购买，请稍后再试。'],
     resentXp: ['지난 판의 결과를 다시 보냈습니다. 경험치 +{n}', '前回のバトル結果を再送信しました。経験値 +{n}', 'Your last game result was sent again. +{n} XP', '已重新发送上一局的结果。经验 +{n}'],
-    rLevel: ['계정 레벨', 'アカウントLv', 'Account level', '账号等级'], rClear: ['최단 클리어', '最速クリア', 'Fastest clear', '最快通关'], rImm: ['불멸 소환', '不滅の召喚', 'Immortal summons', '不灭召唤'], rCoop: ['온라인 협동', 'オンライン協力', 'Online co-op', '在线协作'], rSolo: ['솔로', 'ソロ', 'Solo', '单人'],
+    rLevel: ['계정 레벨', 'アカウントLv.', 'Account level', '账号等级'], rClear: ['최단 클리어', '最速クリア', 'Fastest clear', '最快通关'], rImm: ['불멸 소환', '不滅の召喚', 'Immortal summons', '不灭召唤'], rCoop: ['온라인 협동', 'オンライン協力', 'Online co-op', '在线协作'], rSolo: ['솔로', 'ソロ', 'Solo', '单人'],
     times: ['{n}회', '{n}回', '×{n}', '{n}次'], empty: ['아직 기록이 없습니다.', 'まだ記録がありません。', 'No records yet.', '暂无记录。'],
-    rankNote: ['최단 클리어는 온라인 협동(2인 이상)과 솔로(혼자·AI 동맹)로 나뉩니다. 불멸 소환은 온라인 판만 기록됩니다.', '最速クリアはオンライン協力（2人以上）とソロ（ひとり・AI同盟）に分かれます。不滅の召喚はオンラインバトルのみ記録されます。', 'Fastest clear is split into online co-op (2+ players) and solo (alone or with AI allies). Immortal summons count online games only.', '最快通关分为在线协作（2人以上）和单人（独自或AI同盟）。不灭召唤仅记录在线对局。'],
+    rankNoteClear: ['온라인 협동(2인 이상)과 솔로(혼자·AI 동맹)로 나뉩니다.', 'オンライン協力（2人以上）とソロ（ひとり・AI同盟）に分かれます。', 'Split into online co-op (2+ players) and solo (alone or with AI allies).', '分为在线协作（2人以上）和单人（独自或AI同盟）。'],
+    rankNoteImm: ['온라인 판만 기록됩니다.', 'オンラインバトルのみ記録されます。', 'Online games only.', '仅记录在线对局。'],
     icon: ['아이콘', 'アイコン', 'Icon', '头像'], iconPick: ['아이콘 바꾸기', 'アイコン変更', 'Change icon', '更换头像'],
     language: ['언어', '言語', 'Language', '语言'],
-    history: ['전적', '戦績', 'Records', '战绩'], totalPlays: ['전체 판', '総プレイ', 'Games', '总局数'], playsClears: ['{p}판 · 클리어 {c}', '{p}回・クリア{c}', '{p} played · {c} cleared', '{p}局·通关{c}'],
+    history: ['전적', '戦績', 'Records', '战绩'], totalPlays: ['전체 판', '総プレイ', 'Games', '总局数'], hsClears: ['클리어 / 판', 'クリア / 回数', 'clears / games', '通关 / 局数'], hsNone: ['아직 안 함', '未プレイ', 'Not played', '未游玩'],
     recent: ['최근 20판 (누르면 자세히)', '直近20回（タップすると詳細）', 'Last 20 games (tap for details)', '最近20局（点击查看详情）'], win: ['승리', '勝利', 'Win', '胜利'], lose: ['패배', '敗北', 'Loss', '失败'],
     mythGot: ['신화 이상 소환', '神話以上の召喚', 'Myth+ summoned', '神话以上召唤'], noMyth: ['없음', 'なし', 'None', '无'], offlineTag: ['오프라인', 'オフライン', 'Offline', '离线'], onlineTag: ['온라인', 'オンライン', 'Online', '在线'],
     histLocal: ['로그인하지 않은 기록은 이 기기에만 저장됩니다.', 'ログインしていない記録はこの端末にだけ保存されます。', 'Records made while signed out stay on this device.', '未登录时的记录只保存在本设备。'],
@@ -74,7 +80,7 @@
     report: ['신고', '通報', 'Report', '举报'], block: ['차단', 'ブロック', 'Block', '屏蔽'], unblock: ['차단 풀기', 'ブロック解除', 'Unblock', '解除屏蔽'], reported: ['신고했습니다. 운영자가 확인합니다.', '通報しました。運営が確認します。', 'Reported. We will review it.', '已举报，运营将核实。'], blocked: ['차단한 사람의 채팅은 보이지 않습니다.', 'ブロックした人のチャットは表示されません。', "Blocked players' messages are hidden.", '已屏蔽该玩家的聊天。'],
     chatRule: ['욕설은 가려지고 광고·도배는 차단됩니다. 신고된 채팅은 운영자가 확인합니다.', '暴言は伏せ字になり、広告・連投はブロックされます。通報されたチャットは運営が確認します。', 'Abusive words are masked; ads and spam are blocked. Reported messages are reviewed.', '脏话会被屏蔽，广告和刷屏会被拦截。被举报的聊天由管理员审核。'],
     lchat: ['로비 채팅', 'ロビーチャット', 'Lobby chat', '大厅聊天'], chN: ['채널 {n}', 'チャンネル{n}', 'Channel {n}', '频道{n}'], lcSend: ['보내기', '送信', 'Send', '发送'], lcPh: ['메시지 입력', 'メッセージを入力', 'Type a message', '输入消息'],
-    chEnter: ['채널 {n}에 들어왔습니다. (지금 {c}명)', 'チャンネル{n}に入りました。（現在{c}人）', 'Joined channel {n}. ({c} here now)', '已进入频道{n}。（当前{c}人）'], chFull: ['그 채널은 가득 찼습니다.', 'そのチャンネルは満員です。', 'That channel is full.', '该频道已满。'],
+    chEnter: ['채널 {n}에 들어왔습니다.', 'チャンネル{n}に入りました。', 'Joined channel {n}.', '已进入频道{n}。'], chFull: ['그 채널은 가득 찼습니다.', 'そのチャンネルは満員です。', 'That channel is full.', '该频道已满。'],
     lcWait: ['채팅 서버에 연결하는 중…', 'チャットサーバーに接続中…', 'Connecting to chat…', '正在连接聊天服务器…'], lcBar: ['채팅 · 채널 {n} ({c}명)', 'チャット・チャンネル{n}（{c}人）', 'Chat · Ch {n} ({c})', '聊天·频道{n}（{c}人）'],
     no_fast: ['너무 빨리 보내고 있습니다. 잠시 뒤에 보내 주세요.', '送信が速すぎます。少し待ってから送ってください。', 'You are sending too fast. Please wait a moment.', '发送过快，请稍后再发。'],
     no_dup: ['같은 말을 연달아 보낼 수 없습니다.', '同じ内容を続けて送ることはできません。', 'You cannot send the same message twice in a row.', '不能连续发送相同内容。'],
@@ -89,7 +95,7 @@
     histFallback: ['서버의 전적을 불러오지 못해 이 기기에 있는 기록을 보여 줍니다.', 'サーバーの戦績を読み込めなかったため、この端末の記録を表示しています。', 'Could not load server records. Showing the records on this device.', '无法加载服务器战绩，显示本设备的记录。'],
     adLoading: ['광고 불러오는 중…', '広告を読み込み中…', 'Loading ad…', '广告加载中…'],
     working: ['처리 중…', '処理中…', 'Working…', '处理中…'],
-    balance: ['보유 동전 {n}', '所持銅銭 {n}', 'Coins: {n}', '持有铜钱 {n}'],
+    balance: ['보유 동전 {n}', '所持 銅銭 {n}', 'Coins: {n}', '持有铜钱 {n}'],
     short: ['{n} 부족', '{n}不足', '{n} short', '还差{n}'],
     profGuest: ['로그인 안 함', '未ログイン', 'Not signed in', '未登录'],
     profTap: ['눌러서 로그인', 'タップしてログイン', 'Tap to sign in', '点击登录'],
@@ -179,7 +185,7 @@
 
   function toast(txt) {
     let el = $('ltoast'); if (!el) { el = document.createElement('div'); el.id = 'ltoast'; $('title').appendChild(el); }
-    el.textContent = txt; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2600);
+    el.textContent = txt; el.hidden = false; el.classList.remove('in'); void el.offsetWidth; el.classList.add('in'); clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2600);
   }
   // ---------- 전적과 난이도 해금 ----------
   const DIFFS = ['easy', 'normal', 'hard', 'nightmare'];
@@ -257,7 +263,7 @@
       b.title = open ? '' : L('locked', { a: dname(DIFFS[i - 1]) });
       // 잠긴 난이도는 무엇을 깨면 열리는지 버튼 안에 글로 보여 준다(터치 화면에서는 title이 안 보인다)
       let lk = b.querySelector('.lk');
-      if (!open) { if (!lk) { lk = document.createElement('em'); lk.className = 'lk'; b.appendChild(lk); } lk.textContent = '🔒 ' + L('locked', { a: dname(DIFFS[i - 1]) }); }
+      if (!open) { if (!lk) { lk = document.createElement('em'); lk.className = 'lk'; b.appendChild(lk); } lk.innerHTML = '<i class="ico lock" aria-hidden="true"></i>' + esc(L('locked', { a: dname(DIFFS[i - 1]) })); }
       else if (lk) lk.remove();
     });
     const p = prog();
@@ -267,7 +273,7 @@
       const box = $('mutlv'), first = p.nmx + 2; let lk = box && box.querySelector('.lk');
       if (box && box.children.length && first <= 5) {
         if (!lk) { lk = document.createElement('em'); lk.className = 'lk'; box.appendChild(lk); }
-        lk.textContent = '🔒 ' + (first > 1 ? L('lockedMut', { n: first - 1 }) : L('locked', { a: dname('nightmare') }));
+        lk.innerHTML = '<i class="ico lock" aria-hidden="true"></i>' + esc(first > 1 ? L('lockedMut', { n: first - 1 }) : L('locked', { a: dname('nightmare') }));
       } else if (lk) lk.remove();
     }
     if (!diffOpen(C.cfg.diff, 0)) { const best = DIFFS.filter((d) => diffOpen(d, 0)).pop(); if (best && best !== C.cfg.diff) { C.cfg.diff = best; C.cfg.mutLv = '0'; } }
@@ -395,7 +401,7 @@
     h += `<div class="lp-grid">${U.lockedIds().map((id) => {
       const d = unitOf(id), own = owns(id), cost = U.coins[d.tier], ip = U.iap[d.tier];
       const buy = own ? `<span class="pr">${L('unlocked')}</span>`
-        : `<button class="btn go" type="button" data-unl="${id}" ${me.coins < cost ? 'disabled' : ''}>${L('unlockBtn')} · 銅 ${cost}</button>${me.coins < cost ? `<span class="short">${L('short', { n: cost - me.coins })}</span>` : ''}` + (iap && ip ? `<button class="btn" type="button" data-iap="${ip[0] + id}">${L('iapBtn', { y: ip[1].toLocaleString('en-US') })}</button>` : '');
+        : `<button class="btn go" type="button" data-unl="${id}" ${me.coins < cost ? 'disabled' : ''}>${L('unlockBtn')} · <i class="ico coin" aria-hidden="true"></i>${cost}</button>${me.coins < cost ? `<span class="short">${L('short', { n: cost - me.coins })}</span>` : ''}` + (iap && ip ? `<button class="btn" type="button" data-iap="${ip[0] + id}">${L('iapBtn', { y: ip[1].toLocaleString('en-US') })}</button>` : '');
       return `<div class="lp-card ${own ? 'on' : 'lock'}"><img alt="" src="${Art.portrait(d)}"><span class="nm">${esc(d.name || id)}</span><span class="rk">${L(d.tier === 10 ? 'tImm' : 'tMyth')}</span>${buy}</div>`;
     }).join('')}</div>`;
     // 결제 버튼이 보일 때만: 특정상거래법 표시·이용약관
@@ -406,7 +412,7 @@
   // ---------- 상단 ----------
   const iconSrc = (id) => { const d = C.T.units.find((u) => u.id === id) || C.T.units.find((u) => u.id === 'cav'); return Art.portrait(d); };
   function renderTop() {
-    { const sb = document.querySelector('#lmenu [data-lp="shop"]'); if (sb) sb.classList.toggle('locked', !shopOpen()); }
+    { const sb = document.querySelector('#lmenu [data-lp="shop"]'); if (sb) { const lockd = !shopOpen(); sb.classList.toggle('locked', lockd); let n = sb.querySelector('.lkn'); if (lockd && !n) { n = document.createElement('small'); n.className = 'lkn'; sb.appendChild(n); } if (n) { n.hidden = !lockd; n.textContent = L('shopLockShort'); } } }
     { const nd = document.querySelector('#lnews .dot'); if (nd) nd.hidden = !(root.RTD_NEWS && root.RTD_NEWS.unseen()); }
     msDot();
     const me = C.ACC.me;
@@ -441,10 +447,12 @@
     const me = C.ACC.me, dn = (id) => esc((C.T.difficulties.find((d) => d.id === id) || {}).name || id);
     const left = Math.max(0, (ms.resetAt || 0) - Date.now()), hh = Math.floor(left / 3600000), mm = Math.floor((left % 3600000) / 60000);
     const fname = (id) => { const m = /^f_nm(\d)$/.exec(id); return m ? L('msFirstMut', { a: dn('nightmare'), n: m[1] }) : L('msFirst', { a: dn(id.slice(2)) }); };
-    const row = (x, name, prog) => `<div class="ms-row${x.claimed ? ' got' : x.done ? ' done' : ''}"><span class="nm">${name}</span><span class="pg">${prog}</span><span class="rw"><i>銅</i> ${x.coins}</span>${x.claimed ? `<span class="ms-got">${L('msClaimed')}</span>` : `<button class="btn go" type="button" data-msclaim="${x.id}" ${x.done ? '' : 'disabled'}>${L('msClaim')}</button>`}</div>`;
-    return `<div class="lp-bal"><i>銅</i> ${L('balance', { n: (me.coins || 0).toLocaleString() })}</div>`
-      + `<div class="ms-head"><b>${L('msDaily')}</b><small>${L('msReset', { h: hh, m: mm })}</small></div>${ms.daily.map((x) => row(x, L('ms_' + x.id), `${x.n}/${x.need}`)).join('')}`
-      + `<div class="ms-head"><b>${L('msFirsts')}</b></div>${ms.firsts.map((x) => row(x, fname(x.id), x.done ? '1/1' : '0/1')).join('')}`;
+    const row = (x, name, n, need) => `<div class="ms-row${x.claimed ? ' got' : x.done ? ' done' : ''}"><span class="nm">${name}</span><span class="pg"><i class="ms-bar"><b style="width:${Math.round(Math.min(1, n / Math.max(1, need)) * 100)}%"></b></i>${n}/${need}</span><span class="rw"><i class="ico coin" aria-hidden="true"></i>${x.coins}</span>${x.claimed ? `<span class="ms-got">✓ ${L('msClaimed')}</span>` : x.done ? `<button class="btn go" type="button" data-msclaim="${x.id}">${L('msClaim')}</button>` : '<span class="ms-wait"></span>'}</div>`;
+    // 받을 수 있는 것 → 진행 중 → 받은 것 순서(같은 무리 안에서는 서버 순서 그대로)
+    const ord = (x) => (x.claimed ? 2 : x.done ? 0 : 1), sort = (a) => a.map((x, i) => [x, i]).sort((p, q) => ord(p[0]) - ord(q[0]) || p[1] - q[1]).map((p) => p[0]);
+    return `<div class="lp-bal"><i class="ico coin" aria-hidden="true"></i>${L('balance', { n: (me.coins || 0).toLocaleString() })}</div>`
+      + `<div class="ms-head"><b>${L('msDaily')}</b><small>${L('msReset', { h: hh, m: mm })}</small></div>${sort(ms.daily).map((x) => row(x, L('ms_' + x.id), x.n, x.need)).join('')}`
+      + `<div class="ms-head"><b>${L('msFirsts')}</b></div>${sort(ms.firsts).map((x) => row(x, fname(x.id), x.done ? 1 : 0, 1)).join('')}`;
   }
   async function msClaim(id) {
     const r = await C.api('/api/missions/claim', { id });
@@ -455,12 +463,13 @@
   }
 
   // ---------- 메뉴 창 ----------
-  let panel = null, ptab = null, rdiff = 'normal', rimm = 'jojo', rmode = 'coop';
+  let panel = null, ptab = null, rdiff = 'easy', rimm = 'jojo', rmode = 'coop', rdiffSet = false;
   function openPanel(kind) {
-    panel = kind; ptab = null; $('lpanel').hidden = false;
+    panel = kind; ptab = null; $('lpanel').hidden = false; $('lpanel').dataset.kind = kind;
+    if (kind === 'rank' && !rdiffSet) { const c = prog().clr; rdiff = DIFFS[Math.max(0, Math.min(DIFFS.length - 1, c))]; } // 최단 클리어 기본 난이도 = 내가 깬 가장 높은 난이도(없으면 쉬움)
     $('lptitle').textContent = kind === 'news' && root.RTD_NEWS ? root.RTD_NEWS.label() : L(kind);
     // 계정 상자는 계정 창 안으로 옮겨 쓴다
-    $('lhold').appendChild($('accbox')); $('lpbody').innerHTML = '';
+    $('lhold').appendChild($('accbox')); $('lpbody').innerHTML = ''; $('lpbody').scrollTop = 0; // 앞 창의 스크롤 위치가 남지 않게
     if (kind === 'account') $('lpbody').appendChild($('accbox'));
     if (kind === 'shop') iapFlush(); // 서버 확인을 못 한 결제가 남아 있으면 다시 보낸다
     renderPanel();
@@ -500,7 +509,7 @@
       if (!me || fell) { hist = loadJ('rtd-hist', []); pg = loadJ('rtd-prog', { plays: {}, clears: {} }); }
       const plays = pg.plays || {}, clears = pg.clears || {}, total = Object.values(plays).reduce((a, b) => a + b, 0);
       const dn = (id) => (C.T.difficulties.find((d) => d.id === id) || {}).name || id;
-      let h = `<div class="hs-sum"><div>${L('totalPlays')}<b>${total}</b></div>${DIFFS.map((d) => `<div>${esc(dn(d))}<b>${L('playsClears', { p: plays[d] || 0, c: clears[d] || 0 })}</b></div>`).join('')}</div>`;
+      let h = `<div class="hs-sum"><div><span>${L('totalPlays')}</span><b>${total}</b></div>${DIFFS.map((d) => { const p = plays[d] || 0; return `<div><span>${esc(dn(d))}</span><b>${p ? `${clears[d] || 0}/${p}` : '—'}</b><small>${p ? L('hsClears') : L('hsNone')}</small></div>`; }).join('')}</div>`;
       if (fell) h = `<div class="lp-note lp-fail">${L('histFallback')} <button class="btn" type="button" data-retry="1">${L('retry')}</button></div>` + h;
       if (!me) h += `<div class="lp-note">${L('histLocal')}</div>`;
       h += `<div class="label">${L('recent')}</div>`;
@@ -511,7 +520,7 @@
         const det = `<div class="hs-det" id="hsd${i}" hidden><b>${L('mythGot')}</b><div class="ms">${myth.length ? myth.map((id) => { const d = C.T.units.find((u) => u.id === id); return d ? `<span><img alt="" src="${Art.portrait(d)}">${esc(d.name)} ×${x.myth[id]}</span>` : ''; }).join('') : L('noMyth')}</div>
           <div class="sg"><span>${L('st_kills')} <b>${st.kills || 0}</b></span><span>${L('st_mid')} <b>${st.midKill || 0}/${st.midMiss || 0}</b></span><span>${L('st_life')} <b>${st.lifeLost || 0}</b></span><span>${L('st_gold')} <b>${(st.goldIn || 0).toLocaleString()}</b></span><span>${L('st_comb')} <b>${st.combines || 0} · ${st.crafts || 0}</b></span><span>${L('st_tix')} <b>${st.tickets || 0} · ${st.chests || 0}</b></span><span>${L('st_boss')} <b>${st.bossWins || 0}/${st.bosses || 0}</b></span><span>${L('st_fast')} <b>${st.fast || 0}</b></span></div></div>`;
         return `<div class="hs-row" data-hs="${i}"><span>${when} · ${esc(dn(x.diff))}${x.mut ? ' +' + x.mut : ''} <small>${L(x.online ? 'onlineTag' : 'offlineTag')}</small></span><span>R${x.round} · ${C.clock(x.time || 0)}</span><span class="${x.win ? 'w' : 'l'}">${L(x.win ? 'win' : 'lose')}</span></div>${det}`;
-      }).join('') || `<div class="lp-note">${L('empty')}</div>`;
+      }).join('') || `<div class="lp-note lp-empty">${L('empty')}</div>`;
       body.innerHTML = h;
       return;
     }
@@ -549,9 +558,9 @@
       const has = (id) => SHOP.free(id) || me.owned.includes(id);
       const btn = (id, cost, on, kind, unit) => has(id)
         ? `<button class="btn" type="button" data-equip="${kind}" data-id="${id}" ${unit ? `data-unit="${unit}"` : ''} ${on && kind !== 'skin' ? 'disabled' : ''}>${on ? L(kind === 'skin' ? 'unequip' : 'equipped') : L('equip')}</button>`
-        : `<button class="btn go" type="button" data-buy="${id}" ${me.coins < cost ? 'disabled' : ''}>${L('buy')} · 銅 ${cost}</button>${me.coins < cost ? `<span class="short">${L('short', { n: cost - me.coins })}</span>` : ''}`;
+        : `<button class="btn go" type="button" data-buy="${id}" ${me.coins < cost ? 'disabled' : ''}>${L('buy')} · <i class="ico coin" aria-hidden="true"></i>${cost}</button>${me.coins < cost ? `<span class="short">${L('short', { n: cost - me.coins })}</span>` : ''}`;
       // 창 안에서도 잔액이 보이게(위 줄의 잔액은 창에 가려진다)
-      let h = `<div class="lp-bal"><i>銅</i> ${L('balance', { n: (me.coins || 0).toLocaleString() })}</div><div class="lp-note">${L('coinHint')}</div>`;
+      let h = `<div class="lp-bal"><i class="ico coin" aria-hidden="true"></i>${L('balance', { n: (me.coins || 0).toLocaleString() })}</div><div class="lp-note">${L('coinHint')}</div>`;
       if (ptab === 'unlock') {
         h += unlockHtml(me);
       } else if (ptab === 'icons') {
@@ -577,7 +586,7 @@
     }
     if (panel === 'rank') {
       tabs([['level', L('rLevel')], ['clear', L('rClear')], ['imm', L('rImm')]]);
-      let h = `<div class="lp-note">${L('rankNote')}</div>`, list = [];
+      let h = ptab === 'clear' ? `<div class="lp-note">${L('rankNoteClear')}</div>` : ptab === 'imm' ? `<div class="lp-note">${L('rankNoteImm')}</div>` : '', list = [];
       // 서버에 묻는 동안 '불러오는 중…', 실패하면 '불러오지 못했습니다 + 다시 시도'(빈 순위와 구별). 그때는 null을 돌려준다
       const ask = async (url) => {
         body.innerHTML = h + loadingHtml();
@@ -586,7 +595,7 @@
         if (r.status !== 200 || r.error) { body.innerHTML = h + failHtml(); return null; }
         return r;
       };
-      const row = (i, p, val, extra) => `<div class="lp-row"><span class="no">${i + 1}</span><img alt="" src="${iconSrc(p.icon)}"><span class="who">${extra || esc(p.nick)}<small>${p.grade ? esc(C.t(p.grade)) + ' · ' : ''}${p.level ? C.t('level', { n: p.level }) : ''}</small></span><span class="val">${val}</span></div>`;
+      const row = (i, p, val, extra) => `<div class="lp-row"><span class="no">${i + 1}</span><img alt="" src="${iconSrc(p.icon)}"><span class="who">${extra || esc(p.nick)}<small>${p.grade ? esc(C.t(p.grade)) : ''}${p.level && ptab !== 'level' ? (p.grade ? ' · ' : '') + C.t('level', { n: p.level }) : ''}</small></span><span class="val">${val}</span></div>`;
       if (ptab === 'clear') {
         h += `<div class="lp-sel">${[['coop', L('rCoop')], ['solo', L('rSolo')]].map(([k, n]) => `<button type="button" class="${rmode === k ? 'on' : ''}" data-rmode="${k}">${n}</button>`).join('')}</div>`;
         h += `<div class="lp-sel">${C.T.difficulties.map((d) => `<button type="button" class="${rdiff === d.id ? 'on' : ''}" data-rdiff="${d.id}">${esc(d.name)}</button>`).join('')}</div>`;
@@ -601,7 +610,7 @@
         const r = await ask('/api/rank?type=level'); if (!r) return; list = r.list || [];
         h += list.map((p, i) => row(i, p, C.t('level', { n: p.level }))).join('');
       }
-      if (!list.length) h += `<div class="lp-note">${L('empty')}</div>`;
+      if (!list.length) h += `<div class="lp-note lp-empty">${L('empty')}</div>`;
       if (panel === 'rank') body.innerHTML = h;
     }
   }
@@ -664,7 +673,10 @@
     document.querySelectorAll('#setup .wz').forEach((el) => el.classList.toggle('cur', el.dataset.step === step));
     $('wztitle').textContent = L({ play: 'stepPlay', mode: 'stepMode', diff: 'stepDiff', room: 'stepRoom', match: 'stepMatch' }[step]);
     markLocks();
-    $('wzsteps').textContent = `${i + 1} / ${order.length}`;
+    // 단계 표시는 숫자 대신 점(갈래에 따라 단계 수가 바뀌어도 덜 어색하다). 읽어 주기용으로 숫자는 aria-label에
+    $('wzsteps').textContent = '●'.repeat(i + 1) + '○'.repeat(Math.max(0, order.length - i - 1));
+    $('wzsteps').setAttribute('aria-label', `${i + 1} / ${order.length}`);
+    $('setup').dataset.step = step;
     $('wzback').style.visibility = i > 0 ? 'visible' : 'hidden';
     const online = C.cfg.play === 'online', ready = !online || (C.ACC.token && C.ACC.me);
     $('wzgate').hidden = !(step === 'play' && online && !ready);
@@ -676,6 +688,7 @@
     if (last && !chosen) $('startbtn').disabled = true;
     // 방에서는 방장만 난이도를 고른다(난이도 칸을 방 안으로 옮김)
     const l = C.getLobby();
+    $('setup').classList.toggle('inroom', step === 'room' && !!l); // 방에 들어온 뒤에는 방 코드 입력·만들기 줄과 겹친 제목을 숨긴다(CSS)
     if (step === 'room') { const host = l && l.isHost(); $('wzroomdiff').hidden = !host; if (host) { $('wzroomdiff').appendChild($('diffsec')); $('wzroomdiff').appendChild($('mutbox')); } }
     else if ($('diffsec').parentElement !== $('wzdiff')) { $('wzdiff').appendChild($('diffsec')); $('wzdiff').appendChild($('mutbox')); }
     attachChat();
@@ -705,7 +718,7 @@
   // 신고·차단은 바로 실행하지 않는다. 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 실행한다.
   function armed(b) {
     if (b.dataset.armed) return true;
-    const label = b.textContent; b.dataset.armed = '1'; b.classList.add('arm'); b.textContent = C.t('quitAgain');
+    const label = b.textContent; b.dataset.armed = '1'; b.classList.add('arm'); b.textContent = C.t('confirmAgain');
     setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.classList.remove('arm'); b.textContent = label; } }, 3000);
     return false;
   }
@@ -815,7 +828,7 @@
       if (e.target.id === 'mretry') { startMatch(); return; }
       const pt = e.target.closest('[data-ptab]'); if (pt) { ptab = pt.dataset.ptab; renderPanel(); return; }
       const rm = e.target.closest('[data-rmode]'); if (rm) { rmode = rm.dataset.rmode; renderPanel(); return; }
-      const rd = e.target.closest('[data-rdiff]'); if (rd) { rdiff = rd.dataset.rdiff; renderPanel(); return; }
+      const rd = e.target.closest('[data-rdiff]'); if (rd) { rdiff = rd.dataset.rdiff; rdiffSet = true; renderPanel(); return; }
       const ri = e.target.closest('[data-rimm]'); if (ri) { rimm = ri.dataset.rimm; renderPanel(); return; }
       const hs = e.target.closest('[data-hs]'); if (hs) { const d = $('hsd' + hs.dataset.hs); if (d) d.hidden = !d.hidden; return; }
       if (e.target.id === 'mcancel') { stopMatch(true); back(); return; }

@@ -28,6 +28,35 @@
     c.restore();
     return true;
   }
+  // 직선·사각 장판의 경고 띠(gfx/vs_warn: 붉은 먹·부적 느낌의 가로 띠). 그림 비율을 지켜 길이 방향으로 이어 붙이고(한 칸씩 좌우 반전해 이음매를 감춘다),
+  // 굵기 방향은 thick으로 늘인다. cx,cy = 띠 가운데, ang = 띠 방향. 그림이 아직 없으면 false(부른 쪽이 예전 모양으로 그린다).
+  function warnBand(c, cx, cy, len, thick, ang, a, add, from) {
+    const im = Art.pic('vs_warn');
+    if (!im) return false;
+    if (len < 1 || thick < 1 || !(a > 0.01)) return true;
+    const tw0 = (thick * im.width) / im.height, n = Math.max(1, Math.round(len / tw0)), tw = len / n;
+    c.save(); c.globalAlpha = Math.min(1, a); if (add) c.globalCompositeOperation = 'lighter';
+    c.translate(cx, cy); if (ang) c.rotate(ang);
+    // from(0~1): 시작 쪽에서 그 비율만큼만 보이게(차오르는 진행)
+    if (from != null) { c.beginPath(); c.rect(-len / 2, -thick / 2, len * Math.max(0, Math.min(1, from)), thick); c.clip(); }
+    for (let i = 0; i < n; i++) { c.save(); c.translate(-len / 2 + tw * (i + 0.5), 0); if (i % 2) c.scale(-1, 1); c.drawImage(im, -tw / 2 - 0.5, -thick / 2, tw + 1, thick); c.restore(); }
+    c.restore();
+    return true;
+  }
+  // 법진 그림(mc_rune1)을 받았나(투명도 0으로 불러 보면 그리지 않고 있는지만 알려 준다)
+  const runeOk = (c) => Art.fxPic(c, 'mc_rune1', 0, 0, 1, 1, 0, 0);
+  // 사각 구역을 경고 띠 여러 줄로 채운다(줄 굵기 60~150)
+  function warnRect(c, x, y, w, h, a, add, from) {
+    if (!Art.pic('vs_warn')) return false;
+    const rows = Math.max(1, Math.round(h / Math.max(60, Math.min(150, h)))), rh = h / rows;
+    for (let i = 0; i < rows; i++) warnBand(c, x + w / 2, y + rh * (i + 0.5), w, rh, 0, a, add, from);
+    return true;
+  }
+  // 사각 구역 테두리: 얇은 경고 띠를 네 변에(맥동)
+  function warnEdge(c, x, y, w, h, e, a) {
+    warnBand(c, x + w / 2, y + e / 2, w, e, 0, a, true); warnBand(c, x + w / 2, y + h - e / 2, w, e, 0, a, true);
+    warnBand(c, x + e / 2, y + h / 2, h, e, Math.PI / 2, a, true); warnBand(c, x + w - e / 2, y + h / 2, h, e, Math.PI / 2, a, true);
+  }
   function addVfx(o) {
     // 불꽃·파편 같은 잔조각은 화질에 따라 줄인다(큰 모양은 그대로)
     if ((o.k === 'spark' || o.k === 'debris' || o.k === 'ember') && Math.random() > qPart()) return;
@@ -88,7 +117,7 @@
   // 떨어지는 물체(바위·불배·불화살 등): 터지기 0.5초 전부터 위에서 내려온다
   function drawFalling(c, h, q) {
     const col = visCol(h), y = h.y - 620 * (1 - q) * (1 - q), x = h.x + (h.fx === 'firearrow' ? 260 * (1 - q) : 0);
-    c.globalAlpha = 0.35 * q; c.fillStyle = '#000'; c.beginPath(); c.ellipse(h.x, h.y + 4, h.r * 0.5 * q, h.r * 0.2 * q, 0, 0, 7); c.fill();
+    blobShadow(c, h.x, h.y + 4, h.r * 1.4 * q + 1, 0.6 * q);
     c.globalAlpha = 1;
     if (h.fx === 'rock') {
       if (vs(c, 'rock', x, y, h.r * 1.1, q * 6)) return;
@@ -98,7 +127,8 @@
       c.fillStyle = '#b08a64'; c.beginPath(); c.moveTo(-s * 0.4, -s); c.lineTo(s * 0.6, -s * 0.8); c.lineTo(s * 0.2, -s * 0.1); c.lineTo(-s * 0.5, -s * 0.2); c.closePath(); c.fill();
       c.restore();
     } else if (h.fx === 'firearrow') {
-      for (let i = 0; i < 3; i++) { const ox = (i - 1) * 22, oy = i * 18; c.strokeStyle = '#ffd8a0'; c.lineWidth = 3; c.beginPath(); c.moveTo(x + ox, y + oy); c.lineTo(x + ox + 60, y + oy - 140); c.stroke(); Art.fxImg(c, 'fire', x + ox, y + oy, 46, Math.atan2(140, -60), 1); }
+      // 불화살: 화살 그림(gfx/vs_arrow)을 떨어지는 방향으로 돌리고 촉에 불꽃 그림
+      for (let i = 0; i < 3; i++) { const ox = (i - 1) * 22, oy = i * 18, ra = Math.atan2(140, -60); if (!vs(c, 'arrow', x + ox + 30, y + oy - 70, 150, ra)) { c.strokeStyle = '#ffd8a0'; c.lineWidth = 3; c.beginPath(); c.moveTo(x + ox, y + oy); c.lineTo(x + ox + 60, y + oy - 140); c.stroke(); } Art.fxImg(c, 'fire', x + ox, y + oy, 46, ra, 1); }
     } else if (h.fx === 'fireship') {
       if (vs(c, 'fireship', x, y - 26, 150, Math.sin(performance.now() / 160) * 0.06)) return;
       c.save(); c.translate(x, y);
@@ -109,10 +139,9 @@
     } else if (h.fx === 'flame' || h.fx === 'fireball') {
       Art.fxImg(c, 'fire', x, y, h.r * 1.3, UP, 1);
     } else if (h.fx === 'bolt' || h.fx === 'thunder') {
-      // 낙뢰 전조: 하늘에서 지직거리는 잔전기
-      c.strokeStyle = col; c.lineWidth = 2; c.globalAlpha = 0.5 + Math.random() * 0.5;
-      for (let i = 0; i < 2; i++) { let px = h.x + rnd(-h.r, h.r) * 0.6, py = h.y - 300; c.beginPath(); c.moveTo(px, py); for (let j = 0; j < 5; j++) { px += rnd(-18, 18); py += 300 * q / 5; c.lineTo(px, py); } c.stroke(); }
-      c.globalAlpha = 1;
+      // 낙뢰 전조: 하늘에서 지직거리는 잔전기(Kenney 번개 그림, 매 프레임 좌우를 바꿔 깜빡인다)
+      const SK = window.RTD_SKFX;
+      if (SK) for (let i = 0; i < 2; i++) { const px = h.x + rnd(-h.r, h.r) * 0.6, len = 300 * q + 40; SK.spr(c, i ? 'spark_05' : 'spark_06', col, px, h.y - 300 + len / 2, (Math.random() < 0.5 ? -1 : 1) * len * 0.6, len, 0, 0.45 + Math.random() * 0.45); }
     }
   }
   // 장판 표시: 어두운 위험 바탕 + 기술 색 테두리(빛남) + 터질 때까지 차오르는 안쪽
@@ -133,7 +162,12 @@
     c.fillStyle = h.c; c.strokeStyle = h.c; c.lineWidth = 2; c.globalAlpha = Math.max(0, alpha);
     if (h.k === 'wind' || h.k === 'gaze') { if (fired && h.t < h.delay + h.dur) drawAura(c, h); }
     else if (h.k === 'rect') {
-      if (!fired) {
+      if (!fired && warnRect(c, h.x, h.y, h.rw, h.rh, 0.3 + p * 0.3)) {
+        // 경고 띠 그림으로 채우고, 같은 그림을 더하기로 진행만큼 밝힌다. 테두리도 얇은 띠(터질 때가 가까울수록 빠르게 맥동)
+        warnRect(c, h.x, h.y, h.rw, h.rh, 0.35 + p * 0.25, true, p);
+        const e = Math.max(10, Math.min(24, h.rw * 0.06, h.rh * 0.06));
+        warnEdge(c, h.x, h.y, h.rw, h.rh, e, 0.55 + Math.sin(now * (6 + p * 10)) * 0.25 * p);
+      } else if (!fired) {
         c.globalAlpha = 0.18 + p * 0.2; c.fillStyle = danger; c.fillRect(h.x, h.y, h.rw, h.rh);
         // 움직이는 사선 경고 무늬
         c.save(); c.beginPath(); c.rect(h.x, h.y, h.rw, h.rh); c.clip();
@@ -144,53 +178,84 @@
         teleStyle(c, col, p); c.strokeRect(h.x + 3, h.y + 3, h.rw - 6, h.rh - 6); c.shadowBlur = 0;
         c.globalAlpha = 0.9; c.fillStyle = col; c.fillRect(h.x, h.y + h.rh - 6, h.rw * p, 6);
       } else if (live && h.fx === 'flame') {
-        // 타오르는 구획: 불길이 일렁인다
-        c.globalAlpha = 0.35; c.fillStyle = '#7a1e08'; c.fillRect(h.x, h.y, h.rw, h.rh);
+        // 타오르는 구획: 불길이 일렁인다(바닥은 주황 빛 그림을 구획 크기로 늘여 깐다)
+        if (window.RTD_SKFX) window.RTD_SKFX.spr(c, 'light_02', '#ff5a1a', h.x + h.rw / 2, h.y + h.rh / 2, h.rw * 1.25, h.rh * 1.25, 0, 0.45);
         for (let ix = 0; ix < 6; ix++) for (let iy = 0; iy < 3; iy++) {
           const fx = h.x + (ix + 0.5) * (h.rw / 6), fy = h.y + (iy + 0.6) * (h.rh / 3), fl = 0.8 + Math.sin(now * 9 + ix * 1.7 + iy * 2.3) * 0.2;
           Art.fxImg(c, 'fire', fx, fy - Math.min(h.rw / 6, h.rh / 3) * 0.3, Math.min(h.rw / 6, h.rh / 3) * 1.3 * fl, UP + Math.sin(now * 6 + ix + iy) * 0.12, 0.75);
         }
-      } else { c.fillRect(h.x, h.y, h.rw, h.rh); }
+      } else if (!warnRect(c, h.x, h.y, h.rw, h.rh, Math.max(0, alpha), true)) { c.fillRect(h.x, h.y, h.rw, h.rh); }
     } else if (h.k === 'band') {
-      c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, h.y0 + OVER.y); c.fillRect(-OVER.x, h.y1, W + OVER.x * 2, H - h.y1 + OVER.y);
-      if (!fired) { c.globalAlpha = 1; c.strokeStyle = '#a8ffb8'; c.lineWidth = 3; c.beginPath(); c.moveTo(ARENA.x0, h.y0); c.lineTo(ARENA.x1, h.y0); c.moveTo(ARENA.x0, h.y1); c.lineTo(ARENA.x1, h.y1); c.stroke(); }
+      // 띠 밖이 위험: 위·아래 구역을 경고 띠 그림으로, 안전한 띠의 경계는 초록 빛줄기 그림
+      const AW = ARENA.x1 - ARENA.x0;
+      if (warnRect(c, ARENA.x0, ARENA.y0, AW, h.y0 - ARENA.y0, Math.max(0, alpha) * 1.4) && warnRect(c, ARENA.x0, h.y1, AW, ARENA.y1 - h.y1, Math.max(0, alpha) * 1.4)) {
+        if (!fired) { streak(c, '#a8ffb8', ARENA.x0, h.y0, ARENA.x1, h.y0, 8, 0.9); streak(c, '#a8ffb8', ARENA.x0, h.y1, ARENA.x1, h.y1, 8, 0.9); }
+      } else {
+        c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, h.y0 + OVER.y); c.fillRect(-OVER.x, h.y1, W + OVER.x * 2, H - h.y1 + OVER.y);
+        if (!fired) { c.globalAlpha = 1; c.strokeStyle = '#a8ffb8'; c.lineWidth = 3; c.beginPath(); c.moveTo(ARENA.x0, h.y0); c.lineTo(ARENA.x1, h.y0); c.moveTo(ARENA.x0, h.y1); c.lineTo(ARENA.x1, h.y1); c.stroke(); }
+      }
     } else if (h.k === 'all') {
-      c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+      // 경기장 전체: 경고 띠 그림을 경기장 가득(터지는 순간의 흰 섬광은 착탄 효과가 덮는다)
+      if (!warnRect(c, ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0, Math.max(0, alpha) * 1.4)) c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
     } else if (h.k === 'los') {
-      c.fillRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
-      // 돌기둥 뒤 그림자 = 안전
-      c.globalAlpha = fired ? 0.2 : 0.45; c.fillStyle = '#a8ffb8';
+      if (!warnRect(c, ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0, Math.max(0, alpha) * 1.4)) c.fillRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
+      // 돌기둥 뒤 그림자 = 안전: 그림자 모양으로 잘라 낸 초록 빛 그림
+      const SK = window.RTD_SKFX;
       g.fight.mech.objs.forEach((o) => {
         if (o.k !== 'pillar') return;
         const a = Math.atan2(o.y - h.y, o.x - h.x), px = -Math.sin(a) * o.r * 0.8, py = Math.cos(a) * o.r * 0.8, ex = Math.cos(a) * 250, ey = Math.sin(a) * 250;
-        c.beginPath(); c.moveTo(o.x + px, o.y + py); c.lineTo(o.x + px + ex, o.y + py + ey); c.lineTo(o.x - px + ex, o.y - py + ey); c.lineTo(o.x - px, o.y - py); c.closePath(); c.fill();
+        c.save(); c.beginPath(); c.moveTo(o.x + px, o.y + py); c.lineTo(o.x + px + ex, o.y + py + ey); c.lineTo(o.x - px + ex, o.y - py + ey); c.lineTo(o.x - px, o.y - py); c.closePath(); c.clip();
+        if (SK) { SK.spr(c, 'light_01', '#a8ffb8', o.x + ex / 2, o.y + ey / 2, 420, 420, 0, fired ? 0.35 : 0.8); SK.spr(c, 'light_02', '#a8ffb8', o.x + ex / 2, o.y + ey / 2, 320, 320, now, fired ? 0.2 : 0.5); }
+        else { c.globalAlpha = fired ? 0.2 : 0.45; c.fillStyle = '#a8ffb8'; c.fill(); }
+        c.restore();
       });
-      if (!fired) { c.globalAlpha = 0.9; c.strokeStyle = h.c; c.lineWidth = 4; c.beginPath(); c.arc(h.x, h.y, 60 + p * 40, 0, 7); c.stroke(); }
+      if (!fired) Art.fxPic(c, 'mc_rune2', h.x, h.y, (60 + p * 40) * 2.1, (60 + p * 40) * 2.1, now, 0.9, { col: h.c });
     } else if (h.k === 'push') {
-      c.globalAlpha = fired ? Math.max(0, alpha) : 0.6; c.lineWidth = 6; c.beginPath(); c.arc(h.x, h.y, fired ? h.r : h.r * p, 0, 7); c.stroke();
+      // 밀어내기: 퍼지는 빛 고리 그림
+      const rr = Math.max(4, fired ? h.r : h.r * p);
+      if (!ringSpr(c, 'circle_02', h.c, h.x, h.y, rr, 0, fired ? Math.max(0, alpha) : 0.7)) { c.globalAlpha = fired ? Math.max(0, alpha) : 0.6; c.lineWidth = 6; c.beginPath(); c.arc(h.x, h.y, rr, 0, 7); c.stroke(); }
     } else if (h.k === 'proj') {
       drawProj(c, h, col, fired);
     } else if (h.own || h.k === 'circle') {
-      if (h.own) { if (!(h.vx && window.RTD_SKFX && window.RTD_SKFX.tele(c, h, p, fired))) { c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill(); if (!fired) { c.globalAlpha = 0.9; c.beginPath(); c.arc(h.x, h.y, h.r * p, 0, 7); c.stroke(); } } }
+      // 내 장판(연출 이름이 없는 것 포함): 바닥 법진 그림과 차오르는 고리 그림(skillfx.tele)
+      if (h.own) { if (!(window.RTD_SKFX && window.RTD_SKFX.tele(c, h, p, fired))) { c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill(); if (!fired) { c.globalAlpha = 0.9; c.beginPath(); c.arc(h.x, h.y, h.r * p, 0, 7); c.stroke(); } } }
       else if (!fired) {
-        // 바탕 + 차오르는 원 + 도는 점선 테두리
-        c.globalAlpha = 0.2 + p * 0.15; c.fillStyle = danger; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill();
-        const gr = c.createRadialGradient(h.x, h.y, 0, h.x, h.y, Math.max(1, h.r * p));
-        gr.addColorStop(0, col + '10'); gr.addColorStop(1, col + '88');
-        c.globalAlpha = 0.85; c.fillStyle = gr; c.beginPath(); c.arc(h.x, h.y, Math.max(1, h.r * p), 0, 7); c.fill();
+        // 바탕: 붉게 물든 법진 그림(gfx/mc_rune1)이 천천히 돌며 짙어진다. 안쪽에서 기술 색 빛 그림이 차오른다.
+        const SK = window.RTD_SKFX;
+        if (SK && Art.fxPic(c, 'mc_rune1', h.x, h.y, h.r * 2.05, h.r * 2.05, now * 0.35 + h.x, 0.3 + p * 0.45, { col: '#ff3a24' })) {
+          const rp = Math.max(4, h.r * p);
+          SK.spr(c, 'light_01', col, h.x, h.y, rp * 2.4, rp * 2.4, 0, 0.25 + p * 0.4);
+          ringSpr(c, 'circle_01', col, h.x, h.y, rp, 0, 0.75);
+        } else {
+          c.globalAlpha = 0.2 + p * 0.15; c.fillStyle = danger; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill();
+          const gr = c.createRadialGradient(h.x, h.y, 0, h.x, h.y, Math.max(1, h.r * p));
+          gr.addColorStop(0, col + '10'); gr.addColorStop(1, col + '88');
+          c.globalAlpha = 0.85; c.fillStyle = gr; c.beginPath(); c.arc(h.x, h.y, Math.max(1, h.r * p), 0, 7); c.fill();
+        }
         // 테두리: 천천히 도는 불 고리(그림). 터질 때가 가까울수록 밝아진다
         if (!vs(c, 'ring', h.x, h.y, h.r * 2.24, now * 0.5 + h.x, 0.55 + p * 0.45, true)) { teleStyle(c, col, p); c.setLineDash([16, 10]); c.lineDashOffset = -now * 40; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.stroke(); c.setLineDash([]); c.shadowBlur = 0; }
-        if (p > 0.82) { c.globalAlpha = (p - 0.82) * 5; c.strokeStyle = '#fff'; c.lineWidth = 3; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.stroke(); }
+        // 터지기 직전: 테두리에 흰 빛 고리 그림이 떠오른다
+        if (p > 0.82) ringSpr(c, 'circle_02', '#ffffff', h.x, h.y, h.r, 0, (p - 0.82) * 5);
         const left = h.delay - h.t;
         if (left < 0.5 && h.fx) drawFalling(c, h, 1 - left / 0.5);
       } else if (live) {
         // 남는 불길·장판
-        c.globalAlpha = 0.3 + Math.sin(h.t * 12) * 0.05; c.fillStyle = h.fx === 'flame' ? '#7a1e08' : h.c; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill();
+        // 바닥은 빛 그림(불길이면 주황)을 장판 크기로 깐다
+        if (!(window.RTD_SKFX && window.RTD_SKFX.spr(c, 'light_02', h.fx === 'flame' ? '#ff5a1a' : h.c, h.x, h.y, h.r * 2.5, h.r * 2.5, now * 0.4, 0.5 + Math.sin(h.t * 12) * 0.06))) { c.globalAlpha = 0.3 + Math.sin(h.t * 12) * 0.05; c.fillStyle = h.fx === 'flame' ? '#7a1e08' : h.c; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill(); }
         if (h.fx === 'flame' || h.fx === 'fireball') for (let i = 0; i < 5; i++) { const a = i * 1.26 + now, rr = h.r * 0.5; Art.fxImg(c, 'fire', h.x + Math.cos(a) * rr, h.y + Math.sin(a) * rr * 0.6 - h.r * 0.3, h.r * (0.8 + Math.sin(now * 8 + i) * 0.15), UP + Math.sin(now * 7 + i) * 0.12, 0.7); }
       }
     } else if (h.k === 'line') {
       c.translate(h.x, h.y); c.rotate(h.a);
-      if (!fired) {
+      const warnOk = !!Art.pic('vs_warn');
+      if (!fired && warnOk) {
+        // 경고 띠 그림 + 같은 띠를 더하기로 진행만큼 + 양옆 가장자리는 기술 색 빛줄기 그림(터질 때가 가까울수록 밝게)
+        warnBand(c, h.len / 2, 0, h.len, h.w, 0, 0.3 + p * 0.3);
+        warnBand(c, h.len / 2, 0, h.len, h.w, 0, 0.4, true, p);
+        streak(c, col, 0, -h.w / 2, h.len, -h.w / 2, 6, 0.5 + p * 0.45); streak(c, col, 0, h.w / 2, h.len, h.w / 2, 6, 0.5 + p * 0.45);
+        if (VS.chev) { const cw = Math.max(26, Math.min(h.w * 0.62, 54)), st2 = Math.max(70, cw * 1.6), o2 = (now * 190) % st2; for (let d = o2; d < h.len; d += st2) vs(c, 'chev', d, 0, cw, 0, (0.45 + p * 0.5) * Math.min(1, d / 60, (h.len - d) / 60), true); }
+      } else if (fired && warnOk) {
+        warnBand(c, h.len / 2, 0, h.len, h.w, 0, Math.max(0, alpha) * 0.8, true);
+      } else if (!fired) {
         c.globalAlpha = 0.18 + p * 0.18; c.fillStyle = danger; c.fillRect(0, -h.w / 2, h.len, h.w);
         // 진행 방향으로 흐르는 화살표 무늬와 차오르는 띠
         c.globalAlpha = 0.5; c.fillStyle = col + '66'; c.fillRect(0, -h.w / 2, h.len * p, h.w);
@@ -202,25 +267,50 @@
       } else { c.globalAlpha *= 0.35; c.fillStyle = col; c.fillRect(0, -h.w / 2, h.len, h.w); }
     } else if (h.k === 'cone') {
       const path = (r) => { c.beginPath(); c.moveTo(h.x, h.y); c.arc(h.x, h.y, r, h.a - h.arc / 2, h.a + h.arc / 2); c.closePath(); };
-      if (!fired) {
+      const SK = window.RTD_SKFX;
+      if (SK && runeOk(c)) {
+        // 부채꼴 모양으로 잘라 낸 그림: 붉은 법진 + 차오르는 기술 색 빛. 양쪽 가장자리는 빛줄기 그림.
+        const ea = 0.55 + p * 0.4, x1 = h.x + Math.cos(h.a - h.arc / 2) * h.r, y1 = h.y + Math.sin(h.a - h.arc / 2) * h.r, x2 = h.x + Math.cos(h.a + h.arc / 2) * h.r, y2 = h.y + Math.sin(h.a + h.arc / 2) * h.r;
+        if (!fired) {
+          c.save(); path(h.r); c.clip();
+          Art.fxPic(c, 'mc_rune1', h.x, h.y, h.r * 2.05, h.r * 2.05, now * 0.3, 0.35 + p * 0.4, { col: '#ff3a24' });
+          SK.spr(c, 'light_02', '#ff3a24', h.x, h.y, h.r * 2.2, h.r * 2.2, 0, 0.3 + p * 0.2);
+          c.restore();
+          c.save(); path(Math.max(2, h.r * p)); c.clip(); SK.spr(c, 'light_01', col, h.x, h.y, h.r * 2.6 * p + 4, h.r * 2.6 * p + 4, 0, 0.7); c.restore();
+          streak(c, col, h.x, h.y, x1, y1, 7, ea); streak(c, col, h.x, h.y, x2, y2, 7, ea);
+          c.save(); path(h.r * 1.04); c.clip(); ringSpr(c, 'circle_02', col, h.x, h.y, h.r, 0, ea); c.restore();
+        } else if (h.fx !== 'blade' && h.fx !== 'halberd') { c.save(); path(h.r); c.clip(); SK.spr(c, 'light_02', col, h.x, h.y, h.r * 2.4, h.r * 2.4, 0, Math.max(0, c.globalAlpha) * 0.9); c.restore(); } // 칼 휘두르기는 궤적 연출만 남긴다
+      } else if (!fired) {
         c.globalAlpha = 0.2 + p * 0.15; c.fillStyle = danger; path(h.r); c.fill();
         c.globalAlpha = 0.6; c.fillStyle = col + '77'; path(h.r * p); c.fill();
         teleStyle(c, col, p); path(h.r); c.stroke(); c.shadowBlur = 0;
       } else if (h.fx !== 'blade' && h.fx !== 'halberd') { c.globalAlpha *= 0.45; c.fillStyle = col; path(h.r); c.fill(); } // 칼 휘두르기는 궤적 연출만 남긴다
     } else if (h.k === 'donut') {
       const ringPath = () => { c.beginPath(); c.arc(h.x, h.y, h.r1, 0, 7); c.arc(h.x, h.y, h.r0, 0, 7, true); };
-      if (!fired) {
+      const SK = window.RTD_SKFX, rok = SK && runeOk(c);
+      if (!fired && rok) {
+        // 고리 모양으로 잘라 낸 붉은 법진 그림 + 안쪽부터 차오르는 기술 색 빛 그림
+        c.save(); ringPath(); c.clip('evenodd');
+        Art.fxPic(c, 'mc_rune1', h.x, h.y, h.r1 * 2.05, h.r1 * 2.05, now * 0.25, 0.35 + p * 0.4, { col: '#ff3a24' });
+        SK.spr(c, 'light_02', '#ff3a24', h.x, h.y, h.r1 * 2.3, h.r1 * 2.3, 0, 0.3 + p * 0.2);
+        c.restore();
+        c.save(); c.beginPath(); c.arc(h.x, h.y, h.r0 + (h.r1 - h.r0) * p, 0, 7); c.arc(h.x, h.y, h.r0, 0, 7, true); c.clip('evenodd');
+        SK.spr(c, 'light_01', col, h.x, h.y, h.r1 * 2.6, h.r1 * 2.6, 0, 0.6); c.restore();
+      } else if (!fired) {
         c.globalAlpha = 0.2 + p * 0.15; c.fillStyle = danger; ringPath(); c.fill();
         c.globalAlpha = 0.55; c.fillStyle = col + '66'; c.beginPath(); c.arc(h.x, h.y, h.r0 + (h.r1 - h.r0) * p, 0, 7); c.arc(h.x, h.y, h.r0, 0, 7, true); c.fill();
+      }
+      if (!fired) {
         if (vs(c, 'ring', h.x, h.y, h.r1 * 2.24, now * 0.4, 0.55 + p * 0.45, true)) { if (h.r0 > 24) vs(c, 'ring', h.x, h.y, h.r0 * 2.24, -now * 0.6, 0.5 + p * 0.4, true); }
         else { teleStyle(c, col, p); c.setLineDash([18, 10]); c.lineDashOffset = now * 50; c.beginPath(); c.arc(h.x, h.y, h.r1, 0, 7); c.stroke(); c.beginPath(); c.arc(h.x, h.y, h.r0, 0, 7); c.stroke(); c.setLineDash([]); c.shadowBlur = 0; }
-      } else { c.globalAlpha *= 0.45; c.fillStyle = col; ringPath(); c.fill(); }
+      } else if (rok) { c.save(); ringPath(); c.clip('evenodd'); SK.spr(c, 'light_02', col, h.x, h.y, h.r1 * 2.5, h.r1 * 2.5, 0, Math.max(0, c.globalAlpha) * 0.9); c.restore(); }
+      else { c.globalAlpha *= 0.45; c.fillStyle = col; ringPath(); c.fill(); }
     } else if (h.k === 'safe') {
       c.beginPath(); c.rect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
       h.spots.forEach((s) => { c.moveTo(s[0] + s[2], s[1]); c.arc(s[0], s[1], s[2], 0, 7, true); });
       c.fill('evenodd');
-      c.globalAlpha = 1; c.strokeStyle = '#a8ffb8'; c.lineWidth = 3;
-      if (!fired) h.spots.forEach((s) => { c.beginPath(); c.arc(s[0], s[1], s[2], 0, 7); c.stroke(); });
+      // 안전한 자리: 초록 법진 그림 + 빛 고리 그림(바깥은 화면 덮개로 어둡게)
+      if (!fired) h.spots.forEach((s) => { Art.fxPic(c, 'mc_rune3', s[0], s[1], s[2] * 2.1, s[2] * 2.1, now * 0.5, 0.75, { col: '#a8ffb8' }); ringSpr(c, 'circle_02', '#a8ffb8', s[0], s[1], s[2], 0, 0.9); });
     }
     c.restore();
   }
@@ -229,16 +319,20 @@
     if (!fired) {
       // 발사 전: 보스 앞에 모이는 기운
       const q = h.t / Math.max(0.01, h.delay);
-      c.globalAlpha = 0.25 + q * 0.4; c.fillStyle = col; c.beginPath(); c.arc(h.x + Math.cos(h.a) * 40 * q, h.y + Math.sin(h.a) * 40 * q, 6 + q * 6, 0, 7); c.fill();
+      const gx = h.x + Math.cos(h.a) * 40 * q, gy = h.y + Math.sin(h.a) * 40 * q;
+      if (!(window.RTD_SKFX && window.RTD_SKFX.spr(c, 'light_01', col, gx, gy, (6 + q * 6) * 7, (6 + q * 6) * 7, q * 4, 0.35 + q * 0.5))) { c.globalAlpha = 0.25 + q * 0.4; c.fillStyle = col; c.beginPath(); c.arc(gx, gy, 6 + q * 6, 0, 7); c.fill(); }
       return;
     }
     const a = h.a, tx = -Math.cos(a), ty = -Math.sin(a), fx = h.fx;
     // 꼬리
-    const tl = fx === 'arrow' ? 0 : 70, gr = c.createLinearGradient(h.x, h.y, h.x + tx * tl, h.y + ty * tl);
-    gr.addColorStop(0, col + 'cc'); gr.addColorStop(1, col + '00');
-    if (tl) { c.globalAlpha = 0.9; c.strokeStyle = gr; c.lineWidth = h.r * 1.4; c.lineCap = 'round'; c.beginPath(); c.moveTo(h.x, h.y); c.lineTo(h.x + tx * tl, h.y + ty * tl); c.stroke(); }
+    // 꼬리: 불 계열은 불꼬리 그림(vs_streak), 그 밖은 기술 색 빛줄기 그림
+    const tl = fx === 'arrow' ? 0 : 70;
+    if (tl) {
+      const fire = fx === 'fireball' || fx === 'flame';
+      if (!(fire && vs(c, 'streak', h.x + tx * tl * 0.45, h.y + ty * tl * 0.45, tl * 1.5, a, 0.9, true))) streak(c, col, h.x + tx * tl, h.y + ty * tl, h.x, h.y, h.r * 1.2, 0.9);
+    }
     c.globalAlpha = 1;
-    if (fx === 'fireball') { Art.fxImg(c, 'fire', h.x - Math.cos(a) * h.r, h.y - Math.sin(a) * h.r, h.r * 3.6, a, 1); c.fillStyle = '#fff4c8'; c.beginPath(); c.arc(h.x, h.y, h.r * 0.45, 0, 7); c.fill(); }
+    if (fx === 'fireball') { Art.fxImg(c, 'fire', h.x - Math.cos(a) * h.r, h.y - Math.sin(a) * h.r, h.r * 3.6, a, 1); if (window.RTD_SKFX) window.RTD_SKFX.spr(c, 'light_01', '#fff4c8', h.x, h.y, h.r * 2.2, h.r * 2.2, 0, 0.95); }
     else if (fx === 'spirit' || fx === 'shadow') {
       // 혼령: 흐느적이는 반투명 불꽃
       const w = Math.sin(performance.now() / 70 + h.x) * 3;
@@ -275,28 +369,31 @@
       if (p < 0) continue;
       c.save();
       c.globalAlpha = 1;
+      const SK = window.RTD_SKFX;
       if (v.k === 'flash') {
-        c.globalAlpha = 0.55 * (1 - p); c.fillStyle = v.c;
-        if (v.rect) c.fillRect(...v.rect); else { c.beginPath(); c.arc(v.x, v.y, v.r, 0, 7); c.fill(); }
+        // 섬광: 화면 전체를 덮는 것(전체 장판)만 흰 덮개, 나머지는 빛 그림(단색 원반·사각을 칠하지 않는다)
+        const full = v.rect && v.rect[2] > W;
+        if (full || !SK) { c.globalAlpha = 0.55 * (1 - p); c.fillStyle = v.c; if (v.rect) c.fillRect(...v.rect); else { c.beginPath(); c.arc(v.x, v.y, v.r, 0, 7); c.fill(); } }
+        else if (v.rect) SK.spr(c, 'light_02', v.c, v.rect[0] + v.rect[2] / 2, v.rect[1] + v.rect[3] / 2, v.rect[2] * 1.3, v.rect[3] * 1.3, 0, 0.8 * (1 - p));
+        else { SK.spr(c, 'light_01', v.c, v.x, v.y, v.r * 2.6, v.r * 2.6, 0, 0.85 * (1 - p)); SK.spr(c, 'flare_01', '#ffffff', v.x, v.y, v.r * 1.6 * (1 + p), v.r * 1.6 * (1 + p), p * 2, 0.9 * (1 - p)); }
       } else if (v.k === 'shock') {
-        c.globalAlpha = 1 - p; c.strokeStyle = v.c; c.lineWidth = (v.w || 7) * (1 - p) + 1; c.shadowColor = v.c; c.shadowBlur = 12;
-        c.beginPath(); c.ellipse(v.x, v.y, v.r * (0.3 + p * 0.8), v.r * (0.3 + p * 0.8) * 0.75, 0, 0, 7); c.stroke(); c.shadowBlur = 0;
+        // 충격파: 퍼지는 빛 고리 그림(바닥에 눕힘) + 고리 프레임 애니메이션
+        ringSpr(c, 'circle_02', v.c, v.x, v.y, v.r * (0.3 + p * 0.8), 0, (1 - p) * 0.9, true, 0.75);
         // 충격파 고리 애니메이션(바닥에 눕힘)
         Art.fxAnim(c, 'ring', p, v.x, v.y, v.r * 2.8, v.r * 2.1, 0, 0.9);
       } else if (v.k === 'bolt') {
-        // 하늘에서 내리꽂는 번개 줄기
-        c.globalAlpha = 1 - p; c.strokeStyle = '#fffbe0'; c.shadowColor = v.c; c.shadowBlur = 24;
-        for (let k = 0; k < 2; k++) {
-          c.lineWidth = k ? 3 : 8; let x = v.x + (k ? 14 : 0), y = v.y - 560; c.beginPath(); c.moveTo(x, y);
-          for (let j = 0; j < 8; j++) { x += rnd(-26, 26); y += 70; c.lineTo(x, Math.min(y, v.y)); }
-          c.stroke();
-        }
-        // 번개 애니메이션: 하늘에서 땅까지 세로로, 줄기 모양이 번쩍이며 바뀐다
-        if (!Art.fxAnim(c, 'bolt', p, v.x, v.y - 290, 600, 170, Math.PI / 2, (1 - p) * 1.4, Math.floor(v.t * 30))) Art.fxImg(c, 'bolt', v.x, v.y - v.r * 0.9, v.r * 2.4, 0, 1 - p);
+        // 하늘에서 내리꽂는 번개: 세로로 그린 번개 그림(Kenney spark_06·05, 원래 비율)을 두 줄기 겹치고, 0.05초마다 좌우를 바꿔 번쩍인다.
+        // 위쪽은 화면 위 글자(남은 시간)를 가리지 않게 땅에서 470까지만.
+        const fl = Math.floor(v.t * 20) % 2 ? -1 : 1, ba = Math.pow(1 - p, 0.7);
+        if (SK && SK.spr(c, 'spark_06', '#fffbe0', v.x, v.y - 235, fl * 300, 470, 0, ba)) {
+          SK.spr(c, 'spark_05', v.c, v.x + 16 * fl, v.y - 220, -fl * 260, 440, 0, ba * 0.8);
+          SK.spr(c, 'light_01', v.c, v.x, v.y - 10, v.r * 2.2, v.r * 1.4, 0, ba * 0.9);
+        } else if (!Art.fxAnim(c, 'bolt', p, v.x, v.y - 235, 470, 120, Math.PI / 2, (1 - p) * 1.2, Math.floor(v.t * 30))) Art.fxImg(c, 'bolt', v.x, v.y - v.r * 0.9, v.r * 2.4, 0, 1 - p);
         Art.fxAnim(c, 'hit', p, v.x, v.y, v.r * 2.2, v.r * 1.4, 0, 1);
       } else if (v.k === 'spark') {
-        const d = v.s * p; c.globalAlpha = 1 - p; c.strokeStyle = v.c; c.lineWidth = 3;
-        c.beginPath(); c.moveTo(v.x + Math.cos(v.a) * d * 0.6, v.y + Math.sin(v.a) * d * 0.6); c.lineTo(v.x + Math.cos(v.a) * d, v.y + Math.sin(v.a) * d); c.stroke();
+        // 튀는 불꽃 조각: 짧은 빛줄기 그림
+        const d = v.s * p;
+        streak(c, v.c, v.x + Math.cos(v.a) * d * 0.6, v.y + Math.sin(v.a) * d * 0.6, v.x + Math.cos(v.a) * d, v.y + Math.sin(v.a) * d, 4, 1 - p);
       } else if (v.k === 'debris') {
         // 튀는 돌조각(포물선)
         const d = v.s * p, z = v.z * 4 * p * (1 - p);
@@ -320,7 +417,9 @@
         else { c.globalAlpha = 0.35 * (1 - p); c.fillStyle = '#b8a07a';
         for (let k = 0; k < 7; k++) { const a = k * 0.9, rr = v.r * (0.4 + p * 0.6); c.beginPath(); c.arc(v.x + Math.cos(a) * rr, v.y + Math.sin(a) * rr * 0.5 - p * 20, v.r * 0.25 * (1 + p), 0, 7); c.fill(); } }
       } else if (v.k === 'ember') {
-        c.globalAlpha = 1 - p; c.fillStyle = p < 0.4 ? '#fff0a0' : '#ff7a2a'; c.beginPath(); c.arc(v.x + v.vx * v.t, v.y + v.vy * v.t, v.sz * (1 - p * 0.5), 0, 7); c.fill();
+        // 불씨: 부드러운 빛 알갱이 그림
+        const es = v.sz * (1 - p * 0.5) * 5;
+        if (SK) SK.spr(c, 'circle_05', p < 0.4 ? '#fff0a0' : '#ff7a2a', v.x + v.vx * v.t, v.y + v.vy * v.t, es, es, 0, 1 - p);
       } else if (v.k === 'img') {
         // 폭발은 프레임 애니메이션, 불길은 기존 그림
         if (!(v.img === 'boom' && Art.fxAnim(c, 'boom2', p, v.x, v.y - v.r * 0.15, v.r * 1.5, v.r * 1.5, 0, 1)))
@@ -330,33 +429,23 @@
         const u = Math.min(1, p / 0.38), e = 1 - (1 - u) * (1 - u) * (1 - u), fade = p < 0.38 ? 1 : 1 - (p - 0.38) / 0.62;
         const a0 = v.a - v.dir * v.arc / 2, a1 = v.a + v.dir * v.arc / 2, head = a0 + (a1 - a0) * e, N = 48;
         const pt = (ang, rr) => [v.x + Math.cos(ang) * rr, v.y + Math.sin(ang) * rr];
-        // 빛 궤적은 더해 그리기(lighter)로: 겹칠수록 밝아져 검광처럼 보인다
-        c.globalCompositeOperation = 'lighter';
-        // 하나의 도형(바깥 호 → 안쪽 곡선)으로 그리고, 호를 따라 꼬리는 투명·칼끝은 밝게 칠한다
-        const span = Math.abs(head - a0);
-        if (span > 0.02) {
-          c.beginPath();
-          for (let k = 0; k <= N; k++) { const s = k / N, [x, y] = pt(a0 + (head - a0) * s, v.r); if (k) c.lineTo(x, y); else c.moveTo(x, y); }
-          for (let k = N; k >= 0; k--) { const s = k / N, [x, y] = pt(a0 + (head - a0) * s, v.r * (0.97 - 0.2 * s * s)); c.lineTo(x, y); }
-          c.closePath();
-          let fill = v.c;
-          if (c.createConicGradient) {
-            const st = v.dir > 0 ? a0 : head, gr = c.createConicGradient(st, v.x, v.y), f = Math.min(0.999, span / (Math.PI * 2));
-            if (v.dir > 0) { gr.addColorStop(0, v.c + '00'); gr.addColorStop(f * 0.7, v.c + 'aa'); gr.addColorStop(f, '#fff6dc'); gr.addColorStop(Math.min(1, f + 0.001), v.c + '00'); }
-            else { gr.addColorStop(0, '#fff6dc'); gr.addColorStop(f * 0.3, v.c + 'aa'); gr.addColorStop(f, v.c + '00'); }
-            fill = gr;
+        // 궤적: 고리 그림(Kenney circle_03·02)을 휘두른 부채꼴 모양으로 잘라 여러 조각으로 깐다. 칼끝 쪽 조각일수록 밝다(도형을 칠하지 않는다).
+        const span = head - a0;
+        if (SK && Math.abs(span) > 0.02) {
+          const n = 7;
+          for (let k = 0; k < n; k++) {
+            const s0 = a0 + (span * k) / n, s1 = a0 + (span * (k + 1)) / n, w = (k + 1) / n;
+            c.save(); c.beginPath(); c.moveTo(v.x, v.y); c.arc(v.x, v.y, v.r * 1.3, Math.min(s0, s1), Math.max(s0, s1) + 0.01); c.closePath(); c.clip();
+            ringSpr(c, 'circle_03', v.c, v.x, v.y, v.r * 0.9, 0, fade * w * w * 0.95);
+            if (k >= n - 3) ringSpr(c, 'circle_02', '#fff6dc', v.x, v.y, v.r * 0.95, 0, fade * w * 0.9);
+            c.restore();
           }
-          c.globalAlpha = fade * 0.85; c.fillStyle = fill; c.fill();
         }
-        // 날 끝선(가장 밝은 테두리)
-        c.globalAlpha = fade * 0.9; c.strokeStyle = '#fffbe8'; c.lineWidth = 4; c.shadowColor = v.c; c.shadowBlur = 18;
-        const lo = Math.min(a0, head), hi = Math.max(a0, head);
-        c.beginPath(); c.arc(v.x, v.y, v.r, Math.max(lo, hi - v.arc * 0.6), hi); c.stroke();
         c.globalCompositeOperation = 'source-over';
         // 휘두르는 칼(극이면 긴 자루)
         if (u < 1 || p < 0.5) {
           const [hx, hy] = pt(head, v.r * 1.02), [gx, gy] = pt(head, v.r * (v.pole ? 0.05 : 0.3));
-          c.globalAlpha = fade; c.shadowBlur = 10; c.lineCap = 'round';
+          c.globalAlpha = fade; c.lineCap = 'round';
           const [bx, by] = pt(head, v.r * (v.pole ? 0.52 : 0.64));
           if (vs(c, v.pole ? 'ji' : 'dao', bx, by, v.r * (v.pole ? 1.02 : 0.78), head, fade, false, false)) { /* 그림으로 그렸다 */ }
           else {
@@ -369,13 +458,13 @@
       } else if (v.k === 'ringwave') {
         // 포위: 링 위로 창끝(군대)이나 불길·충격파가 솟는다
         const rr = (v.r0 + v.r1) / 2, n = Math.max(12, Math.round(rr / 22));
-        c.globalAlpha = 1 - p; c.strokeStyle = v.c; c.lineWidth = (v.r1 - v.r0) * 0.25 * (1 - p); c.beginPath(); c.arc(v.x, v.y, rr, 0, 7); c.stroke();
+        ringSpr(c, 'circle_03', v.c, v.x, v.y, rr, 0, 1 - p);
         for (let k = 0; k < n; k++) {
           const a = (k / n) * Math.PI * 2, x = v.x + Math.cos(a) * rr, y = v.y + Math.sin(a) * rr, up = Math.sin(Math.min(1, p * 2) * Math.PI) * 34;
           if (v.fx === 'flame') Art.fxImg(c, 'fire', x, y - 18 - up * 0.5, 54, UP, 1 - p);
           else if (v.fx === 'army' && k % 2 === 0 && vs(c, 'spears', x, y - 14 - up * 0.6, 54, -Math.PI / 2, 1 - p)) { /* 솟는 창 대열 */ }
           else if (v.fx === 'army') { /* 그림으로 그릴 때는 한 칸 건너 하나씩만 */ if (!VS.spears) { c.fillStyle = '#e8e8e8'; c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x, y - 10 - up); c.lineTo(x + 6, y); c.closePath(); c.fill(); } }
-          else { c.fillStyle = v.c; c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x, y - 10 - up); c.lineTo(x + 6, y); c.closePath(); c.fill(); }
+          else if (!streak(c, v.c, x, y, x, y - 14 - up, 8, 1 - p)) { c.fillStyle = v.c; c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x, y - 10 - up); c.lineTo(x + 6, y); c.closePath(); c.fill(); }
         }
       } else {
         // 직선을 따라 날아가거나 달려가는 것들
@@ -448,12 +537,12 @@
   function drawAura(c, h) {
     c.save();
     if (h.k === 'wind') {
-      c.globalAlpha = 0.5; c.strokeStyle = '#d8ecff'; c.lineWidth = 3;
+      // 바람: 바람 방향으로 흐르는 빛줄기 그림(흐르며 나타났다 사라진다)
       const l = Math.hypot(h.vx, h.vy) || 1, ux = h.vx / l, uy = h.vy / l;
       for (let i = 0; i < 36; i++) {
         const x = ARENA.x0 + ((i * 263) % (ARENA.x1 - ARENA.x0)), y0 = ARENA.y0 + ((i * 151) % (ARENA.y1 - ARENA.y0));
-        const s = ((h.t * 220 + i * 70) % 300), x1 = x + ux * s, y1 = y0 + uy * s;
-        c.beginPath(); c.moveTo(x1, y1); c.lineTo(x1 + ux * 40, y1 + uy * 40); c.lineTo(x1 + ux * 30 - uy * 8, y1 + uy * 30 + ux * 8); c.stroke();
+        const s = ((h.t * 220 + i * 70) % 300), x1 = x + ux * s, y1 = y0 + uy * s, fa = Math.sin((s / 300) * Math.PI);
+        if (!streak(c, '#d8ecff', x1, y1, x1 + ux * 70, y1 + uy * 70, 5, 0.6 * fa)) { c.globalAlpha = 0.5; c.strokeStyle = '#d8ecff'; c.lineWidth = 3; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x1 + ux * 40, y1 + uy * 40); c.stroke(); }
       }
     } else {
       const b = g.fight.boss;
@@ -463,7 +552,7 @@
         c.fillStyle = '#7a1ad0'; c.beginPath(); c.arc(b.x, b.y - 150, 18, 0, 7); c.fill();
       }
       c.globalAlpha = 0.95;
-      c.fillStyle = '#fff'; c.font = '700 18px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText(I.t('walkHurt'), b.x, b.y - 108);
+      { const us = uiS(); c.save(); c.translate(b.x, b.y - 108); c.scale(us, us); c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,10,30,.9)'; c.lineWidth = 4; c.lineJoin = 'round'; c.font = '700 18px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.strokeText(I.t('walkHurt'), 0, 0); c.fillText(I.t('walkHurt'), 0, 0); c.restore(); }
     }
     c.restore();
   }
@@ -485,7 +574,7 @@
         else { c.globalAlpha = 0.85; c.strokeStyle = '#d8ecff'; c.lineWidth = 3; c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.stroke();
         c.fillStyle = '#d8ecff'; drawSym(c, o.x, o.y, o.s, 26); }
       } else if (o.k === 'pillar' && VS.pillar) {
-        c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(o.x, o.y + o.r * 0.55, o.r * 1.1, o.r * 0.4, 0, 0, 7); c.fill();
+        blobShadow(c, o.x, o.y + o.r * 0.55, o.r * 2.6, 0.7);
         vs(c, 'pillar', o.x, o.y - o.r * 0.75, o.r * 2.3);
       } else if (o.k === 'pillar') {
         c.fillStyle = '#6f6a62'; c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.fill();
@@ -496,21 +585,22 @@
       } else {
         // 공격할 수 있는 오브젝트
         const col = o.k === 'altar' ? '#f2dd5c' : o.k === 'tower' ? '#b08850' : '#c0c8d8';
-        c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(o.x, o.y + o.r * 0.8, o.r, o.r * 0.35, 0, 0, 7); c.fill();
+        blobShadow(c, o.x, o.y + o.r * 0.8, o.r * 2.4, 0.7);
         c.fillStyle = o.flash > 0 ? '#fff' : col; c.strokeStyle = '#2a1c10'; c.lineWidth = 3;
         const pic = o.k === 'tower' ? 'tower' : o.k === 'altar' ? 'altar' : 'ambush', pw = o.k === 'tower' ? 104 : o.k === 'altar' ? 124 : o.r * 2.9, py = o.k === 'tower' ? o.y - 40 : o.k === 'altar' ? o.y - 22 : o.y - o.r * 0.25;
         if (vs(c, pic, o.x, py, pw)) { if (o.flash > 0) vs(c, pic, o.x, py, pw, 0, 0.75, true); /* 맞으면 번쩍 */ }
         else if (o.k === 'tower') { c.fillRect(o.x - 30, o.y - 50, 60, 80); c.strokeRect(o.x - 30, o.y - 50, 60, 80); c.beginPath(); c.moveTo(o.x - 42, o.y - 50); c.lineTo(o.x, o.y - 82); c.lineTo(o.x + 42, o.y - 50); c.closePath(); c.fill(); c.stroke(); }
         else if (o.k === 'altar') { c.fillRect(o.x - 34, o.y - 20, 68, 44); c.strokeRect(o.x - 34, o.y - 20, 68, 44); c.fillStyle = '#c03020'; c.fillRect(o.x - 8, o.y - 60, 16, 44); c.fillStyle = '#fff3a0'; c.font = '400 16px "Black Han Sans", sans-serif'; c.textAlign = 'center'; c.fillText('符', o.x, o.y - 32); }
         else { c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#2a1c10'; c.font = '400 22px "Black Han Sans", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('伏', o.x, o.y); }
-        bar(c, o.x, o.y - o.r - 34, 70, 6, Math.max(0, o.hp / (o.mhp || 1)), '#ff8a5c');
+        bar(c, o.x, o.y - o.r - 34, 70 * uiS(), 6 * uiS(), Math.max(0, o.hp / (o.mhp || 1)), '#ff8a5c');
       }
-      if (act && act.tgt === o.id) { c.globalAlpha = 1; c.strokeStyle = '#ff5040'; c.lineWidth = 3; c.setLineDash([8, 6]); c.beginPath(); c.arc(o.x, o.y, o.r + 18, 0, 7); c.stroke(); c.setLineDash([]); }
+      // 공격 대상: 붉은 법진 그림이 돈다(점선 원 대신)
+      if (act && act.tgt === o.id) Art.fxPic(c, 'mc_rune2', o.x, o.y, (o.r + 18) * 2.1, (o.r + 18) * 2.1, t * 0.8, 0.95, { col: '#ff5040' });
       c.restore();
     });
     if (M.bur) {
       c.save(); c.strokeStyle = M.bur.lock ? '#ff5040' : '#c9b48a'; c.lineWidth = 4; c.globalAlpha = 0.9;
-      if (VS.dust) { for (let i = 0; i < 4; i++) { const a = t * 2.2 + i * 1.57; vs(c, 'dust', M.bur.x + Math.cos(a) * 34, M.bur.y + Math.sin(a) * 20, 70, a, 0.6); } c.lineWidth = 2; c.beginPath(); c.ellipse(M.bur.x, M.bur.y, 52 + ((t * 30) % 18), (52 + ((t * 30) % 18)) * 0.6, 0, 0, 7); c.stroke(); }
+      if (VS.dust) { for (let i = 0; i < 4; i++) { const a = t * 2.2 + i * 1.57; vs(c, 'dust', M.bur.x + Math.cos(a) * 34, M.bur.y + Math.sin(a) * 20, 70, a, 0.6); } ringSpr(c, 'circle_02', M.bur.lock ? '#ff5040' : '#c9b48a', M.bur.x, M.bur.y, 52 + ((t * 30) % 18), 0, 0.85, true, 0.6); }
       else for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(M.bur.x, M.bur.y, 30 + i * 22 + ((t * 40) % 22), 0, 7); c.stroke(); }
       c.restore();
     }

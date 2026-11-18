@@ -91,7 +91,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     if (now - lastDraw < 14) return;
     // 쉬는 화면: 일시정지(창은 DOM이라 캔버스가 멈춰도 보인다), 또는 판이 끝나고 승리·등장 연출과 경험치 연출이 다 끝난 결과 화면.
     // 이때는 초당 5번만 그린다(발열·배터리). 글자판을 고칠 일이 있으면(needs) 바로 돈다. 튜토리얼 설명 중에는 그대로 그린다.
-    const idle = !S.tutHold && ((S.paused && !g.over) || (g.over && !S.pop && !popQ.length && !S.xpPlaying));
+    // 패배 연출 중(performance.now() < S.endHoldUntil)은 쉬는 화면에서 빼서 연출이 끊기지 않게 한다
+    const idle = !S.tutHold && ((S.paused && !g.over) || (g.over && !S.pop && !popQ.length && !S.xpPlaying && now >= (S.endHoldUntil || 0)));
     if (idle && !needs && now - lastDraw < 200) return;
     lastDraw = now;
     const p0 = Q.perf ? performance.now() : 0;
@@ -121,7 +122,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const pool = window.RTD_AI.BUILDS.slice();
       bots = [];
       for (let i = 0; i < opt.ai; i++) {
-        const b = pool.splice((Math.random() * pool.length) | 0, 1)[0], bn = hub.join('AI ' + b.name);
+        const b = pool.splice((Math.random() * pool.length) | 0, 1)[0], bn = hub.join(I.t('ai_' + b.id)); // 동맹 이름은 문구표(ai_<빌드 id>)로 4개 언어
         const bg = new E.Game(T, { diff: opt.diff, mode: 'multi', seed: opt.seed + i + 1, net: bn, bot: true, muts: opt.muts, mutLv: opt.mutLv });
         bn.attach(bg);
         bots.push({ g: bg, net: bn, brain: new window.RTD_AI.Brain(bg, b) });
@@ -151,7 +152,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
         ask();
       }
     }
-    S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;
+    S.everSel = false; S.frontWarned = false; S.fromSnap = !!opt.snap; S.endHoldUntil = 0; S.toastHoldUntil = 0; S.toastQ = []; S.vicUntil = 0;
+    S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.coinGained = 0; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;
     if (opt.net) { net = opt.net; net.onLobby = null; net.attach(g); speed = 1; }
     Snd.init();
     S.tutHold = false;

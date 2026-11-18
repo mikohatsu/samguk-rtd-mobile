@@ -19,7 +19,7 @@
   const mutCard = (id, i) => { const m = T.mutators.find((x) => x.id === id); return m ? `<div class="mut"><span class="n">${i + 1}</span><b>${esc(m.name)}</b><div class="gb"><span class="g">＋ ${esc(m.good)}</span><span class="bd">－ ${esc(m.bad)}</span></div></div>` : ''; };
   if (+cfg.mutLv) rollMuts(); // 기억해 둔 악몽 +N이면 규칙을 새로 뽑아 둔다
   const DIFF_COL = { easy: '#7fd08a', normal: '#6fb7ff', hard: '#ffb347', nightmare: '#ff5a5a' };
-  const myName = () => (ACC.me && cfg.play === 'online' ? ACC.me.nick : t('solo'));
+  const myName = () => (ACC.me ? ACC.me.nick : t('me'));
   function setupTitle() {
     I.applyDom();
     $('gametitle').textContent = T.title;
@@ -47,12 +47,13 @@
       }
       const m = ACC.me, lv = m.level, max = m.rank >= 10, f = max ? 1 : Math.max(0, Math.min(1, (m.xp - xpLv(lv)) / Math.max(1, xpLv(lv + 1) - xpLv(lv))));
       const guest = m.provider === 'guest', prov = m.provider === 'apple' ? 'Apple' : m.provider === 'google' ? 'Google' : guest ? t('provGuest') : '';
-      return `${note}<div class="acc-card"><span class="badge">${lv}</span><div><b>${esc(m.nick)}</b> <span class="gr">${esc(t(m.grade))}${pum(m.rank)} ${t('level', { n: lv })}</span> <small class="prov">${esc(prov)}</small></div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div></div>
-        <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })} · XP ${fmt(m.xp)}</div>
+      const trk = m.track === 'civ' ? 'civ' : 'mil', nextR = !max && m.rank >= 0 && m.rank < 10 ? t('goalRank', { a: esc(t('rk_' + trk + (m.rank + 1))), n: fmt(Math.max(0, xpLv(RANK_LV[m.rank + 1]) - (m.xp || 0))) }) : '';
+      return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${m.rank | 0}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(t(m.grade))}${pum(m.rank)} · ${t('level', { n: lv })}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
+        <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })}・XP ${fmt(m.xp)}</div>
         <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button><button class="btn acc-q" id="acc-treebtn" type="button" aria-label="${esc(t('treeHead'))}">?</button></div>
         <div class="acc-tree" id="acc-tree" ${S.accTree ? '' : 'hidden'}>${treeHtml(m)}</div>
         ${guest && (!app || N.ssoHas('apple') || N.ssoHas('google')) ? `<div class="acc-link"><b>${t('linkHead')}</b><div class="hint2">${t('linkHint')}</div><div class="acc-btns">${(app ? N.ssoHas('apple') : apple) ? `<button class="btn sso apple" data-sso="apple" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}${!app || N.ssoHas('google') ? `<button class="btn sso google" data-sso="google" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button>` : ''}</div></div>` : ''}
-        <div class="acc-btns"><button class="btn" id="acc-rank" type="button">${t('ranking')}</button><button class="btn" id="acc-nickbtn" type="button">${t('nickEdit')}</button><button class="btn" id="acc-out" type="button">${t('logout')}</button></div>
+        <div class="acc-btns"><button class="btn" id="acc-nickbtn" type="button">${t('nickEdit')}</button><button class="btn" id="acc-out" type="button">${t('logout')}</button></div>
         <div id="acc-nickbox" hidden><div class="inline"><input id="acc-nick2" maxlength="12" value="${esc(m.nick)}"><button class="btn" id="acc-nicksave" type="button">${t('save')}</button></div></div>
         <div class="acc-danger"><button class="btn warn" id="acc-del" type="button">${t('deleteAcc')}</button></div>
         <div id="acc-delbox" hidden><div class="hint2">${t('delConfirmSso')}</div><div class="inline">${m.provider === 'password' ? `<input id="acc-delpw" type="password" placeholder="${esc(t('accPw'))}">` : ''}<button class="btn warn" id="acc-delgo" type="button">${t('delYes')}</button></div></div>
@@ -63,7 +64,7 @@
     const dr = () => {
       const on = cfg.play === 'online';
       $('playmode').innerHTML = [['offline', t('offline')], ['online', t('online')]].map(([k, n]) => `<button class="${cfg.play === k && pk('play') ? 'on' : ''}" data-cfg="play" data-v="${k}" type="button">${n}</button>`).join('');
-      $('playhint').textContent = t(on ? 'onlineHint' : 'offlineHint');
+      $('playhint').textContent = pk('play') ? t(on ? 'onlineHint' : 'offlineHint') : t('pickOne');
       $('accbox').hidden = false; // 계정 상자는 로비의 계정 창에 들어간다
       refreshAcc();
       const ready = !on || (ACC.token && ACC.me);
@@ -80,6 +81,7 @@
       // 오프라인: 단독·AI 동맹 / 온라인: 단독(기록)·방 협동
       const modes = on ? [['quick', t('lb_quick'), t('lb_quickSub')], ['create', t('lb_create'), t('lb_createSub')], ['join', t('lb_join'), t('lb_joinSub')]] : [['solo', t('solo'), t('soloSub')], ['ai', t('aiAlly'), t('aiAllySub')]];
       if (!modes.some(([k]) => k === cfg.mode)) cfg.mode = modes[0][0];
+      $('modes').className = 'choice modes ' + (modes.length === 3 ? 'three' : 'two');
       $('modes').innerHTML = modes.map(([k, n, s]) => `<button class="${cfg.mode === k && pk('mode') ? 'on' : ''}" data-cfg="mode" data-v="${k}" type="button">${n}<small>${s}</small></button>`).join('');
       const isRoom = cfg.mode === 'create' || cfg.mode === 'join' || cfg.mode === 'multi';
       $('netbox').hidden = !(ready && isRoom);
@@ -115,7 +117,7 @@
         const p = r[i];
         if (!p) return `<div class="lb-slot empty">${t('emptySeat')}</div>`;
         const nm = p.state.name || '?';
-        return `<div class="lb-slot in ${p.me ? 'me' : ''}">${i === 0 ? `<span class="host">★ ${t('host')}</span>` : ''}<span class="av">${esc(nm.slice(0, 1))}</span><span>${esc(nm)}${p.me ? ` (${t('me')})` : ''}</span>${gradeTag(p.state)}</div>`;
+        return `<div class="lb-slot in ${p.me ? 'me' : ''}">${i === 0 ? `<span class="host">★ ${t('host')}</span>` : ''}<img class="av" alt="" src="${Art.portrait(defOf[p.state.ic] || defOf.cav)}"><span>${esc(nm)}${p.me ? ` (${t('me')})` : ''}</span>${gradeTag(p.state)}</div>`;
       }).join('');
       const hc = lobby.isHost() ? { diff: cfg.diff, mutLv: +cfg.mutLv, muts: cfg.muts } : hostCfg;
       const dn = hc ? (T.difficulties.find((d) => d.id === hc.diff) || {}).name : '';
@@ -393,7 +395,7 @@
       h += `<div class="row"><div>${t('fps30')} <small>${t('fps30Hint')}</small></div><button class="toggle ${Q.fps30 ? 'on' : ''}" data-act="fps30" type="button">${Q.fps30 ? t('on') : t('off')}</button></div>`;
       h += `<div class="row"><div>${t('perfShow')} <small>${t('perfShowHint')}</small></div><button class="toggle ${Q.perf ? 'on' : ''}" data-act="perf" type="button">${Q.perf ? t('on') : t('off')}</button></div>`;
       h += `<div class="h">${t('sound')}</div>` + volRow('sfx') + volRow('bgm');
-      h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplay')}</button></div>`;
+      h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplayBtn')}</button></div>`;
       h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
       h += `<div class="row"><div>${t('version')}</div><div>v${window.RTD_VERSION || '?'}</div></div>`;
       return `<div class="setlist">${h}</div>`;
@@ -402,7 +404,21 @@
     if (window.RTD_LOBBY) window.RTD_LOBBY.init({ api, ACC, saveAcc, t, I, T, cfg, getLobby: () => lobby, joinRoom: (code) => join(code), leaveRoom, saveLast, clearAccNote: () => { if (accNote) { accNote = ''; $('accbox').dataset.html = ''; } }, begin, refreshAcc, settingsHtml, errText, clock, repaintMap, repaintSetup: () => dr(), paintMini: (cv, theme) => paintMap(cv.getContext('2d'), cv.width, cv.height, theme || null) });
     dr();
     // 로딩(처음이면 로그인·닉네임·관직 갈래)이 끝난 뒤: 로비 안내(처음) 또는 아직 못 받은 첫 신화 해금 연출
-    boot().catch(() => { const B = $('boot'); if (B) B.hidden = true; }).then(() => { if (window.RTD_TUT && window.RTD_TUT.lobby) window.RTD_TUT.lobby({ t, T }); });
+    // 결과창의 '같은 설정으로 다시'(11-actions 'again')는 sessionStorage 'rtd-again'을 남기고 다시 불러온다.
+    // 싱글(혼자·AI 동맹)과 온라인 혼자 판만 바로 시작한다. 방 협동은 결과창에 버튼이 없다. 시작하지 못하면 그냥 로비.
+    const startAgain = () => {
+      let want = false; try { want = sessionStorage.getItem('rtd-again') === '1'; sessionStorage.removeItem('rtd-again'); } catch (e) { /* 저장 불가 */ }
+      if (!want || !(window.RTD_TUT && window.RTD_TUT.done && window.RTD_TUT.done())) return false;
+      const online = cfg.play === 'online';
+      if (online && !(ACC.token && ACC.me)) return false;
+      if (window.RTD_LOBBY && !window.RTD_LOBBY.diffOpen(cfg.diff, +cfg.mutLv)) return false;
+      if (cfg.diff === 'nightmare' && +cfg.mutLv) rollMuts();
+      const mm = cfg.diff === 'nightmare' ? { muts: cfg.muts.slice(), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 };
+      if (!online && cfg.mode === 'ai') { begin(Object.assign({ diff: cfg.diff, ai: +cfg.ai }, mm)); return true; }
+      if (cfg.mode === 'solo') { begin(Object.assign({ diff: cfg.diff, mode: 'solo', online, key: online ? 's-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : null }, mm)); return true; }
+      return false;
+    };
+    boot().catch(() => { const B = $('boot'); if (B) B.hidden = true; }).then(() => { if (startAgain()) return; if (window.RTD_TUT && window.RTD_TUT.lobby) window.RTD_TUT.lobby({ t, T }); });
   }
   setupTitle();
   requestAnimationFrame(loop);

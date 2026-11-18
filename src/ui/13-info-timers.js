@@ -134,7 +134,7 @@
       else tm = clock(eta(x));
       if (!cls.includes('past') && nextKey == null) nextKey = x.r;
       if (x.boss && !cls.includes('past') && !hudBoss) hudBoss = `R${x.r} ${x.name} ${tm}`;
-      if (!x.boss && cls.includes('now') && tm.startsWith(I.t('field'))) hudMid.push(`${t('midBoss')} ${x.name} ${tm}`);
+      if (!x.boss && cls.includes('now') && tm.startsWith(I.t('field'))) hudMid.push([`${t('midBoss')} ${x.name}`, tm]); // 16-hud가 두 묶음으로 나눠 줄바꿈한다
       x.gauge.style.width = fill * 100 + '%';
       if (x.tm.textContent !== tm) x.tm.textContent = tm;
       if (x.row.className !== cls) x.row.className = cls;
