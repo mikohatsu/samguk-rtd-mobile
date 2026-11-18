@@ -133,6 +133,35 @@ function verifySignedTx(jws) {
   return body;
 }
 
+// 구글 플레이 결제 검증: 구매 토큰을 Google Play Developer API(purchases.products.get)로 확인한다.
+// GOOGLE_PLAY_SA = 서비스 계정 키(JSON) 파일 경로. 플레이 콘솔 '사용자 및 권한'에서 이 서비스 계정에 '재무 데이터 보기' 권한을 줘야 한다. 없으면 503.
+// 구매 확인(acknowledge)은 앱의 결제 플러그인이 한다.
+const GPLAY = { sa: process.env.GOOGLE_PLAY_SA || '', pkg: process.env.GOOGLE_PLAY_PACKAGE || 'com.hongsungjae.sangokurtd', api: process.env.GOOGLE_PLAY_API || 'https://androidpublisher.googleapis.com', tok: null };
+const gplayOn = () => !!GPLAY.sa && fs.existsSync(GPLAY.sa);
+const b64u = (x) => Buffer.from(x).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+async function gplayToken() {
+  if (GPLAY.tok && GPLAY.tok.exp > Date.now() + 60000) return GPLAY.tok.v;
+  const k = JSON.parse(fs.readFileSync(GPLAY.sa, 'utf8')), now = Math.floor(Date.now() / 1000), aud = k.token_uri || 'https://oauth2.googleapis.com/token';
+  const un = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' })) + '.' + b64u(JSON.stringify({ iss: k.client_email, scope: 'https://www.googleapis.com/auth/androidpublisher', aud, iat: now, exp: now + 3600 }));
+  const jwt = un + '.' + b64u(crypto.sign('RSA-SHA256', Buffer.from(un), k.private_key));
+  const r = await fetch(aud, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=' + encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer') + '&assertion=' + jwt });
+  const j = await r.json(); if (!j.access_token) throw new Error('gplay_auth');
+  GPLAY.tok = { v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+  return GPLAY.tok.v;
+}
+// 돌려주는 값: { productId, txId, at } (구매 완료 상태일 때만). 아니면 bad_receipt
+async function verifyGooglePurchase(productId, token) {
+  const bad = () => new Error('bad_receipt'), pid = String(productId || ''), t = String(token || '');
+  if (!/^[a-z0-9_.]{1,100}$/.test(pid) || !/^[A-Za-z0-9._-]{10,1000}$/.test(t)) throw bad();
+  const u = GPLAY.api + '/androidpublisher/v3/applications/' + encodeURIComponent(GPLAY.pkg) + '/purchases/products/' + encodeURIComponent(pid) + '/tokens/' + encodeURIComponent(t);
+  const r = await fetch(u, { headers: { Authorization: 'Bearer ' + await gplayToken() } });
+  if (!r.ok) throw bad();
+  const p = await r.json();
+  // purchaseState: 0 구매 완료, 1 취소(환불), 2 대기
+  if (p.purchaseState !== 0 || !p.orderId) throw bad();
+  return { productId: pid, txId: 'g:' + String(p.orderId).slice(0, 60), at: +p.purchaseTimeMillis || Date.now() };
+}
+
 // 판 보고를 검사해 전적 한 줄로 만든다(숫자만, 크기 제한). 저장은 store가 한다.
 function histOf(b, online) {
   const diff = DIFFS.includes(b.diff) ? b.diff : 'easy', mut = Math.min(5, Math.max(0, b.mutLv | 0));
@@ -242,6 +271,8 @@ async function handle(req, res, url, query) {
     const list = await cached(rankCache, 'level', async () => (await store.rankLevel(50)).map((u) => Object.assign(pub(u), { xp: u.xp, games: u.games })));
     return json(res, 200, { list });
   }
+  // 결제 검증 준비 상태: 앱은 이게 true인 스토어에서만 결제 버튼을 보인다(검증 못 하는데 돈만 나가는 일을 막는다)
+  if (url === '/api/iap/status' && req.method === 'GET') return json(res, 200, { apple: iapOn(), google: gplayOn() });
   if (url === '/api/me' && req.method === 'GET') {
     const u = await userOf(req);
     return u ? json(res, 200, { me: profile(u) }) : json(res, 401, { error: 'auth' });
@@ -385,11 +416,19 @@ async function handle(req, res, url, query) {
   // 앱스토어 결제(구매·복원 모두): 서명 거래를 검증하고 상품의 열쇠를 넣는다. 설정 전이면 503.
   if (url === '/api/iap/verify') {
     if (limited('u:' + u.id, 'iap', 30, 600000)) return json(res, 429, { error: 'slow_down' });
-    if (!iapOn()) return json(res, 503, { error: 'not_configured' });
-    let tx; try { tx = verifySignedTx(b.signed); } catch (e) { return json(res, 400, { error: 'bad_receipt' }); }
-    const pid = String(tx.productId), items = iapItems(pid);
+    // 구글 플레이: { store: 'google', productId, token }, App Store: { signed }
+    let tx;
+    if (b.store === 'google') {
+      if (!gplayOn()) return json(res, 503, { error: 'not_configured' });
+      try { tx = await verifyGooglePurchase(b.productId, b.token); } catch (e) { return json(res, 400, { error: 'bad_receipt' }); }
+    } else {
+      if (!iapOn()) return json(res, 503, { error: 'not_configured' });
+      let t; try { t = verifySignedTx(b.signed); } catch (e) { return json(res, 400, { error: 'bad_receipt' }); }
+      tx = { productId: String(t.productId), txId: String(t.originalTransactionId || t.transactionId).slice(0, 64), at: +t.purchaseDate || Date.now() };
+    }
+    const pid = tx.productId, items = iapItems(pid);
     if (!items || !items.length) return json(res, 400, { error: 'bad_item' });
-    const r = await store.grantIap(u.id, String(tx.originalTransactionId || tx.transactionId).slice(0, 64), pid, items, +tx.purchaseDate || Date.now());
+    const r = await store.grantIap(u.id, tx.txId, pid, items, tx.at);
     if (r === 'other') return json(res, 409, { error: 'other_account' });
     return json(res, 200, { me: profile(await store.getUser(u.id)) });
   }
@@ -458,7 +497,7 @@ async function handle(req, res, url, query) {
 
 // ---------- 정적 파일 ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.json': 'application/json', '.css': 'text/css; charset=utf-8', '.mp3': 'audio/mpeg' };
-const PAGES = { '/': 'samguk-rtd.html', '/privacy': 'legal/privacy.html', '/terms': 'legal/terms.html' };
+const PAGES = { '/': 'samguk-rtd.html', '/privacy': 'legal/privacy.html', '/terms': 'legal/terms.html', '/delete-account': 'legal/delete-account.html' };
 const SAFE = /^\/(samguk-rtd\.html|[a-z0-9-]+\.js|gfx\/[A-Za-z0-9_]+\.(png|jpg|js)|fonts\/[A-Za-z0-9_-]+\.woff2|fonts\/fonts\.css|legal\/[a-z-]+\.html|i18n\/[a-z]{2}\.js|bgm\/[a-z_]+\.mp3)$/;
 const fileCache = new Map();
 function load(file, cb) {

@@ -1,0 +1,60 @@
+# 플레이스토어 업로드용 AAB를 만든다(출시 키로 서명). 손으로만 돌린다: GitHub > Actions > "Android Release (AAB)" > Run workflow.
+# 필요한 저장소 비밀값(Settings > Secrets and variables > Actions):
+#   RTD_UPLOAD_KEYSTORE_B64   업로드 키 파일(.jks)을 base64로 바꾼 글자
+#   RTD_UPLOAD_STORE_PASSWORD, RTD_UPLOAD_KEY_ALIAS, RTD_UPLOAD_KEY_PASSWORD
+# 결과 AAB는 이 실행의 Artifacts(비공개)로만 남긴다. Releases에는 올리지 않는다.
+name: Android Release (AAB)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check secrets
+        env:
+          KS: ${{ secrets.RTD_UPLOAD_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KS" ]; then echo "::error::RTD_UPLOAD_KEYSTORE_B64 비밀값이 없습니다(MAC_HANDOFF.md 안드로이드 절)"; exit 1; fi
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build AAB
+        working-directory: android
+        env:
+          KS: ${{ secrets.RTD_UPLOAD_KEYSTORE_B64 }}
+          RTD_UPLOAD_STORE_PASSWORD: ${{ secrets.RTD_UPLOAD_STORE_PASSWORD }}
+          RTD_UPLOAD_KEY_ALIAS: ${{ secrets.RTD_UPLOAD_KEY_ALIAS }}
+          RTD_UPLOAD_KEY_PASSWORD: ${{ secrets.RTD_UPLOAD_KEY_PASSWORD }}
+        run: |
+          echo "$KS" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          export RTD_UPLOAD_STORE_FILE="$RUNNER_TEMP/upload.jks"
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon
+          rm -f "$RUNNER_TEMP/upload.jks"
+      - name: Name the AAB
+        run: |
+          V=$(node -p "require('./package.json').version")
+          mkdir -p out
+          cp android/app/build/outputs/bundle/release/app-release.aab "out/sangokurtd-$V.aab"
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sangokurtd-aab
+          path: out/*.aab
+          retention-days: 30

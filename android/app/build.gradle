@@ -4,6 +4,16 @@ apply plugin: 'com.android.application'
 def pkgVersion = new groovy.json.JsonSlurper().parseText(file('../../package.json').text).version
 def vParts = pkgVersion.tokenize('.').collect { it as int }
 
+// 출시(플레이스토어 업로드) 서명: 키 파일과 비밀번호는 저장소에 넣지 않는다.
+// 이 컴퓨터: android/keystore.properties (storeFile, storePassword, keyAlias, keyPassword) — .gitignore에 있음
+// GitHub Actions: 환경 변수 RTD_UPLOAD_STORE_FILE, RTD_UPLOAD_STORE_PASSWORD, RTD_UPLOAD_KEY_ALIAS, RTD_UPLOAD_KEY_PASSWORD
+// 둘 다 없으면 release 빌드는 서명 없이 만들어진다(플레이에 못 올림). 자세한 절차: MAC_HANDOFF.md 안드로이드 절
+def upload = new Properties()
+def upFile = rootProject.file('keystore.properties')
+if (upFile.exists()) { upFile.withInputStream { upload.load(it) } }
+def upVal = { String k, String env -> upload.getProperty(k) ?: System.getenv(env) }
+def upStore = upVal('storeFile', 'RTD_UPLOAD_STORE_FILE')
+
 android {
     namespace = "com.hongsungjae.sangokurtd"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -28,12 +38,21 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (upStore) {
+            release {
+                storeFile file(upStore)
+                storePassword upVal('storePassword', 'RTD_UPLOAD_STORE_PASSWORD')
+                keyAlias upVal('keyAlias', 'RTD_UPLOAD_KEY_ALIAS')
+                keyPassword upVal('keyPassword', 'RTD_UPLOAD_KEY_PASSWORD')
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
+            if (upStore) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

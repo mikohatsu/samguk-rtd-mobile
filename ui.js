@@ -3939,11 +3939,11 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     const pum = (rk) => (rk >= 1 && rk <= 9 ? ' <small>' + t('rankPum', { n: 10 - rk }) + '</small>' : '');
     const accHtml = () => {
       const link = (k, p) => `<a href="${API}/${p}?lang=${I.lang}" target="_blank" rel="noopener">${t(k)}</a>`;
-      const N = window.RTD_NATIVE, app = !!(N && N.on);
+      const N = window.RTD_NATIVE, app = !!(N && N.on), apple = !(N && N.droid); // 안드로이드 앱에는 Apple 로그인 버튼이 없다
       if (!ACC.token || !ACC.me) {
         return `<div class="acc-form"><input id="acc-nick" maxlength="12" placeholder="${esc(t('nickFirst'))}">
           <label class="agree"><input id="acc-agree" type="checkbox"><span>${t('agree', { terms: link('terms', 'terms'), privacy: link('privacy', 'privacy') })}</span></label>
-          <button class="btn sso apple" data-sso="apple" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>
+          ${apple ? `<button class="btn sso apple" data-sso="apple" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}
           <button class="btn sso google" data-sso="google" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button>
           ${app ? '' : `<div class="hint2">${t('appOnly')}</div>`}
           <button class="btn go" id="acc-guest" type="button">${t('loginGuest')}</button>
@@ -3954,7 +3954,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       return `<div class="acc-card"><span class="badge">${lv}</span><div><b>${esc(m.nick)}</b> <span class="gr">${esc(t(m.grade))}${pum(m.rank)} ${t('level', { n: lv })}</span> <small class="prov">${esc(prov)}</small></div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div></div>
         <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })} · XP ${fmt(m.xp)}</div>
         <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button></div>
-        ${guest ? `<div class="acc-link"><b>${t('linkHead')}</b><div class="hint2">${t('linkHint')}</div><div class="acc-btns"><button class="btn sso apple" data-sso="apple" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button><button class="btn sso google" data-sso="google" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button></div></div>` : ''}
+        ${guest ? `<div class="acc-link"><b>${t('linkHead')}</b><div class="hint2">${t('linkHint')}</div><div class="acc-btns">${apple ? `<button class="btn sso apple" data-sso="apple" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}<button class="btn sso google" data-sso="google" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button></div></div>` : ''}
         <div class="acc-btns"><button class="btn" id="acc-rank" type="button">${t('ranking')}</button><button class="btn" id="acc-nickbtn" type="button">${t('nickEdit')}</button><button class="btn" id="acc-out" type="button">${t('logout')}</button><button class="btn warn" id="acc-del" type="button">${t('deleteAcc')}</button></div>
         <div id="acc-nickbox" hidden><div class="inline"><input id="acc-nick2" maxlength="12" value="${esc(m.nick)}"><button class="btn" id="acc-nicksave" type="button">${t('save')}</button></div></div>
         <div id="acc-delbox" hidden><div class="hint2">${t('delConfirmSso')}</div><div class="inline">${m.provider === 'password' ? `<input id="acc-delpw" type="password" placeholder="${esc(t('accPw'))}">` : ''}<button class="btn warn" id="acc-delgo" type="button">${t('delYes')}</button></div></div>

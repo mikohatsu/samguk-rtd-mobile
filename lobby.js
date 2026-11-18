@@ -254,10 +254,19 @@
     const r = await C.api('/api/ad/reward', {});
     if (r.me) { adLeft = r.left; afterMe(r); toast(L('adLeft', { n: r.left })); } else { if (r.error === 'ad_cap') adLeft = 0; toast(r.error === 'ad_cap' ? L('adCap') : C.errText(r.error)); }
   }
-  async function iapSend(signed) { const r = await C.api('/api/iap/verify', { signed }); if (r.me) afterMe(r); return r; }
+  // rc = 영수증 { signed }(iOS) 또는 { store: 'google', productId, token }(안드로이드)
+  // 서버가 이 스토어의 영수증을 검증할 수 있을 때만 결제 버튼을 보인다(/api/iap/status). 한 번 묻고, 실패하면 다음 화면에서 다시 묻는다
+  let iapSrv = null, iapAsk = null;
+  function iapReady() {
+    const N = root.RTD_NATIVE || {};
+    if (!(N.iapOn && N.iapOn())) return false;
+    if (!iapSrv && !iapAsk) iapAsk = C.api('/api/iap/status').then((r) => { if (r.status === 200) { iapSrv = r; renderPanel(); } }).finally(() => { iapAsk = null; });
+    return !!(iapSrv && iapSrv[N.droid ? 'google' : 'apple']);
+  }
+  async function iapSend(rc) { const r = await C.api('/api/iap/verify', rc); if (r.me) afterMe(r); return r; }
   async function iapBuy(pid) {
-    let signed; try { signed = await root.RTD_NATIVE.iapBuy(pid); } catch (e) { if (!/cancel/i.test(String(e && e.message))) toast(L('iapFail')); return; }
-    const r = await iapSend(signed); toast(r.me ? L('unlocked') : L('iapFail'));
+    let rc; try { rc = await root.RTD_NATIVE.iapBuy(pid); } catch (e) { if (!/cancel/i.test(String(e && e.message))) toast(L('iapFail')); return; }
+    const r = await iapSend(rc); toast(r.me ? L('unlocked') : L('iapFail'));
   }
   async function iapRestore() {
     let list = []; try { list = await root.RTD_NATIVE.iapRestore(); } catch (e) { toast(L('iapFail')); return; }
@@ -265,7 +274,7 @@
     toast(L('restore') + ' ✓');
   }
   function unlockHtml(me) {
-    const U = UL(), N = root.RTD_NATIVE || {}, iap = !!(N.iapOn && N.iapOn()), owns = (id) => (me.owned || []).includes(U.key(id));
+    const U = UL(), N = root.RTD_NATIVE || {}, iap = iapReady(), owns = (id) => (me.owned || []).includes(U.key(id));
     let h = `<div class="lp-note">${L('unlockHint')}</div>`, bar = '';
     // 광고·결제 버튼은 앱에서만(웹 브라우저에서는 RTD_NATIVE.on이 false라 숨는다)
     if (N.rewardOn && N.rewardOn()) bar += `<button class="btn go" type="button" data-adrw="1">${L((me.owned || []).includes(U.noAdsKey) ? 'adFree' : 'adBtn', { n: U.ad.coins })}${adLeft != null ? ' (' + L('adLeft', { n: adLeft }) + ')' : ''}</button>`;

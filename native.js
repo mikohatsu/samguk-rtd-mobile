@@ -2,11 +2,14 @@
 (function (root) {
   const C = root.Capacitor, on = !!(C && C.isNativePlatform && C.isNativePlatform());
   const P = on ? C.Plugins || {} : {};
-  // 출시 전에 실제 AdMob 광고 단위 ID로 바꾼다(지금은 구글 공식 시험용 ID)
-  // 시험용 전면 광고 ID는 iOS와 안드로이드가 다르다
+  // AdMob 광고 단위 ID. 출시 전에 REAL에 AdMob 콘솔의 실제 ID를 넣는다(비어 있으면 구글 공식 시험용 ID와 시험 모드로 돈다).
+  // 앱 ID는 따로: 안드로이드 android/app/src/main/AndroidManifest.xml, iOS ios/App/App/Info.plist의 GADApplicationIdentifier.
   const droid = on && C.getPlatform && C.getPlatform() === 'android';
-  const AD = { interstitial: droid ? 'ca-app-pub-3940256099942544/1033173712' : 'ca-app-pub-3940256099942544/4411468910', testing: true,
-    reward: droid ? 'ca-app-pub-3940256099942544/5224354917' : 'ca-app-pub-3940256099942544/1712485313' }; // 보상형 광고(시험용 ID)
+  const REAL = { android: { interstitial: '', reward: '' }, ios: { interstitial: '', reward: '' } };
+  const TEST = { android: { interstitial: 'ca-app-pub-3940256099942544/1033173712', reward: 'ca-app-pub-3940256099942544/5224354917' },
+    ios: { interstitial: 'ca-app-pub-3940256099942544/4411468910', reward: 'ca-app-pub-3940256099942544/1712485313' } };
+  const real = REAL[droid ? 'android' : 'ios'];
+  const AD = real.interstitial && real.reward ? Object.assign({ testing: false }, real) : Object.assign({ testing: true }, TEST[droid ? 'android' : 'ios']);
   let adReady = false;
 
   async function prepareAd() {
@@ -49,42 +52,59 @@
     return r || {};
   }
 
-  // 인앱 결제(장수 해금, 확정 구매만). 결제 플러그인은 아직 설치하지 않았다 → IAP.plugin이 없으면 화면이 결제 버튼을 숨긴다.
-  // 설치 후(MAC_HANDOFF.md '인앱 결제' 절) plugin 이름과 아래 두 함수를 플러그인 API에 맞춘다. 서버에는 StoreKit 2 서명 거래(JWS)를 보낸다.
-  const IAP = { plugin: 'NativePurchases', enabled: false };
+  // 인앱 결제(장수 해금·광고 제거, 확정 구매만): @capgo/native-purchases. 구매 확인(acknowledge·finish)은 플러그인이 자동으로 한다.
+  // 서버에 보내는 영수증: iOS = StoreKit 2 서명 거래(JWS) { signed }, 안드로이드 = 구글 플레이 구매 토큰 { store: 'google', productId, token }.
+  // 서버가 검증한 뒤에만 해금한다(server/app.js /api/iap/verify).
+  const IAP = { plugin: 'NativePurchases', enabled: true };
   const iapOn = () => on && IAP.enabled && !!P[IAP.plugin];
+  function receipt(x) {
+    if (!x) return null;
+    if (droid) return x.purchaseToken && (x.purchaseState == null || String(x.purchaseState) === '1') ? { store: 'google', productId: x.productIdentifier, token: x.purchaseToken } : null;
+    const signed = x.jwsRepresentation || x.jws || x.signedTransaction;
+    return signed ? { signed } : null;
+  }
   async function iapBuy(productId) {
     if (!iapOn()) throw new Error('not_configured');
-    // [확인 필요] 플러그인마다 이름이 다르다. 예) @capgo/native-purchases: purchaseProduct({ productIdentifier }) → { jwsRepresentation? }
-    const r = await P[IAP.plugin].purchaseProduct({ productIdentifier: productId, productType: 'inapp', quantity: 1 });
-    const signed = r && (r.jwsRepresentation || r.jws || r.signedTransaction);
-    if (!signed) throw new Error('bad_receipt');
-    return signed;
+    const r = receipt(await P[IAP.plugin].purchaseProduct({ productIdentifier: productId, productType: 'inapp', quantity: 1 }));
+    if (!r) throw new Error('bad_receipt');
+    return r;
   }
   async function iapRestore() {
     if (!iapOn()) throw new Error('not_configured');
-    await P[IAP.plugin].restorePurchases();
-    const r = await P[IAP.plugin].getPurchases ? await P[IAP.plugin].getPurchases({ productType: 'inapp' }) : { purchases: [] };
-    return ((r && r.purchases) || []).map((x) => x.jwsRepresentation || x.jws || x.signedTransaction).filter(Boolean);
+    try { await P[IAP.plugin].restorePurchases(); } catch (e) { /* 목록만 다시 읽는다 */ }
+    const r = await P[IAP.plugin].getPurchases(droid ? { productType: 'inapp' } : { onlyCurrentEntitlements: true });
+    return ((r && r.purchases) || []).map(receipt).filter(Boolean);
   }
 
-  // Apple·Google 로그인(@capgo/capacitor-social-login). ID 토큰을 받아 서버가 검증한다.
-  // Google은 Google Cloud 콘솔에서 만든 iOS 클라이언트 ID와 웹(서버) 클라이언트 ID가 필요하다(MAC_HANDOFF.md 참고).
+  // Apple·Google 로그인(@capgo/capacitor-social-login). ID 토큰을 받아 서버가 검증한다(서버 GOOGLE_AUDS에 아래 ID들을 넣는다).
+  // Google 클라이언트 ID(Google Cloud 콘솔 > API 및 서비스 > 사용자 인증 정보, MAC_HANDOFF.md 참고):
+  //   googleIOS = iOS 클라이언트 ID, googleWeb = 웹 애플리케이션 클라이언트 ID.
+  //   안드로이드는 googleWeb만 쓴다(안드로이드 클라이언트 ID는 콘솔에 패키지 이름 + 서명 SHA-1로 만들어 두기만 하면 된다).
+  // Apple 로그인은 iOS에서만 쓴다(안드로이드는 Apple 웹 로그인용 서버 설정이 따로 필요해서 버튼을 숨긴다).
   const SSO = { googleIOS: '', googleWeb: '' };
+  const ssoHas = (provider) => on && (provider === 'apple' ? !droid : droid ? !!SSO.googleWeb : !!SSO.googleIOS);
   let ssoReady = null;
   async function ssoInit() {
     if (!P.SocialLogin) throw new Error('not_configured');
-    if (!ssoReady) ssoReady = P.SocialLogin.initialize(Object.assign({ apple: {} }, SSO.googleIOS ? { google: { iOSClientId: SSO.googleIOS, iOSServerClientId: SSO.googleWeb || undefined, mode: 'online' } } : {}));
+    if (!ssoReady) {
+      const cfg = {};
+      if (!droid) cfg.apple = {};
+      if (droid && SSO.googleWeb) cfg.google = { webClientId: SSO.googleWeb, mode: 'online', skipAuthOnlyAuthorizationAfterSignIn: true };
+      if (!droid && SSO.googleIOS) cfg.google = { iOSClientId: SSO.googleIOS, iOSServerClientId: SSO.googleWeb || undefined, mode: 'online' };
+      ssoReady = P.SocialLogin.initialize(cfg);
+    }
     await ssoReady;
   }
   async function signIn(provider) {
     if (!on) throw new Error('app_only');
-    if (provider === 'google' && !SSO.googleIOS) throw new Error('not_configured');
+    if (!ssoHas(provider)) throw new Error('not_configured');
     await ssoInit();
+    // 안드로이드 기본 BridgeActivity에서는 scopes를 넘기면 거절된다(profile·email은 기본 포함)
+    const options = provider === 'apple' ? { scopes: ['name'] } : droid ? {} : { scopes: ['profile'] };
     let r;
-    try { r = await P.SocialLogin.login({ provider, options: provider === 'apple' ? { scopes: ['name'] } : { scopes: ['profile'] } }); } catch (e) { throw new Error(/cancel/i.test(String(e && e.message)) ? 'cancel' : 'bad_token'); }
+    try { r = await P.SocialLogin.login({ provider, options }); } catch (e) { throw new Error(/cancel/i.test(String(e && e.message)) ? 'cancel' : 'bad_token'); }
     const res = (r && r.result) || {};
-    const tok = res.idToken || (res.responseType === 'online' && res.idToken);
+    const tok = res.idToken;
     if (!tok) throw new Error('bad_token');
     const nm = res.profile && (res.profile.givenName || res.profile.name);
     return { idToken: tok, name: nm || '' };
@@ -118,6 +138,6 @@
       })).catch(() => {});
     } catch (e) { /* 플러그인 없음 */ }
   }
-  root.RTD_NATIVE = { on, init, interstitial, openUrl, signIn, signOut, rewardOn, rewardAd, iapOn, iapBuy, iapRestore };
+  root.RTD_NATIVE = { on, droid, init, interstitial, openUrl, signIn, signOut, ssoHas, rewardOn, rewardAd, iapOn, iapBuy, iapRestore };
   if (on) init();
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -64,7 +64,7 @@
 ## GitHub·안드로이드
 - 저장소: https://github.com/mikohatsu/samguk-rtd-mobile (비공개, `gh` CLI가 mikohatsu로 로그인돼 있음). 배포할 때 `git push origin main`도 같이 한다.
 - main에 올리면 GitHub Actions(`.github/workflows/android-apk.yml`)가 시험용 APK를 만들어 Releases `android-latest`에 덮어쓴다. 받기: `gh release download android-latest -R mikohatsu/samguk-rtd-mobile -D dist --clobber`
-- `android/` = Capacitor 안드로이드 프로젝트(가로 고정, AdMob 시험용 앱 ID). 플레이스토어에는 올리지 않는다(디버그 서명).
+- `android/` = Capacitor 안드로이드 프로젝트(가로 고정, AdMob 시험용 앱 ID). 시험용 APK는 디버그 서명. **구글 플레이 출시(2026-11-18 사용자 결정)**: 업로드 키로 서명한 AAB를 손으로 돌리는 Actions "Android Release (AAB)"(`.github/workflows/android-release.yml`)가 만든다. 키·비밀번호는 저장소에 넣지 않는다. 절차와 남은 일은 `ANDROID_RELEASE.md`.
 
 ## 배포(서버)
 ```
