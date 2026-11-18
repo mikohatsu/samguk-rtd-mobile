@@ -295,6 +295,35 @@ function json(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 const ID_RE = /^[a-z0-9_]{4,16}$/;
+// ---------- 서버 공지 + 최소 버전 (GET /api/notice) ----------
+// 내용은 DATA_DIR/notice.json: { "notice": { "id": "2026-11-20a", "text": { "ko": "…", "ja": "…", "en": "…", "zh": "…" } }, "minVersion": "0.2.33" }
+// 둘 다 없어도 된다(없으면 null). 파일이 없거나, 8KB를 넘거나, JSON이 깨졌으면 둘 다 null. 파일 수정 시각이 바뀌면 다시 읽는다(서버를 다시 켜지 않아도 된다).
+// id를 바꾸면 이미 본 사람에게도 다시 빨간 점이 뜬다. minVersion보다 낮은 앱은 로딩 화면에서 업데이트 안내를 받고 멈춘다.
+const NOTICE_FILE = path.join(DATA, 'notice.json'), NOTICE_MAX = 8192, NOTICE_LANGS = ['ko', 'ja', 'en', 'zh'];
+const NOTICE_NONE = { notice: null, minVersion: null };
+let noticeCache = { mtime: -1, size: -1, val: NOTICE_NONE };
+function parseNotice(raw) {
+  let j; try { j = JSON.parse(raw); } catch (e) { return NOTICE_NONE; }
+  if (!j || typeof j !== 'object') return NOTICE_NONE;
+  let notice = null; const n = j.notice;
+  if (n && typeof n === 'object' && n.text && typeof n.text === 'object' && (typeof n.id === 'string' || typeof n.id === 'number') && String(n.id)) {
+    const text = {}; NOTICE_LANGS.forEach((k) => { if (typeof n.text[k] === 'string' && n.text[k].trim()) text[k] = n.text[k]; });
+    if (Object.keys(text).length) notice = { id: String(n.id).slice(0, 40), text };
+  }
+  const minVersion = typeof j.minVersion === 'string' && /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(j.minVersion) ? j.minVersion : null;
+  return { notice, minVersion };
+}
+function readNotice() {
+  let st = null; try { st = fs.statSync(NOTICE_FILE); } catch (e) { /* 파일 없음 */ }
+  if (!st || !st.isFile()) noticeCache = { mtime: -1, size: -1, val: NOTICE_NONE };
+  else if (st.mtimeMs !== noticeCache.mtime || st.size !== noticeCache.size) {
+    let val = NOTICE_NONE;
+    if (st.size <= NOTICE_MAX) { try { val = parseNotice(fs.readFileSync(NOTICE_FILE, 'utf8')); } catch (e) { /* 못 읽으면 없는 것으로 */ } }
+    else console.warn('[notice] notice.json이 8KB를 넘어 읽지 않았다');
+    noticeCache = { mtime: st.mtimeMs, size: st.size, val };
+  }
+  return noticeCache.val;
+}
 function api(req, res, url, query) {
   handle(req, res, url, query).catch((e) => {
     if (e && e.busy) { if (!res.headersSent) json(res, 503, { error: 'busy' }); return; }
@@ -328,6 +357,11 @@ async function handle(req, res, url, query) {
   }
   // 결제 검증 준비 상태: 앱은 이게 true인 스토어에서만 결제 버튼을 보인다(검증 못 하는데 돈만 나가는 일을 막는다)
   if (url === '/api/iap/status' && req.method === 'GET') return json(res, 200, { apple: iapOn(), google: gplayOn() });
+  // 공지·최소 버전: 로그인 없이 부른다(주소당 분당 60번)
+  if (url === '/api/notice' && req.method === 'GET') {
+    if (limited(ip, 'notice', 60, 60000)) return json(res, 429, { error: 'slow_down' });
+    return json(res, 200, readNotice());
+  }
   if (url === '/api/me' && req.method === 'GET') {
     const u = await userOf(req);
     return u ? json(res, 200, { me: profile(u) }) : json(res, 401, { error: 'auth' });

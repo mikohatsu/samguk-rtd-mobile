@@ -25,8 +25,12 @@
     const st = g.recipeStatus(g.me, id), d = defOf[id];
     const chips = st.parts.map((x) => `<span class="chip ${x.have >= x.need ? 'have' : 'miss'}">${esc(defOf[x.id].name)} ${rankTag(defOf[x.id].tier)} ${Math.min(x.have, x.need)}/${x.need}</span>`).join('');
     const it = st.item ? `<span class="chip ${st.hasItem ? 'have' : 'miss'}">${esc(T.items.find((i) => i.id === st.item).name)}</span>` : '';
+    // 잠긴 신화·불멸: 재료가 다 있어도 조합할 수 없으므로 버튼 대신 까닭(상점에서 해금)을 적는다
+    if (g.isLocked && g.isLocked(id)) return `<div class="row"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div><small class="lockn">🔒 ${I.t('lockedInShop')}</small></div></div>`;
     return `<div class="row ${st.ok ? 'ok' : ''}"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div></div><button class="btn ${st.ok ? 'go' : ''}" data-act="craft" data-arg="${id}" type="button" ${st.ok ? '' : 'disabled'}>${I.t('combineBtn')}</button></div>`;
   }
+  // 소리 크기 줄(판 안 설정 탭과 로비 설정 창이 같이 쓴다): − 값 ＋
+  const volRow = (key) => { const v = Math.round(Snd.state[key] * 100); return `<div class="row"><div>${t(key)}</div><div class="volrow"><button class="toggle" data-act="vol" data-arg="${key}:-" type="button" aria-label="-" ${v <= 0 ? 'disabled' : ''}>−</button><b>${v}%</b><button class="toggle" data-act="vol" data-arg="${key}:+" type="button" aria-label="+" ${v >= 100 ? 'disabled' : ''}>＋</button></div></div>`; };
   const SKILL_TEXT = {
     line: (s) => `직선 ${s.len} 범위, 공격력 ${s.mult}배`, cone: (s) => `부채꼴 ${s.r} 범위, 공격력 ${s.mult}배`,
     circle: (s) => `지정 위치 반경 ${s.r}, 공격력 ${s.mult}배${s.stun ? `, 기절 ${s.stun}초` : ''}`,
@@ -89,19 +93,19 @@
       const zones = (k) => `<div class="zones">${ZN.map(([z, l]) => `<button class="zb ${p.zones[k] === z ? 'on' : ''}" data-act="zone" data-arg="${k}:${z}" type="button">${l}</button>`).join('')}</div>`;
       const az = (k, l) => tg(k, l) + `<div class="row zrow"><div><small>${I.t('sortPos')}</small></div>${zones(k)}</div>`;
       const ql = [['high', t('high')], ['mid', t('mid')], ['low', t('low')]];
-      h = `<div class="h">${t('language')}</div><div class="row"><div class="zones">${I.LANGS.map(([k, n]) => `<button class="zb ${I.lang === k ? 'on' : ''}" data-act="langSet" data-arg="${k}" type="button">${n}</button>`).join('')}</div></div>`;
+      // 판 도중 나가기(맨 위): 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 나간다(11-actions의 quit)
+      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : 'quitHintRoom';
+      h = `<div class="h">${I.t('quitGame')}</div><div class="row"><div><small>${I.t(qh)}</small></div><button class="toggle ${S.quitArm ? 'on' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitBtn')}</button></div>`;
+      // 언어는 이 판에는 적용되지 않는다(로비로 돌아가면 바뀜)
+      h += `<div class="h">${t('language')} <small>${t('langLater')}</small></div><div class="row"><div class="zones">${I.LANGS.map(([k, n]) => `<button class="zb ${I.lang === k ? 'on' : ''}" data-act="langSet" data-arg="${k}" type="button">${n}</button>`).join('')}</div></div>`;
       h += `<div class="h">${t('gfx')}</div><div class="row"><div>${t('gfxRow')} <small>${t('gfxHint')}</small></div><div class="zones">${ql.map(([k, l]) => `<button class="zb ${Q.level === k ? 'on' : ''}" data-act="gfx" data-arg="${k}" type="button">${l}</button>`).join('')}</div></div>`;
       h += `<div class="row"><div>${t('fps30')} <small>${t('fps30Hint')}</small></div><button class="toggle ${Q.fps30 ? 'on' : ''}" data-act="fps30" type="button">${Q.fps30 ? t('on') : t('off')}</button></div>`;
       h += `<div class="row"><div>${t('perfShow')} <small>${t('perfShowHint')}</small></div><button class="toggle ${Q.perf ? 'on' : ''}" data-act="perf" type="button">${Q.perf ? t('on') : t('off')}</button></div>`;
       h += `<div class="h">${t('autoSection')}</div>` + az('t1', I.t('autoT1')) + az('t2', I.t('autoT2')) + az('t3', I.t('autoT3')) + az('t45', I.t('autoT45')) + tg('sell', I.t('autoSell'));
-      h += `<div class="h">${t('sound')}</div><div class="row"><div>${t('sfx')}</div><button class="toggle" data-act="vol" data-arg="sfx" type="button">${Math.round(Snd.state.sfx * 100)}%</button></div>`;
+      h += `<div class="h">${t('sound')}</div>` + volRow('sfx') + volRow('bgm');
       h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplay')}</button></div>`;
       h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
       h += `<div class="row"><div>${t('version')}</div><div>v${window.RTD_VERSION || '?'}</div></div>`;
-      h += `<div class="row"><div>${t('bgm')}</div><button class="toggle" data-act="vol" data-arg="bgm" type="button">${Math.round(Snd.state.bgm * 100)}%</button></div>`;
-      // 판 도중 나가기: 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 나간다(11-actions의 quit)
-      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : 'quitHintRoom';
-      h += `<div class="h">${I.t('quitGame')}</div><div class="row"><div><small>${I.t(qh)}</small></div><button class="toggle ${S.quitArm ? 'on' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitBtn')}</button></div>`;
     } else if (S.tab === 'war') {
       h = '';
     } else {
@@ -174,7 +178,8 @@
       lines.push(`<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(have, need), b: need, r: rankName(d.tier + 1) })}</span><button class="btn ${have >= need ? 'go' : ''}" data-act="combine" type="button" ${have >= need ? '' : 'disabled'}>${I.t('combineBtn')}${S.coarse ? '' : ' R'}</button></div>`);
     }
     const score = (id) => { const st = g.recipeStatus(g.me, id); return st.parts.filter((x) => x.have >= x.need).length / st.parts.length; };
-    const used = Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id) && !(g.isLocked && g.isLocked(id))) // 잠긴 장수의 조합식은 빼고 보인다.sort((a, b) => score(b) - score(a));
+    const used = Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id) && !(g.isLocked && g.isLocked(id))) // 잠긴 장수의 조합식은 빼고 보인다
+      .sort((a, b) => score(b) - score(a)); // 완성에 가까운 조합식부터
     const list = used, max = need ? 5 : 6; // 자기 자신의 조합식은 재료로 쓰이는 곳이 아니므로 뺀다
     lines.push(...list.slice(0, max).map(recipeLine));
     if (list.length > max) lines.push(`<div class="sub line">${I.t('moreInBook', { n: list.length - max })}</div>`);

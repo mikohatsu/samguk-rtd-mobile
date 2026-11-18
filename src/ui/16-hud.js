@@ -91,15 +91,22 @@
     } else if (net && net.kicked) {
       key = 'k'; h = `<div class="over"><div class="sheet"><h2>${t('kicked')}</h2><div>${t('kickedHint')}</div><button class="btn go" data-act="restart" type="button" style="padding:9px 20px">${t('toTitle')}</button></div></div>`;
     } else if (net && net.clock.pz && !g.over) {
-      key = 'z' + net.clock.pz; h = `<div class="over"><div class="sheet"><h2>${I.t('waitTitle')}</h2><div>${I.t('waitPz', { a: esc(net.clock.pz) })}</div></div></div>`;
+      // 기다림 창에서도 나갈 수 있게 나가기 버튼을 둔다(설정 탭의 나가기와 같은 길: 한 번 더 눌러 확정 → 11-actions의 quit).
+      // 10초 넘게 기다리면 끊긴 쪽이 나일 수 있으므로 내 연결을 확인하라는 글을 더한다.
+      if (!S.pzAt) S.pzAt = performance.now();
+      const late = performance.now() - S.pzAt > 10000;
+      key = 'z' + net.clock.pz + (late ? 'L' : '') + (S.quitArm ? 'A' : '');
+      h = `<div class="over pzwait"><div class="sheet"><h2>${I.t('waitTitle')}</h2><div>${I.t('waitPz', { a: esc(net.clock.pz) })}</div>${late ? `<div class="warnline">${I.t('waitSelf')}</div>` : ''}<div class="dim">${I.t('quitHintRoom')}</div><button class="btn ${S.quitArm ? 'warn' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitGame')}</button></div></div>`;
     } else if (g.over) {
       if (S.drawer) { S.drawer = null; $('drawer').hidden = true; } // 오른쪽 서랍이 결과·경험치 연출을 가리지 않게
       // 온라인 판은 경험치 연출이 끝난 뒤 결과창(서버 답이 4초 넘게 없으면 그냥 결과창)
       const waitXp = S.online && ACC.token && !S.xpDone && (S.xpPlaying || (S.xpGained == null && performance.now() - (S.overAt || (S.overAt = performance.now())) < 4000));
-      if (waitXp) { key = 'ox'; h = '<div class="over xpwait"></div>'; }
+      if (waitXp) { key = 'ox' + (S.xpPlaying ? 'p' : ''); h = `<div class="over xpwait">${S.xpPlaying ? '' : `<div class="xpsend">${t('sendingResult')}</div>`}</div>`; }
       else { key = 'o' + (S.xpGained != null ? S.xpGained : ''); h = endStats(); }
     }
     if (box.dataset.key !== key) { box.innerHTML = h; box.dataset.key = key; }
+    // 기다림 창이 떠 있는 동안에는 오른쪽 위 메뉴 버튼이 창 위로 올라온다(CSS #stage.pz). 창이 사라지면 기다린 시간도 지운다.
+    { const pz = key[0] === 'z', stg = $('stage'); if (!pz) S.pzAt = 0; if (stg.classList.contains('pz') !== pz) stg.classList.toggle('pz', pz); }
     $('backbtn').hidden = !viewedPeer();
     renderHud();
     const sbar = $('selbar'), boss = inBoss() && g.phase === 'boss' && !!g.fight;
@@ -123,7 +130,7 @@
       else if (e.type === 'pop') { queuePop(e.def, e.who || (net ? net.name : null)); if (e.def.tier >= 9 && g.phase !== 'boss') S.freeze = (S.freeze || 0) + POP_DUR[e.def.tier]; if (net && !e.remote) net.send('pop', { id: e.def.id, name: net.name }); }
       else if (e.type === 'round') { Snd.play('round'); saveGame(); }
       else if (e.type === 'bossIntro') { Snd.play('gong'); Snd.setBoss(true); }
-      else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); reportResult(); if (window.RTD_LOBBY) window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.ticket); if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
+      else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); S.tkMiss = !!(S.tkWant && !S.gameTk); reportResult(); if (window.RTD_LOBBY) { S.progBefore = window.RTD_LOBBY.progNow(); window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.gameTk); } if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
       else if (e.type === 'banner') S.banner = { text: e.text, sub: e.sub, t: 3 };
       else if (e.type === 'dmgtext') {
         // 숫자가 같은 자리에 겹쳐 안 읽히지 않게 조금씩 흩어 놓는다

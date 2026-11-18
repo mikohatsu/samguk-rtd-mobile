@@ -102,7 +102,12 @@
     box.addEventListener('pointerdown', (e) => {
       const b = e.target.closest('[data-tut]'); if (!b) return;
       e.preventDefault(); e.stopPropagation();
-      if (b.dataset.tut === 'skip') skipAll(); else next();
+      // 건너뛰기는 안내 전체를 끝내므로 한 번 누르면 '한 번 더'로 바뀌고, 3초 안에 다시 눌러야 끝낸다('다음' 바로 옆이라 잘못 누르기 쉽다)
+      if (b.dataset.tut === 'skip') {
+        if (b.dataset.armed) { delete b.dataset.armed; skipAll(); return; }
+        b.dataset.armed = '1'; b.textContent = t('quitAgain');
+        setTimeout(() => { if (b.dataset.armed) { delete b.dataset.armed; b.textContent = t('tut_skip'); } }, 3000);
+      } else next();
     });
   }
   function hide() { if (box) { box.hidden = true; ring.hidden = true; } if (ctx && ctx.S) ctx.S.tutHold = false; shownKey = ''; }
@@ -133,7 +138,7 @@
       box.querySelector('.tt').innerHTML = t(k, v);
       const nb = box.querySelector('[data-tut="next"]'), sb = box.querySelector('[data-tut="skip"]');
       nb.hidden = !isTip && !!st.noNext && !st._late; nb.textContent = t(isTip ? 'tut_ok' : st.last ? 'tut_done' : 'tut_next');
-      sb.textContent = t('tut_skip'); sb.hidden = isTip || !!st.last;
+      sb.textContent = t('tut_skip'); sb.hidden = isTip || !!st.last; delete sb.dataset.armed;
     }
     box.hidden = false;
     const W = innerWidth, H = innerHeight, bw = Math.min(360, W - 24);

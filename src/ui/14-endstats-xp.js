@@ -1,3 +1,33 @@
+  // ---- 결과창 맨 위 '다음 목표' 칸(글 2~4줄, 그림 없음): 진 곳 · 이번 판으로 새로 열린 것(난이도·상점) · 다음 관직까지 남은 경험치 · 가장 싼 잠긴 장수까지 남은 동전.
+  // S.progBefore = 이 판을 기록하기 직전의 해금 진행도(16-hud drainEvents의 'over'). 로그인하지 않은 판은 열린 것과 진 곳만 나온다.
+  function goalBox() {
+    const DF = ['easy', 'normal', 'hard', 'nightmare'], win = g.over === 'win', lines = [], num = (n) => Math.round(n).toLocaleString();
+    if (!win) {
+      const b = g.stats.bosses[g.stats.bosses.length - 1], f = g.fight;
+      if (b && !b.win && b.round === g.round) {
+        const p = f && f.boss && f.def && f.def.round === b.round && f.boss.mhp > 0 ? Math.max(1, Math.min(100, Math.ceil((f.boss.hp / f.boss.mhp) * 100))) : 0;
+        lines.push(I.t(p ? 'goalLostBossHp' : 'goalLostBoss', { r: b.round, a: esc(b.name), p }));
+      } else lines.push(I.t(g.lives <= 0 ? 'goalLostLane' : 'goalLost', { r: g.round }));
+    }
+    const pb = S.progBefore, mut = g.mutLv || 0;
+    if (win && pb) {
+      const i = DF.indexOf(g.diff.id), nx = T.difficulties.find((d) => d.id === DF[i + 1]);
+      if (i > pb.clr && nx) lines.push(I.t('goalDiff', { a: esc(nx.name) }));
+      if (g.diff.id === 'nightmare' && mut > pb.nmx && mut < 5) lines.push(I.t('goalMut', { n: mut + 1 }));
+      if (pb.clr < 0) lines.push(I.t('goalShop'));
+    }
+    const me = ACC.token && ACC.me;
+    if (me) {
+      const trk = me.track === 'civ' ? 'civ' : 'mil';
+      if (me.rank >= 0 && me.rank < 10) lines.push(I.t('goalRank', { a: esc(t('rk_' + trk + (me.rank + 1))), n: num(Math.max(0, xpAt(RANK_LV[me.rank + 1]) - (me.xp || 0))) }));
+      const U = T.unlock, shop = !window.RTD_LOBBY || window.RTD_LOBBY.shopOpen();
+      if (U && shop) {
+        const d = U.lockedIds().filter((id) => !(me.owned || []).includes(U.key(id))).map((id) => defOf[id]).filter(Boolean).sort((a, b) => U.coins[a.tier] - U.coins[b.tier])[0];
+        if (d) { const need = U.coins[d.tier] - (me.coins || 0); lines.push(I.t(need > 0 ? 'goalCoins' : 'goalCoinsOk', { n: num(Math.max(0, need)), r: esc(rankName(d.tier)) })); }
+      }
+    }
+    return lines.length ? `<div class="es-goal"><b>${I.t('goalHead')}</b>${lines.slice(0, 4).map((x) => `<div>${x}</div>`).join('')}</div>` : '';
+  }
   // 판 끝 통계: 요약 · 보스전 기록(순위) · 라인 피해 순위 · 강화·조합 기록
   function endStats() {
     const s = g.stats, win = g.over === 'win', mm = Math.floor(g.time / 60), ss = Math.floor(g.time % 60);
@@ -26,13 +56,13 @@
     // 승리: 철괴 제목판을 키워 글씨를 얹는다. 패배: 기울어진 부서진 나무판(흰 깃발 그림)에 '전선 붕괴'.
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
     return `<div class="over" id="end"><div class="sheet es">
-      ${head}${S.xpGained != null && ACC.me ? `<div class="dim" style="color:#ffd86a">${t('xpGain', { n: S.xpGained })} · ${esc(t(ACC.me.grade))} ${t('level', { n: ACC.me.level })}</div>` : ''}<div class="es-cards">${cards}</div>
+      ${head}${goalBox()}${S.xpGained != null && ACC.me ? `<div class="dim" style="color:#ffd86a">${t('xpGain', { n: S.xpGained })} · ${esc(t(ACC.me.grade))} ${t('level', { n: ACC.me.level })}</div>` : ''}${S.tkMiss ? `<div class="dim" style="color:#ff9d8a">${t('noTicket')}</div>` : ''}<div class="es-cards">${cards}</div>
       ${g.mutLv && g.muts && g.muts.length ? `<div class="es-mutpop" hidden><b>${esc(I.t('mutHead', { n: g.mutLv }))}</b>${g.muts.map((m, i) => mutCard(m.id, i)).join('')}</div>` : ''}
       <h3>${I.t('bossLog')}</h3>${bossRows ? `<table class="es-boss"><tr><th>${I.t('thBoss')}</th><th>${I.t('thResult')}</th><th>${I.t('thTime')}</th><th>${I.t('thChamp')}</th><th>${I.t('dmgRank')}</th></tr>${bossRows}</table>` : `<div class="dim">${I.t('noBossLog')}</div>`}
       <h3>${I.t('laneDmgRank')}</h3>${dmgRows || `<div class="dim">${I.t('noRecord')}</div>`}
       <h3>${I.t('upgrade')}</h3><div class="chips">${ups}</div>
       <h3>${I.t('craftedHead')}</h3><div class="chips">${crafts}</div>
-      <button class="btn go es-again" data-act="restart" type="button">${t('again')}</button></div></div>`;
+      <button class="btn go es-again" data-act="restart" type="button">${t('quitGame')}</button></div></div>`;
   }
   // ---- 판 끝 경험치 연출: 화면을 어둡게 흐리고, 지금 계급 문양 ─ 경험치 막대 ─ 다음 계급 문양.
   // +경험치가 뜬 뒤 막대가 그만큼 차오르고(계급이 오르면 문양이 바뀜), 잠시 뒤 사라지며 결과창이 나온다.
@@ -56,9 +86,13 @@
       el.querySelector('.xpnum').textContent = r >= 10 ? 'MAX' : `${fmt(Math.round(xp - lo))} / ${fmt(hi - lo)}`;
     };
     draw(from);
+    // 화면을 누르면 연출을 건너뛴다(끝 값으로 채우고 바로 결과창)
+    let fin = false;
+    const end = () => { if (fin) return; fin = true; el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 600); };
+    el.addEventListener('pointerdown', () => { if (fin) return; draw(to); end(); });
     requestAnimationFrame(() => el.classList.add('in'));
     // 0.7초 뒤 +XP가 뜨고, 1.4초 동안 차오른다. 다 차고 1.6초 뒤 사라진다.
-    setTimeout(() => { el.classList.add('gain'); const t0 = performance.now(), D = 1400;
-      const step = (now) => { const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3); draw(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); else setTimeout(() => { el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 600); }, 1600); };
+    setTimeout(() => { if (fin) return; el.classList.add('gain'); const t0 = performance.now(), D = 1400;
+      const step = (now) => { if (fin) return; const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3); draw(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); else setTimeout(end, 1600); };
       requestAnimationFrame(step); }, 700);
   }

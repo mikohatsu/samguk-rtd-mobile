@@ -13,14 +13,35 @@
   const errText = (e) => (e === 'net' ? t('noServer') : t('err_' + e) !== 'err_' + e ? t('err_' + e) : String(e || ''));
   const xpLv = (lv) => 40 * (lv - 1) * (lv - 1);
   // 게스트 비밀값(이 기기에만): 토큰이 만료돼도 다시 들어온다
-  const GUEST = (() => { try { return JSON.parse(localStorage.getItem('rtd-guest') || 'null'); } catch (e) { return null; } })();
-  const saveGuest = (g2) => { try { if (g2) localStorage.setItem('rtd-guest', JSON.stringify(g2)); else localStorage.removeItem('rtd-guest'); } catch (e) { /* 저장 불가 */ } };
+  // GUEST는 늘 같은 객체다(비밀값이 없으면 id가 null). saveGuest가 저장소와 이 객체를 같이 바꾸므로, 같은 실행 안에서 가입·로그아웃을 해도 최신 값을 본다
+  const GUEST = Object.assign({ id: null, secret: null }, (() => { try { return JSON.parse(localStorage.getItem('rtd-guest') || 'null'); } catch (e) { return null; } })() || {});
+  const saveGuest = (g2) => {
+    Object.keys(GUEST).forEach((k) => { delete GUEST[k]; }); Object.assign(GUEST, { id: null, secret: null }, g2 || {});
+    try { if (g2) localStorage.setItem('rtd-guest', JSON.stringify(g2)); else localStorage.removeItem('rtd-guest'); } catch (e) { /* 저장 불가 */ }
+  };
+  // 게스트로 들어가기: 이 기기에 비밀값이 있으면 먼저 그걸로 로그인한다. 서버가 401(없는 계정)이라고 할 때만 비밀값을 지우고 make()로 새로 만든다.
+  // 끊김·429·5xx면 비밀값을 그대로 두고 그 답을 돌려준다(새 계정을 만들어 옛 계정을 덮지 않게). make가 null을 돌려주면(약관 미동의 등) { stop: true }
+  async function guestEnter(make) {
+    if (GUEST.id) {
+      const r = await api('/api/guest/login', { id: GUEST.id, secret: GUEST.secret });
+      if (r.token) return r;
+      if (r.status !== 401) return r;
+      saveGuest(null);
+    }
+    const body = make(); if (!body) return { stop: true };
+    const r = await api('/api/guest/new', body);
+    if (r.token && r.guest) { saveGuest(r.guest); r.fresh = true; }
+    return r;
+  }
   const gradeTag = (st) => (st && st.gr ? `<span class="gr">${esc(t(st.gr))} ${t('level', { n: st.lv })}</span>` : '');
   // 판이 끝나면 온라인 판 결과를 서버에 보내 경험치를 받는다(같은 판은 한 번만)
+  // 서버에 닿지 못하면(끊김·5xx) 보낼 내용을 기기에 남겨 두고 다음에 앱을 켤 때·로비로 돌아올 때 다시 보낸다(lobby.js queueSend·flushPending)
   async function reportResult() {
     if (!S.online || !ACC.token || S.reported) return;
     S.reported = true;
-    const r = await api('/api/result', { ticket: S.ticket, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {} });
+    const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {} };
+    const uid = ACC.me && ACC.me.id, r = await api('/api/result', body);
+    if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend('/api/result', body, uid);
     if (r.me) {
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained;
       if (r.gained > 0) { S.xpPlaying = true; playXp(r.me.xp - r.gained, r.me.xp, r.coins, () => { S.xpPlaying = false; S.xpDone = true; dirty(); $('overlay').dataset.key = ''; }); }

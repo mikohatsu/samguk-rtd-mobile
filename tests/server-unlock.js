@@ -47,7 +47,8 @@ async function waitUp() { for (let i = 0; i < 50; i++) { try { await fetch(`http
     r = await api('/api/history', { diff: 'nightmare', round: 120, win: true, time: 9000, myth: { yeopo: 1, sunuk: 2 } }, tok);
     ok(r.status === 200 && r.me.prog.clr === -1, '표 없는 전적 보고는 난이도 진행을 올리지 못함');
     r = await api('/api/unlock/claim', {}, tok);
-    ok(r.status === 200 && r.granted.length === 0 && !r.me.owned.includes('unl_yeopo') && !r.me.owned.includes('unl_sunuk'), '소급 해금: 가짜 전적으로 여포·순욱이 열리지 않음');
+    // 순욱(신화)은 첫 신화 랜덤이나 위의 동전 구매로 이미 가졌을 수 있어, 불멸인 여포로 확인한다
+    ok(r.status === 200 && r.granted.length === 0 && !r.me.owned.includes('unl_yeopo'), '소급 해금: 가짜 전적으로 아무것도 열리지 않음(여포)');
     r = await api('/api/iap/verify', { signed: 'a.b.c' }, tok);
     ok(r.status === 503 && r.error === 'not_configured', '결제 설정이 없으면 503(not_configured)');
     r = await api('/api/unlock', { id: 'gwakga' });

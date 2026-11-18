@@ -488,6 +488,7 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 .boot-brand { display: flex; align-items: center; gap: 12px; }
 .boot-brand h1 { margin: 0; font: 400 clamp(34px, 6vw, 72px)/1 "East Sea Dokdo", "Black Han Sans", serif; color: #1d1009; text-shadow: 0 0 16px rgba(255, 238, 206, .95), 0 0 4px rgba(255, 238, 206, .9); }
 html[lang="en"] .boot-brand h1, html[lang="zh"] .boot-brand h1 { font-size: clamp(26px, 4.4vw, 52px); }
+html[lang="ja"] .boot-brand h1 { font-size: clamp(28px, 4.8vw, 56px); }
 #boot.form .boot-brand h1 { font-size: clamp(24px, 3.6vw, 40px); }
 #boot.form .boot-brand .seal { transform: scale(.8); }
 .boot-load { width: min(420px, 70%); text-align: center; }
@@ -934,6 +935,8 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 #lnews .dot[hidden] { display: none; }
 .news { display: grid; gap: 10px; font-size: 13px; line-height: 1.6; text-align: left; }
 .news-now { color: var(--dim); font-size: 12px; }
+.news .news-notice { border-top: 0; padding-top: 0; }
+.news .news-notice p { margin: 0; color: var(--paper); white-space: pre-line; }
 .news section { border-top: 1px solid rgba(201, 164, 92, .25); padding-top: 8px; }
 .news h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #ffd86a; display: flex; align-items: baseline; gap: 8px; }
 .news h3 small { font-size: 11px; font-weight: 400; color: var(--dim); }
@@ -951,13 +954,71 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 .acc-tree tr.cur td { background: #43321f; color: #ffd86a; font-weight: 700; }
 .acc-tree th.me, .acc-tree td.me { color: #ffd86a; }
 .acc-tree .note { padding: 5px 6px; font-size: 11px; color: var(--dim); border-top: 1px solid rgba(201, 164, 92, .15); }
+/* ---- 출시 전 UX 점검(2026-11-18): 누르는 곳 44px, 확인·진행 표시, 결과창 '다음 목표' 칸 등. 그림은 새로 쓰지 않는다 ---- */
+/* 누르는 곳 44px: 보이는 크기를 그대로 둘 곳은 ::after로 누르는 범위만 넓힌다 */
+#lpclose, #wzclose, #wzback, .acc-track .acc-q, .sypg button, .sdbtn, #lchatbar { position: relative; }
+#lpclose::after, #wzclose::after, #wzback::after, #lnews::after { content: ''; position: absolute; inset: -5px; }
+.acc-track .acc-q { margin-left: 10px; }
+.acc-track .acc-q::after { content: ''; position: absolute; inset: -9px; }
+#lchatbar::after { content: ''; position: absolute; inset: -5px 0; }
+/* 시너지 쪽 넘김: 위쪽은 시너지 칸과 겹치지 않게 조금만, 아래쪽으로 넓힌다 */
+.sypg button::after { content: ''; position: absolute; inset: -4px -9px -22px; }
+.sdbtn::after { content: ''; position: absolute; inset: -13px -6px; }
+.lp-card .btn, .acc-btns .btn, .acc-danger .btn, .lp-sel button, #lptabs button, #tutbox .btn, #lbcopy, #lbleave, .lp-note .btn, #matchbox .btn { min-height: 44px; }
+#tutbox [data-tut="skip"] { margin-right: auto; } /* 건너뛰기는 '다음'과 떨어뜨려 왼쪽 끝에 */
+/* 설정(판 안 설정 탭·로비 설정 창)의 켬/끔·정렬 위치·언어 버튼 */
+#pane[data-tab="set"] .toggle, .setlist .toggle { position: relative; min-height: 40px; min-width: 60px; }
+#pane[data-tab="set"] .zb, .setlist .zb { position: relative; min-height: 40px; min-width: 40px; padding: 2px 8px; }
+#pane[data-tab="set"] .toggle::after, .setlist .toggle::after, #pane[data-tab="set"] .zb::after, .setlist .zb::after { content: ''; position: absolute; inset: -2px; }
+#pane[data-tab="set"] .zones, .setlist .zones { gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.volrow { display: flex; align-items: center; gap: 8px; }
+.volrow b { min-width: 46px; text-align: center; font-weight: 700; }
+#pane[data-tab="set"] .volrow .toggle, .setlist .volrow .toggle { min-width: 44px; font-size: 18px; line-height: 1; }
+.volrow .toggle:disabled { opacity: .4; }
+/* 계정 삭제는 로그아웃과 떨어뜨려 아래에 따로 */
+.acc-danger { margin-top: 26px; padding-top: 12px; border-top: 1px solid rgba(201, 164, 92, .22); }
+/* 계정 알림(연결됨·삭제됨 등): 계정 창 맨 위 */
+.acc-note { margin-bottom: 8px; padding: 8px 10px; border: 1px solid rgba(125, 255, 142, .4); border-radius: 6px; background: rgba(125, 255, 142, .08); color: #d8ffd8; font-size: 13px; line-height: 1.5; }
+/* 상점: 잔액, 모자란 동전, '한 번 더' 확인(.arm) */
+.lp-bal { margin: 2px 0; font-weight: 700; color: #ffe9a8; }
+.lp-bal i { font-style: normal; color: #ffd86a; }
+.lp-card .short { font-size: 11px; color: #ff9a7a; }
+#lpbody .btn.arm { border-color: #c8402e; color: #ffb0a0; }
+#lpbody .btn:disabled { opacity: .5; }
+/* 불러오는 중·불러오지 못함 */
+.lp-wait { padding: 18px 0; text-align: center; }
+.lp-fail { color: #ff9a7a; }
+.lp-note .btn { margin-left: 8px; }
+/* 전투 시작 창: 잠긴 악몽 단계 안내, 방 나가기 */
+#mutlv .lk { flex-basis: 100%; font-style: normal; font-size: 11.5px; color: #ffcf8a; }
+#lbleave { margin-left: 8px; }
+/* 협동 연결 기다림 창: 나가기 버튼. 창이 떠 있는 동안 오른쪽 위 메뉴 버튼이 창 위로 올라온다 */
+#stage.pz #tr { z-index: 7; }
+.over.pzwait .sheet { width: min(440px, 100%); align-items: center; text-align: center; }
+.over.pzwait .warnline { color: #ff9a7a; }
+.over.pzwait .dim { color: var(--dim); font-size: 12px; }
+.over.pzwait .btn { min-height: 44px; padding: 8px 22px; }
+/* 결과 전송을 기다리는 동안의 글, 경험치 연출은 누르면 건너뛴다 */
+.over.xpwait .xpsend { color: #e8dcc0; font: 700 14px var(--ui); text-shadow: 0 1px 2px #000; }
+#xpfx.in { pointer-events: auto; } #xpfx.out { pointer-events: none; }
+/* 결과창 맨 위 '다음 목표' 칸(글만) */
+#end .es-goal { flex: none; margin-top: 4px; margin-bottom: 6px; padding: 8px 12px; border: 1px solid rgba(255, 216, 106, .45); border-radius: 6px; background: rgba(0, 0, 0, .28); font: 400 13px/1.55 var(--ui); color: #f4ecd8; text-align: left; }
+#end .es-goal b { display: block; margin-bottom: 2px; font-weight: 700; color: #ffd86a; }
+#end .es-goal div::before { content: '· '; color: #ffd86a; }
+/* 선택 창 윗줄: 누르면 펼쳐진다는 표시 */
+#selbar #info h3::after { content: ' ▾'; font: 400 12px var(--ui); color: var(--dim); }
+#selbar.exp #info h3::after { content: ' ▴'; }
+/* 1성 해산 버튼: 선택 해제와 헷갈리지 않게 색을 다르게 하고 한 칸 뗀다 */
+#selbar .cmd[data-act="sell"] { border-color: #c8402e; color: #ffb0a0; margin-right: 12px; }
+/* 도감: 잠긴 장수 조합식의 안내 */
+.lockn { display: block; margin-top: 3px; color: #ffcf8a; }
 </style>
 
 <div id="app" hidden>
   <div id="stage">
-    <canvas id="view" tabindex="0" aria-label="전장"></canvas>
+    <canvas id="view" tabindex="0" aria-label="전장" data-i18n-aria="field"></canvas>
     <div id="hud"></div>
-    <div id="tr"><button id="speedbtn" class="hb" data-act="speed" type="button" hidden></button><button id="menubtn" class="hb" data-act="drawer" data-arg="set" type="button" aria-label="메뉴"></button></div>
+    <div id="tr"><button id="speedbtn" class="hb" data-act="speed" type="button" hidden></button><button id="menubtn" class="hb" data-act="drawer" data-arg="set" type="button" aria-label="메뉴" data-i18n-aria="menuLbl"></button></div>
     <div id="rail"></div>
     <div id="synbar" hidden></div>
     <div id="toasts"></div>
@@ -971,7 +1032,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
     <div id="overlay"></div>
   </div>
   <aside id="drawer" hidden>
-    <div id="dhead"><div id="tabs"></div><button id="dclose" data-act="drawerClose" type="button" aria-label="닫기">✕</button></div>
+    <div id="dhead"><div id="tabs"></div><button id="dclose" data-act="drawerClose" type="button" aria-label="닫기" data-i18n-aria="close">✕</button></div>
     <div id="pane"></div>
     <div id="timers" hidden><div class="tt" data-i18n="timers">보스 타이머</div><div id="tlist"></div><div class="tt" data-i18n="synergy">인연 시너지</div><div id="synlist"></div><div class="tt" id="mutt" hidden></div><div id="mutlist"></div></div>
     <div id="allies"></div>
@@ -1031,7 +1092,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
           <div class="label"><span data-i18n="room"></span> <span class="hint" data-i18n="roomHint"></span></div>
           <div class="inline"><input id="code" maxlength="6" data-i18n-ph="roomCode" aria-label="room code"><button class="btn" id="jn" type="button" data-i18n="joinRoom"></button><button class="btn" id="mk" type="button" data-i18n="makeRoom"></button></div>
           <div id="lobby" hidden>
-            <div class="lb-head"><span data-i18n="roomCode"></span><b id="lbcode"></b><button class="btn" id="lbcopy" type="button" data-i18n="copy"></button><i id="lbnet"></i></div>
+            <div class="lb-head"><span data-i18n="roomCode"></span><b id="lbcode"></b><button class="btn" id="lbcopy" type="button" data-i18n="copy"></button><i id="lbnet"></i><button class="btn" id="lbleave" type="button" data-i18n="roomLeave"></button></div>
             <div class="lb-slots" id="lbslots"></div>
             <div class="lb-cfg" id="lbcfg"></div>
             <div id="wzroomdiff"></div>

@@ -97,7 +97,7 @@
 연환 화공|連環火攻|Chained Fire Attack|连环火攻
 수군 대도독|水軍大都督|Grand Admiral|水军大都督
 백발백중|百発百中|Never Misses|百发百中
-신정의 결투|神亭の一騎打ち|Duel at Shenting|神亭之斗
+신정의 결투|神亭の一騎討ち|Duel at Shenting|神亭之斗
 쌍극|双戟|Twin Halberds|双戟
 태평요술|太平要術|Way of Peace|太平要术
 황천의 뇌운|黄天の雷雲|Thunderclouds of Yellow Heaven|黄天雷云
@@ -161,10 +161,10 @@
 의천검|倚天剣|Heaven Sword|倚天剑
 호표기 돌격|虎豹騎突撃|Tiger Cavalry Charge|虎豹骑突击
 사기 진작|士気高揚|Raise Morale|振奋士气
-낭고상|狼顧相|Wolf Gaze|狼顾之相
+낭고상|狼顧の相|Wolf Gaze|狼顾之相
 농성 대기|籠城待機|Siege Patience|固守待机
 고평릉의 함정|高平陵の罠|Gaopingling Trap|高平陵之陷阱
-쌍고검|雙股剣|Twin Swords|双股剑
+쌍고검|双股剣|Twin Swords|双股剑
 인덕의 빛|仁徳の光|Light of Benevolence|仁德之光
 인덕의 전군 치료|仁徳の全軍治療|Benevolent Heal All|仁德全军治疗
 청룡언월참|青龍偃月斬|Green Dragon Slash|青龙偃月斩
@@ -318,6 +318,22 @@
 천벌 낙뢰|天罰の落雷|Heaven's Wrath|天罚落雷
 사방 포위|四方包囲|Total Encirclement|四面包围
 화염 낙하|火炎落下|Falling Flames|火焰坠落
+오호 소집|五虎招集|Rally the Five Tigers|五虎集结
+전리품 상자|戦利品の宝箱|Spoils Chest|战利品宝箱
+광종|広宗|Guangzong|广宗
+사수관|汜水関|Sishui Gate|汜水关
+낙양 대화재|洛陽炎上|Luoyang in Flames|洛阳大火
+관도|官渡|Guandu|官渡
+호로관|虎牢関|Hulao Gate|虎牢关
+적벽|赤壁|Red Cliffs|赤壁
+이릉|夷陵|Yiling|夷陵
+기산|祁山|Qishan|祁山
+면죽관|綿竹関|Mianzhu Gate|绵竹关
+고평릉|高平陵|Gaoping Tombs|高平陵
+금화|金貨|Gold|金币
+강화|強化|Upgrades|强化
+유닛|ユニット|Units|单位
+보스전|ボス戦|Boss fights|首领战
 `;
   // 이야기 문구(보스 대사·명대사)
   const LINES = `
@@ -363,7 +379,7 @@
 영천의 모사|潁川の謀士|Strategists of Yingchuan|颍川谋士||魏の全ユニット攻撃力+6%、3武将のスキル再使用-10%|All Wei units ATK +6%; 3 generals' skill cooldown -10%|魏国全体攻击+6%，三人技能冷却-10%
 관씨 부자|関家父子|Guan Father and Son|关氏父子||関平の攻撃力+25%、関羽の攻撃力+10%|Guan Ping ATK +25%, Guan Yu ATK +10%|关平攻击+25%，关羽攻击+10%
 장판파|長坂の戦い|Changban|长坂坡||2武将の攻撃力+8%、趙雲の被ダメージ-15%|Both ATK +8%; Zhao Yun damage taken -15%|两人攻击+8%，赵云受伤-15%
-신정의 결투|神亭の一騎打ち|Duel at Shenting|神亭之斗||2武将が10%の確率で2倍ダメージ|Both deal double damage 10% of the time|两人10%几率造成2倍伤害
+신정의 결투|神亭の一騎討ち|Duel at Shenting|神亭之斗||2武将が10%の確率で2倍ダメージ|Both deal double damage 10% of the time|两人10%几率造成2倍伤害
 동오 대도독|東呉の大都督|Grand Commanders of Wu|东吴大都督||呉の全ユニット攻撃力+6%、4武将のスキルダメージ+15%|All Wu units ATK +6%; 4 generals' skill damage +15%|吴国全体攻击+6%，四人技能伤害+15%
 남만왕 부부|南蛮王夫妻|King and Queen of Nanman|南蛮王夫妇||2武将の攻撃力+10%、ボス戦の体力+25%|Both ATK +10%, boss HP +25%|两人攻击+10%，首领战生命+25%
 완성의 악래|宛城の悪来|E Lai of Wancheng|宛城恶来||典韋のボス戦体力+30%、曹操の被ダメージ-15%|Dian Wei boss HP +30%; Cao Cao damage taken -15%|典韦首领战生命+30%，曹操受伤-15%
@@ -384,10 +400,10 @@
 속전속결|速戦即決|Swift Victory|速战速决||残り時間20%で速攻扱い（通常35%）|Fast clear with only 20% time left (normally 35%)|剩余20%时间即算速通（原35%）||ボス戦の制限時間-20%|Boss time limit -20%|首领战时限-20%
 하늘의 분노|天の怒り|Wrath of Heaven|天之怒||ボス戦のスキル再使用-25%|Boss-fight skill cooldowns -25%|首领战技能冷却-25%||全ボスが「天罰の落雷」を追加で使う|Every boss also casts Heaven's Wrath|所有首领追加使用「天罚落雷」
 대군 쇄도|大軍殺到|Endless Horde|大军涌来||戦線の敵10体ごとに全ユニットの攻撃力+5%|+5% ATK for all units per 10 enemies on the front|战线上每10个敌人全体攻击+5%||1ラウンドの敵の数+30%|+30% enemies per round|每回合敌人数量+30%
-고립무원|孤立無援|Isolated|孤立无援||全ユニットの攻撃力+15%|All units ATK +15%|全体单位攻击+15%||名士を招けない|Can't hire sages|无法招募名士
-영웅의 시대|英雄の時代|Age of Heroes|英雄时代||ボス討伐ごとにランダム等級上昇券1枚|A rank-up ticket per boss defeated|每次讨伐首领获得随机升级券1张||ボスの体力+20%|Boss HP +20%|首领生命+20%
+고립무원|孤立無援|Isolated|孤立无援||全ユニットの攻撃力+15%|All units ATK +15%|全体单位攻击+15%||名士を招聘できない|Can't hire sages|无法招募名士
+영웅의 시대|英雄の時代|Age of Heroes|英雄时代||ボス討伐ごとにランダム昇格券1枚|A rank-up ticket per boss defeated|每次讨伐首领获得随机升级券1张||ボスの体力+20%|Boss HP +20%|首领生命+20%
 보물 사냥|宝探し|Treasure Hunt|寻宝||ボス討伐ごとに宝箱+1|+1 chest per boss|每次讨伐首领宝箱+1||ボスの攻撃力+30%|Boss ATK +30%|首领攻击+30%
-명의의 동행|名医の同行|Physician Joins|名医同行||華佗を招いた状態で開始|Start with Hua Tuo hired|开局已招募华佗||ボスの攻撃力+25%|Boss ATK +25%|首领攻击+25%
+명의의 동행|名医の同行|Physician Joins|名医同行||華佗を招聘した状態で開始|Start with Hua Tuo hired|开局已招募华佗||ボスの攻撃力+25%|Boss ATK +25%|首领攻击+25%
 포위망|包囲網|Encirclement|包围网||ボス戦の制限時間+15%|Boss time limit +15%|首领战时限+15%||全ボスが「四方包囲」を追加で使う|Every boss also casts Total Encirclement|所有首领追加使用「四面包围」
 폭풍 전야|嵐の前夜|Calm Before the Storm|暴风前夜||ボス討伐の金貨+50%|Boss gold +50%|首领奖励金币+50%||ボスの技の間隔20%短縮|Boss attacks 20% more often|首领招式间隔缩短20%
 군량 부족|兵糧不足|Short on Rations|军粮不足||開始時の金貨+800|+800 starting gold|初始金币+800||ラインの敵の体力+15%|Lane enemy HP +15%|防线敌人生命+15%
@@ -427,8 +443,17 @@
 `;
   const CONS = `
 1~5성 유닛 1기를 다음 등급의 랜덤 유닛으로 바꿉니다.|★1〜5のユニット1体を次の等級のランダムなユニットに変えます。|Turns one ★1–5 unit into a random unit of the next tier.|将1个1~5星单位变为下一等级的随机单位。
-2~7성 유닛 1기를 같은 등급의 다른 세력 유닛으로 바꿉니다.|★2〜★7のユニット1体を同じ等級の別勢力ユニットに変えます。|Turns one ★2–★7 unit into a unit of another faction at the same tier.|将1个2~7星单位变为同等级的其他阵营单位。
+2~7성 유닛 1기를 같은 등급의 다른 세력 유닛으로 바꿉니다.|★2〜7のユニット1体を同じ等級の別勢力ユニットに変えます。|Turns one ★2–★7 unit into a unit of another faction at the same tier.|将1个2~7星单位变为同等级的其他阵营单位。
 7성 이상 장수 1기를 같은 등급의 다른 장수로 바꿉니다(세력 무관, 랜덤).|★7以上の武将1体を同じ等級の別の武将に変えます（勢力問わず、ランダム）。|Turns one ★7+ general into a different general of the same tier (any faction, random).|将1名7星以上武将随机变为同等级的其他武将（不限阵营）。
+`;
+  // 보스전 역할 설명(theme-samguk.js roles.*.desc)
+  const ROLES = `
+보스의 공격을 끌어오고 받는 피해가 줄어듭니다|ボスの攻撃を引きつけ、被ダメージを軽減します|Draws the boss's attacks and takes less damage|吸引首领的攻击，并减少受到的伤害
+아군 전체(다른 사령관 포함)의 체력을 회복합니다|味方全体（他の司令官含む）の体力を回復します|Heals the whole party (incl. other commanders)|为全队（含其他指挥官）回复生命
+보스가 받는 피해를 늘리고 무력화 게이지를 더 깎습니다|ボスの被ダメージを増やし、ブレイクゲージを多く削ります|Makes the boss take more damage and wears down the break gauge faster|提高首领受到的伤害，并更快削减破防槽
+스킬 재사용이 빠르고 스킬 피해가 큽니다|スキルの再使用が早く、スキルダメージが大きいです|Skills recharge faster and hit harder|技能冷却更快，技能伤害更高
+평타가 빠르고 강타가 자주 터집니다|通常攻撃が速く、強打がよく発動します|Attacks fast and lands heavy blows often|普攻更快，且经常打出重击
+아군 전체(다른 사령관 포함)의 공격력을 올립니다|味方全体（他の司令官含む）の攻撃力を上げます|Raises the whole party's ATK (incl. other commanders)|提高全队（含其他指挥官）的攻击
 `;
   const rows = (s) => s.trim().split('\n').map((l) => l.split('|'));
   const map = (s) => { const m = {}; rows(s).forEach(([ko, ja, en, zh]) => (m[ko] = { ja, en, zh })); return m; };
@@ -436,7 +461,7 @@
 
   // ---- 설명 틀: 패시브 종류별 ----
   const pc = (v) => Math.round(v * 100) + '%';
-  const facN = { ja: { wei: '魏', shu: '蜀', wu: '呉', etc: 'その他', all: '全' }, en: { wei: 'Wei', shu: 'Shu', wu: 'Wu', etc: 'Others', all: 'all' }, zh: { wei: '魏', shu: '蜀', wu: '吴', etc: '其他', all: '全体' } };
+  const facN = { ja: { wei: '魏', shu: '蜀', wu: '呉', etc: '群雄', all: '全' }, en: { wei: 'Wei', shu: 'Shu', wu: 'Wu', etc: 'Others', all: 'all' }, zh: { wei: '魏', shu: '蜀', wu: '吴', etc: '其他', all: '全体' } };
   const PD = {
     ja: {
       slow: (p) => `攻撃した敵の移動速度${pc(p.pct)}低下`, bossPct: (p) => `ボス・中ボスへのダメージ${pc(p.pct)}増加`, crit: (p) => `${pc(p.ch)}の確率で${p.mult}倍ダメージ`, everyN: (p) => `${p.n}回目の攻撃ごとに${p.mult}倍ダメージ`,
@@ -487,5 +512,5 @@
     en: { line: (s) => `Line ${s.len}, ×${s.mult} ATK`, cone: (s) => `Cone ${s.r}, ×${s.mult} ATK`, circle: (s) => `Radius ${s.r} at target, ×${s.mult} ATK${s.stun ? `, stun ${s.stun}s` : ''}`, buff: (s) => `ATK +${pc(s.atk)} for ${s.dur}s`, shield: (s) => `Invincible for ${s.dur}s`, heal: (s) => `Heals the whole party (incl. other commanders) ${pc(s.pct)}${s.hot ? `, then ${pc(s.hot)}/s for ${s.hotDur}s` : ''}`, rally: (s) => `Party ATK +${pc(s.atk)} for ${s.dur}s`, taunt: (s) => `Draws the boss and reduces damage taken for ${s.dur}s`, weaken: (s) => `Boss takes +${pc(s.amp)} damage for ${s.dur}s`, cover: (s) => `Draws the boss; party damage taken -${pc(s.v)} for ${s.dur}s`, pshield: (s) => `Blocks projectiles for the party for ${s.dur}s`, hasteAll: (s) => `Party attack speed +${pc(s.v)} for ${s.dur}s`, roar: (s) => `Boss ATK -${pc(s.v)} for ${s.dur}s`, delay: (s) => `Delays the boss's next attack by ${s.v}s`, reflect: (s) => `Draws the boss for ${s.dur}s; counters each hit at ×${s.mult} ATK`, charm: (s) => `Charms the boss for ${s.dur}s; it takes +${pc(s.amp)} damage (cannot interrupt break casts)` },
     zh: { line: (s) => `直线${s.len}范围，攻击${s.mult}倍`, cone: (s) => `扇形${s.r}范围，攻击${s.mult}倍`, circle: (s) => `指定位置半径${s.r}，攻击${s.mult}倍${s.stun ? `，眩晕${s.stun}秒` : ''}`, buff: (s) => `${s.dur}秒内攻击+${pc(s.atk)}`, shield: (s) => `${s.dur}秒无敌`, heal: (s) => `全队（含其他指挥官）回复${pc(s.pct)}生命${s.hot ? `，之后${s.hotDur}秒每秒${pc(s.hot)}` : ''}`, rally: (s) => `${s.dur}秒内全队攻击+${pc(s.atk)}`, taunt: (s) => `${s.dur}秒内吸引首领并减伤`, weaken: (s) => `${s.dur}秒内首领受伤+${pc(s.amp)}`, cover: (s) => `吸引首领，${s.dur}秒内全队受伤-${pc(s.v)}`, pshield: (s) => `${s.dur}秒内为全队挡下飞行物`, hasteAll: (s) => `${s.dur}秒内全队攻速+${pc(s.v)}`, roar: (s) => `${s.dur}秒内首领攻击-${pc(s.v)}`, delay: (s) => `将首领下一招推迟${s.v}秒`, reflect: (s) => `${s.dur}秒内吸引首领，每次受击以攻击${s.mult}倍反击`, charm: (s) => `魅惑首领${s.dur}秒使其停止，受伤+${pc(s.amp)}（无法打断破防咏唱）` },
   };
-  root.RTD_I18N_DATA = { names: map(NAMES), lines: map(LINES), syn: pairs(SYN), mut: pairs(MUT), ach: pairs(ACH), cons: map(CONS), PD, SK };
+  root.RTD_I18N_DATA = { names: map(NAMES), lines: map(LINES), syn: pairs(SYN), mut: pairs(MUT), ach: pairs(ACH), cons: map(CONS), roles: map(ROLES), PD, SK };
 })(typeof window !== 'undefined' ? window : globalThis);

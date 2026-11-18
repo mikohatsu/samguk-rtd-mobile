@@ -4,7 +4,9 @@
   const T = window.RTD_THEME, E = window.RTD_ENGINE, { W, H, ROAD, ARENA, dist } = E;
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const fmt = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'K' : Math.round(n).toLocaleString());
+  // 일본어는 큰 수를 万·億 단위로
+  const fmtJa = (n) => (n >= 1e8 ? (n / 1e8).toFixed(1) + '億' : n >= 1e6 ? Math.round(n / 1e4) + '万' : (n / 1e4).toFixed(1) + '万');
+  const fmt = (n) => (n >= 1e4 && window.RTD_I18N && window.RTD_I18N.lang === 'ja' ? fmtJa(n) : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'K' : Math.round(n).toLocaleString());
   const view = $('view'), ctx = view.getContext('2d');
   // ---- 화질: high(PC 기본) / mid(폰 기본) / low, 30fps 제한. 이 기기에만 저장한다. ----
   const Q = (() => {
@@ -2727,7 +2729,8 @@
     else if (a === 'drawerClose') S.drawer = null;
     else if (a === 'autoAll') { const on = !['t1', 't2', 't3'].every((k) => p.auto[k]); ['t1', 't2', 't3'].forEach((k) => g.setAuto(p, k, on)); try { localStorage.setItem('rtd-auto', on ? '1' : '0'); } catch (e) { /* 저장 불가 */ } toast(on ? t('autoToastOn') : t('autoToastOff'), on ? 'good' : ''); }
     else if (a === 'selExp') S.selExp = !S.selExp;
-    else if (a === 'langSet') { if (arg !== I.lang) { try { localStorage.setItem('rtd-lang', arg); } catch (e) { /* 저장 불가 */ } toast(I.LANGS.find(([k]) => k === arg)[1] + ' — ' + t('toTitle'), 'good'); } }
+    // 언어: 로비에서는 저장하고 바로 다시 불러온다(I.setLang). 판 안에서는 저장만 하고 로비로 돌아가면 바뀐다고 알린다.
+    else if (a === 'langSet') { if (arg !== I.lang) { if (!g) { I.setLang(arg); return; } try { localStorage.setItem('rtd-lang', arg); } catch (e) { /* 저장 불가 */ } toast(I.LANGS.find(([k]) => k === arg)[1] + ' — ' + t('langLater'), 'good'); } }
     else if (a === 'gfx') { if (Q.level !== arg) { Q.level = arg; Q.rs = 1; applyQuality(); sizeMap(); if (g) fit(); } }
     else if (a === 'fps30') { Q.fps30 = !Q.fps30; applyQuality(); }
     else if (a === 'perf') { Q.perf = !Q.perf; applyQuality(); }
@@ -2747,7 +2750,8 @@
     else if (a === 'auto') g.setAuto(p, arg, !p.auto[arg]);
     else if (a === 'zone') { const [k, z] = arg.split(':'); g.setZone(p, k, z); }
     else if (a === 'vol') {
-      const key = arg, cur = Snd.state[key], next = cur >= 0.99 ? 0 : Math.round((cur + 0.25) * 4) / 4 >= 1 ? 1 : Math.round((Math.floor(cur * 4 + 0.001) + 1) * 25) / 100;
+      // 소리 크기: − / ＋ 버튼으로 25%씩(0~100%). arg = 'sfx:-' · 'sfx:+' · 'bgm:-' · 'bgm:+'
+      const [key, dir] = String(arg).split(':'), next = Math.max(0, Math.min(1, (Math.round(Snd.state[key] * 4) + (dir === '-' ? -1 : 1)) / 4));
       if (key === 'sfx') Snd.setSfx(next); else Snd.setBgm(next);
     }
     else if (a === 'book') S.book = S.book === arg ? null : arg;
@@ -2842,8 +2846,12 @@
     const st = g.recipeStatus(g.me, id), d = defOf[id];
     const chips = st.parts.map((x) => `<span class="chip ${x.have >= x.need ? 'have' : 'miss'}">${esc(defOf[x.id].name)} ${rankTag(defOf[x.id].tier)} ${Math.min(x.have, x.need)}/${x.need}</span>`).join('');
     const it = st.item ? `<span class="chip ${st.hasItem ? 'have' : 'miss'}">${esc(T.items.find((i) => i.id === st.item).name)}</span>` : '';
+    // 잠긴 신화·불멸: 재료가 다 있어도 조합할 수 없으므로 버튼 대신 까닭(상점에서 해금)을 적는다
+    if (g.isLocked && g.isLocked(id)) return `<div class="row"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div><small class="lockn">🔒 ${I.t('lockedInShop')}</small></div></div>`;
     return `<div class="row ${st.ok ? 'ok' : ''}"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div></div><button class="btn ${st.ok ? 'go' : ''}" data-act="craft" data-arg="${id}" type="button" ${st.ok ? '' : 'disabled'}>${I.t('combineBtn')}</button></div>`;
   }
+  // 소리 크기 줄(판 안 설정 탭과 로비 설정 창이 같이 쓴다): − 값 ＋
+  const volRow = (key) => { const v = Math.round(Snd.state[key] * 100); return `<div class="row"><div>${t(key)}</div><div class="volrow"><button class="toggle" data-act="vol" data-arg="${key}:-" type="button" aria-label="-" ${v <= 0 ? 'disabled' : ''}>−</button><b>${v}%</b><button class="toggle" data-act="vol" data-arg="${key}:+" type="button" aria-label="+" ${v >= 100 ? 'disabled' : ''}>＋</button></div></div>`; };
   const SKILL_TEXT = {
     line: (s) => `직선 ${s.len} 범위, 공격력 ${s.mult}배`, cone: (s) => `부채꼴 ${s.r} 범위, 공격력 ${s.mult}배`,
     circle: (s) => `지정 위치 반경 ${s.r}, 공격력 ${s.mult}배${s.stun ? `, 기절 ${s.stun}초` : ''}`,
@@ -2906,19 +2914,19 @@
       const zones = (k) => `<div class="zones">${ZN.map(([z, l]) => `<button class="zb ${p.zones[k] === z ? 'on' : ''}" data-act="zone" data-arg="${k}:${z}" type="button">${l}</button>`).join('')}</div>`;
       const az = (k, l) => tg(k, l) + `<div class="row zrow"><div><small>${I.t('sortPos')}</small></div>${zones(k)}</div>`;
       const ql = [['high', t('high')], ['mid', t('mid')], ['low', t('low')]];
-      h = `<div class="h">${t('language')}</div><div class="row"><div class="zones">${I.LANGS.map(([k, n]) => `<button class="zb ${I.lang === k ? 'on' : ''}" data-act="langSet" data-arg="${k}" type="button">${n}</button>`).join('')}</div></div>`;
+      // 판 도중 나가기(맨 위): 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 나간다(11-actions의 quit)
+      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : 'quitHintRoom';
+      h = `<div class="h">${I.t('quitGame')}</div><div class="row"><div><small>${I.t(qh)}</small></div><button class="toggle ${S.quitArm ? 'on' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitBtn')}</button></div>`;
+      // 언어는 이 판에는 적용되지 않는다(로비로 돌아가면 바뀜)
+      h += `<div class="h">${t('language')} <small>${t('langLater')}</small></div><div class="row"><div class="zones">${I.LANGS.map(([k, n]) => `<button class="zb ${I.lang === k ? 'on' : ''}" data-act="langSet" data-arg="${k}" type="button">${n}</button>`).join('')}</div></div>`;
       h += `<div class="h">${t('gfx')}</div><div class="row"><div>${t('gfxRow')} <small>${t('gfxHint')}</small></div><div class="zones">${ql.map(([k, l]) => `<button class="zb ${Q.level === k ? 'on' : ''}" data-act="gfx" data-arg="${k}" type="button">${l}</button>`).join('')}</div></div>`;
       h += `<div class="row"><div>${t('fps30')} <small>${t('fps30Hint')}</small></div><button class="toggle ${Q.fps30 ? 'on' : ''}" data-act="fps30" type="button">${Q.fps30 ? t('on') : t('off')}</button></div>`;
       h += `<div class="row"><div>${t('perfShow')} <small>${t('perfShowHint')}</small></div><button class="toggle ${Q.perf ? 'on' : ''}" data-act="perf" type="button">${Q.perf ? t('on') : t('off')}</button></div>`;
       h += `<div class="h">${t('autoSection')}</div>` + az('t1', I.t('autoT1')) + az('t2', I.t('autoT2')) + az('t3', I.t('autoT3')) + az('t45', I.t('autoT45')) + tg('sell', I.t('autoSell'));
-      h += `<div class="h">${t('sound')}</div><div class="row"><div>${t('sfx')}</div><button class="toggle" data-act="vol" data-arg="sfx" type="button">${Math.round(Snd.state.sfx * 100)}%</button></div>`;
+      h += `<div class="h">${t('sound')}</div>` + volRow('sfx') + volRow('bgm');
       h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplay')}</button></div>`;
       h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
       h += `<div class="row"><div>${t('version')}</div><div>v${window.RTD_VERSION || '?'}</div></div>`;
-      h += `<div class="row"><div>${t('bgm')}</div><button class="toggle" data-act="vol" data-arg="bgm" type="button">${Math.round(Snd.state.bgm * 100)}%</button></div>`;
-      // 판 도중 나가기: 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 나간다(11-actions의 quit)
-      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : 'quitHintRoom';
-      h += `<div class="h">${I.t('quitGame')}</div><div class="row"><div><small>${I.t(qh)}</small></div><button class="toggle ${S.quitArm ? 'on' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitBtn')}</button></div>`;
     } else if (S.tab === 'war') {
       h = '';
     } else {
@@ -2991,7 +2999,8 @@
       lines.push(`<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(have, need), b: need, r: rankName(d.tier + 1) })}</span><button class="btn ${have >= need ? 'go' : ''}" data-act="combine" type="button" ${have >= need ? '' : 'disabled'}>${I.t('combineBtn')}${S.coarse ? '' : ' R'}</button></div>`);
     }
     const score = (id) => { const st = g.recipeStatus(g.me, id); return st.parts.filter((x) => x.have >= x.need).length / st.parts.length; };
-    const used = Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id) && !(g.isLocked && g.isLocked(id))) // 잠긴 장수의 조합식은 빼고 보인다.sort((a, b) => score(b) - score(a));
+    const used = Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id) && !(g.isLocked && g.isLocked(id))) // 잠긴 장수의 조합식은 빼고 보인다
+      .sort((a, b) => score(b) - score(a)); // 완성에 가까운 조합식부터
     const list = used, max = need ? 5 : 6; // 자기 자신의 조합식은 재료로 쓰이는 곳이 아니므로 뺀다
     lines.push(...list.slice(0, max).map(recipeLine));
     if (list.length > max) lines.push(`<div class="sub line">${I.t('moreInBook', { n: list.length - max })}</div>`);
@@ -3289,6 +3298,36 @@
       mb.innerHTML = `<div style="display:grid;gap:4px;padding:4px 6px 8px">${g.muts.map((m, i) => mutCard(m.id, i)).join('')}</div>`;
     }
   }
+  // ---- 결과창 맨 위 '다음 목표' 칸(글 2~4줄, 그림 없음): 진 곳 · 이번 판으로 새로 열린 것(난이도·상점) · 다음 관직까지 남은 경험치 · 가장 싼 잠긴 장수까지 남은 동전.
+  // S.progBefore = 이 판을 기록하기 직전의 해금 진행도(16-hud drainEvents의 'over'). 로그인하지 않은 판은 열린 것과 진 곳만 나온다.
+  function goalBox() {
+    const DF = ['easy', 'normal', 'hard', 'nightmare'], win = g.over === 'win', lines = [], num = (n) => Math.round(n).toLocaleString();
+    if (!win) {
+      const b = g.stats.bosses[g.stats.bosses.length - 1], f = g.fight;
+      if (b && !b.win && b.round === g.round) {
+        const p = f && f.boss && f.def && f.def.round === b.round && f.boss.mhp > 0 ? Math.max(1, Math.min(100, Math.ceil((f.boss.hp / f.boss.mhp) * 100))) : 0;
+        lines.push(I.t(p ? 'goalLostBossHp' : 'goalLostBoss', { r: b.round, a: esc(b.name), p }));
+      } else lines.push(I.t(g.lives <= 0 ? 'goalLostLane' : 'goalLost', { r: g.round }));
+    }
+    const pb = S.progBefore, mut = g.mutLv || 0;
+    if (win && pb) {
+      const i = DF.indexOf(g.diff.id), nx = T.difficulties.find((d) => d.id === DF[i + 1]);
+      if (i > pb.clr && nx) lines.push(I.t('goalDiff', { a: esc(nx.name) }));
+      if (g.diff.id === 'nightmare' && mut > pb.nmx && mut < 5) lines.push(I.t('goalMut', { n: mut + 1 }));
+      if (pb.clr < 0) lines.push(I.t('goalShop'));
+    }
+    const me = ACC.token && ACC.me;
+    if (me) {
+      const trk = me.track === 'civ' ? 'civ' : 'mil';
+      if (me.rank >= 0 && me.rank < 10) lines.push(I.t('goalRank', { a: esc(t('rk_' + trk + (me.rank + 1))), n: num(Math.max(0, xpAt(RANK_LV[me.rank + 1]) - (me.xp || 0))) }));
+      const U = T.unlock, shop = !window.RTD_LOBBY || window.RTD_LOBBY.shopOpen();
+      if (U && shop) {
+        const d = U.lockedIds().filter((id) => !(me.owned || []).includes(U.key(id))).map((id) => defOf[id]).filter(Boolean).sort((a, b) => U.coins[a.tier] - U.coins[b.tier])[0];
+        if (d) { const need = U.coins[d.tier] - (me.coins || 0); lines.push(I.t(need > 0 ? 'goalCoins' : 'goalCoinsOk', { n: num(Math.max(0, need)), r: esc(rankName(d.tier)) })); }
+      }
+    }
+    return lines.length ? `<div class="es-goal"><b>${I.t('goalHead')}</b>${lines.slice(0, 4).map((x) => `<div>${x}</div>`).join('')}</div>` : '';
+  }
   // 판 끝 통계: 요약 · 보스전 기록(순위) · 라인 피해 순위 · 강화·조합 기록
   function endStats() {
     const s = g.stats, win = g.over === 'win', mm = Math.floor(g.time / 60), ss = Math.floor(g.time % 60);
@@ -3317,13 +3356,13 @@
     // 승리: 철괴 제목판을 키워 글씨를 얹는다. 패배: 기울어진 부서진 나무판(흰 깃발 그림)에 '전선 붕괴'.
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
     return `<div class="over" id="end"><div class="sheet es">
-      ${head}${S.xpGained != null && ACC.me ? `<div class="dim" style="color:#ffd86a">${t('xpGain', { n: S.xpGained })} · ${esc(t(ACC.me.grade))} ${t('level', { n: ACC.me.level })}</div>` : ''}<div class="es-cards">${cards}</div>
+      ${head}${goalBox()}${S.xpGained != null && ACC.me ? `<div class="dim" style="color:#ffd86a">${t('xpGain', { n: S.xpGained })} · ${esc(t(ACC.me.grade))} ${t('level', { n: ACC.me.level })}</div>` : ''}${S.tkMiss ? `<div class="dim" style="color:#ff9d8a">${t('noTicket')}</div>` : ''}<div class="es-cards">${cards}</div>
       ${g.mutLv && g.muts && g.muts.length ? `<div class="es-mutpop" hidden><b>${esc(I.t('mutHead', { n: g.mutLv }))}</b>${g.muts.map((m, i) => mutCard(m.id, i)).join('')}</div>` : ''}
       <h3>${I.t('bossLog')}</h3>${bossRows ? `<table class="es-boss"><tr><th>${I.t('thBoss')}</th><th>${I.t('thResult')}</th><th>${I.t('thTime')}</th><th>${I.t('thChamp')}</th><th>${I.t('dmgRank')}</th></tr>${bossRows}</table>` : `<div class="dim">${I.t('noBossLog')}</div>`}
       <h3>${I.t('laneDmgRank')}</h3>${dmgRows || `<div class="dim">${I.t('noRecord')}</div>`}
       <h3>${I.t('upgrade')}</h3><div class="chips">${ups}</div>
       <h3>${I.t('craftedHead')}</h3><div class="chips">${crafts}</div>
-      <button class="btn go es-again" data-act="restart" type="button">${t('again')}</button></div></div>`;
+      <button class="btn go es-again" data-act="restart" type="button">${t('quitGame')}</button></div></div>`;
   }
   // ---- 판 끝 경험치 연출: 화면을 어둡게 흐리고, 지금 계급 문양 ─ 경험치 막대 ─ 다음 계급 문양.
   // +경험치가 뜬 뒤 막대가 그만큼 차오르고(계급이 오르면 문양이 바뀜), 잠시 뒤 사라지며 결과창이 나온다.
@@ -3347,10 +3386,14 @@
       el.querySelector('.xpnum').textContent = r >= 10 ? 'MAX' : `${fmt(Math.round(xp - lo))} / ${fmt(hi - lo)}`;
     };
     draw(from);
+    // 화면을 누르면 연출을 건너뛴다(끝 값으로 채우고 바로 결과창)
+    let fin = false;
+    const end = () => { if (fin) return; fin = true; el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 600); };
+    el.addEventListener('pointerdown', () => { if (fin) return; draw(to); end(); });
     requestAnimationFrame(() => el.classList.add('in'));
     // 0.7초 뒤 +XP가 뜨고, 1.4초 동안 차오른다. 다 차고 1.6초 뒤 사라진다.
-    setTimeout(() => { el.classList.add('gain'); const t0 = performance.now(), D = 1400;
-      const step = (now) => { const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3); draw(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); else setTimeout(() => { el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 600); }, 1600); };
+    setTimeout(() => { if (fin) return; el.classList.add('gain'); const t0 = performance.now(), D = 1400;
+      const step = (now) => { if (fin) return; const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3); draw(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); else setTimeout(end, 1600); };
       requestAnimationFrame(step); }, 700);
   }
   // ---- 보스전 직접 조작(모바일 MOBA식) ----
@@ -3648,15 +3691,22 @@
     } else if (net && net.kicked) {
       key = 'k'; h = `<div class="over"><div class="sheet"><h2>${t('kicked')}</h2><div>${t('kickedHint')}</div><button class="btn go" data-act="restart" type="button" style="padding:9px 20px">${t('toTitle')}</button></div></div>`;
     } else if (net && net.clock.pz && !g.over) {
-      key = 'z' + net.clock.pz; h = `<div class="over"><div class="sheet"><h2>${I.t('waitTitle')}</h2><div>${I.t('waitPz', { a: esc(net.clock.pz) })}</div></div></div>`;
+      // 기다림 창에서도 나갈 수 있게 나가기 버튼을 둔다(설정 탭의 나가기와 같은 길: 한 번 더 눌러 확정 → 11-actions의 quit).
+      // 10초 넘게 기다리면 끊긴 쪽이 나일 수 있으므로 내 연결을 확인하라는 글을 더한다.
+      if (!S.pzAt) S.pzAt = performance.now();
+      const late = performance.now() - S.pzAt > 10000;
+      key = 'z' + net.clock.pz + (late ? 'L' : '') + (S.quitArm ? 'A' : '');
+      h = `<div class="over pzwait"><div class="sheet"><h2>${I.t('waitTitle')}</h2><div>${I.t('waitPz', { a: esc(net.clock.pz) })}</div>${late ? `<div class="warnline">${I.t('waitSelf')}</div>` : ''}<div class="dim">${I.t('quitHintRoom')}</div><button class="btn ${S.quitArm ? 'warn' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitGame')}</button></div></div>`;
     } else if (g.over) {
       if (S.drawer) { S.drawer = null; $('drawer').hidden = true; } // 오른쪽 서랍이 결과·경험치 연출을 가리지 않게
       // 온라인 판은 경험치 연출이 끝난 뒤 결과창(서버 답이 4초 넘게 없으면 그냥 결과창)
       const waitXp = S.online && ACC.token && !S.xpDone && (S.xpPlaying || (S.xpGained == null && performance.now() - (S.overAt || (S.overAt = performance.now())) < 4000));
-      if (waitXp) { key = 'ox'; h = '<div class="over xpwait"></div>'; }
+      if (waitXp) { key = 'ox' + (S.xpPlaying ? 'p' : ''); h = `<div class="over xpwait">${S.xpPlaying ? '' : `<div class="xpsend">${t('sendingResult')}</div>`}</div>`; }
       else { key = 'o' + (S.xpGained != null ? S.xpGained : ''); h = endStats(); }
     }
     if (box.dataset.key !== key) { box.innerHTML = h; box.dataset.key = key; }
+    // 기다림 창이 떠 있는 동안에는 오른쪽 위 메뉴 버튼이 창 위로 올라온다(CSS #stage.pz). 창이 사라지면 기다린 시간도 지운다.
+    { const pz = key[0] === 'z', stg = $('stage'); if (!pz) S.pzAt = 0; if (stg.classList.contains('pz') !== pz) stg.classList.toggle('pz', pz); }
     $('backbtn').hidden = !viewedPeer();
     renderHud();
     const sbar = $('selbar'), boss = inBoss() && g.phase === 'boss' && !!g.fight;
@@ -3680,7 +3730,7 @@
       else if (e.type === 'pop') { queuePop(e.def, e.who || (net ? net.name : null)); if (e.def.tier >= 9 && g.phase !== 'boss') S.freeze = (S.freeze || 0) + POP_DUR[e.def.tier]; if (net && !e.remote) net.send('pop', { id: e.def.id, name: net.name }); }
       else if (e.type === 'round') { Snd.play('round'); saveGame(); }
       else if (e.type === 'bossIntro') { Snd.play('gong'); Snd.setBoss(true); }
-      else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); reportResult(); if (window.RTD_LOBBY) window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.ticket); if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
+      else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); S.tkMiss = !!(S.tkWant && !S.gameTk); reportResult(); if (window.RTD_LOBBY) { S.progBefore = window.RTD_LOBBY.progNow(); window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.gameTk); } if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
       else if (e.type === 'banner') S.banner = { text: e.text, sub: e.sub, t: 3 };
       else if (e.type === 'dmgtext') {
         // 숫자가 같은 자리에 겹쳐 안 읽히지 않게 조금씩 흩어 놓는다
@@ -3829,6 +3879,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       renderPane(); renderInfo(); renderTimers(); renderOverlay();
     }
   }
+  // 판 표를 못 받았을 때 다시 받는 간격(ms)
+  const TICKET_RETRY_MS = [3000, 6000, 12000, 24000];
   function begin(opt) {
     if (window.RTD_LOBBY) window.RTD_LOBBY.close();
     $('title').hidden = true; $('title').style.display = 'none';
@@ -3853,12 +3905,24 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기)
     S.saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo'; S.saveT = 0;
     // 판 표: 로그인해 있으면 서버에서 받아 둔다(결과·전적은 이 표가 있어야 서버가 받는다). 이어하기는 저장해 둔 표를 다시 쓴다.
-    S.ticket = null;
+    // 판 표는 S.gameTk에 둔다(S.ticket은 선택권 창이 쓰는 값이라 같이 쓰면 선택권을 쓸 때 판 표가 지워진다).
+    // 표를 못 받으면(끊김·서버 오류) 3·6·12·24초 뒤에 다시 받는다. 판이 끝났거나 다른 판이 시작됐으면 멈춘다.
+    // 끝까지 못 받은 채 판이 끝나면 결과 화면에서 알린다(S.tkWant = 이 판은 표를 받아야 하는 판, S.tkMiss = 못 받고 끝남).
+    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false;
     if (ACC.token) {
-      if (opt.snap) { try { S.ticket = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
+      if (opt.snap) { try { S.gameTk = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
       else {
         const saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo';
-        api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0 }).then((r) => { if (r.ticket) { S.ticket = r.ticket; if (saveOn) { try { localStorage.setItem('rtd-save-tk', r.ticket); } catch (e) { /* 저장 불가 */ } } } });
+        const mine = g, waits = TICKET_RETRY_MS.slice();
+        S.tkWant = true;
+        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0 }).then((r) => {
+          if (g !== mine) return; // 그 사이 다른 판이 시작됐다
+          if (r.ticket) { S.gameTk = r.ticket; if (saveOn) { try { localStorage.setItem('rtd-save-tk', r.ticket); } catch (e) { /* 저장 불가 */ } } return; }
+          // 로그인이 풀렸거나(401) 요청이 잘못됐으면(400) 다시 해도 같다
+          if (r.status === 401 || r.status === 400 || g.over || !waits.length) return;
+          setTimeout(() => { if (g === mine && !g.over && !S.gameTk) ask(); }, waits.shift());
+        });
+        ask();
       }
     }
     S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;
@@ -3893,14 +3957,35 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   const errText = (e) => (e === 'net' ? t('noServer') : t('err_' + e) !== 'err_' + e ? t('err_' + e) : String(e || ''));
   const xpLv = (lv) => 40 * (lv - 1) * (lv - 1);
   // 게스트 비밀값(이 기기에만): 토큰이 만료돼도 다시 들어온다
-  const GUEST = (() => { try { return JSON.parse(localStorage.getItem('rtd-guest') || 'null'); } catch (e) { return null; } })();
-  const saveGuest = (g2) => { try { if (g2) localStorage.setItem('rtd-guest', JSON.stringify(g2)); else localStorage.removeItem('rtd-guest'); } catch (e) { /* 저장 불가 */ } };
+  // GUEST는 늘 같은 객체다(비밀값이 없으면 id가 null). saveGuest가 저장소와 이 객체를 같이 바꾸므로, 같은 실행 안에서 가입·로그아웃을 해도 최신 값을 본다
+  const GUEST = Object.assign({ id: null, secret: null }, (() => { try { return JSON.parse(localStorage.getItem('rtd-guest') || 'null'); } catch (e) { return null; } })() || {});
+  const saveGuest = (g2) => {
+    Object.keys(GUEST).forEach((k) => { delete GUEST[k]; }); Object.assign(GUEST, { id: null, secret: null }, g2 || {});
+    try { if (g2) localStorage.setItem('rtd-guest', JSON.stringify(g2)); else localStorage.removeItem('rtd-guest'); } catch (e) { /* 저장 불가 */ }
+  };
+  // 게스트로 들어가기: 이 기기에 비밀값이 있으면 먼저 그걸로 로그인한다. 서버가 401(없는 계정)이라고 할 때만 비밀값을 지우고 make()로 새로 만든다.
+  // 끊김·429·5xx면 비밀값을 그대로 두고 그 답을 돌려준다(새 계정을 만들어 옛 계정을 덮지 않게). make가 null을 돌려주면(약관 미동의 등) { stop: true }
+  async function guestEnter(make) {
+    if (GUEST.id) {
+      const r = await api('/api/guest/login', { id: GUEST.id, secret: GUEST.secret });
+      if (r.token) return r;
+      if (r.status !== 401) return r;
+      saveGuest(null);
+    }
+    const body = make(); if (!body) return { stop: true };
+    const r = await api('/api/guest/new', body);
+    if (r.token && r.guest) { saveGuest(r.guest); r.fresh = true; }
+    return r;
+  }
   const gradeTag = (st) => (st && st.gr ? `<span class="gr">${esc(t(st.gr))} ${t('level', { n: st.lv })}</span>` : '');
   // 판이 끝나면 온라인 판 결과를 서버에 보내 경험치를 받는다(같은 판은 한 번만)
+  // 서버에 닿지 못하면(끊김·5xx) 보낼 내용을 기기에 남겨 두고 다음에 앱을 켤 때·로비로 돌아올 때 다시 보낸다(lobby.js queueSend·flushPending)
   async function reportResult() {
     if (!S.online || !ACC.token || S.reported) return;
     S.reported = true;
-    const r = await api('/api/result', { ticket: S.ticket, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {} });
+    const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {} };
+    const uid = ACC.me && ACC.me.id, r = await api('/api/result', body);
+    if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend('/api/result', body, uid);
     if (r.me) {
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained;
       if (r.gained > 0) { S.xpPlaying = true; playXp(r.me.xp - r.gained, r.me.xp, r.coins, () => { S.xpPlaying = false; S.xpDone = true; dirty(); $('overlay').dataset.key = ''; }); }
@@ -3932,9 +4017,23 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   // ---- 시작 화면 ----
   const cfg = { diff: 'easy', mode: 'solo', ai: '2', mutLv: '0', muts: [], play: 'offline', accTab: 'login', showRank: false };
   try { const p = localStorage.getItem('rtd-play'); if (p === 'online' || p === 'offline') cfg.play = p; } catch (e) { /* 저장 불가 */ }
+  // 마지막에 시작한 설정('rtd-last': 온라인/싱글·모드·난이도·AI 수·악몽 단계)을 기억해, 다음에 전투 시작 창을 열면 그 선택이 되어 있게 한다(lobby.js openWizard)
+  try {
+    const l = JSON.parse(localStorage.getItem('rtd-last') || 'null');
+    if (l) {
+      if (l.play === 'online' || l.play === 'offline') cfg.play = l.play;
+      if (typeof l.mode === 'string') cfg.mode = l.mode;
+      if (T.difficulties.some((d) => d.id === l.diff)) cfg.diff = l.diff;
+      if (['1', '2', '3', '4'].includes(l.ai)) cfg.ai = l.ai;
+      if (cfg.diff === 'nightmare' && ['1', '2', '3', '4', '5'].includes(l.mutLv)) cfg.mutLv = l.mutLv;
+    }
+  } catch (e) { /* 저장 불가 */ }
+  const saveLast = () => { try { localStorage.setItem('rtd-last', JSON.stringify({ play: cfg.play, mode: cfg.mode, diff: cfg.diff, ai: cfg.ai, mutLv: String(cfg.mutLv) })); } catch (e) { /* 저장 불가 */ } };
+  const savedGame = () => { try { const sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); return sv && sv.v === 1 ? sv : null; } catch (e) { return null; } };
   // 악몽 +N: 규칙 N개를 겹치지 않게 무작위로 고른다
   const rollMuts = () => { const pool = (T.mutators || []).map((m) => m.id); cfg.muts = []; for (let i = 0; i < +cfg.mutLv && pool.length; i++) cfg.muts.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]); };
   const mutCard = (id, i) => { const m = T.mutators.find((x) => x.id === id); return m ? `<div class="mut"><span class="n">${i + 1}</span><b>${esc(m.name)}</b><div class="gb"><span class="g">＋ ${esc(m.good)}</span><span class="bd">－ ${esc(m.bad)}</span></div></div>` : ''; };
+  if (+cfg.mutLv) rollMuts(); // 기억해 둔 악몽 +N이면 규칙을 새로 뽑아 둔다
   const DIFF_COL = { easy: '#7fd08a', normal: '#6fb7ff', hard: '#ffb347', nightmare: '#ff5a5a' };
   const myName = () => (ACC.me && cfg.play === 'online' ? ACC.me.nick : t('solo'));
   function setupTitle() {
@@ -3945,29 +4044,33 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     $('langsel').innerHTML = I.LANGS.map(([k, n]) => `<option value="${k}" ${I.lang === k ? 'selected' : ''}>${n}</option>`).join('');
     $('langsel').onchange = (e) => I.setLang(e.target.value);
       let lobby = null;
+    // accNote = 계정 창 안에 보여 주는 알림(연결됨·삭제됨·"게스트 기록은 합쳐지지 않습니다"). ovArm = 이어하기 기록을 덮어쓰기 전 '한 번 더' 확인. joinSeq = 방 입장 도중 나가면 늦게 온 연결을 버리기 위한 번호
+    let accNote = '', ovArm = false, joinSeq = 0;
     // 계정: Apple·Google·게스트. 처음 가입할 때만 닉네임과 약관 동의를 받는다.
     const pum = (rk) => (rk >= 1 && rk <= 9 ? ' <small>' + t('rankPum', { n: 10 - rk }) + '</small>' : '');
     const accHtml = () => {
       const link = (k, p) => `<a href="${API}/${p}?lang=${I.lang}" target="_blank" rel="noopener">${t(k)}</a>`;
       const N = window.RTD_NATIVE, app = !!(N && N.on), apple = !(N && N.droid); // 안드로이드 앱에는 Apple 로그인 버튼이 없다
+      const note = accNote ? `<div class="acc-note">${esc(accNote)}</div>` : '';
       if (!ACC.token || !ACC.me) {
-        return `<div class="acc-form"><input id="acc-nick" maxlength="12" placeholder="${esc(t('nickFirst'))}">
+        return `${note}<div class="acc-form"><input id="acc-nick" maxlength="12" placeholder="${esc(t('nickFirst'))}">
           <label class="agree"><input id="acc-agree" type="checkbox"><span>${t('agree', { terms: link('terms', 'terms'), privacy: link('privacy', 'privacy') })}</span></label>
-          ${apple ? `<button class="btn sso apple" data-sso="apple" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}
-          <button class="btn sso google" data-sso="google" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button>
+          ${(app ? N.ssoHas('apple') : apple) ? `<button class="btn sso apple" data-sso="apple" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}
+          ${!app || N.ssoHas('google') ? `<button class="btn sso google" data-sso="google" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button>` : ''}
           ${app ? '' : `<div class="hint2">${t('appOnly')}</div>`}
           <button class="btn go" id="acc-guest" type="button">${t('loginGuest')}</button>
           <div class="err" id="acc-err"></div></div>`;
       }
       const m = ACC.me, lv = m.level, max = m.rank >= 10, f = max ? 1 : Math.max(0, Math.min(1, (m.xp - xpLv(lv)) / Math.max(1, xpLv(lv + 1) - xpLv(lv))));
       const guest = m.provider === 'guest', prov = m.provider === 'apple' ? 'Apple' : m.provider === 'google' ? 'Google' : guest ? t('provGuest') : '';
-      return `<div class="acc-card"><span class="badge">${lv}</span><div><b>${esc(m.nick)}</b> <span class="gr">${esc(t(m.grade))}${pum(m.rank)} ${t('level', { n: lv })}</span> <small class="prov">${esc(prov)}</small></div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div></div>
+      return `${note}<div class="acc-card"><span class="badge">${lv}</span><div><b>${esc(m.nick)}</b> <span class="gr">${esc(t(m.grade))}${pum(m.rank)} ${t('level', { n: lv })}</span> <small class="prov">${esc(prov)}</small></div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div></div>
         <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })} · XP ${fmt(m.xp)}</div>
         <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button><button class="btn acc-q" id="acc-treebtn" type="button" aria-label="${esc(t('treeHead'))}">?</button></div>
         <div class="acc-tree" id="acc-tree" ${S.accTree ? '' : 'hidden'}>${treeHtml(m)}</div>
-        ${guest ? `<div class="acc-link"><b>${t('linkHead')}</b><div class="hint2">${t('linkHint')}</div><div class="acc-btns">${apple ? `<button class="btn sso apple" data-sso="apple" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}<button class="btn sso google" data-sso="google" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button></div></div>` : ''}
-        <div class="acc-btns"><button class="btn" id="acc-rank" type="button">${t('ranking')}</button><button class="btn" id="acc-nickbtn" type="button">${t('nickEdit')}</button><button class="btn" id="acc-out" type="button">${t('logout')}</button><button class="btn warn" id="acc-del" type="button">${t('deleteAcc')}</button></div>
+        ${guest && (!app || N.ssoHas('apple') || N.ssoHas('google')) ? `<div class="acc-link"><b>${t('linkHead')}</b><div class="hint2">${t('linkHint')}</div><div class="acc-btns">${(app ? N.ssoHas('apple') : apple) ? `<button class="btn sso apple" data-sso="apple" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}${!app || N.ssoHas('google') ? `<button class="btn sso google" data-sso="google" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button>` : ''}</div></div>` : ''}
+        <div class="acc-btns"><button class="btn" id="acc-rank" type="button">${t('ranking')}</button><button class="btn" id="acc-nickbtn" type="button">${t('nickEdit')}</button><button class="btn" id="acc-out" type="button">${t('logout')}</button></div>
         <div id="acc-nickbox" hidden><div class="inline"><input id="acc-nick2" maxlength="12" value="${esc(m.nick)}"><button class="btn" id="acc-nicksave" type="button">${t('save')}</button></div></div>
+        <div class="acc-danger"><button class="btn warn" id="acc-del" type="button">${t('deleteAcc')}</button></div>
         <div id="acc-delbox" hidden><div class="hint2">${t('delConfirmSso')}</div><div class="inline">${m.provider === 'password' ? `<input id="acc-delpw" type="password" placeholder="${esc(t('accPw'))}">` : ''}<button class="btn warn" id="acc-delgo" type="button">${t('delYes')}</button></div></div>
         <div class="err" id="acc-err"></div><div class="rank-list" id="acc-ranklist"></div>`;
     };
@@ -3981,7 +4084,9 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       refreshAcc();
       const ready = !on || (ACC.token && ACC.me);
       ['diffsec', 'modesec'].forEach((id) => ($(id).hidden = !ready));
-      $('diffs').innerHTML = T.difficulties.map((d) => `<button class="${cfg.diff === d.id && pk('diff') ? 'on' : ''}" data-cfg="diff" data-v="${d.id}" type="button" style="--dc:${DIFF_COL[d.id] || '#c99a2e'}">${d.name}${d.id === 'nightmare' && +cfg.mutLv ? ` +${cfg.mutLv}` : ''}<small>${t('rounds', { n: d.rounds, m: d.mult })}</small></button>`).join('');
+      // 방장은 방 안에서 난이도를 따로 누르지 않아도 지금 난이도가 고른 것으로 친다(손님에게 보이는 '방장 설정'과 같게)
+      const hostPick = !!(lobby && lobby.isHost());
+      $('diffs').innerHTML = T.difficulties.map((d) => `<button class="${cfg.diff === d.id && (pk('diff') || hostPick) ? 'on' : ''}" data-cfg="diff" data-v="${d.id}" type="button" style="--dc:${DIFF_COL[d.id] || '#c99a2e'}">${d.name}${d.id === 'nightmare' && +cfg.mutLv ? ` +${cfg.mutLv}` : ''}<small>${t('rounds', { n: d.rounds, m: d.mult })}</small></button>`).join('');
       const nm = cfg.diff === 'nightmare' && ready;
       $('mutbox').hidden = !nm;
       if (nm) {
@@ -4001,11 +4106,11 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       $('startbtn').hidden = !ready;
       let sv = null;
       try { sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); } catch (e) { sv = null; }
-      const cb = $('contbtn'), showC = !on && sv && sv.v === 1;
+      const cb = $('contbtn'), showC = sv && sv.v === 1; // 이어하기는 마지막에 온라인을 골랐어도 저장이 있으면 보인다
       cb.hidden = !showC;
       if (showC) { const dn = (T.difficulties.find((d) => d.id === sv.diff) || {}).name || ''; cb.textContent = t('continueGame', { r: sv.round, d: dn }); cb.onclick = () => begin({ snap: sv, mode: 'solo', diff: sv.diff }); }
-      $('startbtn').textContent = isRoom ? (!lobby ? t('joinFirst') : host ? t('startHost') : t('waitHost')) : t('start');
-      $('startbtn').disabled = (isRoom && (!lobby || !host)) || !pk('diff') || (window.RTD_LOBBY && !window.RTD_LOBBY.diffOpen(cfg.diff, +cfg.mutLv));
+      $('startbtn').textContent = isRoom ? (!lobby ? t('joinFirst') : host ? t('startHost') : t('waitHost')) : ovArm ? t('overwriteSave') : t('start');
+      $('startbtn').disabled = (isRoom && (!lobby || !host)) || (!pk('diff') && !hostPick) || (window.RTD_LOBBY && !window.RTD_LOBBY.diffOpen(cfg.diff, +cfg.mutLv));
       if (lobby && host) {
         const c = { diff: cfg.diff, mutLv: +cfg.mutLv, muts: cfg.muts }, k = JSON.stringify(c);
         if (lobby.sentCfg !== k) { lobby.sentCfg = k; lobby.t.presence({ cfg: c }); }
@@ -4040,7 +4145,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       return `<table><thead><tr><th>${t('treeStage')}</th><th class="n">${t('treeLv')}</th><th class="n">${t('treeXp')}</th><th class="${mine === 'mil' ? 'me' : ''}">${t('trackMil')}</th><th class="${mine === 'civ' ? 'me' : ''}">${t('trackCiv')}</th></tr></thead><tbody>${rows}</tbody></table><div class="note">${t('treeNote', { xp: Math.round(m.xp).toLocaleString() })}</div>`;
     }
     const setErr = (e) => { const el = $('acc-err'); if (el) el.textContent = e ? errText(e) : ''; };
-    const signedIn = (r) => { ACC.token = r.token; ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); };
+    const signedIn = (r) => { accNote = ''; ACC.token = r.token; ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); };
     function bindAcc() {
       const box = $('accbox');
       const nickIn = () => { const el = $('acc-nick'); return (el && el.value.trim()) || ''; };
@@ -4049,14 +4154,10 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const gb = $('acc-guest');
       if (gb) gb.onclick = async () => {
         setErr(''); gb.disabled = true;
-        let r;
-        if (GUEST && GUEST.id) { r = await api('/api/guest/login', { id: GUEST.id, secret: GUEST.secret }); if (r.status === 401) { saveGuest(null); GUEST.id = null; } }
-        if (!r || !r.token) {
-          if (!agreed()) { gb.disabled = false; setErr('need_agree'); return; }
-          r = await api('/api/guest/new', { nick: nickIn() || t('guestNick', { n: 1000 + ((Math.random() * 9000) | 0) }), agree: true, termsVer: 1, lang: I.lang });
-          if (r.guest) { saveGuest(r.guest); Object.assign(GUEST || {}, r.guest); }
-        }
+        // 비밀값이 있으면 그 계정으로 먼저 들어간다. 서버가 없는 계정(401)이라고 할 때만 새로 만든다(guestEnter)
+        const r = await guestEnter(() => (agreed() ? { nick: nickIn() || t('guestNick', { n: 1000 + ((Math.random() * 9000) | 0) }), agree: true, termsVer: 1, lang: I.lang } : null));
         gb.disabled = false;
+        if (r.stop) { setErr('need_agree'); return; }
         if (r.token) signedIn(r); else setErr(r.error);
       };
       // Apple·Google: 로그인 또는(게스트일 때) 연결
@@ -4093,7 +4194,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
         lb.innerHTML = (r.top || []).slice(0, 20).map((p, i2) => `<div><span>${i2 + 1}</span><span>${esc(p.nick)} <span class="gr">${esc(t(p.grade))}</span></span><span>${t('level', { n: p.level })}</span></div>`).join('') || errText(r.error);
       };
     }
-    const toastTitle = (txt) => { $('roster').textContent = txt; };
+    // 계정 알림은 계정 창 안(맨 위)에 적는다. 전에는 전투 시작 창의 #roster에 적혀 계정 창에서는 안 보였다
+    const toastTitle = (txt) => { accNote = txt; $('accbox').dataset.html = ''; refreshAcc(); };
     // ---- 로딩 화면(#boot): 그림과 계정을 불러온 뒤 로비를 보여 준다.
     // 계정이 없으면(처음) 여기서 로그인(게스트·Apple·Google) → 닉네임 → 관직 갈래를 정한다. 'rtd-onb' = 남은 첫 설정 단계(nick·track).
     // 서버에 닿지 않으면 막지 않는다: 계정이 있으면 저장된 정보로, 없으면 '오프라인으로 시작'을 고를 수 있다.
@@ -4126,13 +4228,13 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
             if (netDown) { err('net'); $('boot-off').hidden = false; }
             $('boot-off').onclick = () => finish();
             $('boot-guest').onclick = async () => {
-              err(''); if (!agreed()) { err('need_agree'); return; }
-              busy(true);
-              const r = await api('/api/guest/new', { nick: guestName(), agree: true, termsVer: 1, lang: I.lang });
+              err(''); busy(true);
+              // 이 기기에 게스트 비밀값이 남아 있으면 그 계정으로 먼저 들어간다(새로 만들면 옛 계정을 잃는다). 없는 계정(401)일 때만 새로 만든다
+              const r = await guestEnter(() => (agreed() ? { nick: guestName(), agree: true, termsVer: 1, lang: I.lang } : null));
               busy(false);
+              if (r.stop) { err('need_agree'); return; }
               if (!r.token) { fail(r); return; }
-              if (r.guest) saveGuest(r.guest);
-              after(r, true);
+              after(r, !!r.fresh);
             };
             card.querySelectorAll('[data-sso]').forEach((bt) => (bt.onclick = async () => {
               err(''); if (!agreed()) { err('need_agree'); return; }
@@ -4179,26 +4281,51 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
         show(step);
       });
     }
+    // 서버 공지·최소 버전(GET /api/notice): 로딩하는 동안 받는다. 못 받으면(끊김·오류·4초 넘김) 조용히 넘어간다.
+    const NOTICE_WAIT_MS = 4000;
+    const verNum = (v) => { const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(v || '')); return m ? [+m[1], +m[2], +m[3]] : null; };
+    const verLess = (a, b) => { const x = verNum(a), y = verNum(b); if (!x || !y) return false; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false; };
+    // 지금 버전이 최소 버전보다 낮다: 앱은 업데이트 안내만 보이고 더 나아가지 않는다. 웹 브라우저는 새로고침을 권하되 막지 않는다.
+    function needUpdate() {
+      return new Promise((done) => {
+        const B = $('boot'), card = $('bootcard'), app = !!(window.RTD_NATIVE && window.RTD_NATIVE.on);
+        B.classList.add('form'); $('bootload').hidden = true; card.hidden = false;
+        card.innerHTML = `<p>${t(app ? 'updateNeed' : 'updateWeb')}</p>${app ? '' : `<button class="btn go" id="boot-reload" type="button">${t('updateReload')}</button><button class="btn sub" id="boot-skip" type="button">${t('updateSkip')}</button>`}`;
+        if (app) return; // 앱에서는 여기서 멈춘다
+        $('boot-reload').onclick = () => location.reload();
+        $('boot-skip').onclick = () => { card.hidden = true; card.innerHTML = ''; B.classList.remove('form'); $('bootload').hidden = false; done(); };
+      });
+    }
     async function boot() {
       const B = $('boot');
       if (!B) return;
       const bar = (f) => { $('bootfill').style.width = Math.round(f * 100) + '%'; }, say = (k) => { $('bootmsg').textContent = t(k); };
       const t0 = performance.now();
       $('boottitle').textContent = $('gametitle').textContent;
+      const noticeP = Promise.race([api('/api/notice'), pause(NOTICE_WAIT_MS).then(() => ({}))]).catch(() => ({}));
       bar(0.15); say('boot_assets');
       try { await Promise.race([Art.ready, pause(6000)]); } catch (e) { /* 그림 없이도 진행 */ }
+      {
+        const nt = await noticeP;
+        if (nt && nt.status === 200) {
+          if (window.RTD_NEWS && window.RTD_NEWS.setNotice) window.RTD_NEWS.setNotice(nt.notice); // 안 본 공지면 로비의 '報' 버튼에 빨간 점, 내역 창 맨 위에 보인다
+          if (verLess(window.RTD_VERSION, nt.minVersion)) await needUpdate();
+        }
+      }
       bar(0.55); say('boot_account');
       let netDown = false;
       // 로그인 상태 새로 받기(등급이 다른 기기에서 올랐을 수 있다). 토큰이 만료됐으면(401) api()가 지운다
       if (ACC.token) { const r = await api('/api/me'); if (r.me) { ACC.me = r.me; saveAcc(); } else if (r.status === 0) netDown = true; }
       if (!ACC.token && GUEST && GUEST.id) {
         const r = await api('/api/guest/login', { id: GUEST.id, secret: GUEST.secret });
-        if (r.token) setAcc(r); else if (r.status === 401) { saveGuest(null); GUEST.id = null; } else if (r.status === 0) netDown = true;
+        if (r.token) setAcc(r); else if (r.status === 401) saveGuest(null); else if (r.status === 0) netDown = true;
       }
       bar(0.9);
       const has = !!(ACC.token && ACC.me);
       if (!has && !(netDown && GUEST && GUEST.id)) await firstRun('login', netDown);
       else if (has && onbGet() && !netDown) await firstRun(onbGet() === 'track' ? 'track' : 'nick', false);
+      // 지난번에 못 보낸 판 결과·결제 영수증을 다시 보낸다(lobby.js, 기다리지 않는다)
+      if (window.RTD_LOBBY && window.RTD_LOBBY.flushPending) window.RTD_LOBBY.flushPending();
       bar(1); say('boot_done');
       const left = 700 - (performance.now() - t0); if (left > 0) await pause(left);
       $('accbox').dataset.html = ''; dr();
@@ -4219,20 +4346,26 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
         if (window.RTD_LOBBY) window.RTD_LOBBY.onCfg(b.dataset.cfg);
       }
     });
+    // 방에서 나가기(방 나가기 버튼, 창 닫기·뒤로 가기 — lobby.js가 부른다). 들어가는 중이던 연결도 버린다
+    const leaveRoom = () => { joinSeq++; if (lobby) { try { lobby.leave(); } catch (e) { /* 이미 끊김 */ } lobby = null; } $('roster').textContent = ''; dr(); };
+    // 돌려주는 값: 들어갔으면 '', 못 들어갔으면 까닭 문구(빠른 대전 대기 화면이 보여 준다)
     const join = async (code) => {
-      if (!ACC.token) return;
+      if (!ACC.token) return t('err_auth');
+      const my = ++joinSeq;
       $('roster').textContent = t('connecting');
       const l = await window.RTD_NET.connect(code, ACC.me.nick, { token: ACC.token });
-      if (l === 'full') { $('roster').textContent = t('roomFull'); return; }
-      if (l === 'auth') { ACC.token = null; ACC.me = null; saveAcc(); $('accbox').dataset.html = ''; $('roster').textContent = t('err_auth'); dr(); return; }
-      if (!l) { $('roster').textContent = t('noServer'); return; }
+      if (my !== joinSeq) { if (l && typeof l === 'object') { try { l.leave(); } catch (e) { /* 이미 끊김 */ } } return ''; } // 기다리는 사이에 나갔다
+      if (l === 'full') { $('roster').textContent = t('roomFull'); return t('roomFull'); }
+      if (l === 'auth') { ACC.token = null; ACC.me = null; saveAcc(); $('accbox').dataset.html = ''; $('roster').textContent = t('err_auth'); dr(); return t('err_auth'); }
+      if (!l) { $('roster').textContent = t('noServer'); return t('noServer'); }
       lobby = l;
       $('code').value = code;
       lobby.code = code;
       $('roster').textContent = '';
       const show = () => dr();
       lobby.onLobby = show; show();
-      lobby.onStart = (d) => begin({ diff: d.diff, mode: 'multi', seed: d.seed, net: lobby, muts: d.muts || [], mutLv: d.mutLv || 0, online: true, key: code + '-' + d.seed });
+      lobby.onStart = (d) => { saveLast(); begin({ diff: d.diff, mode: 'multi', seed: d.seed, net: lobby, muts: d.muts || [], mutLv: d.mutLv || 0, online: true, key: code + '-' + d.seed }); };
+      return '';
     };
     $('mk').onclick = () => join(Math.random().toString(36).slice(2, 7));
     document.addEventListener('pointerdown', () => { if (g) Snd.init(); });
@@ -4240,7 +4373,10 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     $('startbtn').onclick = () => {
       const mm = cfg.diff === 'nightmare' ? { muts: cfg.muts.slice(), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 };
       const online = cfg.play === 'online';
-      if (cfg.mode === 'multi' || cfg.mode === 'create' || cfg.mode === 'join') { if (lobby && lobby.isHost()) lobby.start(cfg.diff, mm); return; }
+      if (cfg.mode === 'multi' || cfg.mode === 'create' || cfg.mode === 'join') { if (lobby && lobby.isHost()) { saveLast(); lobby.start(cfg.diff, mm); } return; }
+      // 싱글 단독 새 판은 이어하기 기록을 덮어쓴다: 기록이 있으면 버튼 글을 바꾸고 3초 안에 한 번 더 눌러야 시작한다
+      if (cfg.mode !== 'ai' && !online && !ovArm && savedGame()) { ovArm = true; dr(); setTimeout(() => { if (ovArm) { ovArm = false; if (!$('title').hidden) dr(); } }, 3000); return; }
+      ovArm = false; saveLast();
       if (cfg.mode === 'ai') { begin(Object.assign({ diff: cfg.diff, ai: +cfg.ai }, mm)); return; }
       begin(Object.assign({ diff: cfg.diff, mode: 'solo', online, key: online ? 's-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : null }, mm));
     };
@@ -4251,15 +4387,14 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       h += `<div class="h">${t('gfx')}</div><div class="row"><div>${t('gfxRow')} <small>${t('gfxHint')}</small></div><div class="zones">${ql.map(([k, l]) => `<button class="zb ${Q.level === k ? 'on' : ''}" data-act="gfx" data-arg="${k}" type="button">${l}</button>`).join('')}</div></div>`;
       h += `<div class="row"><div>${t('fps30')} <small>${t('fps30Hint')}</small></div><button class="toggle ${Q.fps30 ? 'on' : ''}" data-act="fps30" type="button">${Q.fps30 ? t('on') : t('off')}</button></div>`;
       h += `<div class="row"><div>${t('perfShow')} <small>${t('perfShowHint')}</small></div><button class="toggle ${Q.perf ? 'on' : ''}" data-act="perf" type="button">${Q.perf ? t('on') : t('off')}</button></div>`;
-      h += `<div class="h">${t('sound')}</div><div class="row"><div>${t('sfx')}</div><button class="toggle" data-act="vol" data-arg="sfx" type="button">${Math.round(Snd.state.sfx * 100)}%</button></div>`;
-      h += `<div class="row"><div>${t('bgm')}</div><button class="toggle" data-act="vol" data-arg="bgm" type="button">${Math.round(Snd.state.bgm * 100)}%</button></div>`;
+      h += `<div class="h">${t('sound')}</div>` + volRow('sfx') + volRow('bgm');
       h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplay')}</button></div>`;
       h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
       h += `<div class="row"><div>${t('version')}</div><div>v${window.RTD_VERSION || '?'}</div></div>`;
       return `<div class="setlist">${h}</div>`;
     };
     const repaintMap = () => { sizeMap(); };
-    if (window.RTD_LOBBY) window.RTD_LOBBY.init({ api, ACC, saveAcc, t, I, T, cfg, getLobby: () => lobby, joinRoom: (code) => join(code), begin, refreshAcc, settingsHtml, errText, clock, repaintMap, repaintSetup: () => dr(), paintMini: (cv, theme) => paintMap(cv.getContext('2d'), cv.width, cv.height, theme || null) });
+    if (window.RTD_LOBBY) window.RTD_LOBBY.init({ api, ACC, saveAcc, t, I, T, cfg, getLobby: () => lobby, joinRoom: (code) => join(code), leaveRoom, saveLast, clearAccNote: () => { if (accNote) { accNote = ''; $('accbox').dataset.html = ''; } }, begin, refreshAcc, settingsHtml, errText, clock, repaintMap, repaintSetup: () => dr(), paintMini: (cv, theme) => paintMap(cv.getContext('2d'), cv.width, cv.height, theme || null) });
     dr();
     // 로딩(처음이면 로그인·닉네임·관직 갈래)이 끝난 뒤: 로비 안내(처음) 또는 아직 못 받은 첫 신화 해금 연출
     boot().catch(() => { const B = $('boot'); if (B) B.hidden = true; }).then(() => { if (window.RTD_TUT && window.RTD_TUT.lobby) window.RTD_TUT.lobby({ t, T }); });

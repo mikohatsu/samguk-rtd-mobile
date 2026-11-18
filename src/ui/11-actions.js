@@ -7,7 +7,8 @@
     else if (a === 'drawerClose') S.drawer = null;
     else if (a === 'autoAll') { const on = !['t1', 't2', 't3'].every((k) => p.auto[k]); ['t1', 't2', 't3'].forEach((k) => g.setAuto(p, k, on)); try { localStorage.setItem('rtd-auto', on ? '1' : '0'); } catch (e) { /* 저장 불가 */ } toast(on ? t('autoToastOn') : t('autoToastOff'), on ? 'good' : ''); }
     else if (a === 'selExp') S.selExp = !S.selExp;
-    else if (a === 'langSet') { if (arg !== I.lang) { try { localStorage.setItem('rtd-lang', arg); } catch (e) { /* 저장 불가 */ } toast(I.LANGS.find(([k]) => k === arg)[1] + ' — ' + t('toTitle'), 'good'); } }
+    // 언어: 로비에서는 저장하고 바로 다시 불러온다(I.setLang). 판 안에서는 저장만 하고 로비로 돌아가면 바뀐다고 알린다.
+    else if (a === 'langSet') { if (arg !== I.lang) { if (!g) { I.setLang(arg); return; } try { localStorage.setItem('rtd-lang', arg); } catch (e) { /* 저장 불가 */ } toast(I.LANGS.find(([k]) => k === arg)[1] + ' — ' + t('langLater'), 'good'); } }
     else if (a === 'gfx') { if (Q.level !== arg) { Q.level = arg; Q.rs = 1; applyQuality(); sizeMap(); if (g) fit(); } }
     else if (a === 'fps30') { Q.fps30 = !Q.fps30; applyQuality(); }
     else if (a === 'perf') { Q.perf = !Q.perf; applyQuality(); }
@@ -27,7 +28,8 @@
     else if (a === 'auto') g.setAuto(p, arg, !p.auto[arg]);
     else if (a === 'zone') { const [k, z] = arg.split(':'); g.setZone(p, k, z); }
     else if (a === 'vol') {
-      const key = arg, cur = Snd.state[key], next = cur >= 0.99 ? 0 : Math.round((cur + 0.25) * 4) / 4 >= 1 ? 1 : Math.round((Math.floor(cur * 4 + 0.001) + 1) * 25) / 100;
+      // 소리 크기: − / ＋ 버튼으로 25%씩(0~100%). arg = 'sfx:-' · 'sfx:+' · 'bgm:-' · 'bgm:+'
+      const [key, dir] = String(arg).split(':'), next = Math.max(0, Math.min(1, (Math.round(Snd.state[key] * 4) + (dir === '-' ? -1 : 1)) / 4));
       if (key === 'sfx') Snd.setSfx(next); else Snd.setBgm(next);
     }
     else if (a === 'book') S.book = S.book === arg ? null : arg;

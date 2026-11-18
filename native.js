@@ -138,6 +138,20 @@
       })).catch(() => {});
     } catch (e) { /* 플러그인 없음 */ }
   }
+  // 안드로이드 뒤로 가기(@capacitor/app backButton): 열려 있는 것을 하나 닫는다. 화면 코드를 부르지 않고 그 창의 닫기 버튼을 대신 눌러 준다.
+  // 순서: 크레딧(맨 위에 뜨는 창) → 판 안 서랍 → 로비 창 → 전투 시작 창 → 안내 말풍선(다음·확인). 아무것도 없으면 로비에서는 앱을 내리고, 판 안에서는 메뉴(서랍)를 연다.
+  function backButton() {
+    const q = (s) => document.querySelector(s), shown = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
+    // 게임 버튼(data-act)과 말풍선은 pointerdown으로, 로비·크레딧 버튼은 click으로 받으므로 둘 다 보낸다
+    const press = (b) => { b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' })); b.click(); };
+    const shut = (boxSel, btnSel) => { const b = q(btnSel); if (!shown(q(boxSel)) || !b || b.hidden || b.disabled) return false; press(b); return true; };
+    if (shut('#credits', '#credits-x') || shut('#drawer', '#dclose') || shut('#lpanel', '#lpclose') || shut('#setup', '#wzclose') || shut('#tutbox', '#tutbox [data-tut="next"]')) return;
+    if (shown(q('#app'))) { const m = q('#menubtn'); if (m) press(m); return; }
+    if (P.App && P.App.minimizeApp) Promise.resolve(P.App.minimizeApp()).catch(() => {});
+  }
+  if (droid && P.App && P.App.addListener) {
+    try { Promise.resolve(P.App.addListener('backButton', () => { try { backButton(); } catch (e) { /* 무시 */ } })).catch(() => {}); } catch (e) { /* 플러그인 없음 */ }
+  }
   root.RTD_NATIVE = { on, droid, init, interstitial, openUrl, signIn, signOut, ssoHas, rewardOn, rewardAd, iapOn, iapBuy, iapRestore };
   if (on) init();
 })(typeof window !== 'undefined' ? window : globalThis);

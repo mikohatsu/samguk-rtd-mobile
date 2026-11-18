@@ -51,6 +51,7 @@
 - Capacitor(@capacitor/*) — MIT, Copyright (c) 2017-present Drifty Co. / Ionic
 - @capacitor-community/admob — MIT, Copyright (c) 2021 Capacitor Community
 - @capgo/capacitor-social-login — MPL-2.0 (고치지 않고 그대로 씀. 소스: https://github.com/Cap-go/capacitor-social-login)
+- @capgo/native-purchases — MPL-2.0 (고치지 않고 그대로 씀. 소스: https://github.com/Cap-go/capacitor-native-purchases)
 - Google Mobile Ads SDK, Google/Apple 로그인 SDK — 각 회사의 이용 약관(오픈소스 아님, 표기 의무 없음)
 - 서버 쪽 라이브러리(server/node_modules)는 배포물에 들어가지 않으므로 표기 대상이 아니다.
 

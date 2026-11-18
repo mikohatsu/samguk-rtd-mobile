@@ -105,6 +105,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       renderPane(); renderInfo(); renderTimers(); renderOverlay();
     }
   }
+  // 판 표를 못 받았을 때 다시 받는 간격(ms)
+  const TICKET_RETRY_MS = [3000, 6000, 12000, 24000];
   function begin(opt) {
     if (window.RTD_LOBBY) window.RTD_LOBBY.close();
     $('title').hidden = true; $('title').style.display = 'none';
@@ -129,12 +131,24 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기)
     S.saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo'; S.saveT = 0;
     // 판 표: 로그인해 있으면 서버에서 받아 둔다(결과·전적은 이 표가 있어야 서버가 받는다). 이어하기는 저장해 둔 표를 다시 쓴다.
-    S.ticket = null;
+    // 판 표는 S.gameTk에 둔다(S.ticket은 선택권 창이 쓰는 값이라 같이 쓰면 선택권을 쓸 때 판 표가 지워진다).
+    // 표를 못 받으면(끊김·서버 오류) 3·6·12·24초 뒤에 다시 받는다. 판이 끝났거나 다른 판이 시작됐으면 멈춘다.
+    // 끝까지 못 받은 채 판이 끝나면 결과 화면에서 알린다(S.tkWant = 이 판은 표를 받아야 하는 판, S.tkMiss = 못 받고 끝남).
+    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false;
     if (ACC.token) {
-      if (opt.snap) { try { S.ticket = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
+      if (opt.snap) { try { S.gameTk = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
       else {
         const saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo';
-        api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0 }).then((r) => { if (r.ticket) { S.ticket = r.ticket; if (saveOn) { try { localStorage.setItem('rtd-save-tk', r.ticket); } catch (e) { /* 저장 불가 */ } } } });
+        const mine = g, waits = TICKET_RETRY_MS.slice();
+        S.tkWant = true;
+        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0 }).then((r) => {
+          if (g !== mine) return; // 그 사이 다른 판이 시작됐다
+          if (r.ticket) { S.gameTk = r.ticket; if (saveOn) { try { localStorage.setItem('rtd-save-tk', r.ticket); } catch (e) { /* 저장 불가 */ } } return; }
+          // 로그인이 풀렸거나(401) 요청이 잘못됐으면(400) 다시 해도 같다
+          if (r.status === 401 || r.status === 400 || g.over || !waits.length) return;
+          setTimeout(() => { if (g === mine && !g.over && !S.gameTk) ask(); }, waits.shift());
+        });
+        ask();
       }
     }
     S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;

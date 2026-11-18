@@ -3,7 +3,9 @@
   const T = window.RTD_THEME, E = window.RTD_ENGINE, { W, H, ROAD, ARENA, dist } = E;
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const fmt = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'K' : Math.round(n).toLocaleString());
+  // 일본어는 큰 수를 万·億 단위로
+  const fmtJa = (n) => (n >= 1e8 ? (n / 1e8).toFixed(1) + '億' : n >= 1e6 ? Math.round(n / 1e4) + '万' : (n / 1e4).toFixed(1) + '万');
+  const fmt = (n) => (n >= 1e4 && window.RTD_I18N && window.RTD_I18N.lang === 'ja' ? fmtJa(n) : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'K' : Math.round(n).toLocaleString());
   const view = $('view'), ctx = view.getContext('2d');
   // ---- 화질: high(PC 기본) / mid(폰 기본) / low, 30fps 제한. 이 기기에만 저장한다. ----
   const Q = (() => {
