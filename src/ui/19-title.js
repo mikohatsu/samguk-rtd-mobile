@@ -154,9 +154,116 @@
       };
     }
     const toastTitle = (txt) => { $('roster').textContent = txt; };
-    // 로그인 상태 새로 받기(등급이 다른 기기에서 올랐을 수 있다)
-    if (ACC.token) api('/api/me').then((r) => { if (r.me) { ACC.me = r.me; saveAcc(); } $('accbox').dataset.html = ''; dr(); });
-    else if (GUEST && GUEST.id) api('/api/guest/login', { id: GUEST.id, secret: GUEST.secret }).then((r) => { if (r.token) signedIn(r); });
+    // ---- 로딩 화면(#boot): 그림과 계정을 불러온 뒤 로비를 보여 준다.
+    // 계정이 없으면(처음) 여기서 로그인(게스트·Apple·Google) → 닉네임 → 관직 갈래를 정한다. 'rtd-onb' = 남은 첫 설정 단계(nick·track).
+    // 서버에 닿지 않으면 막지 않는다: 계정이 있으면 저장된 정보로, 없으면 '오프라인으로 시작'을 고를 수 있다.
+    const ONB = 'rtd-onb';
+    const onbGet = () => { try { return localStorage.getItem(ONB) || ''; } catch (e) { return ''; } };
+    const onbSet = (v) => { try { if (v) localStorage.setItem(ONB, v); else localStorage.removeItem(ONB); } catch (e) { /* 저장 불가 */ } };
+    const setAcc = (r) => { ACC.token = r.token; ACC.me = r.me; saveAcc(); };
+    const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+    function firstRun(step, netDown) {
+      return new Promise((done) => {
+        const B = $('boot'), card = $('bootcard'), N = window.RTD_NATIVE, app = !!(N && N.on);
+        const link = (k, p) => `<a href="${API}/${p}?lang=${I.lang}" target="_blank" rel="noopener">${t(k)}</a>`;
+        const err = (e) => { const el = $('boot-err'); if (el) el.textContent = e ? errText(e) : ''; };
+        const busy = (on) => card.querySelectorAll('button').forEach((b) => { b.disabled = on; });
+        const guestName = () => t('guestNick', { n: 1000 + ((Math.random() * 9000) | 0) });
+        const finish = () => { onbSet(''); card.hidden = true; B.classList.remove('form'); $('bootload').hidden = false; done(); };
+        const show = (st) => {
+          step = st; B.classList.add('form'); $('bootload').hidden = true; card.hidden = false;
+          if (st === 'login') {
+            card.innerHTML = `<h2>${t('boot_loginHead')}</h2><p>${t('boot_loginHint')}</p>
+              <label class="agree"><input id="boot-agree" type="checkbox"><span>${t('agree', { terms: link('terms', 'terms'), privacy: link('privacy', 'privacy') })}</span></label>
+              <button class="btn go" id="boot-guest" type="button">${t('loginGuest')}</button>
+              ${app && N.ssoHas && N.ssoHas('google') ? `<button class="btn sso google" data-sso="google" type="button">${t('loginGoogle')}</button>` : ''}
+              ${app && N.ssoHas && N.ssoHas('apple') ? `<button class="btn sso apple" data-sso="apple" type="button">${t('loginApple')}</button>` : ''}
+              <div class="err" id="boot-err"></div>
+              <button class="btn sub" id="boot-off" type="button" hidden>${t('boot_offline')}</button>`;
+            const agreed = () => $('boot-agree').checked;
+            const fail = (r) => { err(r.error || 'net'); if (r.status === 0) $('boot-off').hidden = false; };
+            const after = (r, fresh) => { setAcc(r); if (fresh) { onbSet('nick'); show('nick'); } else finish(); };
+            if (netDown) { err('net'); $('boot-off').hidden = false; }
+            $('boot-off').onclick = () => finish();
+            $('boot-guest').onclick = async () => {
+              err(''); if (!agreed()) { err('need_agree'); return; }
+              busy(true);
+              const r = await api('/api/guest/new', { nick: guestName(), agree: true, termsVer: 1, lang: I.lang });
+              busy(false);
+              if (!r.token) { fail(r); return; }
+              if (r.guest) saveGuest(r.guest);
+              after(r, true);
+            };
+            card.querySelectorAll('[data-sso]').forEach((bt) => (bt.onclick = async () => {
+              err(''); if (!agreed()) { err('need_agree'); return; }
+              let s;
+              try { s = await N.signIn(bt.dataset.sso); } catch (e) { if (e.message !== 'cancel') err(e.message); return; }
+              busy(true);
+              const r = await api('/api/auth/' + bt.dataset.sso, { idToken: s.idToken, link: false, nick: s.name || guestName(), agree: true, termsVer: 1, lang: I.lang });
+              busy(false);
+              if (!r.token) { fail(r); return; }
+              after(r, !r.existed);
+            }));
+          } else if (st === 'nick') {
+            card.innerHTML = `<div class="step">1 / 2</div><h2>${t('boot_nickHead')}</h2><p>${t('boot_nickHint')}</p>
+              <input id="boot-nick" type="text" maxlength="12" autocomplete="off" value="${esc((ACC.me && ACC.me.nick) || '')}">
+              <div class="err" id="boot-err"></div>
+              <button class="btn go" id="boot-next" type="button">${t('boot_next')}</button>`;
+            $('boot-next').onclick = async () => {
+              const nick = $('boot-nick').value.trim();
+              err(''); if (!nick) { err('bad_nick'); return; }
+              if (!ACC.me || nick !== ACC.me.nick) {
+                busy(true); const r = await api('/api/nick', { nick }); busy(false);
+                if (!r.me) { err(r.error || 'net'); return; }
+                ACC.me = r.me; saveAcc();
+              }
+              onbSet('track'); show('track');
+            };
+          } else {
+            let pick = (ACC.me && ACC.me.track) === 'civ' ? 'civ' : 'mil';
+            const paint = () => {
+              card.innerHTML = `<div class="step">2 / 2</div><h2>${t('boot_trackHead')}</h2><p>${t('boot_trackHint')}</p>
+                <div class="boot-track">${[['mil', 'trackMil', 'boot_trackMil'], ['civ', 'trackCiv', 'boot_trackCiv']].map(([k, n, h]) => `<button class="${pick === k ? 'on' : ''}" data-tk="${k}" type="button"><b>${t(n)}</b><small>${t(h)}</small></button>`).join('')}</div>
+                <div class="err" id="boot-err"></div>
+                <button class="btn go" id="boot-next" type="button">${t('boot_start')}</button>`;
+              card.querySelectorAll('[data-tk]').forEach((b) => (b.onclick = () => { pick = b.dataset.tk; paint(); }));
+              $('boot-next').onclick = async () => {
+                busy(true); const r = await api('/api/track', { track: pick }); busy(false);
+                if (!r.me) { err(r.error || 'net'); return; }
+                ACC.me = r.me; saveAcc(); finish();
+              };
+            };
+            paint();
+          }
+        };
+        show(step);
+      });
+    }
+    async function boot() {
+      const B = $('boot');
+      if (!B) return;
+      const bar = (f) => { $('bootfill').style.width = Math.round(f * 100) + '%'; }, say = (k) => { $('bootmsg').textContent = t(k); };
+      const t0 = performance.now();
+      $('boottitle').textContent = $('gametitle').textContent;
+      bar(0.15); say('boot_assets');
+      try { await Promise.race([Art.ready, pause(6000)]); } catch (e) { /* 그림 없이도 진행 */ }
+      bar(0.55); say('boot_account');
+      let netDown = false;
+      // 로그인 상태 새로 받기(등급이 다른 기기에서 올랐을 수 있다). 토큰이 만료됐으면(401) api()가 지운다
+      if (ACC.token) { const r = await api('/api/me'); if (r.me) { ACC.me = r.me; saveAcc(); } else if (r.status === 0) netDown = true; }
+      if (!ACC.token && GUEST && GUEST.id) {
+        const r = await api('/api/guest/login', { id: GUEST.id, secret: GUEST.secret });
+        if (r.token) setAcc(r); else if (r.status === 401) { saveGuest(null); GUEST.id = null; } else if (r.status === 0) netDown = true;
+      }
+      bar(0.9);
+      const has = !!(ACC.token && ACC.me);
+      if (!has && !(netDown && GUEST && GUEST.id)) await firstRun('login', netDown);
+      else if (has && onbGet() && !netDown) await firstRun(onbGet() === 'track' ? 'track' : 'nick', false);
+      bar(1); say('boot_done');
+      const left = 700 - (performance.now() - t0); if (left > 0) await pause(left);
+      $('accbox').dataset.html = ''; dr();
+      B.classList.add('out'); setTimeout(() => { B.hidden = true; }, 450);
+    }
     document.addEventListener('click', (e) => {
       if (!$('title') || $('title').hidden) return;
       if (e.target.id === 'mutroll') { rollMuts(); dr(); return; }
@@ -214,8 +321,8 @@
     const repaintMap = () => { sizeMap(); };
     if (window.RTD_LOBBY) window.RTD_LOBBY.init({ api, ACC, saveAcc, t, I, T, cfg, getLobby: () => lobby, joinRoom: (code) => join(code), begin, refreshAcc, settingsHtml, errText, clock, repaintMap, repaintSetup: () => dr(), paintMini: (cv, theme) => paintMap(cv.getContext('2d'), cv.width, cv.height, theme || null) });
     dr();
-    // 로비 안내(처음) 또는 아직 못 받은 첫 신화 해금 연출
-    if (window.RTD_TUT && window.RTD_TUT.lobby) window.RTD_TUT.lobby({ t, T });
+    // 로딩(처음이면 로그인·닉네임·관직 갈래)이 끝난 뒤: 로비 안내(처음) 또는 아직 못 받은 첫 신화 해금 연출
+    boot().catch(() => { const B = $('boot'); if (B) B.hidden = true; }).then(() => { if (window.RTD_TUT && window.RTD_TUT.lobby) window.RTD_TUT.lobby({ t, T }); });
   }
   setupTitle();
   requestAnimationFrame(loop);

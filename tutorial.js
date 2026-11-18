@@ -27,7 +27,7 @@
   // skip: 이미 지나간 장면이면 건너뜀, enter: 처음 보일 때 한 번, pos: 'top'이면 비출 곳 없을 때 위쪽에
   // until 단계는 오래 막히지 않게 20초가 지나면 '다음' 버튼을 보여 준다.
   const LOBBY = [
-    { k: 'tut_l_hello', at: '#lmenu [data-lp="shop"]' },
+    { k: 'tut_l_hello', at: null },
     { k: () => [setupOpen() ? 'tut_l_wiz' : 'tut_l_battle'], at: () => (setupOpen() ? null : '#battlebtn'), pos: 'top', until: () => !titleOn(), noNext: true },
   ];
   // 상점 안내: 쉬움을 처음 클리어한 뒤 로비에서 한 번(또는 클리어했는데 첫 신화가 없을 때). 장수 해금 탭에서 첫 신화 2명을 연다.
