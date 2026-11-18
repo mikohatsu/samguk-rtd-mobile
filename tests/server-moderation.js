@@ -152,6 +152,23 @@ async function until(fn, ms = 4000) { for (let t = 0; t < ms; t += 150) { const 
     ok(a.code === 0 && lines.length === 6 && lines[0].includes('계정 정지 풀기') && lines[1].includes('영구') && lines[1].includes('재범') && lines[5].includes('채팅 금지') && lines[5].includes('욕설 반복'), `log: 제재 이력 6줄(새것부터) (${lines.length})`);
     // 운영 도구가 서버의 계정 파일을 덮어쓰지 않았는지: 서버가 계속 정상
     ok(!!(await until(async () => (await api('/api/me', null, bad.token)).status === 200)) && (await api('/api/me', null, reps[3].token)).status === 200, '운영 도구를 여러 번 돌린 뒤에도 계정은 그대로');
+    // ---- 정지 중에도 계정 삭제는 할 수 있다(토큰이 있으면 토큰으로, 로그인이 막힌 게스트는 게스트 ID·비밀값으로) ----
+    const g1 = await api('/api/guest/new', { nick: 'gdel1', agree: true }), g2 = await api('/api/guest/new', { nick: 'gdel2', agree: true });
+    // 운영 도구는 다른 프로세스라 서버가 새 계정을 파일에 적은 뒤에야 찾는다 → 될 때까지 다시 건다
+    ok(!!(await until(() => admin('ban', g1.me.id, '7d', '시험').code === 0 && admin('ban', g2.me.id, '7d', '시험').code === 0, 8000)), '새 게스트 둘을 정지');
+    ok(!!(await until(async () => (await api('/api/me', null, g1.token)).status === 403 && (await api('/api/me', null, g2.token)).status === 403)), '정지된 게스트 둘: API 403');
+    r = await api('/api/nick', { nick: 'zzz' }, g1.token);
+    ok(r.status === 403 && r.error === 'banned', '정지 중 다른 API는 계속 막힘');
+    r = await api('/api/delete', { confirm: 'DELETE' }, g1.token);
+    ok(r.status === 200 && r.ok === true && (await api('/api/guest/login', g1.guest)).status === 401, '정지 중에도 토큰으로 계정 삭제 가능, 삭제 뒤 로그인 불가');
+    r = await api('/api/guest/login', g2.guest);
+    ok(r.status === 403 && r.error === 'banned', '정지된 게스트는 로그인(토큰 발급) 불가');
+    r = await api('/api/delete', { confirm: 'DELETE', guest: { id: g2.guest.id, secret: 'wrong-secret' } });
+    ok(r.status === 401, '토큰 없이 틀린 비밀값으로는 삭제 불가');
+    r = await api('/api/delete', { guest: g2.guest });
+    ok(r.status === 401, '확인 문자 없이는 삭제 불가');
+    r = await api('/api/delete', { confirm: 'DELETE', guest: g2.guest });
+    ok(r.status === 200 && r.ok === true && (await api('/api/guest/login', g2.guest)).status === 401, '토큰 없이 게스트 ID·비밀값으로 계정 삭제 가능');
     lob.ws.close(); peer.ws.close();
   } catch (e) { ok(false, '예외 ' + (e && e.stack || e)); }
   srv.kill();

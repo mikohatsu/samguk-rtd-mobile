@@ -89,9 +89,10 @@ const socks = [];
     const old = await guest('ms_old');
     r = await api('/api/result', { ticket: forge(old.id, 'easy', 0, 3600), round: 70, win: true, time: 3200 }, old.tok);
     ok(r.gained === 66 && r.coins === 23, `판 인원이 안 적힌 옛 표: 오프라인 배율 (${r.gained}/${r.coins})`);
-    // 클리어 순위: 방이 있는 판(k>=1)만. k=0(전적 보고)과 옛 표(결과 보고)는 없다 → 5건(k=1~5)
+    // 클리어 순위: 온라인 협동(k>=2) 4건, 솔로(k=0 전적 보고, k=1 혼자 한 온라인, 옛 표) 3건으로 나뉜다
     const rk = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy`)).json();
-    ok(rk.list.length === 5, `클리어 순위에는 방이 있는 온라인 판만 오른다 (${rk.list.length}건, 기대 5)`);
+    const rs = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy&mode=solo`)).json();
+    ok(rk.list.length === 4 && rs.list.length === 3, `클리어 순위: 온라인 협동 ${rk.list.length}건(기대 4), 솔로 ${rs.list.length}건(기대 3)`);
     // 전적의 online 표시: 전적 보고는 오프라인, 결과 보고는 온라인
     const hD = await api('/api/hist', {}, D.tok), hE = await api('/api/hist', {}, E.tok);
     ok(hD.hist.length === 1 && hD.hist[0].online === false && hE.hist[0].online === true, '전적의 온라인 표시: 전적 보고 = 오프라인, 결과 보고 = 온라인');

@@ -53,9 +53,9 @@
     restoreNone: ['복원할 구매가 없습니다.', '復元できる購入がありません。', 'No purchases to restore.', '没有可恢复的购买。'],
     restoreFail: ['구매를 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.', '購入を確認できませんでした。しばらくしてからもう一度お試しください。', 'Could not check your purchases. Please try again later.', '无法确认购买，请稍后再试。'],
     resentXp: ['지난 판의 결과를 다시 보냈습니다. 경험치 +{n}', '前回のバトル結果を再送信しました。経験値 +{n}', 'Your last game result was sent again. +{n} XP', '已重新发送上一局的结果。经验 +{n}'],
-    rLevel: ['계정 레벨', 'アカウントLv', 'Account level', '账号等级'], rClear: ['최단 클리어', '最速クリア', 'Fastest clear', '最快通关'], rImm: ['불멸 소환', '不滅の召喚', 'Immortal summons', '不灭召唤'],
+    rLevel: ['계정 레벨', 'アカウントLv', 'Account level', '账号等级'], rClear: ['최단 클리어', '最速クリア', 'Fastest clear', '最快通关'], rImm: ['불멸 소환', '不滅の召喚', 'Immortal summons', '不灭召唤'], rCoop: ['온라인 협동', 'オンライン協力', 'Online co-op', '在线协作'], rSolo: ['솔로', 'ソロ', 'Solo', '单人'],
     times: ['{n}회', '{n}回', '×{n}', '{n}次'], empty: ['아직 기록이 없습니다.', 'まだ記録がありません。', 'No records yet.', '暂无记录。'],
-    rankNote: ['온라인 판만 기록됩니다. 클리어 랭킹에는 함께한 파티원이 모두 표시됩니다.', 'オンラインバトルのみ記録されます。クリアランキングには一緒に戦ったメンバー全員が表示されます。', 'Only online games count. Clear rankings show every party member.', '仅记录在线对局。通关榜会显示全部队友。'],
+    rankNote: ['최단 클리어는 온라인 협동(2인 이상)과 솔로(혼자·AI 동맹)로 나뉩니다. 불멸 소환은 온라인 판만 기록됩니다.', '最速クリアはオンライン協力（2人以上）とソロ（ひとり・AI同盟）に分かれます。不滅の召喚はオンラインバトルのみ記録されます。', 'Fastest clear is split into online co-op (2+ players) and solo (alone or with AI allies). Immortal summons count online games only.', '最快通关分为在线协作（2人以上）和单人（独自或AI同盟）。不灭召唤仅记录在线对局。'],
     icon: ['아이콘', 'アイコン', 'Icon', '头像'], iconPick: ['아이콘 바꾸기', 'アイコン変更', 'Change icon', '更换头像'],
     language: ['언어', '言語', 'Language', '语言'],
     history: ['전적', '戦績', 'Records', '战绩'], totalPlays: ['전체 판', '総プレイ', 'Games', '总局数'], playsClears: ['{p}판 · 클리어 {c}', '{p}回・クリア{c}', '{p} played · {c} cleared', '{p}局·通关{c}'],
@@ -455,7 +455,7 @@
   }
 
   // ---------- 메뉴 창 ----------
-  let panel = null, ptab = null, rdiff = 'normal', rimm = 'jojo';
+  let panel = null, ptab = null, rdiff = 'normal', rimm = 'jojo', rmode = 'coop';
   function openPanel(kind) {
     panel = kind; ptab = null; $('lpanel').hidden = false;
     $('lptitle').textContent = kind === 'news' && root.RTD_NEWS ? root.RTD_NEWS.label() : L(kind);
@@ -588,8 +588,9 @@
       };
       const row = (i, p, val, extra) => `<div class="lp-row"><span class="no">${i + 1}</span><img alt="" src="${iconSrc(p.icon)}"><span class="who">${extra || esc(p.nick)}<small>${p.grade ? esc(C.t(p.grade)) + ' · ' : ''}${p.level ? C.t('level', { n: p.level }) : ''}</small></span><span class="val">${val}</span></div>`;
       if (ptab === 'clear') {
+        h += `<div class="lp-sel">${[['coop', L('rCoop')], ['solo', L('rSolo')]].map(([k, n]) => `<button type="button" class="${rmode === k ? 'on' : ''}" data-rmode="${k}">${n}</button>`).join('')}</div>`;
         h += `<div class="lp-sel">${C.T.difficulties.map((d) => `<button type="button" class="${rdiff === d.id ? 'on' : ''}" data-rdiff="${d.id}">${esc(d.name)}</button>`).join('')}</div>`;
-        const r = await ask('/api/rank?type=clear&diff=' + rdiff); if (!r) return; list = r.list || [];
+        const r = await ask('/api/rank?type=clear&diff=' + rdiff + (rmode === 'solo' ? '&mode=solo' : '')); if (!r) return; list = r.list || [];
         h += list.map((c, i) => `<div class="lp-row"><span class="no">${i + 1}</span><img alt="" src="${iconSrc(c.members[0] && c.members[0].icon)}"><span class="who"><span class="lp-party">${c.members.map((m) => `<span><img alt="" src="${iconSrc(m.icon)}">${esc(m.nick)}</span>`).join('')}</span><small>${c.mut ? esc(((C.T.difficulties.find((d) => d.id === 'nightmare') || {}).name || '') + ' +' + c.mut) : ''}</small></span><span class="val">${C.clock(c.time)}</span></div>`).join('');
       } else if (ptab === 'imm') {
         const imms = C.T.units.filter((d) => d.tier === 10);
@@ -813,6 +814,7 @@
       if (e.target.id === 'lbleave') { back(); return; }
       if (e.target.id === 'mretry') { startMatch(); return; }
       const pt = e.target.closest('[data-ptab]'); if (pt) { ptab = pt.dataset.ptab; renderPanel(); return; }
+      const rm = e.target.closest('[data-rmode]'); if (rm) { rmode = rm.dataset.rmode; renderPanel(); return; }
       const rd = e.target.closest('[data-rdiff]'); if (rd) { rdiff = rd.dataset.rdiff; renderPanel(); return; }
       const ri = e.target.closest('[data-rimm]'); if (ri) { rimm = ri.dataset.rimm; renderPanel(); return; }
       const hs = e.target.closest('[data-hs]'); if (hs) { const d = $('hsd' + hs.dataset.hs); if (d) d.hidden = !d.hidden; return; }

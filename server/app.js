@@ -374,7 +374,8 @@ async function settle(u, b, online) {
   // 불멸 장수를 이번 판에 몇 번 소환했는지(장수별로 쌓는다. 불멸 순위는 온라인 판만)
   const imm = {}; if (online && b.imm && typeof b.imm === 'object') Object.keys(b.imm).slice(0, 12).forEach((id) => { const n = Math.min(20, b.imm[id] | 0); if (/^[a-z]{2,16}$/.test(id) && n > 0) imm[id] = n; });
   // 클리어 순위: 방이 있는 온라인 판이고 표와 시간이 맞는 판만(judge의 rankOk). 같은 방 사람들은 방 열쇠(party)로 한 줄에 모인다
-  const clear = j.rankOk && j.seats >= 1 ? { diff: j.diff, party: String(b.party || key).slice(0, 40), time: j.time, mut: j.mut } : null;
+  // 판(board)은 둘: 온라인 협동(2인 이상, 난이도 이름 그대로)과 솔로(오프라인·혼자 시작한 온라인. 'solo:난이도', 계정마다 가장 빠른 한 줄)
+  const clear = !j.rankOk ? null : j.seats >= 2 ? { diff: j.diff, party: String(b.party || key).slice(0, 40), time: j.time, mut: j.mut } : { diff: 'solo:' + j.diff, party: 'solo:' + u.id, time: j.time, mut: j.mut };
   usedTickets.set(j.nonce, Date.now());
   const done = await store.recordResult(u.id, { key, xp: rw.xp, coins, win: !!b.win, round: j.round, hist: histOf(b, online), imm, clear });
   if (!done) return null;
@@ -445,7 +446,8 @@ async function handle(req, res, url, query) {
     if (type === 'clear') {
       const diff = String(q.get('diff') || '');
       if (!DIFFS.includes(diff)) return json(res, 200, { list: [] });
-      const list = await cached(rankCache, 'clear:' + diff, async () => (await store.rankClear(diff, 30)).map((c) => ({ time: c.time, mut: c.mut, at: c.at, members: c.members.map((m) => (m.user ? pub(m.user) : { nick: shownNick(m.nick), icon: m.icon })) })));
+      const board = (q.get('mode') === 'solo' ? 'solo:' : '') + diff;
+      const list = await cached(rankCache, 'clear:' + board, async () => (await store.rankClear(board, 30)).map((c) => ({ time: c.time, mut: c.mut, at: c.at, members: c.members.map((m) => (m.user ? pub(m.user) : { nick: shownNick(m.nick), icon: m.icon })) })));
       return json(res, 200, { list });
     }
     if (type === 'imm') {
@@ -531,9 +533,15 @@ async function handle(req, res, url, query) {
     if (banned(res, u)) return;
     return json(res, 200, { token: await issue(u), me: profile(u) });
   }
-  const u = await userOf(req);
+  let u = await userOf(req);
+  // 정지된 게스트는 로그인이 막혀 토큰이 없다: 계정 삭제만은 기기에 있는 게스트 ID·비밀값으로 받는다
+  if (!u && url === '/api/delete' && b.guest && typeof b.guest === 'object') {
+    if (limited(ip, 'gdel', 10, 600000)) return json(res, 429, { error: 'slow_down' });
+    const g = await store.getUser(String(b.guest.id || '').slice(0, 32));
+    if (g && g.gsec && sameHex(await hashPw(String(b.guest.secret || ''), g.gsalt), g.gsec)) u = g;
+  }
   if (!u) return json(res, 401, { error: 'auth' });
-  if (banned(res, u)) return; // 정지된 계정은 여기서부터 아래 모든 API가 막힌다
+  if (url !== '/api/delete' && banned(res, u)) return; // 정지된 계정은 여기서부터 아래 모든 API가 막힌다(계정 삭제만 예외)
   if (url === '/api/logout') {
     await store.revokeToken(bearer(req));
     return json(res, 200, { ok: true });

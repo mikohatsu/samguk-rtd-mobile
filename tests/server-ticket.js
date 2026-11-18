@@ -88,6 +88,15 @@ function forge(uid, diff, mut, agoSec, key, k) {
     r = await api('/api/history', { ticket: forge(uid, 'normal', 0, 7200), round: 90, win: true, time: 4100 }, tok);
     // 이 표는 앞선 보상보다 먼저 발급됐다(겹치는 판) → 전적·난이도 진행만 남고 보상은 없다
     ok(r.me.prog.clr === 1 && r.me.coins === 46 + 2, `표 있는 전적(보통 90R 클리어, 앞선 보상과 겹침): 어려움이 열림, 동전은 그대로 (동전 ${r.me.coins})`);
+
+    // 최단 클리어 순위는 온라인 협동(2인 이상)과 솔로(오프라인·혼자 시작한 온라인)로 나뉜다
+    const s1 = await api('/api/guest/new', { nick: 'solo1', agree: true }), s2 = await api('/api/guest/new', { nick: 'solo2', agree: true });
+    await api('/api/history', { ticket: forge(s1.me.id, 'easy', 0, 3600), round: 70, win: true, time: 3300 }, s1.token); // 오프라인(AI 동맹)
+    await api('/api/result', { ticket: forge(s2.me.id, 'easy', 0, 3600, null, 1), round: 70, win: true, time: 3100 }, s2.token); // 온라인 방에 혼자
+    const solo = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy&mode=solo`)).json();
+    ok(solo.list.length === 2 && solo.list[0].time === 3100 && solo.list[1].time === 3300 && solo.list.every((c) => c.members.length === 1), `솔로 순위: 오프라인 판과 혼자 한 온라인 판이 빠른 순으로 (${solo.list.map((c) => c.time).join(',')})`);
+    rk = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy`)).json();
+    ok(rk.list.length === 1 && rk.list[0].time === 3200, `온라인 협동 순위에는 솔로 기록이 섞이지 않음(${rk.list.length}건)`);
   } catch (e) { ok(false, '예외 ' + e.message); }
   srv.kill();
   try { fs.rmSync(DATA, { recursive: true, force: true }); } catch (e) { /* 무시 */ }

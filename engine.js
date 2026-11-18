@@ -926,8 +926,10 @@
       hpMul += this.synFor(u.owner, u.def).hp;
       const mhp = this.rankOf[u.def.tier].hp * hpMul * this.mut.champHp;
       f.used[u.id] = true;
+      // 협동에서는 모두 같은 점에서 나오지 않게 방 순번대로 위아래로 벌려 세운다
+      const y0 = clamp(310 + slot * 300 + (this.net && this.net.partySize ? (this.seatRank() - (this.net.partySize() - 1) / 2) * 80 : 0), ARENA.y0 + 40, ARENA.y1 - 40);
       const c = {
-        uid: u.id, u, def: u.def, owner: u.owner, slot, x: 340, y: 310 + slot * 300, hp: mhp, mhp, tx: 340, ty: 310 + slot * 300,
+        uid: u.id, u, def: u.def, owner: u.owner, slot, x: 340, y: y0, hp: mhp, mhp, tx: 340, ty: y0,
         cd: 0.3, move: false, chase: false, skillCd: (u.def.sk || []).map(() => 0), dashCd: 0, inv: 0, buff: 0, buffT: 0, shieldT: 0, think: 0, ai: u.owner !== this.me.idx || this.bot, dead: false, hits: 0, atkFx: 0,
       };
       const i = f.champs.findIndex((x) => x.slot === slot && x.owner === u.owner);
@@ -1455,12 +1457,32 @@
         if (fo === b) this.passives(c.def, 'burn').forEach((x) => { b.burn = Math.max(b.burn, atk * x.pct * (1 + this.synFor(c.owner, c.def).burn)); b.burnT = x.dur; b.burnC = c; });
       }
     }
+    // 자동으로 움직이는 장수끼리 한 점에 겹치지 않게: 그 자리가 다른 장수(서 있는 곳, 가는 중이면 가려는 곳)와 가까울수록 큰 값.
+    // 다른 사람(AI 사령관 포함)의 장수는 ghosts에 있다. before가 있으면 나보다 순서가 앞선 장수만 센다:
+    // 내 장수는 목록의 앞쪽, 다른 사람은 방 ID가 나보다 앞선 사람(겹쳤을 때 뒤쪽만 비켜서 둘이 같이 흔들리지 않는다)
+    crowd(c, x, y, before) {
+      let s = 0;
+      const near = (ox, oy) => { const d = dist(x, y, ox, oy); if (d < 96) s += 96 - d; };
+      const mine = this.myRoomId();
+      Object.values(this.fight.ghosts || {}).forEach((o) => { if (o.alive && !(before && mine != null && String(o.id) > mine)) near(o.x, o.y); });
+      for (const o of this.fight.champs) {
+        if (o === c) { if (before) break; continue; }
+        if (o.dead || o.bench) continue;
+        near(o.move ? o.tx : o.x, o.move ? o.ty : o.y);
+      }
+      return s;
+    }
+    myRoomId() { const r = this.net && this.net.roster ? this.net.roster().find((p) => p.me) : null; return r ? String(r.id) : null; }
+    // 방 안에서 내 순번(방 ID 순서, 0부터). 혼자면 0. 장수마다 자리·박자를 다르게 하는 데 쓴다
+    seatRank() { const mine = this.myRoomId(); return mine == null ? 0 : this.net.roster().filter((p) => !p.me && String(p.id) < mine).length; }
     champAuto(c, dt) {
       c.think -= dt;
       if (c.think > 0) return;
-      c.think = c.ai ? 0.16 : 0.24;
+      // 장수마다 생각하는 박자와 서는 거리를 조금씩 다르게 한다(모두 같으면 한 몸처럼 움직인다)
+      const k = Math.max(0, this.fight.champs.indexOf(c)) + this.seatRank(), side = k % 2 ? 0.3 : -0.3;
+      c.think = (c.ai ? 0.16 : 0.24) + (k % 5) * 0.017;
       this.raidAutoTarget(c);
-      const b = this.champFoe(c) || this.fight.boss, rng = this.range(c.def) * 0.85;
+      const b = this.champFoe(c) || this.fight.boss, rng = this.range(c.def) * (0.85 - (k % 3) * 0.05);
       const here = this.danger(c.x, c.y);
       if (here > 0) {
         // 이미 고른 피신처가 아직 안전하면 그대로 간다(매번 새로 고르면 제자리에서 흔들린다)
@@ -1468,13 +1490,13 @@
         let best = null, bs = 1e9;
         // 가까운 안전한 자리부터 찾는다(가까운 곳이 모두 위험하면 더 멀리)
         for (const r of [150, 280, 420]) for (let i = 0; i < 12; i++) {
-          const a = (i / 12) * Math.PI * 2, x = clamp(c.x + Math.cos(a) * r, ARENA.x0, ARENA.x1), y = clamp(c.y + Math.sin(a) * r, ARENA.y0, ARENA.y1);
-          const s = this.danger(x, y) * 1000 + dist(x, y, c.x, c.y) * 0.6 + Math.abs(dist(x, y, b.x, b.y) - rng) * 0.4;
+          const a = ((i + k * 0.37) / 12) * Math.PI * 2, x = clamp(c.x + Math.cos(a) * r, ARENA.x0, ARENA.x1), y = clamp(c.y + Math.sin(a) * r, ARENA.y0, ARENA.y1);
+          const s = this.danger(x, y) * 1000 + dist(x, y, c.x, c.y) * 0.6 + Math.abs(dist(x, y, b.x, b.y) - rng) * 0.4 + this.crowd(c, x, y) * 2;
           if (s < bs) { bs = s; best = [x, y]; }
         }
         // 기믹이 알려 주는 숨을 자리(돌기둥 그림자, 안전지대)도 후보로 본다
         for (const [x, y] of this.raidSpots()) {
-          const s = this.danger(x, y) * 1000 + dist(x, y, c.x, c.y) * 0.6;
+          const s = this.danger(x, y) * 1000 + dist(x, y, c.x, c.y) * 0.6 + this.crowd(c, x, y) * 0.5;
           if (s < bs) { bs = s; best = [x, y]; }
         }
         c.tx = best[0]; c.ty = best[1]; c.move = true; c.flee = best;
@@ -1483,24 +1505,39 @@
       }
       const goal = this.raidGoal(c);
       if (goal) {
+        // 기믹 자리에 모일 때도 한 점에 포개지지 않게 순번대로 둘레에 선다(안전지대 반지름 95 이상, 정면 판정 ±63° 안쪽)
+        if (k % 5) { const ga = (k % 5) * 1.257, gx = clamp(goal[0] + Math.cos(ga) * 46, ARENA.x0, ARENA.x1), gy = clamp(goal[1] + Math.sin(ga) * 46, ARENA.y0, ARENA.y1); if (this.danger(gx, gy) === 0) { goal[0] = gx; goal[1] = gy; } }
         if (dist(c.x, c.y, goal[0], goal[1]) > 18 && this.danger(goal[0], goal[1]) === 0) { c.tx = goal[0]; c.ty = goal[1]; c.move = true; } else c.move = false;
         if (c.ai) this.autoSkills(c);
         return;
       }
       const d = dist(c.x, c.y, b.x, b.y);
       const wall = (x, y) => Math.min(x - ARENA.x0, ARENA.x1 - x, y - ARENA.y0, ARENA.y1 - y);
-      if (d > rng + 30 || d < 110 || wall(c.x, c.y) < 120) {
+      if (d > rng + 30 || d < 110 || wall(c.x, c.y) < 120 || (!c.move && this.crowd(c, c.x, c.y, true) > 36)) {
         // 보스와 사거리만큼 떨어진 자리 중 벽에서 먼 쪽을 고른다(구석에 몰리면 장판을 못 피한다)
         const a0 = Math.atan2(c.y - b.y, c.x - b.x);
         let tx = 0, ty = 0, bs = -1e9;
         for (let i = -9; i <= 9; i++) {
           const a = a0 + i * 0.35, x = clamp(b.x + Math.cos(a) * rng, ARENA.x0, ARENA.x1), y = clamp(b.y + Math.sin(a) * rng, ARENA.y0, ARENA.y1);
           // 남아 있는 불길 같은 장판을 피해 보스 둘레의 다른 쪽으로 돈다
-          const s = Math.min(wall(x, y), 160) - Math.abs(i) * 12 - this.danger(x, y) * 1000;
+          const s = Math.min(wall(x, y), 160) - Math.abs(i - side) * 12 - this.danger(x, y) * 1000 - this.crowd(c, x, y) * 1.5; // side: 비켜설 때 사람마다 도는 쪽이 다르다
           if (s > bs) { bs = s; tx = x; ty = y; }
         }
         // 다가갈 자리가 아직 장판 안이면 터질 때까지 밖에서 기다린다
-        if (this.danger(tx, ty) > 0 || (this.gazing() && d > rng + 30)) c.move = false;
+        if (this.danger(tx, ty) > 0 || (this.gazing() && d > rng + 30)) {
+          c.move = false;
+          // 기다리는 동안 다른 장수와 포개져 있으면 안전한 옆자리로 비켜선다
+          if (this.crowd(c, c.x, c.y, true) > 36) {
+            let best = null, bq = 1e9;
+            for (let i = 0; i < 8; i++) {
+              const a2 = ((i + k * 0.37) / 8) * Math.PI * 2, x = clamp(c.x + Math.cos(a2) * 80, ARENA.x0, ARENA.x1), y = clamp(c.y + Math.sin(a2) * 80, ARENA.y0, ARENA.y1);
+              if (this.danger(x, y) > 0) continue;
+              const q = this.crowd(c, x, y) - Math.min(wall(x, y), 120) * 0.3;
+              if (q < bq) { bq = q; best = [x, y]; }
+            }
+            if (best) { c.tx = best[0]; c.ty = best[1]; c.move = true; }
+          }
+        }
         else { c.tx = tx; c.ty = ty; c.move = true; }
       } else c.move = false;
       if (c.ai) this.autoSkills(c);

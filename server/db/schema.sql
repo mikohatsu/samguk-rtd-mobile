@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS immortal_counts (
 CREATE INDEX IF NOT EXISTS immortal_rank_idx ON immortal_counts (unit_id, n DESC);
 
 -- 난이도별 가장 빠른 클리어(파티 한 줄). 탈퇴한 사람은 이름만 남는다.
+-- diff: 온라인 협동(2인 이상)은 난이도 이름, 솔로(혼자·AI 동맹)는 'solo:난이도'이고 party_key는 'solo:계정ID'(계정마다 한 줄).
 CREATE TABLE IF NOT EXISTS clear_records (
   id          bigserial PRIMARY KEY,
   diff        text NOT NULL,

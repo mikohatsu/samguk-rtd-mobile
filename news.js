@@ -10,6 +10,10 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.2.35', d: '2026-11-18', items: [
+      ['최단 클리어 랭킹이 「온라인 협동」(2인 이상)과 「솔로」(혼자·AI 동맹)로 나뉘었습니다.', '最速クリアランキングを「オンライン協力」（2人以上）と「ソロ」（ひとり・AI同盟）に分けました。', 'The Fastest clear ranking is now split into Online co-op (2+ players) and Solo (alone or with AI allies).', '最快通关排行榜分为“在线协作”（2人以上）和“单人”（独自或AI同盟）。'],
+      ['보스전에서 AI 동맹의 장수들이 한 점에 겹쳐 움직이지 않고, 서로 자리를 벌려 싸웁니다.', 'ボス戦でAI同盟の武将が一か所に重ならず、間隔をあけて戦うようになりました。', 'In boss fights, AI allies no longer stack on one spot; they spread out around the boss.', 'Boss战中AI同盟的武将不再重叠在一点，而是分散站位作战。'],
+    ] },
     { v: '0.2.34', d: '2026-11-18', items: [
       ['협동 판을 시작할 때 참가자의 닉네임과 계급이 나오는 입장 화면이 생겼습니다. 계급이 높을수록 화려합니다.', '協力プレイの開始時に、参加者のニックネームと官職が表示される入場画面を追加しました。官職が高いほど華やかになります。', 'Co-op games now open with an entry screen showing each player’s nickname and rank. The higher the rank, the flashier the card.', '合作对局开始时新增了显示参与者昵称和官职的入场画面。官职越高越华丽。'],
       ['함께하는 인원이 많을수록 판 보상(경험치·동전)이 커집니다. 온라인 5인 협동이 가장 많이 받습니다.', '一緒に遊ぶ人数が多いほど、バトル報酬（経験値・銅銭）が増えます。オンライン5人協力が一番多くもらえます。', 'Game rewards (XP and coins) now grow with party size. A full 5-player online co-op game pays the most.', '一起游玩的人数越多，对局奖励（经验、铜钱）越多。在线5人合作获得最多。'],

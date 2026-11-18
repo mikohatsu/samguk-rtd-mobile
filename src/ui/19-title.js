@@ -309,7 +309,19 @@
         // 계정 정지: 언제까지인지 보여 주고 로비로 넘어가지 않는다(50년 넘게 남았으면 무기한)
         const card = $('bootcard'), perm = !(ban.until < Date.now() + 50 * 365 * 86400000);
         B.classList.add('form'); $('bootload').hidden = true; card.hidden = false;
-        card.innerHTML = `<p>${esc(t('err_banned'))}</p><p>${esc(perm ? t('ban_perm') : t('ban_until', { d: new Date(ban.until).toLocaleString() }))}</p>`;
+        // 정지 중에도 계정 삭제는 앱에서 할 수 있다(확인 단계를 거친다). 토큰이 없는 게스트는 기기에 있는 게스트 ID·비밀값으로 요청한다
+        const pwAcc = !!(ACC.me && ACC.me.provider === 'password'), canDel = !!(ACC.token || (GUEST && GUEST.id));
+        card.innerHTML = `<p>${esc(t('err_banned'))}</p><p>${esc(perm ? t('ban_perm') : t('ban_until', { d: new Date(ban.until).toLocaleString() }))}</p>${canDel ? `<p><button class="btn" id="ban-del" type="button">${t('deleteAcc')}</button></p><div id="ban-delbox" hidden><div class="hint2">${t('delConfirmSso')}</div><div class="inline">${pwAcc ? `<input id="ban-delpw" type="password" placeholder="${esc(t('accPw'))}">` : ''}<button class="btn warn" id="ban-delgo" type="button">${t('delYes')}</button></div><div class="err" id="ban-err"></div></div>` : ''}`;
+        if (canDel) {
+          $('ban-del').onclick = () => { $('ban-delbox').hidden = !$('ban-delbox').hidden; };
+          $('ban-delgo').onclick = async () => {
+            const body = pwAcc ? { password: $('ban-delpw').value } : { confirm: 'DELETE' };
+            if (!ACC.token) body.guest = { id: GUEST.id, secret: GUEST.secret };
+            const r = await api('/api/delete', body);
+            if (r.ok) { saveGuest(null); ACC.token = null; ACC.me = null; saveAcc(); card.innerHTML = `<p>${esc(t('deleted'))}</p>`; setTimeout(() => location.reload(), 1500); }
+            else $('ban-err').textContent = errText(r.error);
+          };
+        }
         await new Promise(() => {});
       }
       bar(0.9);
