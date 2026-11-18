@@ -3963,7 +3963,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const guest = m.provider === 'guest', prov = m.provider === 'apple' ? 'Apple' : m.provider === 'google' ? 'Google' : guest ? t('provGuest') : '';
       return `<div class="acc-card"><span class="badge">${lv}</span><div><b>${esc(m.nick)}</b> <span class="gr">${esc(t(m.grade))}${pum(m.rank)} ${t('level', { n: lv })}</span> <small class="prov">${esc(prov)}</small></div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div></div>
         <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })} · XP ${fmt(m.xp)}</div>
-        <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button></div>
+        <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button><button class="btn acc-q" id="acc-treebtn" type="button" aria-label="${esc(t('treeHead'))}">?</button></div>
+        <div class="acc-tree" id="acc-tree" ${S.accTree ? '' : 'hidden'}>${treeHtml(m)}</div>
         ${guest ? `<div class="acc-link"><b>${t('linkHead')}</b><div class="hint2">${t('linkHint')}</div><div class="acc-btns">${apple ? `<button class="btn sso apple" data-sso="apple" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}<button class="btn sso google" data-sso="google" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button></div></div>` : ''}
         <div class="acc-btns"><button class="btn" id="acc-rank" type="button">${t('ranking')}</button><button class="btn" id="acc-nickbtn" type="button">${t('nickEdit')}</button><button class="btn" id="acc-out" type="button">${t('logout')}</button><button class="btn warn" id="acc-del" type="button">${t('deleteAcc')}</button></div>
         <div id="acc-nickbox" hidden><div class="inline"><input id="acc-nick2" maxlength="12" value="${esc(m.nick)}"><button class="btn" id="acc-nicksave" type="button">${t('save')}</button></div></div>
@@ -4031,6 +4032,13 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const dn = hc ? (T.difficulties.find((d) => d.id === hc.diff) || {}).name : '';
       $('lbcfg').innerHTML = hc ? `${t('hostCfg')}: <b>${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>${!lobby.isHost() && (hc.muts || []).length ? `<div style="display:grid;gap:4px;margin-top:5px">${hc.muts.map(mutCard).join('')}</div>` : ''}` : '';
     };
+    // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 레벨·누적 경험치와 무관·문관 칭호. 서버(app.js)의 RANK_LV, 경험치 식(40·(레벨-1)²)과 같다
+    const RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];
+    function treeHtml(m) {
+      const mine = m.track === 'civ' ? 'civ' : 'mil';
+      const rows = RANK_LV.map((lv, i) => `<tr class="${m.rank === i ? 'cur' : ''}"><td>${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${lv}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
+      return `<table><thead><tr><th>${t('treeStage')}</th><th class="n">${t('treeLv')}</th><th class="n">${t('treeXp')}</th><th class="${mine === 'mil' ? 'me' : ''}">${t('trackMil')}</th><th class="${mine === 'civ' ? 'me' : ''}">${t('trackCiv')}</th></tr></thead><tbody>${rows}</tbody></table><div class="note">${t('treeNote', { xp: Math.round(m.xp).toLocaleString() })}</div>`;
+    }
     const setErr = (e) => { const el = $('acc-err'); if (el) el.textContent = e ? errText(e) : ''; };
     const signedIn = (r) => { ACC.token = r.token; ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); };
     function bindAcc() {
@@ -4064,6 +4072,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
         if (r.linked || (link && r.existed)) toastTitle(t(r.linked ? 'linked' : 'existed'));
       }));
       box.querySelectorAll('[data-track]').forEach((bt) => (bt.onclick = async () => { const r = await api('/api/track', { track: bt.dataset.track }); if (r.me) { ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); } else setErr(r.error); }));
+      const tb = $('acc-treebtn'); if (tb) tb.onclick = () => { S.accTree = !S.accTree; $('acc-tree').hidden = !S.accTree; };
       const nb = $('acc-nickbtn'); if (nb) nb.onclick = () => { $('acc-nickbox').hidden = !$('acc-nickbox').hidden; };
       const ns = $('acc-nicksave'); if (ns) ns.onclick = async () => { const r = await api('/api/nick', { nick: $('acc-nick2').value.trim() }); if (r.me) { ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); } else setErr(r.error); };
       const out = $('acc-out');

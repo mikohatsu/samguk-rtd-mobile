@@ -291,6 +291,7 @@
   const iconSrc = (id) => { const d = C.T.units.find((u) => u.id === id) || C.T.units.find((u) => u.id === 'cav'); return Art.portrait(d); };
   function renderTop() {
     { const sb = document.querySelector('#lmenu [data-lp="shop"]'); if (sb) sb.classList.toggle('locked', !shopOpen()); }
+    { const nd = document.querySelector('#lnews .dot'); if (nd) nd.hidden = !(root.RTD_NEWS && root.RTD_NEWS.unseen()); }
     const me = C.ACC.me;
     // 금칙어 닉네임: 한 번 알려 준다(다른 사람에게는 *** 로 보임)
     if (me && me.nickBad && !renderTop.warned) { renderTop.warned = true; setTimeout(() => toast(L('nickBadHint')), 600); }
@@ -307,7 +308,7 @@
   let panel = null, ptab = null, rdiff = 'normal', rimm = 'jojo';
   function openPanel(kind) {
     panel = kind; ptab = null; $('lpanel').hidden = false;
-    $('lptitle').textContent = L(kind);
+    $('lptitle').textContent = kind === 'news' && root.RTD_NEWS ? root.RTD_NEWS.label() : L(kind);
     // 계정 상자는 계정 창 안으로 옮겨 쓴다
     $('lhold').appendChild($('accbox')); $('lpbody').innerHTML = '';
     if (kind === 'account') $('lpbody').appendChild($('accbox'));
@@ -349,6 +350,14 @@
         return `<div class="hs-row" data-hs="${i}"><span>${when} · ${esc(dn(x.diff))}${x.mut ? ' +' + x.mut : ''} <small>${L(x.online ? 'onlineTag' : 'offlineTag')}</small></span><span>R${x.round} · ${C.clock(x.time || 0)}</span><span class="${x.win ? 'w' : 'l'}">${L(x.win ? 'win' : 'lose')}</span></div>${det}`;
       }).join('') || `<div class="lp-note">${L('empty')}</div>`;
       body.innerHTML = h;
+      return;
+    }
+    if (panel === 'news') {
+      // 업데이트 내역(news.js). 열면 본 것으로 치고 빨간 점을 끈다
+      $('lptabs').innerHTML = '';
+      body.innerHTML = root.RTD_NEWS ? root.RTD_NEWS.html() : '';
+      if (root.RTD_NEWS) root.RTD_NEWS.markSeen();
+      renderTop();
       return;
     }
     if (panel === 'settings') {

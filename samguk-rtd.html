@@ -927,6 +927,30 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 #setup, #setup *, #lpanel, #lpanel *, #pane[data-tab="set"], #pane[data-tab="set"] *, #lnick, .lb-slot, .lb-slot *, .rank-list, .rank-list * { font-family: var(--ui) !important; letter-spacing: 0 !important; }
 .lp-head b, .wz-head b { font-size: 20px !important; font-weight: 700 !important; }
 #setup .choice button, #setup .wz-foot .btn, #setup .btn, #startbtn, #contbtn, #lnick { font-weight: 700 !important; }
+/* ---- 업데이트 내역: 로비 위쪽의 작은 '報' 버튼(톱니 왼쪽)과 창 내용. 새 내역이 있으면 빨간 점 ---- */
+#lnews { position: relative; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: url(gfx/ui_round.png) center/100% 100% no-repeat; color: #d8c8a8; display: grid; place-items: center; }
+#lnews i { font: 700 15px/1 var(--ui); font-style: normal; }
+#lnews .dot { position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; border-radius: 50%; background: var(--cinnabar); box-shadow: 0 0 0 1.5px #1a120c; }
+#lnews .dot[hidden] { display: none; }
+.news { display: grid; gap: 10px; font-size: 13px; line-height: 1.6; text-align: left; }
+.news-now { color: var(--dim); font-size: 12px; }
+.news section { border-top: 1px solid rgba(201, 164, 92, .25); padding-top: 8px; }
+.news h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #ffd86a; display: flex; align-items: baseline; gap: 8px; }
+.news h3 small { font-size: 11px; font-weight: 400; color: var(--dim); }
+.news h3 i { font-style: normal; font-size: 10px; font-weight: 700; color: #fff; background: var(--cinnabar); border-radius: 3px; padding: 0 5px; }
+.news ul { margin: 0; padding-left: 18px; }
+.news li { margin: 2px 0; color: var(--paper); }
+/* ---- 관직 표: 계정 창의 '관직 갈래' 옆 ? 버튼으로 연다. 단계별 레벨·필요 경험치·무관/문관 칭호, 지금 단계에 표시 ---- */
+.acc-track .acc-q { flex: none; width: 26px; height: 26px; padding: 0; border-radius: 50%; font-weight: 700; color: #ffd86a; }
+.acc-tree { margin-top: 6px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.acc-tree[hidden] { display: none; }
+.acc-tree table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.acc-tree th { background: #2b1f15; color: var(--dim); font-weight: 400; padding: 4px 6px; text-align: left; }
+.acc-tree td { padding: 4px 6px; border-top: 1px solid rgba(201, 164, 92, .15); color: var(--paper); }
+.acc-tree td.n, .acc-tree th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.acc-tree tr.cur td { background: #43321f; color: #ffd86a; font-weight: 700; }
+.acc-tree th.me, .acc-tree td.me { color: #ffd86a; }
+.acc-tree .note { padding: 5px 6px; font-size: 11px; color: var(--dim); border-top: 1px solid rgba(201, 164, 92, .15); }
 </style>
 
 <div id="app" hidden>
@@ -971,6 +995,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
     <button id="lprof" type="button" data-lp="account"><img id="lico" alt=""><span><b id="lnick"></b><small id="lrank"></small></span></button>
     <div id="lcur"><span class="cur coin"><i>銅</i><b id="lcoins">0</b></span><span class="cur gem"><i>寶</i><b id="lgems">0</b></span></div>
     <select id="langsel" aria-label="Language" hidden></select>
+    <button id="lnews" type="button" data-lp="news" aria-label="Update notes"><i>報</i><b class="dot" hidden></b></button>
     <button id="lgear" type="button" data-lp="settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M4.6 4.6l1.9 1.9M17.5 17.5l1.9 1.9M2.5 12h2.6M18.9 12h2.6M4.6 19.4l1.9-1.9M17.5 6.5l1.9-1.9"/><circle cx="12" cy="12" r="7"/></svg></button>
   </header>
   <div id="lbrand"><div class="seal">天下</div><h1 id="gametitle">삼국 랜덤 디펜스</h1></div>
@@ -1038,6 +1063,7 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 <script src="skillicons.js"></script>
 <script src="sfxdata.js" defer></script>
 <script src="credits.js"></script>
+<script src="news.js"></script>
 <script src="tutorial.js"></script>
 <script src="native.js"></script>
 <script src="shop.js"></script>
