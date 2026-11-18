@@ -552,7 +552,7 @@
         c.fillStyle = '#7a1ad0'; c.beginPath(); c.arc(b.x, b.y - 150, 18, 0, 7); c.fill();
       }
       c.globalAlpha = 0.95;
-      { const us = uiS(); c.save(); c.translate(b.x, b.y - 108); c.scale(us, us); c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,10,30,.9)'; c.lineWidth = 4; c.lineJoin = 'round'; c.font = '700 18px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.strokeText(I.t('walkHurt'), 0, 0); c.fillText(I.t('walkHurt'), 0, 0); c.restore(); }
+      if (!g.over) { const us = uiS(); c.save(); c.translate(b.x, b.y - 108); c.scale(us, us); c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,10,30,.9)'; c.lineWidth = 4; c.lineJoin = 'round'; c.font = '700 18px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.strokeText(I.t('walkHurt'), 0, 0); c.fillText(I.t('walkHurt'), 0, 0); c.restore(); }
     }
     c.restore();
   }

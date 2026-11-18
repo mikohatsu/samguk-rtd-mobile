@@ -1,5 +1,7 @@
   // ---- 보스전 직접 조작(모바일 MOBA식) ----
   // 왼쪽 조이스틱으로 이동, 오른쪽 아래 공격 버튼을 누르고 있는 동안 공격(자동 공격 없음).
+  // 조이스틱은 떠 있는 방식: 보스전에서 화면 왼쪽 아래 영역(JOY_ZONE) 어디든 누르면 그 자리에 받침이 생기고,
+  // 끄는 거리(JOY_R)를 넘어가면 받침이 손가락을 따라온다. 손을 떼면 기본 자리(CSS)로 돌아간다. 라인의 조이스틱은 고정.
   // 스킬·이동기는 공격 버튼을 둘러싼 '고양이 발' 배치. 짧게 톡 = 사거리 안의 적에게 자동 조준(밖이면 보는 방향),
   // 꾹 누르고 끌면 장수 둘레에 사거리와 범위가 보이고 끈 방향·거리로 조준해 손을 떼면 쓴다.
   const PAD = { atk: null, aim: null, joy: null, jv: null, buf: null };
@@ -110,29 +112,62 @@
       dirty();
     };
     bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
-    // 조이스틱: 받침 안에서 누른 자리를 기준으로 끈 방향·세기로 움직인다
-    const knob = joy.querySelector('i'), R = 52;
+    // 조이스틱 받침을 직접 누름: 보스전의 터치는 누른 자리가 중심(떠 있는 방식), 라인·마우스는 받침 가운데가 중심
     joy.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
-      try { joy.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
-      const r = joy.getBoundingClientRect();
-      PAD.joy = { id: e.pointerId, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
-      joyMove(e);
+      joyStart(e, !PAD.lane && e.pointerType === 'touch');
     });
-    const joyMove = (e) => {
-      const J = PAD.joy;
-      if (!J || J.id !== e.pointerId) return;
-      let dx = e.clientX - J.cx, dy = e.clientY - J.cy;
-      const l = Math.hypot(dx, dy);
-      if (l > R) { dx = (dx / l) * R; dy = (dy / l) * R; }
-      knob.style.transform = `translate(${dx}px, ${dy}px)`;
-      PAD.jv = { x: dx / R, y: dy / R };
-      joy.classList.add('on');
-    };
-    joy.addEventListener('pointermove', joyMove);
-    const joyUp = (e) => { if (!PAD.joy || PAD.joy.id !== e.pointerId) return; PAD.joy = null; PAD.jv = null; knob.style.transform = ''; joy.classList.remove('on'); };
-    joy.addEventListener('pointerup', joyUp); joy.addEventListener('pointercancel', joyUp);
+    // 움직임·뗌은 창에서 받는다(전장을 눌러 시작한 손가락도 같은 길로 온다)
+    window.addEventListener('pointermove', joyMove);
+    window.addEventListener('pointerup', joyEnd); window.addEventListener('pointercancel', joyEnd);
   }
+  // ---- 조이스틱 ----
+  const JOY_R = 42, JOY_ZONE = { w: 0.45, h: 0.7 }; // 끌 수 있는 거리(px), 누르면 조이스틱이 생기는 영역(화면 왼쪽 45% × 아래 70%)
+  const joyK = () => (typeof zoom === 'number' && zoom > 0 ? zoom : 1); // #app 확대(큰 화면)만큼 화면 px과 CSS px이 다르다
+  // 전장(캔버스)을 누른 자리가 떠 있는 조이스틱 영역인가. 10-input이 보스전 터치에서 묻는다.
+  function joyZone(e) {
+    const joy = $('joy');
+    if (!joy || joy.hidden || PAD.lane || !g || !g.active()) return false;
+    const r = $('stage').getBoundingClientRect();
+    return e.clientX < r.left + r.width * JOY_ZONE.w && e.clientY > r.top + r.height * (1 - JOY_ZONE.h);
+  }
+  function joyPlace(J) {
+    const k = joyK();
+    $('joy').style.transform = J.cx === J.hx && J.cy === J.hy ? '' : `translate(${((J.cx - J.hx) / k).toFixed(1)}px, ${((J.cy - J.hy) / k).toFixed(1)}px)`;
+  }
+  function joyReset() {
+    const joy = $('joy');
+    PAD.joy = null; PAD.jv = null;
+    joy.style.transform = ''; joy.firstElementChild.style.transform = ''; joy.classList.remove('on');
+  }
+  // float: 누른 자리를 중심으로 받침을 옮긴다. 아니면 받침의 기본 자리 가운데가 중심
+  function joyStart(e, float) {
+    const joy = $('joy');
+    padInit();
+    if (PAD.joy) joyReset(); // 앞 손가락의 뗌을 놓쳤어도 새로 누르면 다시 잡힌다
+    try { joy.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+    const r = joy.getBoundingClientRect(), hx = r.left + r.width / 2, hy = r.top + r.height / 2;
+    const J = PAD.joy = { id: e.pointerId, hx, hy, cx: float ? e.clientX : hx, cy: float ? e.clientY : hy, float: !!float };
+    joyPlace(J);
+    joyMove(e);
+  }
+  function joyMove(e) {
+    const J = PAD.joy;
+    if (!J || J.id !== e.pointerId) return;
+    const k = joyK(), R = JOY_R * k;
+    let dx = e.clientX - J.cx, dy = e.clientY - J.cy;
+    const l = Math.hypot(dx, dy);
+    if (l > R) {
+      // 떠 있는 조이스틱은 끝까지 민 손가락을 받침이 따라온다
+      if (J.float) { J.cx += (dx / l) * (l - R); J.cy += (dy / l) * (l - R); joyPlace(J); }
+      dx = (dx / l) * R; dy = (dy / l) * R;
+    }
+    const joy = $('joy');
+    joy.firstElementChild.style.transform = `translate(${(dx / k).toFixed(1)}px, ${(dy / k).toFixed(1)}px)`;
+    PAD.jv = { x: dx / R, y: dy / R };
+    joy.classList.add('on');
+  }
+  function joyEnd(e) { if (PAD.joy && PAD.joy.id === e.pointerId) joyReset(); }
   // 매 프레임: 조이스틱·공격 버튼 상태를 지금 고른 장수에 넘긴다
   function padTick() {
     if (!g) return;
@@ -154,7 +189,7 @@
   const SK_GLYPH = { line: '斬', circle: '爆', cone: '扇', buff: '勢', shield: '盾', heal: '治', rally: '令', taunt: '挑', weaken: '弱' };
   // 공격 버튼 중심에서의 자리(반지름 px, 각도: 0=오른쪽, 90=위)
   // 화면 오른쪽 끝에서 잘리지 않게 모두 공격 버튼의 왼쪽~위쪽에만 둔다(안쪽 줄 3개, 바깥 줄 3개)
-  const PAW = [[112, 186], [112, 140], [112, 94], [188, 168], [188, 132], [188, 100]];
+  const PAW = [[96, 186], [96, 140], [96, 94], [158, 168], [158, 132], [158, 100]];
   function renderSkillBar() {
     const bar = $('skillbar'), joy = $('joy'), c = inBoss() && g.phase === 'boss' ? g.active() : null;
     padInit();
@@ -165,7 +200,8 @@
     $('stage').classList.toggle('lanejoy', lane);
     if (!c) {
       if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; PAD.atk = null; PAD.aim = null; }
-      if (joy.hidden === lane) { joy.hidden = !lane; if (!lane) { PAD.jv = null; PAD.joy = null; joy.classList.remove('on'); joy.querySelector('i').style.transform = ''; } }
+      if (PAD.joy && PAD.joy.float) joyReset(); // 보스전이 끝났거나 라인 보기로 넘어갔다: 떠 있던 받침을 제자리로
+      if (joy.hidden === lane) { joy.hidden = !lane; if (!lane) joyReset(); }
       return;
     }
     const sk = c.def.sk || [], heal = g.healLeft(), dash = c.def.tier >= g.R.dashMinTier;

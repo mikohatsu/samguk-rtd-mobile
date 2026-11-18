@@ -10,6 +10,11 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.2.37', d: '2026-11-19', items: [
+      ['보스전 경기장을 다시 만들었습니다. 바닥이 화면 끝까지 이어지고, 난간과 바닥 그림이 늘어나 보이지 않게 고해상도로 바꿨으며, 보스마다 바닥 재질과 색이 다릅니다. 카메라가 조금 가까이에서 내 장수를 따라갑니다.', 'ボス戦の闘技場を作り直しました。床が画面の端まで広がり、柵と床の絵が引き伸ばされないよう高解像度にし、ボスごとに床の質感と色が変わります。カメラが少し寄って自分の武将を追いかけます。', 'Rebuilt the boss arena: the floor now extends to the screen edges, the railing and floor art are high-resolution so nothing looks stretched, and each boss has its own floor texture and color. The camera now follows your general a little closer.', '重做了Boss战场地：地面延伸到屏幕边缘，栏杆和地面换成高清图不再拉伸，每个Boss的地面材质和颜色各不相同。镜头稍微拉近并跟随自己的武将。'],
+      ['보스전 조작이 가벼워졌습니다. 조이스틱과 버튼이 작아지고 평소에는 반투명하며, 화면 왼쪽 아래 아무 곳이나 누르면 그 자리에 조이스틱이 나타납니다.', 'ボス戦の操作を軽くしました。スティックとボタンを小さく、普段は半透明にし、画面左下のどこを押してもその場所にスティックが出ます。', 'Lighter boss controls: the joystick and buttons are smaller and semi-transparent when idle, and the joystick appears wherever you touch in the lower left.', 'Boss战操作更轻快：摇杆和按钮变小，平时半透明，按下屏幕左下任意位置摇杆就会出现在那里。'],
+      ['보스전 화면을 정리했습니다. 보스 체력 막대·남은 시간·기술 이름·기믹 안내가 화면 위에 고정돼 서로 겹치지 않고, 왼쪽 정보와 피해 순위는 접혀서 필요할 때 눌러 펼칩니다.', 'ボス戦の画面を整理しました。ボスの体力ゲージ・残り時間・技名・ギミック案内が画面上部に固定され重ならず、左側の情報とダメージ順位は折りたたまれ、タップで開けます。', 'Cleaner boss screen: the boss health bar, timer, skill names and mechanic hints are pinned to the top without overlapping, and the side info and damage ranking are collapsed until you tap them.', '整理了Boss战画面：Boss血条、剩余时间、技能名和机制提示固定在屏幕上方互不重叠，左侧信息和伤害排名折叠起来，点击即可展开。'],
+    ] },
     { v: '0.2.36', d: '2026-11-18', items: [
       ['화면 전체를 다듬었습니다. 제목 현판, 창 틀·버튼·아이콘을 한 가지 화풍으로 맞추고, 창이 열릴 때와 버튼을 누를 때 움직임을 넣었습니다.', '画面全体を磨き上げました。タイトルの扁額、ウィンドウの枠・ボタン・アイコンを一つの画風にそろえ、ウィンドウが開くときやボタンを押したときの動きを加えました。', 'Polished the whole interface: a title plaque, and window frames, buttons and icons in one consistent style, with motion when windows open and buttons are pressed.', '全面打磨了画面：标题匾额、窗口边框、按钮和图标统一为同一画风，并为打开窗口和按下按钮加入了动效。'],
       ['보스전이 새로워졌습니다. 보스 체력 막대·조이스틱·공격 버튼·경기장 테두리와 바닥 문양을 새 그림으로 바꾸고, 장판 예고와 낙뢰 같은 기술 연출을 그림으로 다시 만들었습니다.', 'ボス戦を一新しました。ボスの体力ゲージ・スティック・攻撃ボタン・闘技場の縁と床の紋様を新しい絵にし、範囲予告や落雷などの技の演出を描き直しました。', 'Boss fights got a makeover: new art for the boss health bar, joystick, attack button and arena border and floor, and redrawn warning zones and lightning effects.', 'Boss战焕然一新：Boss血条、摇杆、攻击按钮、场地边框和地面纹样换成新图，范围预警和落雷等技能演出也重新绘制。'],

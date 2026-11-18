@@ -330,18 +330,21 @@
   // (태블릿에서 15~25fps의 원인). 카메라가 멈춰 있는 동안은 화면 크기로 한 번 옮겨 둔 것을 1:1로 찍는다. 카메라·흔들림이 움직이는 프레임만 원본을 그린다.
   const BGC = {};
   let mapVer = 0;
-  function blitBg(c, src, id, ver) {
+  // R: 원본이 덮는 게임 좌표 범위(없으면 지도 전체 범위)
+  const BG_ALL = { x: -OVER.x, y: -OVER.y, w: W + OVER.x * 2, h: H + OVER.y * 2 };
+  function blitBg(c, src, id, ver, R) {
+    R = R || BG_ALL;
     const o = BGC[id] || (BGC[id] = { cv: null, key: '', last: '' });
     // 기준은 카메라(S.scale·S.ox·S.oy). 화면 흔들림·타격 확대는 그 위에 얹히는 작은 변환이라, 둘레에 여백을 둔 저장본을 그대로 쓴다.
     const key = S.scale + '|' + S.ox + '|' + S.oy + '|' + view.width + '|' + view.height + '|' + ver + '|' + src.width;
-    if (c !== ctx || key !== o.last) { o.last = key; c.drawImage(src, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); return; }
+    if (c !== ctx || key !== o.last) { o.last = key; c.drawImage(src, R.x, R.y, R.w, R.h); return; }
     const mx = Math.ceil(view.width * 0.06), my = Math.ceil(view.height * 0.06), cw = view.width + mx * 2, ch = view.height + my * 2;
     if (o.key !== key) {
       if (!o.cv) o.cv = document.createElement('canvas');
       if (o.cv.width !== cw || o.cv.height !== ch) { o.cv.width = cw; o.cv.height = ch; }
       const x = o.cv.getContext('2d');
       x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cw, ch);
-      x.setTransform(S.scale, 0, 0, S.scale, S.ox + mx, S.oy + my); x.drawImage(src, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+      x.setTransform(S.scale, 0, 0, S.scale, S.ox + mx, S.oy + my); x.drawImage(src, R.x, R.y, R.w, R.h);
       o.key = key;
     }
     // 저장본이 덮는 자리를 게임 좌표로 되돌려 그린다(흔들림이 없으면 화면 픽셀과 1:1)
@@ -591,6 +594,13 @@
     Art.fxPic(c, 'mc_rune2', x, y, s, s, t * 0.6, 0.9, { col: col || '#7dff8e', sy: 0.45 });
   }
   // 사거리: 선 대신 옅게 빛나는 원판 그림(Kenney circle_01)
+  // 사거리 테: 금 테 그림(gfx/ui_select, 테 바깥 반지름이 그림 폭의 46%)을 반지름 R에 맞춰 옅게 깐다. 안쪽은 비어 있다. 그림을 못 받았으면 그리지 않는다.
+  function rangeRing(c, x, y, R, a) {
+    const im = Art.pic('ui_select');
+    if (!im) return;
+    const s = (2 * R) / 0.92;
+    c.save(); c.globalAlpha = a; c.drawImage(im, x - s / 2, y - s / 2, s, s); c.restore();
+  }
   function rangeMark(c, x, y, R, col, a) {
     ringSpr(c, 'circle_01', col, x, y, R, 0, a);
   }
@@ -1046,17 +1056,59 @@
       : Object.keys(dealt).map((k) => ({ name: k, v: dealt[k] }));
     return rows.sort((a, b) => b.v - a.v);
   }
+  // 보스전 피해 순위: 접힌 한 줄이 기본이다. 내 줄(협동) 또는 1위 줄(혼자)을 "순위. 이름  피해 (몫%)"로만 보여 준다.
+  // 누르면 펼쳐서 5위까지(S.meterOpen, 10-input이 meterHit으로 판정). 4초 뒤·기술 이름 띠가 뜰 때·보스전이 끝나면 다시 접힌다(아래, 16-hud).
+  // 자리: 화면 고정 좌표(09 hudCam)에서 보스 체력 막대 오른쪽 끝 아래. 부르는 쪽의 변환은 쓰지 않고 여기서 직접 잡는다
+  // (체력 막대와 같은 칸: 화면 위 가운데 기준 us배. 막대 폭 식은 07-arena bossBar와 같아야 한다).
+  // 테·바탕은 UI 공통 판(.glass·.hb)과 같은 금 선·먹 바탕. 그린 상자는 캔버스 픽셀 좌표로 S.meterBox에 남긴다.
   function drawMeter(c, rows) {
-    if (!rows.length) return;
-    const x = W - 66 - 300, w = 300, top = rows[0].v || 1, sum = rows.reduce((a, b) => a + b.v, 0) || 1;
-    c.fillStyle = 'rgba(16, 11, 8, .72)'; c.fillRect(x - 10, 96, w + 20, 44 + rows.length * 34);
-    c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillStyle = '#e6c578'; c.font = '700 20px "Gowun Batang", serif'; c.fillText(I.t('meter'), x, 118);
-    rows.slice(0, 5).forEach((r, i) => {
-      const y = 138 + i * 34;
-      c.fillStyle = r.me ? 'rgba(125,255,142,.4)' : 'rgba(255,190,90,.36)'; c.fillRect(x, y, (w * r.v) / top, 28);
-      c.fillStyle = '#fff'; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'left'; c.fillText(r.name, x + 8, y + 15);
-      c.textAlign = 'right'; c.fillText(`${fmt(r.v)} (${Math.round((r.v / sum) * 100)}%)`, x + w - 8, y + 15);
+    if (!rows.length || !S.base) return;
+    const us = hudS(), BW = Math.min(760, 900 / us), w = 236, x = W / 2 + BW / 2 - w, y0 = 74, rh = 24, rp = 26;
+    const top = rows[0].v || 1, sum = rows.reduce((a, b) => a + b.v, 0) || 1;
+    // 펼친 표는 4초 뒤 저절로 접는다(카메라 위 끝에서 내 장수를 오래 가리지 않게). 기술 이름 띠(07 S.pattern)가 새로 뜨는 순간에도 접는다(띠가 첫 줄을 덮지 않게)
+    const now = performance.now(), np = S.pattern && S.pattern.t > 0 && S.pattern !== S.meterPat;
+    if (np) S.meterPat = S.pattern;
+    if (!S.meterOpen) S.meterOpenAt = 0;
+    else if (!S.meterOpenAt) S.meterOpenAt = now;
+    if (S.meterOpen && (np || now - S.meterOpenAt > 4000)) { S.meterOpen = false; S.meterOpenAt = 0; }
+    const open = !!S.meterOpen, mi = Math.max(0, rows.findIndex((r) => r.me));
+    const list = open ? rows.slice(0, 5).map((r, i) => [r, i]) : [[rows[mi], mi]];
+    const bh = open ? rh + list.length * rp + 4 : rh, UI = '"IBM Plex Sans KR", sans-serif';
+    c.save();
+    hudCam(c, 0, 0); c.translate(W / 2, hudTop()); c.scale(us, us); c.translate(-W / 2, 0);
+    c.fillStyle = 'rgba(16, 11, 8, .6)'; c.fillRect(x, y0, w, bh);
+    c.lineWidth = 1; c.strokeStyle = 'rgba(205, 167, 91, .55)'; c.strokeRect(x + 0.5, y0 + 0.5, w - 1, bh - 1);
+    c.textBaseline = 'middle';
+    if (open) {
+      c.textAlign = 'left'; c.fillStyle = '#e6c578'; c.font = '700 15px "Gowun Batang", serif'; c.fillText(I.t('meter'), x + 8, y0 + rh / 2 + 1);
+      c.textAlign = 'right'; c.font = '700 11px ' + UI; c.fillText('▲', x + w - 7, y0 + rh / 2 + 1);
+    }
+    list.forEach(([r, rank], i) => {
+      const y = open ? y0 + rh + i * rp : y0 + 2, h = open ? rp - 4 : rh - 4, cy = y + h / 2 + 1, vr = open ? x + w - 8 : x + w - 22;
+      c.fillStyle = r.me ? 'rgba(255, 216, 106, .32)' : 'rgba(205, 167, 91, .2)'; c.fillRect(x + 2, y, ((w - 4) * r.v) / top, h);
+      c.font = '700 14px ' + UI; c.fillStyle = r.me ? '#ffe2a8' : '#f4ecd8';
+      const val = `${fmt(r.v)} (${Math.round((r.v / sum) * 100)}%)`, vw = c.measureText(val).width;
+      c.textAlign = 'right'; c.fillText(val, vr, cy);
+      c.textAlign = 'left'; c.fillText(`${rank + 1}. ${r.name}`, x + 8, cy, Math.max(40, vr - vw - 10 - (x + 8)));
+      if (!open) { c.textAlign = 'right'; c.fillStyle = '#e6c578'; c.font = '700 11px ' + UI; c.fillText('▼', x + w - 7, cy); }
     });
+    const m = c.getTransform ? c.getTransform() : null;
+    if (m) {
+      const px = (u, v) => m.a * u + m.c * v + m.e, py = (u, v) => m.b * u + m.d * v + m.f;
+      const xa = px(x, y0), xb = px(x + w, y0 + bh), ya = py(x, y0), yb = py(x + w, y0 + bh);
+      S.meterBox = { x0: Math.min(xa, xb), x1: Math.max(xa, xb), y0: Math.min(ya, yb), y1: Math.max(ya, yb), t: performance.now() };
+    }
+    c.restore();
+  }
+  // 누른 자리가 딜미터 위인가(방금 그린 상자 기준). 누르는 곳은 화면 44px 이상이 되게 넓힌다.
+  function meterHit(e) {
+    const B = S.meterBox;
+    if (!B || performance.now() - B.t > 400) return false;
+    const r = view.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    const kx = view.width / r.width, ky = view.height / r.height, x = (e.clientX - r.left) * kx, y = (e.clientY - r.top) * ky;
+    const gx = Math.max(0, (44 * kx - (B.x1 - B.x0)) / 2), gy = Math.max(0, (44 * ky - (B.y1 - B.y0)) / 2);
+    return x >= B.x0 - gx && x <= B.x1 + gx && y >= B.y0 - gy && y <= B.y1 + gy;
   }
   // ---- 보스 기술 연출 ----
   // 기술마다 강조색이 다르다(장판 테두리·투사체·착탄). 없으면 보스 색.
@@ -1612,7 +1664,7 @@
         c.fillStyle = '#7a1ad0'; c.beginPath(); c.arc(b.x, b.y - 150, 18, 0, 7); c.fill();
       }
       c.globalAlpha = 0.95;
-      { const us = uiS(); c.save(); c.translate(b.x, b.y - 108); c.scale(us, us); c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,10,30,.9)'; c.lineWidth = 4; c.lineJoin = 'round'; c.font = '700 18px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.strokeText(I.t('walkHurt'), 0, 0); c.fillText(I.t('walkHurt'), 0, 0); c.restore(); }
+      if (!g.over) { const us = uiS(); c.save(); c.translate(b.x, b.y - 108); c.scale(us, us); c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,10,30,.9)'; c.lineWidth = 4; c.lineJoin = 'round'; c.font = '700 18px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.strokeText(I.t('walkHurt'), 0, 0); c.fillText(I.t('walkHurt'), 0, 0); c.restore(); }
     }
     c.restore();
   }
@@ -1675,48 +1727,69 @@
     if (flash) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.7; Art.drawSprite(c, im, x, y - 56 * (BOSS_S - 1), 200 * BOSS_S, bd.flip, 0, 0.96); c.restore(); }
   }
   // 전장 바닥은 판마다 한 번만 그려 두고 찍는다(매 프레임 화면 전체에 그라디언트·무늬·그라디언트를 세 번 덧칠하던 것)
+  // 저장 범위는 보스전 카메라가 볼 수 있는 곳(경기장 둘레)만: 지도 전체(3900×2210)의 45% 넓이라, 같은 메모리로 해상도를 1.45배 올린다
+  // (보통 0.55→0.8, 낮음 0.4→0.58, 휴대폰 높음 0.7→1.0, PC 1.0→1.28 px/단위. 1.28 = 바닥 타일 원본 해상도).
+  const AR = { x: (ARENA.x0 + ARENA.x1) / 2 - 1250, y: -330, w: 2500, h: 1540 };
+  // 난간 배율과, 난간 가운데 줄이 경기장 경계선(ARENA)에서 바깥으로 나간 거리(아래 arenaRim). ARENA는 장수의 가운데 점이 갈 수 있는 끝이라,
+  // 끝에 선 장수의 몸(발은 가운데에서 35단위 아래, 몸 반폭 35단위)이 난간 그림에 올라타지 않게 변마다 다르게 띄운다:
+  // 위 40(기둥 아래 끝이 발보다 50단위 위) / 아래 65(난간 위 끝이 발 바로 밑) / 좌우 56(기둥 안쪽 끝이 몸 옆).
+  const RIM_K = 70 / 104, RIM_D = { t: 40, b: 65, l: 56, r: 56 };
+  const qArena = () => Math.min(1.28, qMap() * 1.45);
   let arenaCv = null, arenaKey = '';
-  function arenaFloor(c, a) {
-    const key = a.motif + a.ground + a.sky + qMap() + (Art.img('tex_' + a.motif) ? 1 : 0) + (Art.pic('arena_mark') ? 'm' : '');
+  // 바닥 색(아트 디렉터 검수 2026-11-19): 경기장 색(theme의 ground·sky)의 색상은 살리되 채도는 28% 이하, 밝기는 가운데 32~38%로 맞춘다
+  // (장수·보스 채도가 60~80%라 바닥이 탁해야 캐릭터가 뜬다). 색상은 보스별 지정값(FLOOR_HUE)을 쓴다.
+  const hexHsl = (hex) => {
+    const r = parseInt(hex.slice(1, 3), 16) / 255, g2 = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+    const mx = Math.max(r, g2, b), mn = Math.min(r, g2, b), l = (mx + mn) / 2, d = mx - mn;
+    if (!d) return [0, 0, l];
+    const h = mx === r ? ((g2 - b) / d + 6) % 6 : mx === g2 ? (b - r) / d + 2 : (r - g2) / d + 4;
+    return [h * 60, d / (1 - Math.abs(2 * l - 1)), l];
+  };
+  const hslCss = (h, s, l) => `hsl(${Math.round(h)},${Math.round(s * 100)}%,${Math.round(l * 100)}%)`;
+  // 보스(경기장)별 바닥 색상(도)과 밝기: 아트 디렉터 지정값(재검수 2026-11-19 art-review-v37b). 표에 없는 보스는 theme의 원래 색상.
+  const FLOOR_HUE = { b_janggak: 200, b_hwawoong: 30, b_dongtak: 15, b_wonso: 75, b_yeopo: 280, b_jojo: 204, b_yukson: 140, b_jegal: 235, b_deungae: 15, b_samaui: 335 };
+  const FLOOR_LUM = { b_dongtak: 0.31 };
+  function floorCols(a, id) {
+    const G = hexHsl(a.ground), K = hexHsl(a.sky), h = FLOOR_HUE[id] != null ? FLOOR_HUE[id] : G[0];
+    const s = Math.min(0.28, G[1]), l = FLOOR_LUM[id] || Math.max(0.32, Math.min(0.38, G[2]));
+    return { ground: hslCss(h, s, l), sky: hslCss(h, Math.min(0.28, K[1]), l * Math.max(0.5, Math.min(0.8, K[2] / Math.max(0.01, G[2])))) };
+  }
+  function arenaFloor(c, a, id) {
+    const flr = Art.floorTex(a.motif), old = !flr && Art.img('tex_' + a.motif), col = floorCols(a, id);
+    const key = a.motif + col.ground + col.sky + qArena() + (flr ? 'f' : old ? 't' : '');
     if (arenaKey !== key) {
       arenaKey = key;
       if (!arenaCv) arenaCv = document.createElement('canvas');
-      const q = qMap(), w = W + OVER.x * 2, h = H + OVER.y * 2;
+      const q = qArena(), w = AR.w, h = AR.h;
       arenaCv.width = Math.round(w * q); arenaCv.height = Math.round(h * q);
       const x = arenaCv.getContext('2d');
-      x.setTransform(q, 0, 0, q, OVER.x * q, OVER.y * q);
+      x.setTransform(q, 0, 0, q, -AR.x * q, -AR.y * q);
       const gr = x.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 1300);
-      gr.addColorStop(0, a.ground); gr.addColorStop(1, a.sky);
-      x.fillStyle = gr; x.fillRect(-OVER.x, -OVER.y, w, h);
+      gr.addColorStop(0, col.ground); gr.addColorStop(1, col.sky);
+      x.fillStyle = gr; x.fillRect(AR.x, AR.y, w, h);
       // 판마다 같은 배치가 되게 고정 난수
       let sd = 0; for (let i = 0; i < a.motif.length; i++) sd = (sd * 31 + a.motif.charCodeAt(i)) >>> 0;
       const rnd = () => ((sd = (sd * 1664525 + 1013904223) >>> 0) / 4294967296);
-      // 바닥 무늬는 크게(2.0배) 깐다. 같은 무늬가 바둑판처럼 반복돼 보이지 않게 칸마다 90° 단위로 돌리고·뒤집고, 줄마다 반 칸씩 어긋나게 놓는다.
-      // 캔버스 필터(iOS Safari 지원 미확인) 대신 합성 모드로 누른다: 반투명으로 얹어 대비를 줄이고 → 경기장 색을 얇게 덮고 → 어두운 색을 곱해 밝기를 낮춘다
-      const tex = Art.img('tex_' + a.motif);
-      arenaCv._tex = !!tex;
-      if (tex) {
-        const ts = tex.width * 2.0;
+      arenaCv._tex = !!(flr || old);
+      if (flr) {
+        // 바닥 무늬: 1024px 이음매 없는 타일(gfx/flr_*)을 재질별 크기(art.js floorUnit: 기본 800단위, 전돌 480단위)마다 그대로 반복한다(돌리거나 뒤집지 않는다).
+        // 타일은 평균 밝기 128인 밝기 무늬라 overlay 한 번이면 경기장 색은 그대로 두고 결만 얹힌다(예전: 반투명 + 색 덮기 + 곱하기 세 번).
+        const k = Art.floorUnit(a.motif) / flr.width;
+        x.save(); x.scale(k, k); x.globalCompositeOperation = 'overlay'; x.fillStyle = x.createPattern(flr, 'repeat');
+        x.fillRect(AR.x / k, AR.y / k, w / k, h / k); x.restore();
+      } else if (old) {
+        // 새 타일을 아직 못 받았을 때만: 예전 200px 무늬를 2배로(방향이 있는 무늬가 눕지 않게 돌리지 않는다)
+        const ts = old.width * 2.0;
         x.save(); x.globalAlpha = 0.5;
-        for (let row = 0, ty = -OVER.y - ts / 2; ty < H + OVER.y; row++, ty += ts) {
-          for (let tx = -OVER.x - ts + (row % 2 ? ts / 2 : 0); tx < W + OVER.x; tx += ts) {
-            const r = Math.floor(rnd() * 8);
-            x.save(); x.translate(tx + ts / 2, ty + ts / 2); x.rotate((r & 3) * Math.PI / 2); if (r & 4) x.scale(-1, 1);
-            x.drawImage(tex, -ts / 2 - 0.5, -ts / 2 - 0.5, ts + 1, ts + 1); x.restore();
-          }
-        }
+        for (let row = 0, ty = AR.y - ts / 2; ty < AR.y + h; row++, ty += ts) for (let tx = AR.x - ts + (row % 2 ? ts / 2 : 0); tx < AR.x + w; tx += ts) x.drawImage(old, tx - 0.5, ty - 0.5, ts + 1, ts + 1);
         x.restore();
-        x.fillStyle = gr; x.globalAlpha = 0.35; x.fillRect(-OVER.x, -OVER.y, w, h);
-        x.globalAlpha = 1; x.globalCompositeOperation = 'multiply'; x.fillStyle = '#9a9288'; x.fillRect(-OVER.x, -OVER.y, w, h);
+        x.fillStyle = gr; x.globalAlpha = 0.35; x.fillRect(AR.x, AR.y, w, h);
+        x.globalAlpha = 1; x.globalCompositeOperation = 'multiply'; x.fillStyle = '#9a9288'; x.fillRect(AR.x, AR.y, w, h);
         x.globalCompositeOperation = 'source-over';
       }
-      // 경기장 가운데 바닥 문양(gfx/arena_mark, 팔괘 원판): 바닥에 새긴 것처럼 곱하기로 얹어 타일 반복에서 시선을 뗀다
-      const mk = Art.pic('arena_mark');
-      if (mk) {
-        const mcx = (ARENA.x0 + ARENA.x1) / 2, mcy = (ARENA.y0 + ARENA.y1) / 2, ms = Math.min(ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0) * 0.86;
-        x.save(); x.globalCompositeOperation = 'multiply'; x.globalAlpha = 0.4; x.drawImage(mk, mcx - ms / 2, mcy - ms / 2, ms, ms);
-        x.globalCompositeOperation = 'soft-light'; x.globalAlpha = 0.25; x.drawImage(mk, mcx - ms / 2, mcy - ms / 2, ms, ms); x.restore();
-      }
+      // (가운데 팔괘 원판 gfx/arena_mark는 뺐다: 실제 정보량 184px짜리를 765단위로 키워 흐렸다.)
+      // ★ 가운데 문양을 다시 넣을 자리는 여기다(바닥 무늬 다음, 명암 층 앞): 1024px 이상 그림을 지름 600단위로 경기장 가운데에,
+      //   multiply·투명도 0.35~0.45로, 무늬가 flr_slab인 경기장(altar·bagua·palace)에만. art.js의 미리 받기 목록에 'arena_mark'도 다시 넣는다.
       // 큰 명암 층: 무늬 몇 칸을 덮는 크기의 얼룩이라 같은 무늬가 같은 밝기로 반복되는 게 덜 보인다
       const blobs = Q.level === 'low' ? 5 : 9;
       for (let i = 0; i < blobs; i++) {
@@ -1731,28 +1804,55 @@
       lg.addColorStop(0, 'rgba(255,235,190,.16)'); lg.addColorStop(0.55, 'rgba(255,235,190,.06)'); lg.addColorStop(1, 'rgba(255,235,190,0)');
       x.globalCompositeOperation = 'screen'; x.fillStyle = lg; x.fillRect(cx - sr, cy - sr, sr * 2, sr * 2);
       x.globalCompositeOperation = 'source-over';
-      // 경기장 밖 어둡게: 바깥은 한 번에 덮고, 경계 32px은 그라디언트로 부드럽게 이어 준다
-      const E0 = 32, OUT = 'rgba(8,6,4,.58)', NONE = 'rgba(8,6,4,0)';
-      x.fillStyle = OUT; x.beginPath(); x.rect(-OVER.x, -OVER.y, w, h);
-      x.rect(ARENA.x0 - E0, ARENA.y0 - E0, ARENA.x1 - ARENA.x0 + E0 * 2, ARENA.y1 - ARENA.y0 + E0 * 2); x.fill('evenodd');
-      const edge = (x0, y0, x1, y1, rx, ry, rw, rh) => { const eg = x.createLinearGradient(x0, y0, x1, y1); eg.addColorStop(0, NONE); eg.addColorStop(1, OUT); x.fillStyle = eg; x.fillRect(rx, ry, rw, rh); };
-      edge(0, ARENA.y0, 0, ARENA.y0 - E0, ARENA.x0 - E0, ARENA.y0 - E0, ARENA.x1 - ARENA.x0 + E0 * 2, E0);
-      edge(0, ARENA.y1, 0, ARENA.y1 + E0, ARENA.x0 - E0, ARENA.y1, ARENA.x1 - ARENA.x0 + E0 * 2, E0);
-      edge(ARENA.x0, 0, ARENA.x0 - E0, 0, ARENA.x0 - E0, ARENA.y0, E0, ARENA.y1 - ARENA.y0);
-      edge(ARENA.x1, 0, ARENA.x1 + E0, 0, ARENA.x1, ARENA.y0, E0, ARENA.y1 - ARENA.y0);
+      // 난간 밖은 같은 바닥을 45% 어둡게(바닥 결은 그대로 보인다. 예전의 58% 덮개 + 흐린 경계가 아니라 난간 가운데 줄에서 딱 끊는다),
+      // 거기서 바깥으로 520단위에 걸쳐 50%까지 더 어두워진다(화면 가장자리 쪽이 가장 어둡다. 모서리는 두 변이 겹쳐 더 어둡다)
+      {
+        const X0 = ARENA.x0 - RIM_D.l, X1 = ARENA.x1 + RIM_D.r, Y0 = ARENA.y0 - RIM_D.t, Y1 = ARENA.y1 + RIM_D.b, V = 520, D0 = 'rgba(6,5,4,0)', D1 = 'rgba(6,5,4,.5)';
+        x.fillStyle = 'rgba(6,5,4,.45)'; x.beginPath(); x.rect(AR.x, AR.y, w, h); x.rect(X0, Y0, X1 - X0, Y1 - Y0); x.fill('evenodd');
+        const fade = (gx0, gy0, gx1, gy1, rx, ry, rw, rh) => { const eg = x.createLinearGradient(gx0, gy0, gx1, gy1); eg.addColorStop(0, D0); eg.addColorStop(1, D1); x.fillStyle = eg; x.fillRect(rx, ry, rw, rh); };
+        fade(0, Y0, 0, Y0 - V, AR.x, AR.y, w, Y0 - AR.y); fade(0, Y1, 0, Y1 + V, AR.x, Y1, w, AR.y + h - Y1);
+        fade(X0, 0, X0 - V, 0, AR.x, AR.y, X0 - AR.x, h); fade(X1, 0, X1 + V, 0, X1, AR.y, AR.x + w - X1, h);
+      }
     }
-    blitBg(c, arenaCv, 'arena', arenaKey);
+    // 아주 넓은 화면(32:9 등)에서 저장 범위 밖이 보이면 그 자리만 바깥 색으로 메운다
+    if (S.base) { const s = S.base.s0 * S.cam.z; if (S.base.sw / s > AR.w - 120 || S.base.sh / s > AR.h - 120) { c.fillStyle = '#0c0a08'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); } }
+    blitBg(c, arenaCv, 'arena', arenaKey, AR);
     return arenaCv._tex;
   }
-  // 경기장 경계 장식(gfx/arena_rim: 네 변에 돌·나무 난간, 가운데 투명). 9조각으로 늘여 모서리가 찌그러지지 않게 두른다.
-  // 그림이 아직 없으면 예전 경계선(바깥 어두운 4px + 안쪽 보스색 1.5px).
+  // 경기장 경계 난간(gfx/arena_rim: 정사각 틀 그림, 한 변에 기둥 3개). 늘이지 않는다: 모서리 4개는 원본 비율 그대로,
+  // 변은 "기둥 하나 + 양옆 난간 반 칸"(원본 167px)을 같은 배율로 되풀이해 깐다(칸 수를 반올림해 칸 폭만 몇 % 맞춘다).
+  // 배율은 원본 1px = 0.673단위(두께 104px → 70단위). 난간 가운데 줄은 경기장 경계선에서 RIM_D만큼 바깥.
+  // 매 프레임 50번쯤 찍지 않게 네 변을 띠 4장으로 한 번 그려 두고 찍는다. 그림이 아직 없으면 예전 경계선.
+  let rimCv = null, rimKey = '';
+  function rimPaint(x, im) {
+    const k = RIM_K, X0 = ARENA.x0 - RIM_D.l, X1 = ARENA.x1 + RIM_D.r, Y0 = ARENA.y0 - RIM_D.t, Y1 = ARENA.y1 + RIM_D.b;
+    // 원본(800×802)에서 잰 자리: 위 난간 가운데 y 65.5, 아래 735.5, 왼쪽 x 56.5, 오른쪽 747. 변의 한 칸은 x(또는 y) 317~484.
+    const run = (a0, a1, cell, put) => { const n = Math.max(1, Math.round((a1 - a0) / (cell * k))), d = (a1 - a0) / n; for (let i = 0; i < n; i++) put(a0 + i * d, d); };
+    run(X0 + 51.5 * k, X1 - 55 * k, 167, (p, d) => x.drawImage(im, 317, 0, 167, 112, p - 0.3, Y0 - 65.5 * k, d + 0.6, 112 * k));
+    run(X0 + 47.5 * k, X1 - 51 * k, 167, (p, d) => x.drawImage(im, 317, 690, 167, 112, p - 0.3, Y1 - 45.5 * k, d + 0.6, 112 * k));
+    run(Y0 + 58.5 * k, Y1 - 51.5 * k, 168, (p, d) => x.drawImage(im, 0, 328, 100, 168, X0 - 56.5 * k, p - 0.3, 100 * k, d + 0.6));
+    run(Y0 + 64.5 * k, Y1 - 51.5 * k, 168, (p, d) => x.drawImage(im, 700, 328, 100, 168, X1 - 47 * k, p - 0.3, 100 * k, d + 0.6));
+    x.drawImage(im, 0, 0, 108, 124, X0 - 56.5 * k, Y0 - 65.5 * k, 108 * k, 124 * k);
+    x.drawImage(im, 692, 0, 108, 130, X1 - 55 * k, Y0 - 65.5 * k, 108 * k, 130 * k);
+    x.drawImage(im, 0, 684, 104, 118, X0 - 56.5 * k, Y1 - 51.5 * k, 104 * k, 118 * k);
+    x.drawImage(im, 696, 684, 104, 118, X1 - 51 * k, Y1 - 51.5 * k, 104 * k, 118 * k);
+  }
   function arenaRim(c, f, a) {
     const im = Art.pic('arena_rim'), aw = ARENA.x1 - ARENA.x0, ah = ARENA.y1 - ARENA.y0;
     c.save(); c.globalAlpha = a;
     if (im) {
-      // 난간 두께는 그림의 11%(약 88px). 잘라 쓰는 너비는 모서리 기둥까지 들어가게 13%, 그릴 굵기 54. 경기장 경계선 바깥쪽에 대부분 걸치게 둔다.
-      const e = 54, sl = Math.round(Math.min(im.width, im.height) * 0.13);
-      Art.nine(c, im, ARENA.x0 - e * 0.75, ARENA.y0 - e * 0.75, aw + e * 1.5, ah + e * 1.5, sl, e, { hollow: true });
+      const q = qArena(), key = q + '|' + im.width;
+      if (rimKey !== key) {
+        rimKey = key;
+        const k = RIM_K, P = 4, X0 = ARENA.x0 - RIM_D.l, X1 = ARENA.x1 + RIM_D.r, Y0 = ARENA.y0 - RIM_D.t, Y1 = ARENA.y1 + RIM_D.b;
+        const xl = X0 - 57 * k - P, xr = X1 + 54 * k + P, yt = Y0 - 66 * k - P, y1 = Y0 + 66 * k + P, y2 = Y1 - 52 * k - P, yb = Y1 + 68 * k + P;
+        rimCv = [{ x: xl, y: yt, w: xr - xl, h: y1 - yt }, { x: xl, y: y2, w: xr - xl, h: yb - y2 }, { x: xl, y: y1, w: X0 + 45 * k + P - xl, h: y2 - y1 }, { x: X1 - 48 * k - P, y: y1, w: xr - (X1 - 48 * k - P), h: y2 - y1 }].map((R) => {
+          const cv = document.createElement('canvas'); cv.width = Math.ceil(R.w * q); cv.height = Math.ceil(R.h * q);
+          const x = cv.getContext('2d'); x.setTransform(cv.width / R.w, 0, 0, cv.height / R.h, (-R.x * cv.width) / R.w, (-R.y * cv.height) / R.h); rimPaint(x, im);
+          return { cv, R };
+        });
+      }
+      rimCv.forEach((o) => c.drawImage(o.cv, o.R.x, o.R.y, o.R.w, o.R.h));
     } else {
       c.strokeStyle = 'rgba(0,0,0,.45)'; c.lineWidth = 4; c.strokeRect(ARENA.x0 - 2, ARENA.y0 - 2, aw + 4, ah + 4);
       c.strokeStyle = f.def.fx + '88'; c.lineWidth = 1.5; c.strokeRect(ARENA.x0, ARENA.y0, aw, ah);
@@ -1772,10 +1872,11 @@
     const push = inOutSine((e - 0.2) / (INTRO_HIT - 0.2));
     // 내려찍는 순간 1.30 → 1.42로 튀었다가 1.34로 가라앉는다
     const kick = e >= INTRO_HIT ? Math.exp(-(e - INTRO_HIT) * 9) * Math.sin(Math.min(Math.PI, (e - INTRO_HIT) * 14)) : 0;
-    const zoom = Q.level === 'low' ? 0.22 : 0.3;
+    // 보스전 카메라가 이미 1.2배라 등장 확대는 그만큼 줄여 얹는다(합쳐서 최대 1.62배. 그대로 곱하면 1.70배, 예전은 1.42배)
+    const zk = 1 / Math.max(1, S.cam.z), zoom = (Q.level === 'low' ? 0.22 : 0.3) * zk;
     return {
       e, f, out,
-      z: 1 + (zoom * push + (e >= INTRO_HIT ? 0.04 * clamp01((e - INTRO_HIT) / 0.25) : 0) + kick * 0.12) * out,
+      z: 1 + (zoom * push + (e >= INTRO_HIT ? 0.04 * zk * clamp01((e - INTRO_HIT) / 0.25) : 0) + kick * 0.12 * zk) * out,
       m: 0.55 * push * out, // 확대 중심이 화면 가운데에서 보스 쪽으로 옮겨 가는 정도
       big: 1 + 0.28 * push * out, // 보스 그림만 키운다(판정 크기는 그대로)
       dark: 0.62 * outCubic((e - 0.1) / 1.2) * out,
@@ -1785,15 +1886,14 @@
   // 09-render-camera에서 부른다: 펀치처럼 그리기 변환만 덧씌운다
   function introCam(c, s) {
     if (!s || s.z <= 1.0005 && s.m <= 0.0005) return;
-    const b = s.f.boss, px = W / 2 + (b.x - W / 2) * s.m, py = H / 2 + (b.y - 40 - H / 2) * s.m;
-    c.translate(W / 2, H / 2); c.scale(s.z, s.z); c.translate(-px, -py);
+    const b = s.f.boss, cx = S.cam.x, cy = S.cam.y, px = cx + (b.x - cx) * s.m, py = cy + (b.y - 40 - cy) * s.m;
+    c.translate(cx, cy); c.scale(s.z, s.z); c.translate(-px, -py);
   }
   function drawArena(t) {
     const c = ctx, f = g.fight, a = f.def.arena, b = f.boss, IS = introState();
-    if (!arenaFloor(c, a)) drawMotif(c, a.motif, '#f0e0c0', t);
-    // 경계: 등장 연출 중에는 숨기고 끝나기 0.5초 전부터 다시 보인다
-    const edgeA = IS ? clamp01((IS.e - 3.7) / 0.5) : 1;
-    if (edgeA > 0) arenaRim(c, f, edgeA);
+    if (!arenaFloor(c, a, f.def.id)) drawMotif(c, a.motif, '#f0e0c0', t);
+    // 경계 난간: 등장 연출 중에도 그린다(난간 밖 바닥이 어두워져서, 난간을 숨기면 밝기가 끊기는 줄이 그대로 드러난다)
+    arenaRim(c, f, 1);
     f.hazards.forEach((h) => drawHazard(c, h));
     drawRaid(c, t);
     // 보스(잠행 중에는 보이지 않는다. 분신 기믹에서는 그림자가 있는 쪽이 진짜)
@@ -1864,7 +1964,9 @@
     if (hr.slam > 0.1) Art.fxAnim(c, 'wave', 1 - hr.slam, b.x, b.y + 62, 380, 380, 0, 0.9, null, { col: '#fff2d0', sy: 0.4 });
     c.filter = 'none';
     c.textAlign = 'center';
-    if (M.charmT > 0) {
+    // 판이 끝나면(시간 초과·전멸 패배 연출) 보스 머리 위 기믹 안내 글은 지운다(연출 위에 남아 장수와 겹쳤다)
+    const tags = !g.over;
+    if (!tags) { /* 안내 없음 */ } else if (M.charmT > 0) {
       // 매혹: 하트 그림(Kenney symbol_01)이 떠오른다
       if (SKF) for (let i = 0; i < 5; i++) {
         const ph = (t * 0.8 + i / 5) % 1, hx = b.x + Math.sin(i * 2.3 + t * 2) * 46, hy = b.y - 70 - ph * 90, s = (14 + Math.sin(ph * Math.PI) * 10) * 3.2;
@@ -1872,13 +1974,13 @@
       }
       bossTag(c, I.t('e_charm'), b.x, b.y - 84, '400 28px "Black Han Sans", sans-serif', '#ff9ad0');
     } else if (b.stun > 0) bossTag(c, I.t('stun'), b.x, b.y - 84, '400 22px "Black Han Sans", sans-serif', '#ffe27a');
-    if (M.gr > 0) bossTag(c, I.t('groggy'), b.x, b.y - 96, '400 30px "Black Han Sans", sans-serif', '#7fd4ff');
-    if (M.ctr > 0) {
+    if (tags && M.gr > 0) bossTag(c, I.t('groggy'), b.x, b.y - 96, '400 30px "Black Han Sans", sans-serif', '#7fd4ff');
+    if (tags && M.ctr > 0) {
       bossTag(c, I.t('counter'), b.x, b.y - 112, '400 28px "Black Han Sans", sans-serif', '#bfe2ff');
       // 반격 게이지: 정면에서 넣은 피해
       bar(c, b.x, b.y - 92, 150, 8, Math.min(1, (M.ctrGot || 0) / (M.ctrNeed || 1)), '#4aa8ff');
     }
-    if (M.ampT > 0) bossTag(c, I.t('weakened', { n: Math.round(M.amp * 100) }), b.x, b.y + 98, '700 18px "IBM Plex Sans KR", sans-serif', '#d8b4ff');
+    if (tags && M.ampT > 0) bossTag(c, I.t('weakened', { n: Math.round(M.amp * 100) }), b.x, b.y + 98, '700 18px "IBM Plex Sans KR", sans-serif', '#d8b4ff');
     // 팔진도: 보스 머리 위 문양과 같은 문이 생문(어두운 금속 판 그림 위에)
     if (M.objs.some((o) => o.k === 'gate')) { const pl = Art.pic('ui_tab'); if (pl) Art.nine(c, pl, b.x - 50, b.y - 174, 100, 78, 12, 10); else { c.fillStyle = 'rgba(16,11,8,.7)'; c.fillRect(b.x - 46, b.y - 170, 92, 70); } c.fillStyle = '#d8ecff'; drawSym(c, b.x, b.y - 135, M.sym, 30); }
     }
@@ -1897,7 +1999,8 @@
       FALLEN.delete(u);
       if (u === act) {
         // 내 장수: 발밑 금색 문양 그림 + 옅은 사거리 원판 그림 + 이동 목표까지 빛줄기 그림
-        rangeMark(c, u.x, u.y, g.range(u.def) + 40, '#7dff8e', 0.13);
+        // 사거리 표시: 채운 연두색 원판(얼룩처럼 보였다) 대신 얇은 금 테 그림(gfx/ui_select)만 옅게. 안쪽은 채우지 않는다
+        rangeRing(c, u.x, u.y, g.range(u.def) + 40, 0.24);
         selMark(c, u.x, u.y + CHAMP_R * 0.72, CHAMP_R, t);
         if (u.move) streak(c, '#7dff8e', u.x, u.y, u.tx, u.ty, 5, 0.55);
       }
@@ -1932,52 +2035,65 @@
     drawVfx(c);
     drawFx(c);
     if (g.mut.night) drawNight(c, true);
-    if (g.phase === 'boss') {
-      // 휴대폰에서는 보스 체력·남은 시간·기술 이름·딜미터를 키워 그린다(위 가운데 / 오른쪽 위 기준)
-      const us = uiS();
-      c.save(); c.translate(W - 56, 66); c.scale(Math.min(us, 1.3), Math.min(us, 1.3)); c.translate(-(W - 56), -66);
-      drawMeter(c, meterRows(f.dealt, f.total));
-      c.restore();
-      c.save(); c.translate(W / 2, 0); c.scale(us, us); c.translate(-W / 2, 0);
-      bossBar(c, f, b, us);
-      c.fillStyle = '#fff'; c.font = '700 18px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.lineWidth = 4; c.strokeStyle = 'rgba(0,0,0,.75)'; c.lineJoin = 'round'; c.strokeText(`${f.def.name}  ${fmt(b.hp)} / ${fmt(b.mhp)}`, W / 2, 34);
-      c.fillText(`${f.def.name}  ${fmt(b.hp)} / ${fmt(b.mhp)}`, W / 2, 34);
-      const left = Math.max(0, f.limit - f.t), fast = f.t / f.limit <= 1 - g.fastNeed();
-      c.fillStyle = left < 20 ? '#ff7a60' : '#fff'; c.font = '400 28px "Black Han Sans", sans-serif'; c.fillText(`${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`, W / 2, 68);
-      c.fillStyle = fast ? '#ffd86a' : '#a8987f'; c.font = '500 13px "IBM Plex Sans KR", sans-serif'; c.fillText(I.t(fast ? 'fastOk' : 'fastNo'), W / 2, 90);
-      const M = f.mech;
-      if (M.vuln > 0) { c.fillStyle = '#ffb070'; c.font = '700 14px "IBM Plex Sans KR", sans-serif'; c.fillText(I.t('vuln', { n: Math.round(M.vuln * 100) }), W / 2 + 560, 34); }
-      if (M.cast) {
-        const fr = Math.min(1, M.cast.got / M.cast.need), left = Math.max(0, M.cast.dur - M.cast.t);
-        { const pl = Art.pic('ui_title'); if (pl) Art.nine(c, pl, W / 2 - 350, 146, 700, 66, 24, 22); else { c.fillStyle = 'rgba(16,11,8,.75)'; c.fillRect(W / 2 - 330, 150, 660, 58); } }
-        bar(c, W / 2, 190, 620, 16, fr, '#7fd4ff');
-        c.fillStyle = '#fff'; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.fillText(I.t('castLine', { a: M.cast.n, p: Math.round(fr * 100), s: left.toFixed(1) }) + I.t(M.cast.spots ? 'castSpots' : 'castAll'), W / 2, 166);
-        // 서야 할 자리는 실제 전장 좌표라서 글씨 확대를 잠시 풀고 그린다
-        if (M.cast.spots) { c.save(); c.translate(W / 2, 0); c.scale(1 / us, 1 / us); c.translate(-W / 2, 0); M.cast.spots.forEach((s) => { Art.fxPic(c, 'mc_rune3', s[0], s[1], s[2] * 2.1, s[2] * 2.1, t * 0.6, 0.85, { col: '#a8ffb8' }); ringSpr(c, 'circle_02', '#a8ffb8', s[0], s[1], s[2], 0, 0.9); }); c.restore(); }
-      }
-      if (M.objs.some((o) => o.k === 'clone')) { c.fillStyle = '#fff'; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.fillText(I.t('clones'), W / 2, 176); }
-      if (S.pattern && S.pattern.t > 0) {
-        S.pattern.t -= S.fdt;
-        // 기술 이름: 체력바 밑 고정 자리에 어두운 금속 판 그림(gfx/ui_title)을 깔아 제단·장판 그림과 겹쳐도 읽히게 한다.
-        // 나타날 때는 위아래로 펼쳐지고 사라질 때는 접힌다(투명하게 흐려지며 뒤 그림과 섞이지 않게).
-        const open = Math.min(1, (1.6 - S.pattern.t) / 0.12), close = Math.min(1, S.pattern.t / 0.22), fy = Math.max(0.02, Math.min(open, close));
-        c.font = '400 38px "Black Han Sans", sans-serif';
-        const pw = Math.min(900, c.measureText(S.pattern.name).width + 90), pl = Art.pic('ui_title');
-        c.save(); c.translate(W / 2, 132); c.scale(1, fy);
-        if (pl) Art.nine(c, pl, -pw / 2, -29, pw, 58, 26, 24);
-        else { c.fillStyle = 'rgba(16,11,8,.72)'; c.fillRect(-pw / 2, -23, pw, 46); c.fillStyle = f.def.fx; c.fillRect(-pw / 2, -23, pw, 2); c.fillRect(-pw / 2, 21, pw, 2); }
-        c.lineWidth = 5; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineJoin = 'round'; c.strokeText(S.pattern.name, 0, 0);
-        c.fillStyle = f.def.fx; c.fillText(S.pattern.name, 0, 0); c.restore();
-      }
-      c.restore();
-    }
+    // 기를 모으는 기술의 "서야 할 자리"는 전장 좌표라 여기서 그린다. 체력 막대·남은 시간·기술 이름·안내는 화면 고정이라 drawBossHud가 카메라를 풀고 그린다
+    if (g.phase === 'boss' && !g.over && M.cast && M.cast.spots) M.cast.spots.forEach((s) => { Art.fxPic(c, 'mc_rune3', s[0], s[1], s[2] * 2.1, s[2] * 2.1, t * 0.6, 0.85, { col: '#a8ffb8' }); ringSpr(c, 'circle_02', '#a8ffb8', s[0], s[1], s[2], 0, 0.9); });
     // 등장 연출: 보스 주변만 밝게(바깥을 둥글게 누른다). 전장 좌표라 확대와 함께 움직인다
     if (IS && IS.dark > 0.01) {
       const r0 = 150 * IS.big, sg = c.createRadialGradient(b.x, b.y - 40, r0, b.x, b.y - 40, r0 + 520);
       sg.addColorStop(0, 'rgba(6,4,3,0)'); sg.addColorStop(1, `rgba(6,4,3,${IS.dark.toFixed(3)})`);
       c.fillStyle = sg; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
     }
+  }
+  // ---- 보스전 화면 고정 표시(09-render-camera가 카메라 변환을 풀고 부른다: hudCam). 카메라를 확대하거나 장수를 따라가도 제자리에 있다 ----
+  // 좌표는 화면 위 가운데가 (W/2, top)이고 us배 한 칸 안. 위에서부터 고정 자리:
+  //   체력 막대 12~26 / 이름·남은 시간·체력 숫자 44 / 속공 문구 66(기술 이름·안내가 뜨는 동안은 숨김) / 피해 순위 접힌 줄 74~98(오른쪽, 05-lane drawMeter)
+  //   / 기술 이름 띠 104~156(가운데, 순위 줄 아래) / 기믹 안내(기 모으기 막대, 분신 안내) 162~ / 알림 띠(08-pop drawBanner)는 이 중 떠 있는 것의 아래(S.hudBottom, 09 render가 내려 그린다)
+  function drawBossHud(c, t) {
+    const f = g.fight, b = f.boss, M = f.mech, us = hudS(), top = hudTop();
+    c.save(); c.translate(W - 56, top + 66); c.scale(Math.min(us, 1.3), Math.min(us, 1.3)); c.translate(-(W - 56), -66);
+    drawMeter(c, meterRows(f.dealt, f.total));
+    c.restore();
+    c.save(); c.translate(W / 2, top); c.scale(us, us); c.translate(-W / 2, 0);
+    const BW = bossBar(c, f, b, us), x0 = W / 2 - BW / 2;
+    const txt = (s, x, y, col) => { c.lineWidth = 4; c.strokeStyle = 'rgba(0,0,0,.75)'; c.lineJoin = 'round'; c.strokeText(s, x, y); c.fillStyle = col; c.fillText(s, x, y); };
+    c.textBaseline = 'middle'; c.font = '700 15px "IBM Plex Sans KR", sans-serif';
+    c.textAlign = 'left'; txt(f.def.name, x0, 44, '#fff');
+    c.textAlign = 'right'; txt(`${fmt(b.hp)} / ${fmt(b.mhp)}`, x0 + BW, 44, '#fff');
+    if (M.vuln > 0) { c.font = '700 13px "IBM Plex Sans KR", sans-serif'; txt(I.t('vuln', { n: Math.round(M.vuln * 100) }), x0 + BW, 63, '#ffb070'); }
+    const left = Math.max(0, f.limit - f.t), fast = f.t / f.limit <= 1 - g.fastNeed();
+    c.textAlign = 'center'; c.font = '400 26px "Black Han Sans", sans-serif'; txt(`${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`, W / 2, 46, left < 20 ? '#ff7a60' : '#fff');
+    // 판이 끝나면(패배 연출) 기술 이름 띠·기믹 안내는 지운다. 체력 막대·이름·남은 시간은 남긴다
+    if (g.over) S.pattern = null;
+    const pat = S.pattern && S.pattern.t > 0, live = !g.over, clone = live && M.objs.some((o) => o.k === 'clone'), cast = live && M.cast;
+    // 알림 띠가 비켜야 할 아래 끝(화면 고정 좌표). 띠·안내가 없으면 0(알림 띠는 제자리)
+    S.hudBottom = cast ? top + 224 * us : clone ? top + 200 * us : pat ? top + 156 * us : 0;
+    if (live && !pat && !cast && !clone) { c.font = '500 13px "IBM Plex Sans KR", sans-serif'; txt(I.t(fast ? 'fastOk' : 'fastNo'), W / 2, 66, fast ? '#ffd86a' : '#a8987f'); }
+    if (pat) {
+      S.pattern.t -= S.fdt;
+      // 기술 이름: 어두운 금속 판 그림(gfx/ui_title) 위에. 나타날 때는 위아래로 펼쳐지고 사라질 때는 접힌다(투명하게 흐려지며 뒤 그림과 섞이지 않게).
+      const open = Math.min(1, (1.6 - S.pattern.t) / 0.12), close = Math.min(1, S.pattern.t / 0.22), fy = Math.max(0.02, Math.min(open, close));
+      c.font = '400 34px "Black Han Sans", sans-serif';
+      const pw = Math.min(900, c.measureText(S.pattern.name).width + 84), pl = Art.pic('ui_title');
+      c.save(); c.translate(W / 2, 130); c.scale(1, fy);
+      if (pl) Art.nine(c, pl, -pw / 2, -26, pw, 52, 26, 22);
+      else { c.fillStyle = 'rgba(16,11,8,.72)'; c.fillRect(-pw / 2, -21, pw, 42); c.fillStyle = f.def.fx; c.fillRect(-pw / 2, -21, pw, 2); c.fillRect(-pw / 2, 19, pw, 2); }
+      c.lineWidth = 5; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineJoin = 'round'; c.strokeText(S.pattern.name, 0, 0);
+      c.fillStyle = f.def.fx; c.fillText(S.pattern.name, 0, 0); c.restore();
+    }
+    // 기믹 안내: 기술 이름 띠 아래 고정 자리. 뒤의 보스·장수와 섞이지 않게 어두운 금속 판을 깐다
+    const plate = (w, y, h) => { const pl = Art.pic('ui_title'); if (pl) Art.nine(c, pl, W / 2 - w / 2, y, w, h, 24, 18); else { c.fillStyle = 'rgba(16,11,8,.75)'; c.fillRect(W / 2 - w / 2 + 14, y + 4, w - 28, h - 8); } };
+    if (cast) {
+      const fr = Math.min(1, M.cast.got / M.cast.need), cl = Math.max(0, M.cast.dur - M.cast.t), cw = Math.min(700, 1100 / us);
+      plate(cw, 162, 62);
+      c.font = '700 16px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillStyle = '#fff'; c.fillText(I.t('castLine', { a: M.cast.n, p: Math.round(fr * 100), s: cl.toFixed(1) }) + I.t(M.cast.spots ? 'castSpots' : 'castAll'), W / 2, 180, cw - 60);
+      bar(c, W / 2, 196, cw - 80, 12, fr, '#7fd4ff');
+    } else if (clone) {
+      c.font = '700 16px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      const s = I.t('clones'), cw = Math.min(900, c.measureText(s).width + 76);
+      plate(cw, 162, 38); c.fillStyle = '#fff'; c.fillText(s, W / 2, 181);
+    }
+    c.restore();
   }
   // 보스·장수 머리 위 글자: 휴대폰 배율을 곱하고 먹 테두리를 두른다
   function bossTag(c, txt, x, y, font, col) {
@@ -1986,11 +2102,11 @@
     c.save(); c.translate(x, y); c.scale(us, us); c.font = font; c.textAlign = 'center'; c.textBaseline = 'alphabetic'; c.lineJoin = 'round';
     c.lineWidth = 5; c.strokeStyle = 'rgba(16,10,6,.9)'; c.strokeText(txt, 0, 0); c.fillStyle = col; c.fillText(txt, 0, 0); c.restore();
   }
-  // 보스 체력 막대: 장식 틀 그림(gfx/ui_bossbar) 안쪽에 채움. 줄어든 만큼 잠깐 남았다가 뒤따라 줄어드는 잔상 띠, 왼쪽 끝에 보스 얼굴(기존 SD 그림).
+  // 보스 체력 막대(얇게: 높이 14, 예전 28): 장식 틀 그림(gfx/ui_bossbar) 안쪽에 채움. 줄어든 만큼 잠깐 남았다가 뒤따라 줄어드는 잔상 띠.
   // 폭은 휴대폰 배율을 곱해도 오른쪽 위 버튼 밑으로 들어가지 않게 줄인다. 그림이 없으면 어두운 금속 판(ui_title) 틀.
-  // (호출하는 쪽이 화면 위 가운데를 기준으로 us배 해 두었다)
+  // (호출하는 쪽이 화면 위 가운데를 기준으로 us배 해 두었다. 막대 폭을 돌려준다)
   function bossBar(c, f, b, us) {
-    const BW = Math.min(820, 1000 / us), BH = 28, x0 = W / 2 - BW / 2, y = 20, fr = Math.max(0, Math.min(1, b.hp / b.mhp));
+    const BW = Math.min(760, 900 / us), BH = 14, x0 = W / 2 - BW / 2, y = 12, fr = Math.max(0, Math.min(1, b.hp / b.mhp));
     let gh = S.bossGhost;
     if (!gh || gh.f !== f) gh = S.bossGhost = { f, v: fr, last: fr, hold: 0 };
     if (fr < gh.last - 1e-6) gh.hold = 0.45; // 맞은 순간: 잔상은 잠깐 그대로 있다가
@@ -1999,21 +2115,21 @@
     if (gh.v < fr) gh.v = fr;
     const im = Art.pic('ui_bossbar');
     if (im) {
-      // 틀 그림(1200×203): 안쪽 검은 칸이 x 205~1095, y 68~165. 왼쪽 용머리(0~230)·오른쪽 구름(1070~1200)은 세로 배율 그대로 두고 가운데만 가로로 늘인다(3조각).
-      const k = BH / 97, L = 230, R = 1070, fx0 = x0 - 205 * k, fw = BW + (205 + 105) * k, fy = y - 68 * k, fh = im.height * k;
-      c.drawImage(im, 0, 0, L, im.height, fx0, fy, L * k, fh);
-      c.drawImage(im, L, 0, R - L, im.height, fx0 + L * k, fy, fw - (L + im.width - R) * k, fh);
-      c.drawImage(im, R, 0, im.width - R, im.height, fx0 + fw - (im.width - R) * k, fy, (im.width - R) * k, fh);
+      // 틀 그림(1200×203): 안쪽 검은 칸이 y 68~165. 막대가 얇아져 용머리·구름·가운데 꾸밈은 너무 작아 읽히지 않으므로 뺐다(아트 디렉터 검수).
+      // 장식이 없는 민 테두리 구간(x 240~510: 위아래 금 선 + 검은 속)만 막대 길이로 늘여 선만 남긴다.
+      const k = BH / 97, ih = im.height;
+      c.drawImage(im, 240, 0, 270, ih, x0 - 3, y - 68 * k, BW + 6, ih * k);
     } else { const pl = Art.pic('ui_title'); if (pl) Art.nine(c, pl, x0 - 26, y - 9, BW + 52, BH + 18, 26, 20); c.fillStyle = 'rgba(8,5,3,.82)'; c.fillRect(x0, y, BW, BH); }
     // 채움: 틀 안쪽 둥근 끝에 걸리지 않게 양끝·위아래를 조금 들인다
-    const ix = x0 + 4, iy = y + 3, iw = BW - 8, ih = BH - 6;
-    c.fillStyle = 'rgba(255,240,210,.7)'; c.fillRect(ix, iy, iw * gh.v, ih);
-    c.fillStyle = f.def.fx; c.fillRect(ix, iy, iw * fr, ih);
-    c.fillStyle = 'rgba(255,255,255,.2)'; c.fillRect(ix, iy, iw * fr, ih * 0.4);
-    c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(ix, iy + ih * 0.75, iw * fr, ih * 0.25);
+    const ix = x0 + 2, iy = y + 1.5, iw = BW - 4, ih2 = BH - 3;
+    c.fillStyle = 'rgba(255,240,210,.7)'; c.fillRect(ix, iy, iw * gh.v, ih2);
+    c.fillStyle = f.def.fx; c.fillRect(ix, iy, iw * fr, ih2);
+    c.fillStyle = 'rgba(255,255,255,.2)'; c.fillRect(ix, iy, iw * fr, ih2 * 0.4);
+    c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(ix, iy + ih2 * 0.75, iw * fr, ih2 * 0.25);
     // 보스 얼굴: 틀 그림이 없을 때만 왼쪽 끝에(틀 그림은 왼쪽 끝이 용머리 장식이라 겹치지 않게 생략)
     const face = !im && Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, 0, 0);
     if (face) { c.save(); c.beginPath(); c.rect(x0 - 96, y - 40, 92, BH + 46); c.clip(); Art.drawSprite(c, face, x0 - 48, y + 36, 116, false); c.restore(); }
+    return BW;
   }
   // 쓰러진 장수: 1.1초 동안 조각 애니메이션의 쓰러짐 동작(없으면 그림을 눕힘)으로 넘어지며 흐려지고, 발밑에 흙먼지가 인다
   const FALLEN = new WeakMap(), FALL_LEN = 1.1;
@@ -2040,6 +2156,7 @@
     const bs = g.stats && g.stats.bosses, lb = bs && bs[bs.length - 1];
     if (!lb || !lb.win || lb.round !== f.def.round) return;
     const ac = f.champs.find((u) => !u.dead && !u.bench);
+    S.pattern = null; // 처치 연출에는 기술 이름 띠를 남기지 않는다(다음 보스전에 묵은 띠가 뜨지 않게)
     S.kill = { f, t: 0, flip: ac ? ac.x > f.boss.x : false, hit: 0 };
     S.shake = Math.max(S.shake || 0, 1);
     if (!net) S.hitStop = Math.max(S.hitStop || 0, KILL_LEN);
@@ -2050,7 +2167,7 @@
     const K = S.kill, f = K.f, b = f.boss, c = ctx, SK = window.RTD_SKFX;
     K.t += S.fdt;
     const k = K.t;
-    arenaFloor(c, f.def.arena); arenaRim(c, f, 1);
+    arenaFloor(c, f.def.arena, f.def.id); arenaRim(c, f, 1);
     // 이긴 장수들은 보스 쪽을 보고 선다
     f.champs.forEach((u) => { if (u.dead || u.bench) return; piece(c, u.x, u.y, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf({ face: Math.atan2(b.y - u.y, b.x - u.x), def: u.def, id: 1 }, t, CHAMP_R), rig: { state: 'idle', t } }); });
     Object.values(f.ghosts || {}).forEach((o) => { if (o.def) piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf({ face: Math.atan2(b.y - o.y, b.x - o.x), def: o.def, id: 1 }, t, CHAMP_R) }); });
@@ -2087,13 +2204,14 @@
     const f = s.f, e = s.e, fo = 1 - clamp01((e - 3.7) / 0.4);
     // 내려찍는 순간 한 번: 흔들림
     if (e >= INTRO_HIT && S.introHit !== f) { S.introHit = f; S.shake = Math.max(S.shake || 0, Q.level === 'low' ? 0.55 : 0.8); }
-    const bh = 120 * s.lb;
+    // 위 장소 글씨와 아래 대사는 휴대폰 배율(hudS, 최대 1.7)만큼 키운다(휴대폰에서 9~10pt로 작았다)
+    const bh = 120 * s.lb, cs = hudS();
     c.save();
     c.fillStyle = '#000'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, OVER.y + bh); c.fillRect(-OVER.x, H - bh, W + OVER.x * 2, OVER.y + bh);
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
     // 0.3초: 장소(위 레터박스)
     const aPlace = clamp01((e - 0.3) / 0.35) * fo;
-    if (aPlace > 0) { c.globalAlpha = aPlace; c.fillStyle = '#e8dcc0'; c.font = '700 26px "Gowun Batang", serif'; c.fillText(I.t('roundPlace', { r: f.def.round, p: f.def.place }), W / 2, bh / 2); }
+    if (aPlace > 0) { c.globalAlpha = aPlace; c.fillStyle = '#e8dcc0'; c.font = `700 ${Math.round(26 * cs)}px "Gowun Batang", serif`; c.fillText(I.t('roundPlace', { r: f.def.round, p: f.def.place }), W / 2, bh / 2); }
     const TY = H - 275, NY = H - 196;
     // 1.85초: 이름 뒤 먹 띠(신화 등장과 같은 띠)
     const aBand = clamp01((e - 1.85) / 0.25) * fo;
@@ -2121,7 +2239,7 @@
     }
     // 2.3초: 대사(아래 레터박스)
     const aLine = clamp01((e - 2.3) / 0.35) * fo;
-    if (aLine > 0) { c.globalAlpha = aLine; c.fillStyle = '#e8dcc0'; fitFont(c, `“${f.def.line}”`, 400, 23, '"Gowun Batang", serif', W - 160); c.fillText(`“${f.def.line}”`, W / 2, H - bh / 2); }
+    if (aLine > 0) { c.globalAlpha = aLine; c.fillStyle = '#e8dcc0'; fitFont(c, `“${f.def.line}”`, 400, Math.round(23 * cs), '"Gowun Batang", serif', W - 160); c.fillText(`“${f.def.line}”`, W / 2, H - bh / 2); }
     // 1.6~1.75초: 흰 번쩍임
     if (e >= INTRO_HIT && e < INTRO_HIT + 0.15) { c.globalAlpha = 0.35 * (1 - (e - INTRO_HIT) / 0.15); c.fillStyle = '#fff'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); }
     c.restore();
@@ -2759,9 +2877,25 @@
     // 흔들림 폭은 글씨처럼 작은 화면에서 키운다(uiS: PC 1, 휴대폰 최대 1.7)
     const shk = 14 * uiS() * (S.shake || 0) * S.scale;
     const sx = (Math.random() - 0.5) * shk, sy = (Math.random() - 0.5) * shk;
-    const ph = g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');
+    // 보스 처치 순간(S.kill)은 판이 이미 라인으로 넘어간 뒤에도 경기장을 붙잡아 그리므로, 그동안은 보스전 카메라를 그대로 둔다
+    watchKill();
+    if (S.kill && !killOn()) S.kill = null;
+    const arenaV = !!S.kill || !!(g.fight && g.phase !== 'wave' && !laneOn());
+    const ph = S.kill ? S.camPh : g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');
+    S.camArena = arenaV;
     if (S.camPh !== ph) { S.camPh = ph; resetCam(); }
-    if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) { const ac = g.active(); if (ac) { const ck = 1 - Math.pow(0.9, S.f60); S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ac.y - S.cam.y) * ck; } }
+    if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) {
+      const ac = g.active();
+      if (ac) {
+        // 내 장수를 따라가되, 보스가 위 표시 띠(hudBand) 밑이나 화면 아래로 빠지지 않는 쪽으로 높이를 고른다. 둘 다 못 담으면 내 장수가 먼저다.
+        // 내 장수의 아래 여백은 65단위(발 35 + 발밑 고리까지 = 아래 경계에 선 장수와 같은 자리. 예전 110이라 아래쪽에 선 장수와 위쪽 보스를 절충할 폭이 45단위 좁았다)
+        // 휴대폰 가로 1.2배(세로 842단위, 띠 약 133단위): 보스와 내 장수(둘 다 기준점)의 세로 거리가 약 450단위를 넘으면 둘 다는 못 담고 보스 머리가 띠 밑으로 들어간다.
+        const ck = 1 - Math.pow(0.9, S.f60), vh = S.base.sh / (S.base.s0 * S.cam.z), hb = hudBand(), b = g.fight.boss, cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        let ty = cl(ac.y, b.y - vh / 2 + 100, b.y + vh / 2 - hb - 190);
+        ty = cl(ty, ac.y - vh / 2 + 65, ac.y + vh / 2 - hb - 120);
+        S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ty - S.cam.y) * ck;
+      }
+    }
     applyCam();
     ctx.setTransform(S.scale, 0, 0, S.scale, S.ox + sx, S.oy + sy);
     // 강타 카메라 펀치: 보스 쪽으로 순간 확대했다 돌아온다
@@ -2771,12 +2905,22 @@
     // 보스 등장: 보스 쪽으로 밀어 들어가는 확대(그리기 변환만. S.cam은 그대로). 글씨·레터박스는 확대를 풀고 화면 좌표로 그린다
     const intro = g.fight && !laneOn() ? introState() : null;
     if (intro) introCam(ctx, intro);
-    watchKill(); watchMoments();
-    if (S.kill && !killOn()) S.kill = null;
+    watchMoments();
     if (S.kill) drawKillCam(t);
     else if (g.fight && g.phase !== 'wave' && !laneOn()) drawArena(t); else if (watching) drawRemoteLane(t, watching); else drawLane(t);
-    if (intro) { ctx.setTransform(S.scale, 0, 0, S.scale, S.ox + sx, S.oy + sy); drawBossIntro(ctx); }
-    drawText(ctx); drawBanner();
+    // 피해 숫자는 전장 좌표(카메라 그대로, 등장 확대·펀치만 푼다)
+    ctx.setTransform(S.scale, 0, 0, S.scale, S.ox + sx, S.oy + sy);
+    drawText(ctx);
+    // 보스전 화면에서는 여기부터 카메라를 풀고 화면 고정 좌표로 그린다: 보스 체력·남은 시간·기술 이름·안내, 등장 글씨, 알림 띠, 등장 연출
+    if (arenaV) {
+      hudCam(ctx, 0, 0);
+      if (!S.kill && g.phase === 'boss') drawBossHud(ctx, t);
+      hudCam(ctx, sx, sy);
+      if (intro) drawBossIntro(ctx);
+    }
+    // 보스전: 알림 띠는 기술 이름 띠·기믹 안내가 떠 있으면 그 아래로 내려 그린다(S.hudBottom은 drawBossHud가 매 프레임 적는다. 띠 그림의 위 끝이 y 150)
+    const bdy = arenaV && !S.kill && g.phase === 'boss' && S.hudBottom ? Math.max(0, S.hudBottom + 6 - 150) : 0;
+    if (bdy) { ctx.save(); ctx.translate(0, bdy); drawBanner(); ctx.restore(); } else drawBanner();
     drawMoments(ctx);
     drawPop(ctx, t, dt);
   }
@@ -2809,7 +2953,8 @@
     const M = S.mo, dt = S.fdt, us = uiS();
     // 라운드 전환: 먹 띠(gfx/ui_ink)가 왼쪽에서 그어지고 "라운드 N"이 박혔다가 1.6초 뒤 사라진다
     // 보스 처치 순간에는 미뤘다가 그다음에 띄운다
-    if (M.rd && !S.kill) {
+    // 討伐成功 패널(08-pop drawVictory)이 떠 있는 동안에도 미룬다(패널 글자 뒤로 먹 띠가 비쳤다)
+    if (M.rd && !S.kill && !(S.pop && S.pop.vic) && !popQ.some((p) => p.vic)) {
       const k = (M.rd.t += dt), L = 1.6;
       if (k >= L || g.phase !== 'wave' || g.over) M.rd = null;
       else {
@@ -2835,7 +2980,8 @@
       else {
         drawEdge(c, '60,6,4', Math.min(1, k / 0.9) * 0.95);
         // 성(또는 경기장 가운데) 위로 연기가 피어오른다
-        const fx0 = W / 2, fy0 = g.fight ? g.fight.boss.y : H / 2;
+        // 보스전은 화면 고정 좌표로 그리므로(render의 hudCam) 보스의 전장 높이를 화면 고정 좌표로 바꾼다(카메라가 1.2배로 장수를 따라가도 보스 쪽에 피어오르게)
+        const fx0 = W / 2, fy0 = g.fight ? (S.camArena ? H / 2 + (g.fight.boss.y - S.cam.y) * S.cam.z : g.fight.boss.y) : H / 2;
         for (let i = 0; i < 3; i++) { const q = (k - i * 0.25) / 1.4; if (q > 0 && q < 1) Art.fxAnim(c, 'smoke', q, fx0 + (i - 1) * 120, fy0 - 40 - q * 60, 420, 420, 0, 0.6 * (1 - q), null, { col: '#3a3028', op: 'source-over' }); }
         // 부서진 나무판과 흰 깃발이 위에서 떨어져 쿵 하고 박힌다
         const pl = Art.pic('defeat_plank');
@@ -2860,21 +3006,40 @@
   }
   // 카메라: z 1 = 맵 전체가 보이는 배율. 터치 기기는 화면을 꽉 채우는 배율에서 시작한다.
   S.cam = { z: 1, x: W / 2, y: H / 2 };
+  // 보스전 화면(S.camArena)은 1.2배로 당겨 내 장수를 따라간다. 터치 기기는 이 배율로 고정, PC는 휠로 1~3.2배.
+  const BOSS_Z = 1.2;
+  // 화면 고정 좌표: 카메라를 푼 변환(맵 전체가 보이는 배율, 화면 가운데 = (W/2, H/2)). 화면 위 끝의 y는 hudTop(), 글자 배율은 hudS()(uiS에서 카메라 배율을 뺀 것)
+  function hudCam(c, sx, sy) { const B = S.base; c.setTransform(B.s0 * B.dpr, 0, 0, B.s0 * B.dpr, (B.sw / 2 - (W / 2) * B.s0) * B.dpr + sx, (B.sh / 2 - (H / 2) * B.s0) * B.dpr + sy); }
+  const hudTop = () => H / 2 - S.base.sh / (2 * S.base.s0);
+  const hudS = () => Math.max(1, Math.min(1.7, 0.62 / S.base.s0));
+  // 화면 위 보스 표시 띠(체력 막대·이름·남은 시간·속공 문구)의 높이를 지금 카메라의 전장 단위로 잰 값(휴대폰 가로 1.2배: 105단위 = 화면 97px@2x)
+  // 피해 순위 접힌 줄(05-lane drawMeter: 같은 칸의 y 74~98)의 아래 끝까지를 띠로 본다
+  const hudBand = () => (100 * hudS()) / S.cam.z;
   // 터치 기기: 라인 길(또는 결투장)이 화면에 꽉 차게 맞춘다. 바깥 여백(업적 깃발 등)은 손가락으로 끌어서 본다.
   function resetCam() {
-    const B = S.base, r = g && g.phase !== 'wave' && g.fight && !S.laneView ? ARENA : ROAD, pad = 24;
-    // 터치 기기도 맵 전체가 보이는 배율(가장 축소한 화면)로 고정한다. 손가락 확대·축소는 막았다(10-input).
-    S.cam = { z: 1, x: W / 2, y: H / 2 };
+    // 라인: 터치 기기도 맵 전체가 보이는 배율(가장 축소한 화면)로 고정한다. 손가락 확대·축소는 막았다(10-input).
+    // 보스전: 1.2배, 경기장 가운데에서 시작(등장 연출 → 전투로 넘어갈 때는 보던 높이를 그대로 둔다)
+    const was = S.cam;
+    S.cam = S.camArena ? { z: BOSS_Z, x: (ARENA.x0 + ARENA.x1) / 2, y: was && was.arena ? was.y : (ARENA.y0 + ARENA.y1) / 2, arena: true } : { z: 1, x: W / 2, y: H / 2 };
     applyCam();
   }
   function applyCam() {
     const B = S.base;
     if (!B) return;
     const c = S.cam;
-    c.z = S.coarse ? 1 : Math.max(1, Math.min(3.2, c.z));
+    c.z = S.coarse ? (S.camArena ? BOSS_Z : 1) : Math.max(1, Math.min(3.2, c.z));
     const s = B.s0 * c.z, vw = B.sw / s, vh = B.sh / s;
-    c.x = vw >= W ? W / 2 : Math.max(vw / 2, Math.min(W - vw / 2, c.x));
-    c.y = vh >= H ? H / 2 : Math.max(vh / 2, Math.min(H - vh / 2, c.y));
+    if (S.camArena) {
+      // 보스전: 경기장 둘레까지만 본다. 위는 위 난간(바깥 끝이 경계선에서 85단위)이 보스 표시 띠(hudBand) 바로 밑에 오는 데까지, 아래는 아래 난간 가운데 줄(65단위)까지, 양옆은 폭의 10%까지 경기장 밖을 보여 준다.
+      // (휴대폰 가로 1.2배: 세로 842단위가 보이고 움직이는 폭은 332단위라, 어디에 서 있어도 경기장 세로의 70% 안팎이 한 화면에 들어온다)
+      // 그 범위가 화면보다 좁으면(휴대폰 가로: 경기장 폭이 다 들어온다) 경기장 가운데에 고정한다.
+      const x0 = ARENA.x0 - vw * 0.1, x1 = ARENA.x1 + vw * 0.1, y0 = ARENA.y0 - 85 - hudBand(), y1 = ARENA.y1 + 65;
+      c.x = vw >= x1 - x0 ? (ARENA.x0 + ARENA.x1) / 2 : Math.max(x0 + vw / 2, Math.min(x1 - vw / 2, c.x));
+      c.y = vh >= y1 - y0 ? (y0 + y1) / 2 : Math.max(y0 + vh / 2, Math.min(y1 - vh / 2, c.y));
+    } else {
+      c.x = vw >= W ? W / 2 : Math.max(vw / 2, Math.min(W - vw / 2, c.x));
+      c.y = vh >= H ? H / 2 : Math.max(vh / 2, Math.min(H - vh / 2, c.y));
+    }
     S.scale = s * B.dpr; S.ox = (B.sw / 2 - c.x * s) * B.dpr; S.oy = (B.sh / 2 - c.y * s) * B.dpr;
   }
   function fit() {
@@ -2983,6 +3148,12 @@
       const cut = pp.dur - pp.t - 0.3; pp.skip = 1; pp.dur = pp.t + 0.3;
       if (S.freeze > 0) S.freeze = Math.max(0, S.freeze - cut);
       return;
+    }
+    if (inBoss()) {
+      // 딜미터를 누르면 펼치고 접는다(05-lane drawMeter)
+      if (e.button !== 2 && meterHit(e)) { S.meterOpen = !S.meterOpen; Snd.play('click', 40); return; }
+      // 떠 있는 조이스틱: 화면 왼쪽 아래 영역을 누르면 그 자리에 조이스틱이 생긴다(15-pad). 이 손가락은 아래 탭·끌기 처리에 넣지 않는다
+      if (e.pointerType === 'touch' && joyZone(e)) { e.preventDefault(); joyStart(e, true); return; }
     }
     view.focus({ preventScroll: true });
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -3786,6 +3957,8 @@
   }
   // ---- 보스전 직접 조작(모바일 MOBA식) ----
   // 왼쪽 조이스틱으로 이동, 오른쪽 아래 공격 버튼을 누르고 있는 동안 공격(자동 공격 없음).
+  // 조이스틱은 떠 있는 방식: 보스전에서 화면 왼쪽 아래 영역(JOY_ZONE) 어디든 누르면 그 자리에 받침이 생기고,
+  // 끄는 거리(JOY_R)를 넘어가면 받침이 손가락을 따라온다. 손을 떼면 기본 자리(CSS)로 돌아간다. 라인의 조이스틱은 고정.
   // 스킬·이동기는 공격 버튼을 둘러싼 '고양이 발' 배치. 짧게 톡 = 사거리 안의 적에게 자동 조준(밖이면 보는 방향),
   // 꾹 누르고 끌면 장수 둘레에 사거리와 범위가 보이고 끈 방향·거리로 조준해 손을 떼면 쓴다.
   const PAD = { atk: null, aim: null, joy: null, jv: null, buf: null };
@@ -3896,29 +4069,62 @@
       dirty();
     };
     bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
-    // 조이스틱: 받침 안에서 누른 자리를 기준으로 끈 방향·세기로 움직인다
-    const knob = joy.querySelector('i'), R = 52;
+    // 조이스틱 받침을 직접 누름: 보스전의 터치는 누른 자리가 중심(떠 있는 방식), 라인·마우스는 받침 가운데가 중심
     joy.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
-      try { joy.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
-      const r = joy.getBoundingClientRect();
-      PAD.joy = { id: e.pointerId, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
-      joyMove(e);
+      joyStart(e, !PAD.lane && e.pointerType === 'touch');
     });
-    const joyMove = (e) => {
-      const J = PAD.joy;
-      if (!J || J.id !== e.pointerId) return;
-      let dx = e.clientX - J.cx, dy = e.clientY - J.cy;
-      const l = Math.hypot(dx, dy);
-      if (l > R) { dx = (dx / l) * R; dy = (dy / l) * R; }
-      knob.style.transform = `translate(${dx}px, ${dy}px)`;
-      PAD.jv = { x: dx / R, y: dy / R };
-      joy.classList.add('on');
-    };
-    joy.addEventListener('pointermove', joyMove);
-    const joyUp = (e) => { if (!PAD.joy || PAD.joy.id !== e.pointerId) return; PAD.joy = null; PAD.jv = null; knob.style.transform = ''; joy.classList.remove('on'); };
-    joy.addEventListener('pointerup', joyUp); joy.addEventListener('pointercancel', joyUp);
+    // 움직임·뗌은 창에서 받는다(전장을 눌러 시작한 손가락도 같은 길로 온다)
+    window.addEventListener('pointermove', joyMove);
+    window.addEventListener('pointerup', joyEnd); window.addEventListener('pointercancel', joyEnd);
   }
+  // ---- 조이스틱 ----
+  const JOY_R = 42, JOY_ZONE = { w: 0.45, h: 0.7 }; // 끌 수 있는 거리(px), 누르면 조이스틱이 생기는 영역(화면 왼쪽 45% × 아래 70%)
+  const joyK = () => (typeof zoom === 'number' && zoom > 0 ? zoom : 1); // #app 확대(큰 화면)만큼 화면 px과 CSS px이 다르다
+  // 전장(캔버스)을 누른 자리가 떠 있는 조이스틱 영역인가. 10-input이 보스전 터치에서 묻는다.
+  function joyZone(e) {
+    const joy = $('joy');
+    if (!joy || joy.hidden || PAD.lane || !g || !g.active()) return false;
+    const r = $('stage').getBoundingClientRect();
+    return e.clientX < r.left + r.width * JOY_ZONE.w && e.clientY > r.top + r.height * (1 - JOY_ZONE.h);
+  }
+  function joyPlace(J) {
+    const k = joyK();
+    $('joy').style.transform = J.cx === J.hx && J.cy === J.hy ? '' : `translate(${((J.cx - J.hx) / k).toFixed(1)}px, ${((J.cy - J.hy) / k).toFixed(1)}px)`;
+  }
+  function joyReset() {
+    const joy = $('joy');
+    PAD.joy = null; PAD.jv = null;
+    joy.style.transform = ''; joy.firstElementChild.style.transform = ''; joy.classList.remove('on');
+  }
+  // float: 누른 자리를 중심으로 받침을 옮긴다. 아니면 받침의 기본 자리 가운데가 중심
+  function joyStart(e, float) {
+    const joy = $('joy');
+    padInit();
+    if (PAD.joy) joyReset(); // 앞 손가락의 뗌을 놓쳤어도 새로 누르면 다시 잡힌다
+    try { joy.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+    const r = joy.getBoundingClientRect(), hx = r.left + r.width / 2, hy = r.top + r.height / 2;
+    const J = PAD.joy = { id: e.pointerId, hx, hy, cx: float ? e.clientX : hx, cy: float ? e.clientY : hy, float: !!float };
+    joyPlace(J);
+    joyMove(e);
+  }
+  function joyMove(e) {
+    const J = PAD.joy;
+    if (!J || J.id !== e.pointerId) return;
+    const k = joyK(), R = JOY_R * k;
+    let dx = e.clientX - J.cx, dy = e.clientY - J.cy;
+    const l = Math.hypot(dx, dy);
+    if (l > R) {
+      // 떠 있는 조이스틱은 끝까지 민 손가락을 받침이 따라온다
+      if (J.float) { J.cx += (dx / l) * (l - R); J.cy += (dy / l) * (l - R); joyPlace(J); }
+      dx = (dx / l) * R; dy = (dy / l) * R;
+    }
+    const joy = $('joy');
+    joy.firstElementChild.style.transform = `translate(${(dx / k).toFixed(1)}px, ${(dy / k).toFixed(1)}px)`;
+    PAD.jv = { x: dx / R, y: dy / R };
+    joy.classList.add('on');
+  }
+  function joyEnd(e) { if (PAD.joy && PAD.joy.id === e.pointerId) joyReset(); }
   // 매 프레임: 조이스틱·공격 버튼 상태를 지금 고른 장수에 넘긴다
   function padTick() {
     if (!g) return;
@@ -3940,7 +4146,7 @@
   const SK_GLYPH = { line: '斬', circle: '爆', cone: '扇', buff: '勢', shield: '盾', heal: '治', rally: '令', taunt: '挑', weaken: '弱' };
   // 공격 버튼 중심에서의 자리(반지름 px, 각도: 0=오른쪽, 90=위)
   // 화면 오른쪽 끝에서 잘리지 않게 모두 공격 버튼의 왼쪽~위쪽에만 둔다(안쪽 줄 3개, 바깥 줄 3개)
-  const PAW = [[112, 186], [112, 140], [112, 94], [188, 168], [188, 132], [188, 100]];
+  const PAW = [[96, 186], [96, 140], [96, 94], [158, 168], [158, 132], [158, 100]];
   function renderSkillBar() {
     const bar = $('skillbar'), joy = $('joy'), c = inBoss() && g.phase === 'boss' ? g.active() : null;
     padInit();
@@ -3951,7 +4157,8 @@
     $('stage').classList.toggle('lanejoy', lane);
     if (!c) {
       if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; PAD.atk = null; PAD.aim = null; }
-      if (joy.hidden === lane) { joy.hidden = !lane; if (!lane) { PAD.jv = null; PAD.joy = null; joy.classList.remove('on'); joy.querySelector('i').style.transform = ''; } }
+      if (PAD.joy && PAD.joy.float) joyReset(); // 보스전이 끝났거나 라인 보기로 넘어갔다: 떠 있던 받침을 제자리로
+      if (joy.hidden === lane) { joy.hidden = !lane; if (!lane) joyReset(); }
       return;
     }
     const sk = c.def.sk || [], heal = g.healLeft(), dash = c.def.tier >= g.R.dashMinTier;
@@ -4003,12 +4210,18 @@
     const gold = ln ? +ln.g || 0 : g.me.gold, lives = ln ? ln.l | 0 : g.lives, en = ln ? ln.n | 0 : g.enemyCount(), own = ln ? (ln.u || []).length : g.units.filter((u) => u.owner === 0).length;
     const tm = g.phase === 'wave' ? clock(Math.max(0, g.R.roundTime - g.roundT)) : g.phase === 'boss' && g.fight ? clock(Math.max(0, g.fight.limit - g.fight.t)) : '-';
     const cell = (l, v, cls) => `<div class="hs ${cls || ''}"><small>${l}</small><b>${v}</b></div>`;
-    let h = `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${g.phase === 'boss' && !S.laneView ? '' : cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '') + cell(t('troops'), own)}</div>`;
+    // 보스전 화면(bossV)에서는 접는다: 라운드 칸 하나 + 동료 얼굴 줄만. 남은 시간은 전장 위 가운데(07-arena)에 크게 나오므로 여기서는 뺀다.
+    // 보스전 중 라인 보기에서도 결투 시간 칸은 뺀다(같은 시간이 'ボス戦に戻る' 버튼에 있다).
+    const bossV = g.phase === 'boss' && !S.laneView;
+    let h = bossV ? `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}</div>`
+      : `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${g.phase === 'boss' ? '' : cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '') + cell(t('troops'), own)}</div>`;
     const hd = S.hudNext || {};
-    const chips = (hd.mids || []).map((m) => `<span class="nc mid" data-act="drawer" data-arg="war">${Array.isArray(m) ? `<span class="nw">${esc(m[0])}</span> <span class="nw">${esc(m[1])}</span>` : esc(m)}</span>`).join('') + (hd.boss ? `<span class="nc boss" data-act="drawer" data-arg="war">${t('nextBoss')}<br><b>${esc(hd.boss)}</b></span>` : '');
+    // 보스전 동안 '다음 보스' 칸은 지금 싸우는 보스와 그 남은 시간이라 뺀다. 중간 보스 칸은 라인 화면에서만.
+    const chips = bossV ? '' : (hd.mids || []).map((m) => `<span class="nc mid" data-act="drawer" data-arg="war">${Array.isArray(m) ? `<span class="nw">${esc(m[0])}</span> <span class="nw">${esc(m[1])}</span>` : esc(m)}</span>`).join('') + (hd.boss && g.phase !== 'boss' ? `<span class="nc boss" data-act="drawer" data-arg="war">${t('nextBoss')}<br><b>${esc(hd.boss)}</b></span>` : '');
     // 자리 비운 동료(앱을 내림)
     const aw = net && net.awayList ? net.awayList().map((p) => `<span class="nc mid">${esc(p.state.name || '?')} · ${t('away')}</span>`).join('') : '';
     if (chips || aw) h += `<div class="hrow">${chips}${aw}</div>`;
+    let partyOn = false;
     // 파티원(세로, 반투명): 아이콘·닉네임·등급 문양·전선·라이프. 누르면 그 사람 전장을 본다(내 줄은 내 전장으로)
     if (net && net.roster && g.mode === 'multi') {
       const ros = net.roster(), lim = g.limit;
@@ -4017,12 +4230,18 @@
         const en = pp.me ? g.enemyCount() : ln ? ln.n | 0 : st.enemies == null ? null : st.enemies | 0, lv = pp.me ? g.lives : ln ? ln.l | 0 : null; // 남이 보낸 값은 숫자로만 쓴다
         const d = defOf[st.ic] || defOf.cav, rk = /(\d+)$/.exec(st.gr || '') ? +/(\d+)$/.exec(st.gr)[1] : null;
         const on = pp.me ? !S.view : S.view === pp.id;
+        if (bossV) return `<img class="pf ${en != null && en > lim * 0.75 ? 'alert' : ''} ${st.away ? 'away' : ''}" alt="" title="${esc(st.name || '?')}" src="${Art.portrait(d)}">`;
         return `<button class="pm ${on ? 'on' : ''} ${st.away ? 'away' : ''}" data-act="viewPeer" data-arg="${pp.me ? 'me' : esc(pp.id)}" type="button"><img class="pi" alt="" src="${Art.portrait(d)}"><span class="pn">${rk != null ? `<img class="rkm" alt="" src="gfx/rank_${rk}.png" onerror="this.remove()">` : ''}${esc(st.name || '?')}</span><span class="ps">${t('front')} ${en == null ? '-' : en}/${lim} <span class="lf" aria-label="${esc(t('lives'))}">♥${lv == null ? '-' : lv}</span></span></button>`;
       }).join('');
-      if (ros.length > 1) h += `<div class="party">${rows}</div>`;
+      if (ros.length > 1) { h += `<div class="party">${rows}</div>`; partyOn = !bossV; }
     }
+    // 동료 카드 줄이 떠 있으면 라인 조이스틱이 카드 오른쪽으로 비켜난다(CSS #stage.lanejoy.hasparty)
+    { const stg = $('stage'); if (stg.classList.contains('hasparty') !== partyOn) stg.classList.toggle('hasparty', partyOn); }
     const box = $('hud');
-    box.style.display = g.over ? 'none' : ''; // 결과창 위에 겹치지 않게
+    // 결과창 위에 겹치지 않게. 보스 등장 연출(bossIntro) 동안에도 숨긴다(위 검은 띠와 화면 왼쪽을 가리지 않게).
+    // 보스 처치 뒤 討伐成功 패널이 떠 있는 동안(S.vicUntil)도 숨긴다(라인 HUD가 패널보다 먼저 돌아와 겹치지 않게)
+    box.style.display = g.over || g.phase === 'bossIntro' || performance.now() < (S.vicUntil || 0) ? 'none' : '';
+    if (box.classList.contains('boss') !== bossV) box.classList.toggle('boss', bossV);
     // 첫 라운드에 아직 아무 유닛도 고르지 않았으면 화면 아래에 한 줄 힌트(한 번 고르면 이 판에서는 다시 안 나온다). 안내 말풍선이 떠 있으면 숨긴다
     if (S.sel.length) S.everSel = true;
     { const lh = $('lanehint'), tb = document.getElementById('tutbox'), on = !!lh && laneOn() && !vp && !S.drawer && !g.over && g.round <= 1 && !S.everSel && !(tb && !tb.hidden);
@@ -4057,6 +4276,9 @@
     if ($('timers').hidden !== !war) $('timers').hidden = !war;
     if ($('pane').hidden !== war) $('pane').hidden = war;
   }
+  // "★2・攻撃 34・体力 150" 같은 줄을 가운뎃점 단위 묶음으로 나눠, 줄이 바뀌어도 라벨과 숫자가 떨어지지 않게 한다.
+  // 구분점은 뒤 묶음 앞에 붙인다(줄이 바뀌는 자리에 가운뎃점이 앞 줄 끝에 매달리지 않게). '・'는 앞에서 줄을 못 바꾸는 글자라 <wbr>로 바꿀 자리를 준다
+  const nwParts = (s) => { const sep = s.includes('・') ? '・' : ' · '; return s.split(sep).map((x, i) => `<span class="nw">${i ? sep.trimStart() : ''}${x}</span>`).join(sep === '・' ? '<wbr>' : ' '); };
   function renderOverlay() {
     const box = $('overlay');
     let h = '', key = '';
@@ -4074,7 +4296,7 @@
       const ch = g.pickChoices(), n = g.slotCount(), f = g.fight;
       key = 'p' + S.pick.join() + ch.length + Math.ceil(f.pickT) + volKey;
       h = `<div class="over"><div class="sheet"><h2>${t('pickTitle')}</h2>${vol}<div>${I.t('pickInfo', { title: esc(f.def.title), name: esc(f.def.name), t: clock(f.limit), n, s: Math.ceil(f.pickT) })}<br><span style="color:var(--dim)">${I.t('recommendColon', { a: advise(g.bossStats(f.def).hp / (f.def.time * 0.45), n) })}</span></div>
-        <div class="grid">${ch.map((u) => `<button class="pickcard ${S.pick.includes(u.id) ? 'on' : ''}" data-act="pick" data-arg="${u.id}" type="button"><img class="pcpor" alt="" src="${Art.portrait(u.def)}"><strong style="color:${tierColor(u.def.tier)}">${esc(u.def.name)}</strong> ${roleBadge(u.def)}<small>${I.t('pickCard', { r: rankName(u.def.tier), a: fmt(g.unitAtk(u)), h: fmt(g.rankOf[u.def.tier].hp) })}${u.def.sk ? I.t('skillsList', { a: u.def.sk.map((s) => esc(s.n)).join('·') }) : ''}</small>${(u.def.p || []).length ? `<small class="pp">${u.def.p.map((x) => `<b>${esc(x.name)}</b> ${esc(x.desc)}`).join('<br>')}</small>` : ''}</button>`).join('')}</div>
+        <div class="grid">${ch.map((u) => `<button class="pickcard ${S.pick.includes(u.id) ? 'on' : ''}" data-act="pick" data-arg="${u.id}" type="button"><img class="pcpor" alt="" src="${Art.portrait(u.def)}"><strong style="color:${tierColor(u.def.tier)}">${esc(u.def.name)}</strong> ${roleBadge(u.def)}<small>${nwParts(I.t('pickCard', { r: rankName(u.def.tier), a: fmt(g.unitAtk(u)), h: fmt(g.rankOf[u.def.tier].hp) }))}${u.def.sk ? I.t('skillsList', { a: u.def.sk.map((s) => esc(s.n)).join('·') }) : ''}</small>${(u.def.p || []).length ? `<small class="pp">${u.def.p.map((x) => `<b>${esc(x.name)}</b> ${esc(x.desc)}`).join('<br>')}</small>` : ''}</button>`).join('')}</div>
         <button class="btn go" data-act="pickGo" type="button" style="padding:9px">${t('deploy')} (${S.pick.length}/${n})</button></div></div>`;
     } else if (g.phase === 'bossPick') {
       h = `<div class="over"><div class="sheet"><h2>${t('waitAllies')}</h2>${vol}</div></div>`; key = 'w' + volKey;
@@ -4119,7 +4341,7 @@
     // 배속: 게임판 오른쪽 위. 보스 결투장은 항상 1배속이라 숨긴다. 협동은 모두 켜야 적용된다.
     const sb = $('speedbtn'), st = g.over || g.phase !== 'wave' ? '' : `${t('speed', { n: speed })}${net && net.clock.sp !== speed ? ` (×${net.clock.sp})` : ''}`;
     if (sb.dataset.t !== st) { sb.textContent = st; sb.dataset.t = st; sb.hidden = !st; sb.title = net ? I.t('speedTip') : ''; }
-    if (g.phase !== 'boss') S.laneView = false;
+    if (g.phase !== 'boss') { S.laneView = false; S.meterOpen = false; }
     const bb = $('bossbtn'), bt = g.phase === 'boss' ? (S.laneView ? `${t('backToBoss')} · ${clock(Math.max(0, g.fight.limit - g.fight.t))}` : t('toLane')) : '';
     if (bb.dataset.t !== bt) { bb.textContent = bt; bb.dataset.t = bt; bb.hidden = !bt; bb.classList.toggle('go', !!S.laneView); }
   }
@@ -4163,7 +4385,7 @@
       // 장수 스킬 이름은 이미 장수 머리 위에 크게 뜬다. 알림 줄까지 띄우면 보스 기술 이름(피해야 할 경고)을 가려서, 화타 치료 같은 것만 알림으로 보인다.
       else if (e.type === 'skill') { if (!(g.fight && g.fight.champs.some((c) => (c.def.sk || []).some((s) => s.n === e.name)))) toast(e.name); }
       else if (e.type === 'bossPick') { S.pick = []; setSel([]); }
-      else if (e.type === 'bossWin') { { const n0 = performance.now(); S.toastHoldUntil = n0 + 1300; S.vicUntil = n0 + 1300 + 5500; } const rows = meterRows(e.dealt, e.total); (S.bossRows = S.bossRows || {})[e.boss.round] = rows; Snd.setBoss(false); Snd.play('win'); popQ.push({ vic: e, rows, t: 0, dur: 5.5, hits: {}, shake: 0 }); }
+      else if (e.type === 'bossWin') { { const n0 = performance.now(); S.vicUntil = n0 + 1300 + 5500; S.toastHoldUntil = S.vicUntil; } const rows = meterRows(e.dealt, e.total); (S.bossRows = S.bossRows || {})[e.boss.round] = rows; Snd.setBoss(false); Snd.play('win'); popQ.push({ vic: e, rows, t: 0, dur: 5.5, hits: {}, shake: 0 }); }
       else if (e.type === 'bossFail') { if (g.fight) (S.bossRows = S.bossRows || {})[g.fight.def.round] = meterRows(g.fight.dealt, g.fight.total); }
       else if (e.type === 'removed') { S.sel = S.sel.filter((i) => i !== e.id); }
       else if (e.type === 'dropGone') { if (S.dropSel === e.id) S.dropSel = null; }

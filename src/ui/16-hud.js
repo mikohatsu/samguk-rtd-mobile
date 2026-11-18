@@ -15,12 +15,18 @@
     const gold = ln ? +ln.g || 0 : g.me.gold, lives = ln ? ln.l | 0 : g.lives, en = ln ? ln.n | 0 : g.enemyCount(), own = ln ? (ln.u || []).length : g.units.filter((u) => u.owner === 0).length;
     const tm = g.phase === 'wave' ? clock(Math.max(0, g.R.roundTime - g.roundT)) : g.phase === 'boss' && g.fight ? clock(Math.max(0, g.fight.limit - g.fight.t)) : '-';
     const cell = (l, v, cls) => `<div class="hs ${cls || ''}"><small>${l}</small><b>${v}</b></div>`;
-    let h = `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${g.phase === 'boss' && !S.laneView ? '' : cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '') + cell(t('troops'), own)}</div>`;
+    // 보스전 화면(bossV)에서는 접는다: 라운드 칸 하나 + 동료 얼굴 줄만. 남은 시간은 전장 위 가운데(07-arena)에 크게 나오므로 여기서는 뺀다.
+    // 보스전 중 라인 보기에서도 결투 시간 칸은 뺀다(같은 시간이 'ボス戦に戻る' 버튼에 있다).
+    const bossV = g.phase === 'boss' && !S.laneView;
+    let h = bossV ? `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}</div>`
+      : `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${g.phase === 'boss' ? '' : cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '') + cell(t('troops'), own)}</div>`;
     const hd = S.hudNext || {};
-    const chips = (hd.mids || []).map((m) => `<span class="nc mid" data-act="drawer" data-arg="war">${Array.isArray(m) ? `<span class="nw">${esc(m[0])}</span> <span class="nw">${esc(m[1])}</span>` : esc(m)}</span>`).join('') + (hd.boss ? `<span class="nc boss" data-act="drawer" data-arg="war">${t('nextBoss')}<br><b>${esc(hd.boss)}</b></span>` : '');
+    // 보스전 동안 '다음 보스' 칸은 지금 싸우는 보스와 그 남은 시간이라 뺀다. 중간 보스 칸은 라인 화면에서만.
+    const chips = bossV ? '' : (hd.mids || []).map((m) => `<span class="nc mid" data-act="drawer" data-arg="war">${Array.isArray(m) ? `<span class="nw">${esc(m[0])}</span> <span class="nw">${esc(m[1])}</span>` : esc(m)}</span>`).join('') + (hd.boss && g.phase !== 'boss' ? `<span class="nc boss" data-act="drawer" data-arg="war">${t('nextBoss')}<br><b>${esc(hd.boss)}</b></span>` : '');
     // 자리 비운 동료(앱을 내림)
     const aw = net && net.awayList ? net.awayList().map((p) => `<span class="nc mid">${esc(p.state.name || '?')} · ${t('away')}</span>`).join('') : '';
     if (chips || aw) h += `<div class="hrow">${chips}${aw}</div>`;
+    let partyOn = false;
     // 파티원(세로, 반투명): 아이콘·닉네임·등급 문양·전선·라이프. 누르면 그 사람 전장을 본다(내 줄은 내 전장으로)
     if (net && net.roster && g.mode === 'multi') {
       const ros = net.roster(), lim = g.limit;
@@ -29,12 +35,18 @@
         const en = pp.me ? g.enemyCount() : ln ? ln.n | 0 : st.enemies == null ? null : st.enemies | 0, lv = pp.me ? g.lives : ln ? ln.l | 0 : null; // 남이 보낸 값은 숫자로만 쓴다
         const d = defOf[st.ic] || defOf.cav, rk = /(\d+)$/.exec(st.gr || '') ? +/(\d+)$/.exec(st.gr)[1] : null;
         const on = pp.me ? !S.view : S.view === pp.id;
+        if (bossV) return `<img class="pf ${en != null && en > lim * 0.75 ? 'alert' : ''} ${st.away ? 'away' : ''}" alt="" title="${esc(st.name || '?')}" src="${Art.portrait(d)}">`;
         return `<button class="pm ${on ? 'on' : ''} ${st.away ? 'away' : ''}" data-act="viewPeer" data-arg="${pp.me ? 'me' : esc(pp.id)}" type="button"><img class="pi" alt="" src="${Art.portrait(d)}"><span class="pn">${rk != null ? `<img class="rkm" alt="" src="gfx/rank_${rk}.png" onerror="this.remove()">` : ''}${esc(st.name || '?')}</span><span class="ps">${t('front')} ${en == null ? '-' : en}/${lim} <span class="lf" aria-label="${esc(t('lives'))}">♥${lv == null ? '-' : lv}</span></span></button>`;
       }).join('');
-      if (ros.length > 1) h += `<div class="party">${rows}</div>`;
+      if (ros.length > 1) { h += `<div class="party">${rows}</div>`; partyOn = !bossV; }
     }
+    // 동료 카드 줄이 떠 있으면 라인 조이스틱이 카드 오른쪽으로 비켜난다(CSS #stage.lanejoy.hasparty)
+    { const stg = $('stage'); if (stg.classList.contains('hasparty') !== partyOn) stg.classList.toggle('hasparty', partyOn); }
     const box = $('hud');
-    box.style.display = g.over ? 'none' : ''; // 결과창 위에 겹치지 않게
+    // 결과창 위에 겹치지 않게. 보스 등장 연출(bossIntro) 동안에도 숨긴다(위 검은 띠와 화면 왼쪽을 가리지 않게).
+    // 보스 처치 뒤 討伐成功 패널이 떠 있는 동안(S.vicUntil)도 숨긴다(라인 HUD가 패널보다 먼저 돌아와 겹치지 않게)
+    box.style.display = g.over || g.phase === 'bossIntro' || performance.now() < (S.vicUntil || 0) ? 'none' : '';
+    if (box.classList.contains('boss') !== bossV) box.classList.toggle('boss', bossV);
     // 첫 라운드에 아직 아무 유닛도 고르지 않았으면 화면 아래에 한 줄 힌트(한 번 고르면 이 판에서는 다시 안 나온다). 안내 말풍선이 떠 있으면 숨긴다
     if (S.sel.length) S.everSel = true;
     { const lh = $('lanehint'), tb = document.getElementById('tutbox'), on = !!lh && laneOn() && !vp && !S.drawer && !g.over && g.round <= 1 && !S.everSel && !(tb && !tb.hidden);
@@ -69,6 +81,9 @@
     if ($('timers').hidden !== !war) $('timers').hidden = !war;
     if ($('pane').hidden !== war) $('pane').hidden = war;
   }
+  // "★2・攻撃 34・体力 150" 같은 줄을 가운뎃점 단위 묶음으로 나눠, 줄이 바뀌어도 라벨과 숫자가 떨어지지 않게 한다.
+  // 구분점은 뒤 묶음 앞에 붙인다(줄이 바뀌는 자리에 가운뎃점이 앞 줄 끝에 매달리지 않게). '・'는 앞에서 줄을 못 바꾸는 글자라 <wbr>로 바꿀 자리를 준다
+  const nwParts = (s) => { const sep = s.includes('・') ? '・' : ' · '; return s.split(sep).map((x, i) => `<span class="nw">${i ? sep.trimStart() : ''}${x}</span>`).join(sep === '・' ? '<wbr>' : ' '); };
   function renderOverlay() {
     const box = $('overlay');
     let h = '', key = '';
@@ -86,7 +101,7 @@
       const ch = g.pickChoices(), n = g.slotCount(), f = g.fight;
       key = 'p' + S.pick.join() + ch.length + Math.ceil(f.pickT) + volKey;
       h = `<div class="over"><div class="sheet"><h2>${t('pickTitle')}</h2>${vol}<div>${I.t('pickInfo', { title: esc(f.def.title), name: esc(f.def.name), t: clock(f.limit), n, s: Math.ceil(f.pickT) })}<br><span style="color:var(--dim)">${I.t('recommendColon', { a: advise(g.bossStats(f.def).hp / (f.def.time * 0.45), n) })}</span></div>
-        <div class="grid">${ch.map((u) => `<button class="pickcard ${S.pick.includes(u.id) ? 'on' : ''}" data-act="pick" data-arg="${u.id}" type="button"><img class="pcpor" alt="" src="${Art.portrait(u.def)}"><strong style="color:${tierColor(u.def.tier)}">${esc(u.def.name)}</strong> ${roleBadge(u.def)}<small>${I.t('pickCard', { r: rankName(u.def.tier), a: fmt(g.unitAtk(u)), h: fmt(g.rankOf[u.def.tier].hp) })}${u.def.sk ? I.t('skillsList', { a: u.def.sk.map((s) => esc(s.n)).join('·') }) : ''}</small>${(u.def.p || []).length ? `<small class="pp">${u.def.p.map((x) => `<b>${esc(x.name)}</b> ${esc(x.desc)}`).join('<br>')}</small>` : ''}</button>`).join('')}</div>
+        <div class="grid">${ch.map((u) => `<button class="pickcard ${S.pick.includes(u.id) ? 'on' : ''}" data-act="pick" data-arg="${u.id}" type="button"><img class="pcpor" alt="" src="${Art.portrait(u.def)}"><strong style="color:${tierColor(u.def.tier)}">${esc(u.def.name)}</strong> ${roleBadge(u.def)}<small>${nwParts(I.t('pickCard', { r: rankName(u.def.tier), a: fmt(g.unitAtk(u)), h: fmt(g.rankOf[u.def.tier].hp) }))}${u.def.sk ? I.t('skillsList', { a: u.def.sk.map((s) => esc(s.n)).join('·') }) : ''}</small>${(u.def.p || []).length ? `<small class="pp">${u.def.p.map((x) => `<b>${esc(x.name)}</b> ${esc(x.desc)}`).join('<br>')}</small>` : ''}</button>`).join('')}</div>
         <button class="btn go" data-act="pickGo" type="button" style="padding:9px">${t('deploy')} (${S.pick.length}/${n})</button></div></div>`;
     } else if (g.phase === 'bossPick') {
       h = `<div class="over"><div class="sheet"><h2>${t('waitAllies')}</h2>${vol}</div></div>`; key = 'w' + volKey;
@@ -131,7 +146,7 @@
     // 배속: 게임판 오른쪽 위. 보스 결투장은 항상 1배속이라 숨긴다. 협동은 모두 켜야 적용된다.
     const sb = $('speedbtn'), st = g.over || g.phase !== 'wave' ? '' : `${t('speed', { n: speed })}${net && net.clock.sp !== speed ? ` (×${net.clock.sp})` : ''}`;
     if (sb.dataset.t !== st) { sb.textContent = st; sb.dataset.t = st; sb.hidden = !st; sb.title = net ? I.t('speedTip') : ''; }
-    if (g.phase !== 'boss') S.laneView = false;
+    if (g.phase !== 'boss') { S.laneView = false; S.meterOpen = false; }
     const bb = $('bossbtn'), bt = g.phase === 'boss' ? (S.laneView ? `${t('backToBoss')} · ${clock(Math.max(0, g.fight.limit - g.fight.t))}` : t('toLane')) : '';
     if (bb.dataset.t !== bt) { bb.textContent = bt; bb.dataset.t = bt; bb.hidden = !bt; bb.classList.toggle('go', !!S.laneView); }
   }
@@ -175,7 +190,7 @@
       // 장수 스킬 이름은 이미 장수 머리 위에 크게 뜬다. 알림 줄까지 띄우면 보스 기술 이름(피해야 할 경고)을 가려서, 화타 치료 같은 것만 알림으로 보인다.
       else if (e.type === 'skill') { if (!(g.fight && g.fight.champs.some((c) => (c.def.sk || []).some((s) => s.n === e.name)))) toast(e.name); }
       else if (e.type === 'bossPick') { S.pick = []; setSel([]); }
-      else if (e.type === 'bossWin') { { const n0 = performance.now(); S.toastHoldUntil = n0 + 1300; S.vicUntil = n0 + 1300 + 5500; } const rows = meterRows(e.dealt, e.total); (S.bossRows = S.bossRows || {})[e.boss.round] = rows; Snd.setBoss(false); Snd.play('win'); popQ.push({ vic: e, rows, t: 0, dur: 5.5, hits: {}, shake: 0 }); }
+      else if (e.type === 'bossWin') { { const n0 = performance.now(); S.vicUntil = n0 + 1300 + 5500; S.toastHoldUntil = S.vicUntil; } const rows = meterRows(e.dealt, e.total); (S.bossRows = S.bossRows || {})[e.boss.round] = rows; Snd.setBoss(false); Snd.play('win'); popQ.push({ vic: e, rows, t: 0, dur: 5.5, hits: {}, shake: 0 }); }
       else if (e.type === 'bossFail') { if (g.fight) (S.bossRows = S.bossRows || {})[g.fight.def.round] = meterRows(g.fight.dealt, g.fight.total); }
       else if (e.type === 'removed') { S.sel = S.sel.filter((i) => i !== e.id); }
       else if (e.type === 'dropGone') { if (S.dropSel === e.id) S.dropSel = null; }

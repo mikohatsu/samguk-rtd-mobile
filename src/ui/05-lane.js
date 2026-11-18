@@ -153,15 +153,57 @@
       : Object.keys(dealt).map((k) => ({ name: k, v: dealt[k] }));
     return rows.sort((a, b) => b.v - a.v);
   }
+  // 보스전 피해 순위: 접힌 한 줄이 기본이다. 내 줄(협동) 또는 1위 줄(혼자)을 "순위. 이름  피해 (몫%)"로만 보여 준다.
+  // 누르면 펼쳐서 5위까지(S.meterOpen, 10-input이 meterHit으로 판정). 4초 뒤·기술 이름 띠가 뜰 때·보스전이 끝나면 다시 접힌다(아래, 16-hud).
+  // 자리: 화면 고정 좌표(09 hudCam)에서 보스 체력 막대 오른쪽 끝 아래. 부르는 쪽의 변환은 쓰지 않고 여기서 직접 잡는다
+  // (체력 막대와 같은 칸: 화면 위 가운데 기준 us배. 막대 폭 식은 07-arena bossBar와 같아야 한다).
+  // 테·바탕은 UI 공통 판(.glass·.hb)과 같은 금 선·먹 바탕. 그린 상자는 캔버스 픽셀 좌표로 S.meterBox에 남긴다.
   function drawMeter(c, rows) {
-    if (!rows.length) return;
-    const x = W - 66 - 300, w = 300, top = rows[0].v || 1, sum = rows.reduce((a, b) => a + b.v, 0) || 1;
-    c.fillStyle = 'rgba(16, 11, 8, .72)'; c.fillRect(x - 10, 96, w + 20, 44 + rows.length * 34);
-    c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillStyle = '#e6c578'; c.font = '700 20px "Gowun Batang", serif'; c.fillText(I.t('meter'), x, 118);
-    rows.slice(0, 5).forEach((r, i) => {
-      const y = 138 + i * 34;
-      c.fillStyle = r.me ? 'rgba(125,255,142,.4)' : 'rgba(255,190,90,.36)'; c.fillRect(x, y, (w * r.v) / top, 28);
-      c.fillStyle = '#fff'; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'left'; c.fillText(r.name, x + 8, y + 15);
-      c.textAlign = 'right'; c.fillText(`${fmt(r.v)} (${Math.round((r.v / sum) * 100)}%)`, x + w - 8, y + 15);
+    if (!rows.length || !S.base) return;
+    const us = hudS(), BW = Math.min(760, 900 / us), w = 236, x = W / 2 + BW / 2 - w, y0 = 74, rh = 24, rp = 26;
+    const top = rows[0].v || 1, sum = rows.reduce((a, b) => a + b.v, 0) || 1;
+    // 펼친 표는 4초 뒤 저절로 접는다(카메라 위 끝에서 내 장수를 오래 가리지 않게). 기술 이름 띠(07 S.pattern)가 새로 뜨는 순간에도 접는다(띠가 첫 줄을 덮지 않게)
+    const now = performance.now(), np = S.pattern && S.pattern.t > 0 && S.pattern !== S.meterPat;
+    if (np) S.meterPat = S.pattern;
+    if (!S.meterOpen) S.meterOpenAt = 0;
+    else if (!S.meterOpenAt) S.meterOpenAt = now;
+    if (S.meterOpen && (np || now - S.meterOpenAt > 4000)) { S.meterOpen = false; S.meterOpenAt = 0; }
+    const open = !!S.meterOpen, mi = Math.max(0, rows.findIndex((r) => r.me));
+    const list = open ? rows.slice(0, 5).map((r, i) => [r, i]) : [[rows[mi], mi]];
+    const bh = open ? rh + list.length * rp + 4 : rh, UI = '"IBM Plex Sans KR", sans-serif';
+    c.save();
+    hudCam(c, 0, 0); c.translate(W / 2, hudTop()); c.scale(us, us); c.translate(-W / 2, 0);
+    c.fillStyle = 'rgba(16, 11, 8, .6)'; c.fillRect(x, y0, w, bh);
+    c.lineWidth = 1; c.strokeStyle = 'rgba(205, 167, 91, .55)'; c.strokeRect(x + 0.5, y0 + 0.5, w - 1, bh - 1);
+    c.textBaseline = 'middle';
+    if (open) {
+      c.textAlign = 'left'; c.fillStyle = '#e6c578'; c.font = '700 15px "Gowun Batang", serif'; c.fillText(I.t('meter'), x + 8, y0 + rh / 2 + 1);
+      c.textAlign = 'right'; c.font = '700 11px ' + UI; c.fillText('▲', x + w - 7, y0 + rh / 2 + 1);
+    }
+    list.forEach(([r, rank], i) => {
+      const y = open ? y0 + rh + i * rp : y0 + 2, h = open ? rp - 4 : rh - 4, cy = y + h / 2 + 1, vr = open ? x + w - 8 : x + w - 22;
+      c.fillStyle = r.me ? 'rgba(255, 216, 106, .32)' : 'rgba(205, 167, 91, .2)'; c.fillRect(x + 2, y, ((w - 4) * r.v) / top, h);
+      c.font = '700 14px ' + UI; c.fillStyle = r.me ? '#ffe2a8' : '#f4ecd8';
+      const val = `${fmt(r.v)} (${Math.round((r.v / sum) * 100)}%)`, vw = c.measureText(val).width;
+      c.textAlign = 'right'; c.fillText(val, vr, cy);
+      c.textAlign = 'left'; c.fillText(`${rank + 1}. ${r.name}`, x + 8, cy, Math.max(40, vr - vw - 10 - (x + 8)));
+      if (!open) { c.textAlign = 'right'; c.fillStyle = '#e6c578'; c.font = '700 11px ' + UI; c.fillText('▼', x + w - 7, cy); }
     });
+    const m = c.getTransform ? c.getTransform() : null;
+    if (m) {
+      const px = (u, v) => m.a * u + m.c * v + m.e, py = (u, v) => m.b * u + m.d * v + m.f;
+      const xa = px(x, y0), xb = px(x + w, y0 + bh), ya = py(x, y0), yb = py(x + w, y0 + bh);
+      S.meterBox = { x0: Math.min(xa, xb), x1: Math.max(xa, xb), y0: Math.min(ya, yb), y1: Math.max(ya, yb), t: performance.now() };
+    }
+    c.restore();
+  }
+  // 누른 자리가 딜미터 위인가(방금 그린 상자 기준). 누르는 곳은 화면 44px 이상이 되게 넓힌다.
+  function meterHit(e) {
+    const B = S.meterBox;
+    if (!B || performance.now() - B.t > 400) return false;
+    const r = view.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    const kx = view.width / r.width, ky = view.height / r.height, x = (e.clientX - r.left) * kx, y = (e.clientY - r.top) * ky;
+    const gx = Math.max(0, (44 * kx - (B.x1 - B.x0)) / 2), gy = Math.max(0, (44 * ky - (B.y1 - B.y0)) / 2);
+    return x >= B.x0 - gx && x <= B.x1 + gx && y >= B.y0 - gy && y <= B.y1 + gy;
   }

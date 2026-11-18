@@ -265,18 +265,21 @@
   // (태블릿에서 15~25fps의 원인). 카메라가 멈춰 있는 동안은 화면 크기로 한 번 옮겨 둔 것을 1:1로 찍는다. 카메라·흔들림이 움직이는 프레임만 원본을 그린다.
   const BGC = {};
   let mapVer = 0;
-  function blitBg(c, src, id, ver) {
+  // R: 원본이 덮는 게임 좌표 범위(없으면 지도 전체 범위)
+  const BG_ALL = { x: -OVER.x, y: -OVER.y, w: W + OVER.x * 2, h: H + OVER.y * 2 };
+  function blitBg(c, src, id, ver, R) {
+    R = R || BG_ALL;
     const o = BGC[id] || (BGC[id] = { cv: null, key: '', last: '' });
     // 기준은 카메라(S.scale·S.ox·S.oy). 화면 흔들림·타격 확대는 그 위에 얹히는 작은 변환이라, 둘레에 여백을 둔 저장본을 그대로 쓴다.
     const key = S.scale + '|' + S.ox + '|' + S.oy + '|' + view.width + '|' + view.height + '|' + ver + '|' + src.width;
-    if (c !== ctx || key !== o.last) { o.last = key; c.drawImage(src, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); return; }
+    if (c !== ctx || key !== o.last) { o.last = key; c.drawImage(src, R.x, R.y, R.w, R.h); return; }
     const mx = Math.ceil(view.width * 0.06), my = Math.ceil(view.height * 0.06), cw = view.width + mx * 2, ch = view.height + my * 2;
     if (o.key !== key) {
       if (!o.cv) o.cv = document.createElement('canvas');
       if (o.cv.width !== cw || o.cv.height !== ch) { o.cv.width = cw; o.cv.height = ch; }
       const x = o.cv.getContext('2d');
       x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cw, ch);
-      x.setTransform(S.scale, 0, 0, S.scale, S.ox + mx, S.oy + my); x.drawImage(src, -OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+      x.setTransform(S.scale, 0, 0, S.scale, S.ox + mx, S.oy + my); x.drawImage(src, R.x, R.y, R.w, R.h);
       o.key = key;
     }
     // 저장본이 덮는 자리를 게임 좌표로 되돌려 그린다(흔들림이 없으면 화면 픽셀과 1:1)

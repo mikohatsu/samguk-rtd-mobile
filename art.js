@@ -251,17 +251,24 @@
   // 화면 장식 낱장 그림(gfx/이름.png): 보스 체력 막대 틀·경고 띠·선택 표시·아레나 테두리와 바닥 문양·먹 띠 등.
   // 처음 부를 때 받고, 아직 없거나 못 받았으면 null(부른 쪽은 예전 모양으로 그린다). 받기 실패는 다시 시도하지 않는다.
   const UIP = {};
-  function pic(name) {
+  function pic(name, ext) {
     let o = UIP[name];
     if (!o) {
       if (typeof Image === 'undefined') return null;
       o = UIP[name] = { im: new Image(), ok: false };
-      o.im.onload = () => { o.ok = true; }; o.im.src = 'gfx/' + name + '.png?v=1';
+      o.im.onload = () => { o.ok = true; }; o.im.src = 'gfx/' + name + '.' + (ext || 'png') + '?v=1';
     }
     return o.ok && o.im.width ? o.im : null;
   }
   // 보스전 전에 다 받아지도록 판을 시작할 때 미리 부른다
-  ['ui_bossbar', 'vs_warn', 'ui_select', 'arena_rim', 'arena_mark', 'ui_ink', 'ui_title', 'ui_tab', 'defeat_plank'].forEach(pic);
+  ['ui_bossbar', 'vs_warn', 'ui_select', 'arena_rim', 'ui_ink', 'ui_title', 'ui_tab', 'defeat_plank'].forEach((n) => pic(n));
+  // 보스전 바닥 타일(gfx/flr_*.jpg): 1024px 이음매 없는 밝기 무늬(CC0 Poly Haven 재질을 art_src/build-floor.py로 가공). 경기장 무늬(motif)마다 하나를 쓴다.
+  const FLOOR = { altar: 'flr_slab', bagua: 'flr_slab', palace: 'flr_slab', gate: 'flr_brick', city: 'flr_brick', wagon: 'flr_gravel', river: 'flr_gravel', forest: 'flr_forest', cliff: 'flr_earth' };
+  const floorTex = (motif) => (FLOOR[motif] ? pic(FLOOR[motif], 'jpg') : null);
+  Object.keys(FLOOR).forEach(floorTex);
+  // 타일 한 장(1024px)이 덮는 게임 단위. 전돌은 벽돌 한 장이 장수 폭과 비슷하도록 작게 깐다(800이면 벽돌이 장수보다 넓어 세운 벽처럼 보였다).
+  const FLOOR_UNIT = { flr_brick: 480 };
+  const floorUnit = (motif) => FLOOR_UNIT[FLOOR[motif]] || 800;
   // 낱장 그림을 색으로 물들인 것(원본 크기 그대로. 없으면 null)
   function picTint(name, col) { const im = pic(name); return im ? tinted('u' + name, im, col) : null; }
   // 9조각 그리기: 원본 가장자리 sl px을 굵기 b로 고정하고 변·가운데만 늘인다(틀 그림을 어떤 크기에도 모서리가 찌그러지지 않게).
@@ -369,5 +376,5 @@
     const o = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
     return [{ v: 2 }, { v: 1 }, { v: 0 }, { v: 1, flip: true }, { v: 2, flip: true }, { v: 3, flip: true }, { v: 4 }, { v: 3 }][o];
   }
-  root.RTD_ART = { facing, unitSprite, namedSprite, soldierSprite, portrait, drawSprite, shot, fxImg, fxAnim, fxPic, img, ready, pic, picTint, nine };
+  root.RTD_ART = { facing, unitSprite, namedSprite, soldierSprite, portrait, drawSprite, shot, fxImg, fxAnim, fxPic, img, ready, pic, picTint, nine, floorTex, floorUnit };
 })(typeof window !== 'undefined' ? window : globalThis);

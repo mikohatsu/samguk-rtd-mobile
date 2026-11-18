@@ -94,6 +94,12 @@
       if (S.freeze > 0) S.freeze = Math.max(0, S.freeze - cut);
       return;
     }
+    if (inBoss()) {
+      // 딜미터를 누르면 펼치고 접는다(05-lane drawMeter)
+      if (e.button !== 2 && meterHit(e)) { S.meterOpen = !S.meterOpen; Snd.play('click', 40); return; }
+      // 떠 있는 조이스틱: 화면 왼쪽 아래 영역을 누르면 그 자리에 조이스틱이 생긴다(15-pad). 이 손가락은 아래 탭·끌기 처리에 넣지 않는다
+      if (e.pointerType === 'touch' && joyZone(e)) { e.preventDefault(); joyStart(e, true); return; }
+    }
     view.focus({ preventScroll: true });
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { view.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }

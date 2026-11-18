@@ -180,6 +180,7 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 .pickcard { background: var(--panel); border: 1px solid var(--line); padding: 5px 7px; text-align: left; }
 .pickcard.on { border-color: var(--good); background: #2f3a26; }
 .pickcard small { color: var(--dim); display: block; }
+.pickcard .nw { white-space: nowrap; }
 .pickcard .pp { margin-top: 3px; font-size: 10.5px; line-height: 1.35; }
 .pickcard .pp b { color: #e8dcc0; font-weight: 700; }
 .pickcard .pcpor { float: left; width: 46px; height: 46px; margin: 0 7px 3px 0; border-radius: 8px; object-fit: cover; object-position: top; background: #1c140e; border: 1px solid var(--line); }
@@ -380,7 +381,7 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 #selbar .cmd.empty { display: none; }
 /* 보스전 막대는 조이스틱(왼쪽 44px + 132px) 오른쪽에 둔다. 대체 출전 줄이 생겨 높아져도 조이스틱을 덮지 않는다 */
-#selbar.boss { width: auto; max-width: calc(100% - var(--sl, 0px) - 192px - 300px); left: calc(var(--sl, 0px) + 192px); transform: none; padding: 4px 6px; background: rgba(20, 14, 10, .72); }
+#selbar.boss { width: auto; max-width: calc(100% - var(--sl, 0px) - 150px - 300px); left: calc(var(--sl, 0px) + 150px); transform: none; padding: 4px 6px; background: rgba(20, 14, 10, .72); }
 #selbar.boss .mini, #selbar.boss .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 #selbar.boss .mini .btn, #selbar.boss .chips .btn { flex: none; }
 #selbar.boss .chips .btn { min-height: 36px; padding: 2px 10px; font-size: 12px; }
@@ -388,6 +389,7 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 #selbar.boss #recipes { max-height: none; }
 #selbar.boss:not(.exp) #recipes > .line { display: none; }
 #selbar.boss .mini .btn { min-height: 34px; padding: 2px 10px; font-size: 12px; }
+#selbar.boss .mini .btn.on { border-color: rgba(205, 167, 91, .8); background: rgba(16, 11, 8, .6); color: #ffe2a8; }
 #selbar.boss #cmds { display: none; }
 #selbar .hint { color: var(--dim); font-size: 11px; }
 /* 서랍 */
@@ -444,20 +446,24 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 #drawer .h { color: #ffd98a; text-shadow: 0 1px 3px #000, 0 0 6px rgba(0,0,0,.8); }
 /* 보스전: 스킬은 오른쪽 아래, 라인 전환 버튼은 위 가운데 */
 /* 보스전 직접 조작: 공격 버튼(발바닥)을 오른쪽 아래에 두고 스킬(발가락)을 그 둘레에 놓는다. 전장이 비쳐 보이게 반투명 */
-#skillbar { left: auto; right: calc(var(--sr) + 18px); bottom: calc(var(--sb) + 18px); transform: none; width: 92px; height: 92px; display: block; gap: 0; }
-#skillbar .sk { position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; margin: -31px 0 0 -31px; transform: translate(var(--x, 0), var(--y, 0)); border-radius: 50%; touch-action: none;
+#skillbar { left: auto; right: calc(var(--sr) + 18px); bottom: calc(var(--sb) + 18px); transform: none; width: 80px; height: 80px; display: block; gap: 0; }
+#skillbar .sk { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; transform: translate(var(--x, 0), var(--y, 0)); border-radius: 50%; touch-action: none;
   background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--c) 30%, transparent) 0%, rgba(12, 8, 5, .28) 75%); border: 2px solid color-mix(in srgb, var(--c) 75%, transparent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--c) 35%, transparent); font-size: 27px; color: rgba(255, 255, 255, .92); }
+  box-shadow: 0 0 8px color-mix(in srgb, var(--c) 35%, transparent); font-size: 24px; color: rgba(255, 255, 255, .92); opacity: .75; }
+/* 재사용 시간 숫자는 버튼이 반투명해도 읽히게 테두리 그림자를 두껍게 */
+#skillbar .sk .sec { text-shadow: 0 0 4px #000, 0 0 2px #000, 0 1px 3px #000; }
 #skillbar .sk .cd { border-radius: 50%; background: conic-gradient(rgba(8,5,3,.62) var(--p), transparent 0); }
 #skillbar .sk .nm { bottom: -15px; font-size: 10px; opacity: .85; }
-#skillbar .sk.on { transform: translate(var(--x, 0), var(--y, 0)) scale(1.12); border-color: #fff; box-shadow: 0 0 14px var(--c); }
-#skillbar .sk.atk { width: 92px; height: 92px; margin: -46px 0 0 -46px; font-size: 38px; background: radial-gradient(circle at 50% 40%, rgba(255, 176, 112, .38) 0%, rgba(12, 8, 5, .3) 75%); }
+#skillbar .sk.on { transform: translate(var(--x, 0), var(--y, 0)) scale(1.12); border-color: #fff; box-shadow: 0 0 14px var(--c); opacity: 1; }
+#skillbar .sk.atk { width: 80px; height: 80px; margin: -40px 0 0 -40px; font-size: 34px; background: radial-gradient(circle at 50% 40%, rgba(255, 176, 112, .38) 0%, rgba(12, 8, 5, .3) 75%); opacity: .65; }
+#skillbar .sk.atk.on { opacity: 1; }
 #skillbar .sk.atk .nm { bottom: -16px; }
 /* 버튼 위 흐림·그림자 필터는 쓰지 않는다: 매 프레임 바뀌는 전장 위에 얹히면 휴대폰에서 프레임이 크게 떨어진다 */
 #skillbar .sk .skic { width: 58%; height: 58%; fill: rgba(255, 255, 255, .95); stroke: rgba(0, 0, 0, .55); stroke-width: 10px; paint-order: stroke; pointer-events: none; }
 #skillbar .sk.atk .skic { width: 56%; height: 56%; }
 #skillbar .sk[data-cd="1"] .skic { fill: rgba(255, 255, 255, .55); }
-#joy { position: absolute; z-index: 2; left: calc(var(--sl, 0px) + 44px); bottom: calc(var(--sb) + 64px); width: 132px; height: 132px; border-radius: 50%; touch-action: none;
+/* 조이스틱: 쉬는 동안 흐리게(40%), 누르는 동안 또렷하게(85%). 보스전에서는 누른 자리로 옮겨 간다(15-pad가 transform으로 옮김) */
+#joy { position: absolute; z-index: 2; left: calc(var(--sl, 0px) + 24px); bottom: calc(var(--sb) + 20px); width: 110px; height: 110px; border-radius: 50%; touch-action: none; opacity: .4;
   background: radial-gradient(circle, rgba(255, 240, 210, .08) 0%, rgba(255, 240, 210, .16) 62%, rgba(255, 240, 210, .04) 64%); border: 2px solid rgba(255, 235, 200, .38); }
 #joy[hidden] { display: none; }
 #perf { position: absolute; z-index: 7; top: calc(var(--st) + 4px); left: 50%; transform: translateX(-50%); padding: 3px 8px; border-radius: 6px; background: rgba(0, 0, 0, .62); color: #b8ffb0; font: 600 11px/1.35 ui-monospace, Menlo, Consolas, monospace; white-space: pre; text-align: center; pointer-events: none; }
@@ -465,8 +471,11 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 /* 라인에서 유닛을 골랐을 때: 조이스틱은 왼쪽 아래 구석, 선택 창은 그 오른쪽으로 비켜난다 */
 #stage.lanejoy #joy { bottom: calc(var(--sb) + 10px); left: calc(var(--sl, 0px) + 28px); z-index: 5; }
 #stage.lanejoy #selbar { left: calc(var(--sl, 0px) + 176px); transform: none; width: calc(100% - var(--sl, 0px) - 176px - var(--sr) - var(--rw) - 10px); }
-#joy i { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: radial-gradient(circle at 45% 38%, rgba(255, 246, 225, .7), rgba(200, 170, 120, .45)); box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none; }
-#joy.on { border-color: rgba(255, 235, 200, .65); }
+/* 동료 카드 줄이 있을 때(#stage.hasparty, 16-hud): 조이스틱이 카드(폭 128)를 덮지 않게 카드 오른쪽에 두고, 선택 창은 그만큼 더 비켜난다 */
+#stage.lanejoy.hasparty #joy { left: calc(var(--sl, 0px) + 142px); }
+#stage.lanejoy.hasparty #selbar { left: calc(var(--sl, 0px) + 262px); width: calc(100% - var(--sl, 0px) - 262px - var(--sr) - var(--rw) - 10px); }
+#joy i { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: radial-gradient(circle at 45% 38%, rgba(255, 246, 225, .7), rgba(200, 170, 120, .45)); box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none; }
+#joy.on { border-color: rgba(255, 235, 200, .65); opacity: .85; }
 /* 보스전 중 라인 화면: 오른쪽 버튼 열(#rail)에 가리지 않게 맨 윗줄, 메뉴 버튼 왼쪽에 둔다 */
 #bossbtn { top: var(--st); bottom: auto; right: calc(var(--sr) + 50px); left: auto; transform: none; height: 44px; min-height: 44px; }
 #backbtn { top: calc(var(--st) + 48px); }
@@ -1327,8 +1336,13 @@ html:not(.noic-close) #dclose .ico { width: 34px; height: 34px; }
 html:not(.noic-gear) #lgear { border: 0; background: none; box-shadow: none; }
 html:not(.noic-gear) #lgear .ico { width: 44px; height: 44px; filter: drop-shadow(0 3px 6px rgba(40,14,6,.45)); }
 @media (min-height: 600px) { html:not(.noic-gear) #lgear .ico { width: 56px; height: 56px; } }
-/* 낮은 화면의 보스전: 조이스틱 판(그림)이 왼쪽 파티 목록과 겹치지 않게 아래로 내린다 */
-@media (max-height: 430px) { #joy { bottom: calc(var(--sb) + 12px); } }
+/* 보스전 동안의 위 정보 줄(#hud.boss, 16-hud): 라운드 칸 하나와 동료 얼굴 줄만. 전선이 75%를 넘은 동료는 붉은 테 */
+#hud.boss .hs { width: auto; gap: 6px; padding: 1px 8px; background: rgba(16, 11, 8, .6); }
+#hud.boss .hs small { font-size: 9.5px; } #hud.boss .hs b { font-size: 14px; }
+#hud.boss .hrow { align-items: flex-start; }
+#hud.boss .party { flex-direction: row; gap: 4px; margin-top: 2px; }
+#hud .pf { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; object-position: top; background: #1c140e; border: 1px solid rgba(205, 167, 91, .45); opacity: .85; }
+#hud .pf.alert { border: 2px solid #ff7a60; opacity: 1; } #hud .pf.away { opacity: .4; }
 </style>
 
 <div id="app" hidden>

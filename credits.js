@@ -46,6 +46,7 @@
     'Luke.RUSTLTD — 4 summoning circles (OpenGameArt.org)',
     'simranzenov — Sunbursts / 2D Rays (OpenGameArt.org)',
     'alexander123 — Stars Icon for UI (OpenGameArt.org)',
+    'Rob Tuytel — Large Floor Tiles 02, Floor Bricks 02, Rock Ground, Brown Mud Leaves 01, Dry Ground 01 (Poly Haven, polyhaven.com)',
   ];
   const OSS = [
     ['Capacitor (@capacitor/core, android, ios, app, browser, screen-orientation, splash-screen, status-bar)', 'MIT License — Copyright (c) 2017-present Drifty Co. / Copyright 2020-present Ionic'],

@@ -37,6 +37,14 @@
   - simranzenov — "Sunbursts / 2D Rays" (https://opengameart.org/content/sunbursts-2d-rays) → gfx/ray_sun (빛살, 흐리게 가공)
   - alexander123 — "Stars Icon for UI" (https://opengameart.org/content/stars-icon-for-ui) → gfx/pic_star (등급 별)
 
+## 보스전 바닥 재질 — CC0 (표기 의무 없음, 감사 표시)
+- Poly Haven (https://polyhaven.com, 라이선스 CC0 https://polyhaven.com/license) — 모두 Rob Tuytel 제작, 1K 색 지도(Diffuse) JPG. 원본: art_src/floor_src/, 가공: art_src/build-floor.py(밝기 무늬만 남기고 잔결을 흐려 5~6단계로 포스터화, 1024px 그대로)
+  - "Large Floor Tiles 02" (https://polyhaven.com/a/large_floor_tiles_02) → gfx/flr_slab.jpg (제단·팔진·궁궐 경기장)
+  - "Floor Bricks 02" (https://polyhaven.com/a/floor_bricks_02) → gfx/flr_brick.jpg (관문·낙양 경기장)
+  - "Rock Ground" (https://polyhaven.com/a/rock_ground) → gfx/flr_gravel.jpg (수레 진영·강가 경기장)
+  - "Brown Mud Leaves 01" (https://polyhaven.com/a/brown_mud_leaves_01) → gfx/flr_forest.jpg (숲 경기장)
+  - "Dry Ground 01" (https://polyhaven.com/a/dry_ground_01) → gfx/flr_earth.jpg (절벽 경기장)
+
 ## 이펙트 입자 그림 — CC0 (표기 의무 없음, 감사 표시)
 - Kenney (kenney.nl) — "Particle Pack" → gfx/kn_*.png (skillfx.js, 신화·불멸 등장 연출)
 
