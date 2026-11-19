@@ -143,6 +143,30 @@
     combineInto: ['동일 유닛 {a}/{b}기 → 랜덤 {r}', '同じユニット {a}/{b}体 → ランダム{r}', 'Same unit {a}/{b} → random {r}', '相同单位 {a}/{b} → 随机{r}'],
     combineNeed: ['동일 유닛 {b}기 → 랜덤 {r}', '同じユニット {b}体 → ランダム{r}', '{b} of the same unit → random {r}', '{b}个相同单位 → 随机{r}'],
     combineBtn: ['조합', '合成', 'Combine', '合成'],
+    cwTitle: ['인연 시너지 확인', '縁のシナジーの確認', 'Bond synergy check', '羁绊确认'],
+    cwBody: ['이 조합에 재료로 쓰이는 장수가 빠져서 아래 인연 시너지가 꺼지거나 약해집니다. 그래도 조합할까요?', 'この合成で素材の武将がいなくなるため、下の縁のシナジーが解除、または弱まります。それでも合成しますか？', 'This combine uses up generals that the bond synergies below need, so they will turn off or weaken. Combine anyway?', '此次合成会消耗下列羁绊所需的武将，羁绊将失效或减弱。仍要合成吗？'],
+    cwOff: ['꺼짐', '解除', 'Off', '失效'],
+    // 인연 시너지 v0.3: 원군 피해 줄 꼬리표, 패널, 설정
+    synTag: ['인연', '縁', 'Bond', '羁绊'],
+    synLaneH: ['라인', 'ライン', 'Lane', '战线'],
+    synBossH: ['보스전', 'ボス戦', 'Boss', '首领战'],
+    synNone: ['없음', 'なし', 'None', '无'],
+    synTierN: ['{n}명', '{n}人', '{n}', '{n}人'],
+    synCore: ['{a}가 있어야 켜집니다', '{a}がいると発動', 'Requires {a}', '需要{a}'],
+    synBossNote: ['보스전 효과는 출전 장수가 구성원일 때만, 한 장수에 {n}개까지(등급 높은 순)', 'ボス戦効果は出陣武将が構成員の時だけ。1人{n}個まで（等級の高い順）', 'Boss effects apply only if your champion is a member; up to {n} per champion (highest grade first)', '首领战效果仅在出战武将为成员时生效，每名武将最多{n}个（等级高者优先）'],
+    synG1: ['하', '下', 'C', '下'], synG2: ['중', '中', 'B', '中'], synG3: ['상', '上', 'A', '上'], synG4: ['극', '極', 'S', '极'], synG5: ['극+', '極+', 'S+', '极+'],
+    synBossLine: ['보스전 인연(이 장수가 출전하면)', 'ボス戦の縁（この武将が出陣すると）', 'Boss bonds (if this unit is deployed)', '首领战羁绊（此武将出战时）'],
+    synOverCap: ['상한 초과', '上限超過', 'Over cap', '超出上限'],
+    synHelpH: ['인연 시너지', '縁のシナジー', 'Bond synergies', '羁绊'],
+    synHelp1: ['보스전 인연 효과는 출전한 구성원 중 한 명(주장)에게만, 한 장수에 {n}개까지 걸립니다(등급 높은 순).', 'ボス戦の縁の効果は出陣した構成員のうち1人（主将）だけに、1人{n}個まで（等級の高い順）。', 'Boss bond effects go to one deployed member (your carry), up to {n} per champion (highest grade first).', '首领战羁绊效果只作用于出战成员中的一人（主将），每名武将最多{n}个（等级高者优先）。'],
+    synHelp2: ['스킬 재사용 단축이 합쳐서 60%를 넘으면, 넘친 만큼 스킬 피해가 오릅니다.', 'スキル再使用短縮の合計が60%を超えると、超えた分だけスキルダメージが上がります。', 'Cooldown reduction above 60% in total turns into the same amount of skill damage.', '技能冷却缩减合计超过60%时，超出部分转为等量技能伤害。'],
+    cwDownG: ['{a}단계({ga}) → {b}단계({gb})', '{a}段階({ga}) → {b}段階({gb})', 'Tier {a} ({ga}) → {b} ({gb})', '{a}阶({ga}) → {b}阶({gb})'],
+    cwOffG: ['{a}단계({ga}) → 꺼짐', '{a}段階({ga}) → 解除', 'Tier {a} ({ga}) → off', '{a}阶({ga}) → 失效'],
+    keepSyn: ['인연 유지', '縁を維持', 'Keep bonds', '保留羁绊'],
+    keepSynHint: ['자동 조합이 켜진 인연의 마지막 한 기를 남깁니다', '自動合成で、発動中の縁の最後の1体を残します', 'Auto-combine keeps the last unit an active bond needs', '自动合成时保留已激活羁绊所需的最后一个单位'],
+    cwDown: ['{a}단계 → {b}단계', '{a}段階 → {b}段階', 'Tier {a} → {b}', '{a}阶 → {b}阶'],
+    cwGo: ['조합하기', '合成する', 'Combine', '合成'],
+    cwCancel: ['취소', 'キャンセル', 'Cancel', '取消'],
     moreInBook: ['외 {n}개는 도감에서 볼 수 있습니다.', 'ほか{n}件は図鑑で見られます。', '{n} more in the Codex.', '其余{n}项可在图鉴查看。'],
     stopDesc: ['출전 장수를 멈춥니다.', '出陣武将を止めます。', 'Stops your champion.', '让出战武将停下。'],
     itemSub: ['{r} 조합 아이템', '{r}の合成アイテム', '{r} crafting item', '{r}合成道具'],
@@ -236,7 +260,7 @@
     tut_l_wiz: ['<b>싱글 플레이</b> → <b>단독</b> → <b>쉬움</b>을 고르고 <b>출정</b>을 누르세요.', '<b>シングルプレイ</b> → <b>ひとり</b> → <b>かんたん</b>を選んで<b>出陣</b>をタップしてください。', 'Choose <b>Single Play</b> → <b>Solo</b> → <b>Easy</b>, then tap <b>Deploy</b>.', '依次选择<b>单人游戏</b> → <b>单人</b> → <b>简单</b>，然后点击<b>出征</b>。'],
     tut_hello: ['적이 길을 따라 성채 둘레를 돕니다. 왼쪽 위의 <b>전선</b> 수가 한도를 넘거나 중간보스를 놓치면 <b>라이프</b>가 줄고, 0이 되면 패배합니다.', '敵は道に沿って城の周りを回ります。左上の<b>戦線</b>の数が上限を超えたり、中ボスを逃したりすると<b>ライフ</b>が減り、0で敗北です。', 'Enemies circle the fortress along the road. If the <b>Front</b> count (top left) goes over the limit or a mid-boss escapes, you lose <b>Lives</b>. At 0 you lose.', '敌人沿道路绕着城池移动。左上角<b>战线</b>数量超过上限或放走中首领会减少<b>生命</b>，归零即失败。'],
     tut_select: ['성채 주변의 유닛을 <b>눌러서 선택</b>해 보세요.<br><small>길게 누르고 끌면 범위 선택, 같은 유닛을 두 번 누르면 같은 종류 모두 선택</small>', '城の周りのユニットを<b>タップして選択</b>してみましょう。<br><small>長押しでドラッグすると範囲選択、同じユニットを2回タップすると同じ種類をまとめて選択</small>', '<b>Tap a unit</b> near the fortress to select it.<br><small>Long-press and drag to box-select; tap the same unit twice to select all of that type.</small>', '<b>点击</b>城池周围的单位试试看。<br><small>长按拖动可框选，连点同一单位可选中同类全部</small>'],
-    tut_move: ['왼쪽 아래 <b>조이스틱</b>을 밀어 유닛을 <b>옮겨 보세요</b>.<br><small>빈 곳을 끌면 지도가 움직입니다. 유닛 선택이 풀렸으면 다시 누르세요.</small>', '左下の<b>ジョイスティック</b>を動かして、ユニットを<b>移動させてみましょう</b>。<br><small>何もない所をドラッグすると地図が動きます。選択が外れたらもう一度タップ。</small>', 'Push the <b>joystick</b> at the bottom left to <b>move the unit</b>.<br><small>Drag an empty spot to pan the map. If the selection is gone, tap the unit again.</small>', '推动左下角的<b>摇杆</b>，<b>移动</b>单位试试。<br><small>拖动空白处可移动地图。若取消了选择，请再次点击单位。</small>'],
+    tut_move: ['왼쪽 아래 <b>조이스틱</b>을 밀어 유닛을 <b>옮겨 보세요</b>.<br><small>빈 곳을 끌면 지도가 움직입니다. 유닛 선택이 풀렸으면 다시 누르세요. 오른쪽 아래 <b>공격</b> 버튼을 누르고 있으면 움직이면서 중간보스부터 칩니다.</small>', '左下の<b>ジョイスティック</b>を動かして、ユニットを<b>移動させてみましょう</b>。<br><small>何もない所をドラッグすると地図が動きます。選択が外れたらもう一度タップ。右下の<b>攻撃</b>ボタンを押している間は、移動しながら中ボスを優先して攻撃します。</small>', 'Push the <b>joystick</b> at the bottom left to <b>move the unit</b>.<br><small>Drag an empty spot to pan the map. If the selection is gone, tap the unit again. Hold the <b>attack</b> button at the bottom right to attack while moving, mid-bosses first.</small>', '推动左下角的<b>摇杆</b>，<b>移动</b>单位试试。<br><small>拖动空白处可移动地图。若取消了选择，请再次点击单位。按住右下角的<b>攻击</b>按钮，可边移动边攻击，优先攻击中首领。</small>'],
     tut_reward: ['라운드가 끝날 때마다 <b>무작위 1성 유닛</b>이 들어옵니다. 이것이 이 게임의 <b>뽑기</b>입니다.<br>다음 라운드까지 지켜봅시다.', 'ラウンドが終わるたびに<b>ランダムな★1ユニット</b>が届きます。これがこのゲームの<b>ガチャ</b>です。<br>次のラウンドまで様子を見ましょう。', 'At the end of every round you get <b>random ★1 units</b> — that\'s the <b>draw</b> in this game.<br>Let\'s watch until the next round.', '每回合结束都会获得<b>随机1星单位</b>，这就是本游戏的<b>抽卡</b>。<br>看看下一回合吧。'],
     tut_combine: ['<b>{a}</b>이(가) 모였습니다! 그 유닛을 누르고 <b>조합</b> 버튼으로 <b>합성</b>해 보세요. 같은 유닛을 모으면 한 등급 위 유닛이 됩니다.', '<b>{a}</b>が揃いました！そのユニットをタップして<b>合成</b>ボタンで合成してみましょう。同じユニットを集めると1つ上の等級になります。', 'You have enough <b>{a}</b>! Tap one and press <b>Combine</b>. Copies of the same unit merge into a higher tier.', '<b>{a}</b>已集齐！点击该单位，用<b>合成</b>按钮合成试试。相同单位集齐后会升一个等级。'],
     tut_upgrade: ['금화가 모였습니다. 오른쪽 <b>강화</b>를 열고 강화를 하나 사 보세요. 등급 묶음별로 공격력이 오릅니다.<br><small>금화는 정예 적 처치, 유닛 해산, 보상으로 들어옵니다.</small>', '金貨が貯まりました。右の<b>強化</b>を開いて、強化を1つ買ってみましょう。等級グループごとに攻撃力が上がります。<br><small>金貨は精鋭の撃破・ユニット解散・報酬で手に入ります。</small>', 'You have gold. Open <b>Upgrade</b> on the right and buy one. Each tier group gets more ATK.<br><small>Gold comes from elite kills, disbanding units and rewards.</small>', '金币够了。打开右侧<b>强化</b>，买一级强化试试。各等级组的攻击力会提升。<br><small>金币来自击败精英、解散单位和奖励。</small>'],
@@ -443,6 +467,130 @@
     return s;
   }
 
+  // ---- 인연 단계 설명: 테마 데이터(synergies[].tiers[].lane·boss)에서 4개 언어로 만든다(인연을 더할 때 문구를 따로 쓰지 않아도 된다) ----
+  // 칸: [한국어, 日本語, English, 中文]. {m} 배수, {v} 퍼센트, {n} 수, {d} 초
+  const SP = {
+    members: ['구성원', '構成員', 'Members', '成员'], all: ['모든 적', '全ての敵', 'All enemies', '全体敌人'],
+    atk: ['공격력 +{v}', '攻撃力+{v}', 'ATK +{v}', '攻击+{v}'], haste: ['공격 속도 +{v}', '攻撃速度+{v}', 'attack speed +{v}', '攻速+{v}'], range: ['사거리 +{v}', '射程+{v}', 'range +{v}', '射程+{v}'],
+    splashR: ['범위 반경 +{v}', '範囲半径+{v}', 'splash radius +{v}', '范围半径+{v}'], burn: ['화상 피해 +{v}', '炎上ダメージ+{v}', 'burn +{v}', '燃烧伤害+{v}'], grantBurn: ['화상 부여({v})', '炎上付与({v})', 'gains burn ({v})', '附加燃烧({v})'],
+    burnSlow: ['화상 입은 적 이동 -{v}', '炎上中の敵の移動-{v}', 'burning enemies -{v} speed', '燃烧敌人移速-{v}'], pierce: ['방어 무시 +{v}', '防御無視+{v}', 'armor pierce +{v}', '无视防御+{v}'],
+    multi: ['추가 타격 +{n}', '追加攻撃+{n}', '+{n} extra target', '额外攻击+{n}'], slowAdd: ['감속 +{v}', '減速+{v}', 'slow +{v}', '减速+{v}'], stunAdd: ['기절 확률 +{v}', '気絶確率+{v}', 'stun chance +{v}', '眩晕几率+{v}'],
+    auraR: ['오라 반경 +{n}', 'オーラ半径+{n}', 'aura radius +{n}', '光环半径+{n}'], auraPct: ['오라 {v}', 'オーラ{v}', 'aura {v}', '光环{v}'], crit: ['{c} 확률로 {m}배', '{c}の確率で{m}倍', '{c} chance of ×{m}', '{c}几率{m}倍'],
+    fieldSlow: ['이동 속도 -{v}(플레이어 중 최대)', '移動速度-{v}（プレイヤー中最大）', '-{v} speed (best of the party)', '移速-{v}（取玩家最大值）'], upMax: ['모든 강화 최대 단계 +{n}', '全強化の最大段階+{n}', 'All upgrade caps +{n}', '全部强化上限+{n}'],
+    facAtk: ['{f} 유닛 전체 공격력 +{v}', '{f}の全ユニット攻撃力+{v}', 'All {f} units ATK +{v}', '{f}全体单位攻击+{v}'],
+    // 보스전 상시
+    bdmg: ['피해 +{v}', 'ダメージ+{v}', 'damage +{v}', '伤害+{v}'], guard: ['받는 피해 -{v}', '被ダメージ-{v}', 'damage taken -{v}', '受伤-{v}'], hpPct: ['체력 +{v}', '体力+{v}', 'HP +{v}', '生命+{v}'],
+    skillAmp: ['스킬 피해 +{v}', 'スキルダメージ+{v}', 'skill damage +{v}', '技能伤害+{v}'], dashCdr: ['대시 재사용 -{v}', 'ダッシュ再使用-{v}', 'dash cooldown -{v}', '冲刺冷却-{v}'], burnAmp: ['화상 +{v}', '炎上+{v}', 'burn +{v}', '燃烧+{v}'],
+    healUses: ['회복 버튼 +{n}회', '回復ボタン+{n}回', 'heal button +{n}', '回复按钮+{n}次'], healAmp: ['치료량 +{v}', '治療量+{v}', 'healing +{v}', '治疗量+{v}'], regen: ['매초 체력 {v} 회복', '毎秒体力{v}回復', 'regen {v}/s', '每秒回复{v}生命'],
+    lowHp: ['체력 {t} 이하: {x}', '体力{t}以下: {x}', 'HP ≤{t}: {x}', '生命≤{t}: {x}'], highHp: ['체력 {t} 이상: {x}', '体力{t}以上: {x}', 'HP ≥{t}: {x}', '生命≥{t}: {x}'], bossLow: ['보스 체력 {t} 이하: {x}', 'ボス体力{t}以下: {x}', 'boss HP ≤{t}: {x}', '首领生命≤{t}: {x}'],
+    revive: ['1회 부활(체력 {v})', '1回復活（体力{v}）', 'revive once ({v} HP)', '复活1次（生命{v}）'], reviveD: ['1회 {d}초 뒤 부활(체력 {v})', '1回{d}秒後に復活（体力{v}）', 'revive once after {d}s ({v} HP)', '{d}秒后复活1次（生命{v}）'],
+    endure: ['버팀 {n}회', '踏ん張り{n}回', 'endure ×{n}', '坚守{n}次'], endureN: ['쓰러질 피해 무효 {n}회', '致命ダメージ無効{n}回', 'negate a lethal hit ×{n}', '免疫致命伤{n}次'],
+    rotate: ['{d}초마다 지휘 교대: {x}', '{d}秒ごとに指揮交代: {x}', 'command rotates every {d}s: {x}', '每{d}秒轮换指挥: {x}'], pairBdmg: ['맞수 둘 다 출전하면 둘 다 피해 +{v}', '好敵手が揃って出陣すると両者ダメージ+{v}', 'both rivals deployed: both +{v} damage', '宿敌同时出战：两人伤害+{v}'],
+    // 트리거
+    t_start: ['시작', '開始時', 'At start', '开场'], t_timer: ['{d}초마다', '{d}秒ごと', 'Every {d}s', '每{d}秒'], t_hitN: ['평타 {n}번째마다', '通常攻撃{n}回ごと', 'Every {n}th hit', '每第{n}次普攻'], t_hit1: ['평타 때', '通常攻撃時', 'On hit', '普攻时'],
+    t_crit: ['치명 때', '会心時', 'On crit', '暴击时'], t_skill: ['스킬을 쓰면', 'スキル使用時', 'On skill', '使用技能时'], t_heal_skill: ['치료 스킬을 쓰면', '治療スキル使用時', 'On healing skill', '使用治疗技能时'],
+    t_skillHit: ['스킬 적중 때', 'スキル命中時', 'On skill hit', '技能命中时'], t_anyHit: ['적중마다', '命中ごと', 'On every hit', '每次命中'], t_dash: ['대시하면', 'ダッシュ時', 'On dash', '冲刺时'],
+    t_dashGraze: ['대시 무적 중 피격 때', 'ダッシュ無敵中の被弾時', 'Hit while dashing', '冲刺无敌中被击时'], t_pattern: ['보스 패턴마다', 'ボスの技ごと', 'Each boss pattern', '首领每次出招'], t_bigDodge: ['큰 공격을 피하면', '大技を回避すると', 'Dodge a big attack', '躲过大招时'],
+    t_lowHp: ['체력이 처음 {t} 아래면', '体力が初めて{t}未満になると', 'First time below {t} HP', '首次生命低于{t}时'], t_heal: ['넘친 회복', 'あふれた回復', 'Overflow healing', '溢出治疗'], t_hurt: ['피격 때', '被弾時', 'When hit', '受击时'], t_stackMax: ['중첩이 차면', 'スタック最大時', 'At max stacks', '叠满时'],
+    c_cd: ['{d}초 쿨', 'CT{d}秒', '{d}s CD', '冷却{d}秒'], c_lane: ['라인에 구성원이 있을 때', 'ラインに構成員がいる時', 'needs a member on the lane', '战线有成员时'], c_need: ['라인에 {a}', 'ラインに{a}', 'needs {a} on the lane', '战线有{a}'],
+    c_first: ['첫 직선 스킬', '最初の直線スキル', 'first line skill', '首个直线技能'], c_max: ['최대일 때', '最大時', 'when maxed', '满时'], c_nth: ['{n}번마다', '{n}回ごと', 'every {n}', '每{n}次'], c_field: ['진 안에서', '陣の中で', 'inside a circle', '阵内'],
+    // 행동
+    a_dmg: ['{m}배 피해', '{m}倍ダメージ', '×{m} damage', '{m}倍伤害'], a_stun: ['기절 {d}초', '気絶{d}秒', 'stun {d}s', '眩晕{d}秒'], a_volley: ['라인 원군 1명당 {m}배 사격', 'ライン援軍1人ごとに{m}倍射撃', 'lane allies fire ×{m} each', '战线援军每人{m}倍射击'],
+    a_volleyN: ['원군 {n}발({m}배)', '援軍{n}発（{m}倍）', '{n} ally shots (×{m})', '援军{n}发（{m}倍）'], a_ally: ['호위 {n}명 {d}초(1초마다 {m}배)', '護衛{n}人{d}秒（毎秒{m}倍）', '{n} guard(s) for {d}s (×{m}/s)', '护卫{n}名{d}秒（每秒{m}倍）'],
+    a_allyF: ['호위 {n}명 끝까지(1초마다 {m}배)', '護衛{n}人 最後まで（毎秒{m}倍）', '{n} guard(s) all fight (×{m}/s)', '护卫{n}名全程（每秒{m}倍）'], a_allyG: ['그동안 받는 피해 -{v}', 'その間 被ダメージ-{v}', 'damage taken -{v} meanwhile', '期间受伤-{v}'],
+    a_ship: ['화선 {n}척({m}배)', '火船{n}隻（{m}倍）', '{n} fire ship(s) (×{m})', '火船{n}艘（{m}倍）'], a_riders: ['기병 {n}기 돌격(1기 {m}배)', '騎兵{n}騎突撃（1騎{m}倍）', '{n} riders charge (×{m} each)', '骑兵{n}骑冲锋（每骑{m}倍）'],
+    a_echo: ['스킬 메아리 {n}번({v})', 'スキル反響{n}回（{v}）', 'skill echoes ×{n} ({v})', '技能回响{n}次（{v}）'], a_field: ['법진 {d}초(초당 {m}배)', '法陣{d}秒（毎秒{m}倍）', 'circle {d}s (×{m}/s)', '法阵{d}秒（每秒{m}倍）'],
+    a_fire: ['불 장판 {d}초(초당 {m}배)', '炎の床{d}秒（毎秒{m}倍）', 'fire ground {d}s (×{m}/s)', '火地{d}秒（每秒{m}倍）'], a_buff: ['{d}초 {x}', '{d}秒 {x}', '{x} for {d}s', '{d}秒{x}'],
+    a_stack: ['중첩(최대 {n})', 'スタック（最大{n}）', 'stack (max {n})', '叠层（最多{n}）'], a_stackPer: ['중첩당 {x}', '1スタックごとに{x}', '{x} per stack', '每层{x}'], a_shield: ['보호막 {v}', 'シールド{v}', 'shield {v}', '护盾{v}'],
+    a_shieldO: ['보호막으로(최대 {v})', 'シールドに（最大{v}）', 'becomes a shield (max {v})', '化为护盾（最多{v}）'], a_refund: ['스킬 재사용 {d}초 환급', 'スキル再使用{d}秒短縮', 'skill cooldowns -{d}s', '技能冷却-{d}秒'],
+    a_samp: ['보스 받는 피해 +{v} {d}초(팀)', 'ボス被ダメージ+{v} {d}秒（チーム）', 'boss takes +{v} for {d}s (team)', '首领受伤+{v} {d}秒（全队）'], a_rally: ['아군 전체 공격력 +{v} {d}초', '味方全体攻撃力+{v} {d}秒', 'party ATK +{v} for {d}s', '全队攻击+{v} {d}秒'],
+    a_pshield: ['아군 전체 보호 {d}초', '味方全体を{d}秒守る', 'party shield {d}s', '全队保护{d}秒'], a_weaken: ['보스 공격력 -{v} {d}초', 'ボス攻撃力-{v} {d}秒', 'boss ATK -{v} for {d}s', '首领攻击-{v} {d}秒'],
+    a_delay: ['보스 다음 패턴 {d}초 지연', 'ボスの次の技を{d}秒遅らせる', 'delay boss pattern {d}s', '首领下一招延迟{d}秒'], a_next: ['다음 스킬 피해 +{v}', '次のスキルダメージ+{v}', 'next skill +{v}', '下一技能伤害+{v}'],
+    a_heal: ['체력 {v} 회복', '体力{v}回復', 'heal {v}', '回复{v}生命'], a_arrows: ['화살 {n}발(그 평타의 {v})', '矢{n}本（その攻撃の{v}）', '{n} arrows ({v} of the hit)', '箭{n}支（该次普攻的{v}）'], a_dashHit: ['함께 돌진 {m}배', '共に突撃{m}倍', 'joint charge ×{m}', '一同冲锋{m}倍'],
+  };
+  const pc = (v) => Math.round(v * 1000) / 10 + '%';
+  const sp = (k, v) => { const r = SP[k]; let s = r ? r[idx] || r[0] : k; Object.keys(v || {}).forEach((x) => (s = s.split('{' + x + '}').join(v[x]))); return s; };
+  const SEP = idx === 1 || idx === 3 ? '、' : ', ';
+  // 상시 수치 한 덩어리를 글로 (라인·보스전 같이 씀)
+  function statText(T, o) {
+    const out = [];
+    Object.keys(o || {}).forEach((k) => {
+      const v = o[k];
+      if (v == null || k === 'only' || k === 'per' || k === 'needCore') return;
+      if (k === 'crit') (Array.isArray(v) ? v : [v]).forEach((x) => out.push(sp('crit', { c: pc(x.ch), m: x.mult })));
+      else if (k === 'multi' || k === 'auraR' || k === 'upMax' || k === 'healUses') out.push(sp(k, { n: v }));
+      else if (k === 'regen') out.push(sp(k, { v: pc(v) }));
+      else if (k === 'facAtk') out.push(sp(k, { f: (T.factions[v.fac] || {}).name || v.fac, v: pc(v.pct) }));
+      else if (k === 'lowHp' || k === 'highHp' || k === 'bossLow') out.push(sp(k, { t: pc(v.th), x: statText(T, { guard: v.guard, bdmg: v.bdmg }) }));
+      else if (k === 'revive') out.push(v.delay ? sp('reviveD', { d: v.delay, v: pc(v.pct) }) : sp('revive', { v: pc(v.pct) }));
+      else if (k === 'endure') out.push(sp(v.negate ? 'endureN' : 'endure', { n: v.n || 1 }));
+      else if (k === 'rotate') out.push(sp('rotate', { d: v.every, x: v.list.map((x, i) => (unitName(T, v.ids[i]) + ' ' + statText(T, x))).join(' → ') }));
+      else if (k === 'pairBdmg') out.push(sp(k, { v: pc(v) }));
+      else if (typeof v === 'number' && v && SP[k]) out.push(sp(k, { v: pc(v) }));
+    });
+    return out.join(SEP);
+  }
+  function unitName(T, id) { const d = T.units.find((x) => x.id === id); return d ? d.name : id; }
+  function actText(T, a) {
+    const st = a.stun ? SEP + sp('a_stun', { d: a.stun }) : '';
+    switch (a.k) {
+      case 'dmg': return (a.ids && !a.partner ? unitName(T, a.ids[0]) + ' ' : '') + sp('a_dmg', { m: a.m }) + st;
+      case 'volley': return a.n ? sp('a_volleyN', { n: a.n, m: a.m }) : sp('a_volley', { m: a.m });
+      case 'ally': return sp(a.dur === 'fight' ? 'a_allyF' : 'a_ally', { n: a.n || 1, d: a.dur, m: a.m }) + (a.guard ? SEP + sp('a_allyG', { v: pc(a.guard) }) : '');
+      case 'ship': return sp('a_ship', { n: a.n || 1, m: a.m });
+      case 'riders': return sp('a_riders', { n: a.n || 5, m: a.m });
+      case 'echo': return sp('a_echo', { n: a.n || 1, v: pc(a.pct) });
+      case 'field': return sp(a.vis === 'fire' ? 'a_fire' : 'a_field', { d: a.dur, m: a.m });
+      case 'buff': return sp('a_buff', { d: a.dur, x: statText(T, { [a.stat]: a.v }) });
+      case 'stack': return sp('a_stack', { n: a.max }) + (a.per ? SEP + sp('a_stackPer', { x: statText(T, a.per) }) : '');
+      case 'shield': return a.over ? sp('a_shieldO', { v: pc(a.cap) }) : sp('a_shield', { v: pc(a.pct) });
+      case 'refund': return sp('a_refund', { d: a.s });
+      case 'samp': return sp('a_samp', { v: pc(a.v), d: a.dur });
+      case 'rally': return sp('a_rally', { v: pc(a.v), d: a.dur });
+      case 'pshield': return sp('a_pshield', { d: a.dur });
+      case 'weaken': return sp('a_weaken', { v: pc(a.v), d: a.dur });
+      case 'delay': return sp('a_delay', { d: a.v });
+      case 'nextSkill': return sp('a_next', { v: pc(a.x) });
+      case 'heal': return sp('a_heal', { v: pc(a.pct) });
+      case 'dmgHit': return sp('a_arrows', { n: a.n, v: pc(a.pct) });
+      case 'dashHit': return sp('a_dashHit', { m: a.m });
+      default: return '';
+    }
+  }
+  function ruleText(T, r) {
+    let tr;
+    if (r.on === 'timer') tr = sp('t_timer', { d: r.every });
+    else if (r.on === 'hitN') tr = r.n > 1 ? sp('t_hitN', { n: r.n }) : sp('t_hit1');
+    else if (r.on === 'skill' && r.skillK === 'heal') tr = sp('t_heal_skill');
+    else if (r.on === 'lowHp') tr = sp('t_lowHp', { t: pc(r.th) });
+    else tr = sp('t_' + r.on);
+    const cond = [];
+    if (r.first) cond.push(sp('c_first'));
+    if (r.atMax) cond.push(sp('c_max'));
+    if (r.inField) cond.push(sp('c_field'));
+    if (r.lane) cond.push(sp('c_lane'));
+    if (r.need) cond.push(sp('c_need', { a: r.need.map((id) => unitName(T, id)).join('/') }));
+    if (r.nth) cond.push(sp('c_nth', { n: r.nth }));
+    if (r.cd) cond.push(sp('c_cd', { d: r.cd }));
+    const acts = r.do.map((a) => actText(T, a)).filter(Boolean).join(SEP);
+    return tr + (cond.length ? '(' + cond.join(SEP) + ')' : '') + ': ' + acts;
+  }
+  // 한 단계의 { lane, boss } 설명. 비어 있으면 ''
+  function synTierText(T, s, tier) {
+    const L = tier.lane || {}, lane = [];
+    const gl = {}, mem = {};
+    Object.keys(L).forEach((k) => { if (k === 'fieldSlow' || k === 'upMax' || k === 'facAtk') gl[k] = L[k]; else if (k !== 'only' && k !== 'per') mem[k] = L[k]; });
+    const m = statText(T, mem);
+    if (m) lane.push((L.only ? L.only.map((id) => unitName(T, id)).join('·') : sp('members')) + ' ' + m);
+    if (gl.fieldSlow) lane.push(sp('all') + ' ' + sp('fieldSlow', { v: pc(gl.fieldSlow) }));
+    if (gl.upMax || gl.facAtk) lane.push(statText(T, { upMax: gl.upMax, facAtk: gl.facAtk }));
+    Object.keys(L.per || {}).forEach((id) => { const x = statText(T, L.per[id]); if (x) lane.push(unitName(T, id) + ' ' + x); });
+    const B = tier.boss, boss = [];
+    if (B && B.stat) { const x = statText(T, B.stat); if (x) boss.push(x); }
+    if (B && B.rules) B.rules.forEach((r) => boss.push(ruleText(T, r)));
+    return { lane: lane.join(' / '), boss: boss.join(' / ') };
+  }
+
   // ---- 고유명사 ----
   const N = {
     ja: 'cav:騎兵 shd:盾兵 arc:弓兵 swd:剣兵 spr:槍兵 yujin:于禁 akjin:楽進 juchang:周倉 jutae:周泰 neungtong:凌統 hwawoong:華雄 hayeon:夏侯淵 janghap:張郃 wiyeon:魏延 hwanggae:黄蓋 munchu:文醜 anryang:顔良 seohwang:徐晃 heojeo:許褚 hwangchung:黄忠 gamnyeong:甘寧 gongson:公孫瓚 hadon:夏侯惇 macho:馬超 madae:馬岱 nosuk:魯粛 wonso:袁紹 jangryo:張遼 ganguy:姜維 yeomong:呂蒙 sunyu:荀攸 deungae:鄧艾 seoseo:徐庶 gwanpyeong:関平 jeongbo:程普 jegalgeun:諸葛瑾 gahu:賈詡 maenghoek:孟獲 jeonwi:典韋 munang:文鴦 hwangwol:黄月英 bangtong:龐統 songyeon:孫堅 sonhyang:孫尚香 yeoryeong:呂玲綺 chugyung:祝融 gwakga:郭嘉 join:曹仁 sunuk:荀彧 jangbi:張飛 joun:趙雲 sonchaek:孫策 yukson:陸遜 dongtak:董卓 choseon:貂蝉 jojo:曹操 samaui:司馬懿 yubi:劉備 gwanu:関羽 jegal:諸葛亮 songwon:孫権 juyu:周瑜 taesaja:太史慈 janggak:張角 yeopo:呂布 jwaja:左慈 mijuk:糜竺 songeon:孫乾 chaemunhui:蔡文姫 samahwi:司馬徽 ganong:簡雍 ugil:于吉 jingung:陳宮 gyeonhui:甄姫 daegyo:大喬 sogyo:小喬 hwata:華佗',
@@ -528,6 +676,6 @@
     // 캔버스는 글꼴을 기다려 주지 않으므로 미리 불러 둔다
     if (document.fonts && document.fonts.load) map.forEach(([fam, f, w]) => document.fonts.load(`${w} 20px "${fam}"`, 'あ三').catch(() => {}));
   }
-  root.RTD_I18N = { lang, LANGS, t, localizeTheme, applyDom, setLang, skillText };
+  root.RTD_I18N = { lang, LANGS, t, localizeTheme, applyDom, setLang, skillText, synTierText };
   if (root.RTD_THEME) localizeTheme(root.RTD_THEME);
 })(typeof window !== 'undefined' ? window : globalThis);

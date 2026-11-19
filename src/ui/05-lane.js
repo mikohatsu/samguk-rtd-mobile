@@ -75,7 +75,7 @@
     }
     if (S.sel.length === 1) {
       const u = g.units.find((x) => x.id === S.sel[0]);
-      if (u && u.def.tier > 0) rangeMark(c, u.x, u.y, g.range(u.def), '#7dff8e', 0.22);
+      if (u && u.def.tier > 0) rangeMark(c, u.x, u.y, g.rangeOf(u), '#7dff8e', 0.22); // 인연 사거리 포함(engine stepUnits와 같은 값)
     }
     drawFx(c);
     if (g.mut.night) drawNight(c);

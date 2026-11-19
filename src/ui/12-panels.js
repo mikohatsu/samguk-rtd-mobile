@@ -103,7 +103,10 @@
       h += `<div class="h">${t('gfx')}</div><div class="row"><div>${t('gfxRow')} <small>${t('gfxHint')}</small></div><div class="zones">${ql.map(([k, l]) => `<button class="zb ${Q.level === k ? 'on' : ''}" data-act="gfx" data-arg="${k}" type="button">${l}</button>`).join('')}</div></div>`;
       h += `<div class="row"><div>${t('fps30')} <small>${t('fps30Hint')}</small></div><button class="toggle ${Q.fps30 ? 'on' : ''}" data-act="fps30" type="button">${Q.fps30 ? t('on') : t('off')}</button></div>`;
       h += `<div class="row"><div>${t('perfShow')} <small>${t('perfShowHint')}</small></div><button class="toggle ${Q.perf ? 'on' : ''}" data-act="perf" type="button">${Q.perf ? t('on') : t('off')}</button></div>`;
-      h += `<div class="h">${t('autoSection')}</div>` + az('t1', I.t('autoT1')) + az('t2', I.t('autoT2')) + az('t3', I.t('autoT3')) + az('t45', I.t('autoT45')) + tg('sell', I.t('autoSell'));
+      h += `<div class="h">${t('autoSection')}</div>` + az('t1', I.t('autoT1')) + az('t2', I.t('autoT2')) + az('t3', I.t('autoT3')) + az('t45', I.t('autoT45')) + tg('sell', I.t('autoSell'))
+        + `<div class="row"><div>${t('keepSyn')} <small>${t('keepSynHint')}</small></div><button class="toggle ${g.keepSyn ? 'on' : ''}" data-act="keepSyn" type="button">${I.t(g.keepSyn ? 'onOff' : 'offOff')}</button></div>`;
+      // 도움말: 인연 규칙 두 줄
+      h += `<div class="h">${t('synHelpH')}</div><div class="row"><div><small>${esc(I.t('synHelp1', { n: g.synMaxPerCarry || 5 }))}</small></div></div><div class="row"><div><small>${esc(t('synHelp2'))}</small></div></div>`;
       h += `<div class="h">${t('sound')}</div>` + volRow('sfx') + volRow('bgm');
       h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplay')}</button></div>`;
       h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
@@ -130,7 +133,8 @@
     const seen = {};
     g.units.forEach((s) => { if (s.owner === p.idx) (s.def.p || []).forEach((x) => { if (x.k === 'globalAtk' && (x.fac === 'all' || x.fac === d.fac) && !seen[x.name]) { seen[x.name] = 1; out.push({ n: s.def.name, v: x.pct }); } }); });
     if (u.aura) { const src = g.units.find((s) => s.owner === u.owner && (s.def.p || []).some((x) => x.k === 'aura' && x.pct === u.aura && (!x.fac || x.fac === d.fac) && Math.hypot(u.x - s.x, u.y - s.y) <= x.r)); out.push({ n: src ? src.def.name : I.t('aura'), v: u.aura }); }
-    Object.values((p && p.syn) || {}).forEach((s) => { const e = s.eff || {}; let v = 0; if ((e.only || s.units).includes(d.id)) v += e.atk || 0; if (s.per && s.per[d.id]) v += s.per[d.id].atk || 0; if (e.facAtk && d.fac === e.facAtk.fac) v += e.facAtk.pct; if (v) out.push({ n: s.name, v }); });
+    // 인연 라인 공격력(단계별 tier.lane: 구성원·only·per·진영 전체). 보스전 효과는 출전 장수에게 따로 걸린다
+    Object.values((p && p.syn) || {}).forEach((x) => { const e = (x.tier && x.tier.lane) || {}; let v = 0; if ((e.only || x.s.units).includes(d.id)) v += e.atk || 0; if (e.per && e.per[d.id]) v += e.per[d.id].atk || 0; if (e.facAtk && d.fac === e.facAtk.fac) v += e.facAtk.pct; if (v) out.push({ n: x.s.name, v }); });
     const m = (g.mut.atk || 0) + g.mutAtk(); if (m) out.push({ n: I.t('mutShort'), v: m });
     return out;
   }
@@ -138,6 +142,7 @@
     const d = u.def, p = g.players[u.owner], out = [];
     let best = null; g.units.forEach((s) => { if (s.owner === p.idx) (s.def.p || []).forEach((x) => { if (x.k === 'tierHaste' && d.tier >= x.tier && (!best || x.pct > best.v)) best = { n: s.def.name, v: x.pct }; }); });
     if (best && best.v) out.push(best);
+    const sh = g.synFor(u.owner, d).haste; if (sh) out.push({ n: t('synTag'), v: sh }); // 인연 라인 공격 속도
     return out;
   }
   const pctTxt = (v) => (v > 0 ? '+' : '') + Math.round(v * 100) + '%';
@@ -145,16 +150,17 @@
   const buffCls = (k) => (k > 1.0001 ? 'bup' : k < 0.9999 ? 'bdn' : '');
   function unitInfo(u, atk) {
     const d = u.def, f = T.factions[d.fac], remote = atk != null, lv = remote ? 0 : g.upgradeLevel(g.me, d);
-    const spd = remote ? 1 : 1 + g.hasteOf(g.me.idx, d);
+    const spd = remote ? 1 : 1 + g.hasteOf(g.me.idx, d) + g.synFor(g.me.idx, d).haste;
     let stats = '';
     if (d.tier) {
       const base = g.rankOf[d.tier].atk * g.attackTime(d), now = remote ? atk : g.unitAtk(u);
       const iv = g.attackTime(d) / spd;
       const src = remote ? [] : atkSources(u), hs = remote ? [] : hasteSources(u);
       const det = !remote && S.statDet ? `<div class="sdet"><span>${I.t('baseAtk')} ${fmt(base)}</span>${src.map((x) => `<span class="${x.v >= 0 ? 'bup' : 'bdn'}">${esc(x.n)} ${pctTxt(x.v)}</span>`).join('')}${hs.map((x) => `<span class="bup">${esc(x.n)} ${I.t('speedShort')} ${pctTxt(x.v)}</span>`).join('')}${src.length || hs.length ? '' : `<span>${I.t('noBuff')}</span>`}</div>` : '';
-      stats = `<div class="line">${I.t('atk')} <strong class="${remote ? '' : buffCls(now / base)}">${fmt(now)}</strong> · ${I.t('hp')} ${fmt(g.rankOf[d.tier].hp)} · ${I.t('range')} ${g.range(d)} · ${I.t('interval')} <span class="${buffCls(g.attackTime(d) / iv)}">${I.t('sec', { n: iv.toFixed(2) })}</span>${remote ? '' : ` <button class="sdbtn" data-act="statDet" type="button">${I.t(S.statDet ? 'detClose' : 'detOpen')}</button>`}</div>${det}`;
+      stats = `<div class="line">${I.t('atk')} <strong class="${remote ? '' : buffCls(now / base)}">${fmt(now)}</strong> · ${I.t('hp')} ${fmt(g.rankOf[d.tier].hp)} · ${I.t('range')} ${remote || g.inFight(u) ? g.range(d) : Math.round(g.rangeOf(u))} · ${I.t('interval')} <span class="${buffCls(g.attackTime(d) / iv)}">${I.t('sec', { n: iv.toFixed(2) })}</span>${remote ? '' : ` <button class="sdbtn" data-act="statDet" type="button">${I.t(S.statDet ? 'detClose' : 'detOpen')}</button>`}</div>${det}`;
     }
-    const pass = (d.p || []).map((x) => `<div class="line" title="${esc(x.desc)}"><span class="tag">${t('passive')}</span>${esc(x.name)}: ${esc(x.desc)}</div>`).join('');
+    const pass = (d.p || []).map((x) => `<div class="line" title="${esc(x.desc)}"><span class="tag">${t('passive')}</span>${esc(x.name)}: ${esc(x.desc)}</div>`).join('')
+      + (() => { const sb = remote || g.inFight(u) ? [] : synBossFor(d); return sb.length ? `<div class="line"><span class="tag">${esc(t('synBossLine'))}</span>${synBadges(sb)}</div>` : ''; })();
     const skills = (d.sk || []).map((s) => `<div class="line"><span class="tag">${t('active')}</span>${esc(s.n)} (${I.t('cooldown', { n: s.cd })})</div>`).join('');
     const role = d.role ? `<div class="line">${roleBadge(d)} <small>${esc(T.roles[d.role].desc)}</small></div>` : '';
     return `<img class="por" alt="" src="${Art.portrait(d)}">${unitHead(d, lv, remote)}<div class="sub line">${d.tier ? '' : I.t('special') + ' · '}<span style="color:${f.color}">${esc(f.name)}</span>${d.title ? ' · ' + esc(d.title) : ''}</div><div style="clear:both"></div>${role}${stats}${pass}${skills}`;

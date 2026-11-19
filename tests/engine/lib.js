@@ -19,6 +19,7 @@ function seedRandom(s) { rnd = mulberry(s); }
 
 const E = require(path.join(ROOT, 'engine.js'));
 require(path.join(ROOT, 'raid.js'));
+require(path.join(ROOT, 'synergy.js'));
 const T = require(path.join(ROOT, 'theme-samguk.js'));
 const AI = require(path.join(ROOT, 'ai.js'));
 require(path.join(ROOT, 'net.js'));

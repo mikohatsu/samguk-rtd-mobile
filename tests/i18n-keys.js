@@ -54,13 +54,13 @@ function calls(src, re) {
   return { keys, pre, dyn };
 }
 const uiFiles = fs.readdirSync(path.join(ROOT, 'src', 'ui')).filter((f) => /\.js$/.test(f)).map((f) => 'src/ui/' + f);
-const iFiles = uiFiles.concat(['tutorial.js', 'net.js', 'lobby.js', 'engine.js', 'raid.js', 'native.js', 'audio.js', 'skillfx.js', 'art.js', 'rig.js', 'ai.js', 'shop.js', 'palace.js']);
+const iFiles = uiFiles.concat(['tutorial.js', 'net.js', 'lobby.js', 'engine.js', 'raid.js', 'synergy.js', 'native.js', 'audio.js', 'skillfx.js', 'art.js', 'rig.js', 'ai.js', 'shop.js', 'palace.js']);
 const missI = [], dynI = [], preI = new Set();
 for (const f of iFiles) {
   const src = rd(f);
   // 화면 코드: t( · I.t( · C.t( · L.t( · N.t( · tt( · c.t(  / 엔진: this.L(
   const res = [/(?<![A-Za-z0-9_$.])t\(/g, /\b(?:I|C|L|N|c|ctx|RTD_I18N)\.t\(/g, /(?<![A-Za-z0-9_$.])tt\(/g];
-  if (f === 'engine.js' || f === 'raid.js') res.push(/\bthis\.L\(/g, /\bg\.L\(/g);
+  if (f === 'engine.js' || f === 'raid.js' || f === 'synergy.js') res.push(/\bthis\.L\(/g, /\bg\.L\(/g);
   for (const re of res) {
     const r = calls(src, re);
     r.keys.forEach((line, k) => { if (!SI[k]) missI.push(`${f}:${line} ${k}`); });

@@ -88,7 +88,7 @@ function play(diff, comp, seed) {
     const f = h.g.fight;
     if (f && h.g.phase === 'boss') {
       bossT[f.def.round] = [f.t / f.limit, f.boss.hp / f.boss.mhp];
-      members.forEach((m) => { const mf = m.g.fight; if (mf && mf.champs.some((c) => c.owner === m.g.me.idx && !c.dead && (() => { const s = m.g.synFor(c.owner, c.def); return s.atk + s.skill + s.crit.length > 0; })())) synBoss.add(m.i); });
+      members.forEach((m) => { const mf = m.g.fight; if (mf && mf.champs.some((c) => c.owner === m.g.me.idx && !c.dead && c.syR && c.syR.length > 0)) synBoss.add(m.i); });
     }
     if (!firstOver) { const o = members.find((m) => m.g.over); if (o) firstOver = { i: o.i, over: o.g.over, round: o.g.round, phase: o.g.phase, lives: o.g.lives }; }
     if (members.every((m) => m.g.over)) break;

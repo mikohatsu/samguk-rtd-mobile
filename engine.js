@@ -8,6 +8,8 @@
   const dist = (a, b, c, d) => Math.hypot(a - c, b - d);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  // 인연 라인 효과가 없는 유닛(주인 없는 유닛·시너지 없음)이 받는 빈 값
+  const SYN0 = Object.freeze({ atk: 0, haste: 0, range: 0, splashR: 0, burn: 0, grantBurn: 0, burnSlow: 0, pierce: 0, multi: 0, slowAdd: 0, stunAdd: 0, auraR: 0, auraPct: 0, crit: [] });
 
   function mulberry(seed) {
     let s = seed >>> 0;
@@ -35,6 +37,8 @@
       this.diff = theme.difficulties.find((d) => d.id === opt.diff) || theme.difficulties[0];
       this.mode = opt.mode || 'solo'; // solo | multi (AI 동맹도 가상 방을 쓰는 multi다)
       this.bot = !!opt.bot; // AI 사령관의 게임: 보스전 출전 유닛을 스스로 움직인다
+      // 자동 조합이 켜진 인연 단계의 마지막 한 기를 남긴다(설정 「인연 유지」, 화면이 넣는다. AI 동맹·시뮬레이터는 끔). 2026-11-19 사용자 결정
+      this.keepSyn = !!opt.keepSyn;
       this.rand = mulberry(opt.seed || (Math.random() * 1e9) | 0);
       this.net = opt.net || null;
       this.defs = {}; theme.units.forEach((d) => (this.defs[d.id] = d));
@@ -181,10 +185,12 @@
     runAuto(p) {
       [1, 2, 3].forEach((t) => {
         if (!p.auto['t' + t]) return;
-        this.tierIds(t).forEach((id) => { while (this.canCombine(p, id)) this.combine(p, id); });
+        this.tierIds(t).forEach((id) => { while (this.canCombine(p, id) && !this.keepBlocks(p, id)) this.combine(p, id); });
       });
       this.tidy(p);
     }
+    // 자동 조합(runAuto·combineAll)이 이 조합으로 켜진 인연 단계를 떨어뜨리면 건너뛴다(keepSyn이 켜진 내 판만)
+    keepBlocks(p, id) { return !!(this.keepSyn && p === this.me && !this.bot && this.synergiesLostByCombine(p, this.combinePlan(p, id)).length); }
     removeUnit(u) {
       const i = this.units.indexOf(u);
       if (i >= 0) this.units.splice(i, 1);
@@ -204,6 +210,8 @@
     upgradeGroup(d) { return this.T.upgrades.find((g) => g.test(d)); }
     upgradeLevel(p, d) { const g = this.upgradeGroup(d); return g ? p.upgrades[g.id] || 0 : 0; }
     range(d) { return d.rng || this.R.baseRange; }
+    // 라인 유닛 사거리(인연 라인 효과 range 포함). 보스전 장수는 range(def)를 그대로 쓴다
+    rangeOf(u) { return this.range(u.def) * (1 + (u.owner != null ? this.synFor(u.owner, u.def).range : 0)); }
     attackTime(d) { return d.as || this.R.baseAttackTime; }
     passives(d, k) { return (d.p || []).filter((x) => x.k === k); }
     teamPassives(p, k) {
@@ -225,39 +233,103 @@
       // 강화 1단계당 공격력 증가율: 난이도별 upPct(없으면 0.2). 2026-11-17 보통·어려움 0.25(강화를 챙기는 쪽이 보상받게)
       return r.atk * this.attackTime(d) * (1 + (this.diff.upPct || 0.2) * this.upgradeLevel(p, d));
     }
-    unitAtk(u) {
+    // fight: 보스전 장수 공격력(champAtk). 인연 라인 공격력은 보스전에 넣지 않는다(설계 4-3절, 보스전 효과는 synergy.js가 따로 준다)
+    unitAtk(u, fight) {
       const p = this.players[u.owner];
-      return this.baseAtk(p, u.def) * (1 + this.globalBuff(p, u.def) + u.aura + this.synFor(u.owner, u.def).atk + (this.mut.atk || 0) + this.mutAtk());
+      return this.baseAtk(p, u.def) * (1 + this.globalBuff(p, u.def) + u.aura + (fight ? 0 : this.synFor(u.owner, u.def).atk) + (this.mut.atk || 0) + this.mutAtk());
     }
     recomputeAuras() {
+      // 인연 시너지(v0.3 단계형): p.syn[id] = { s, lv, n, tier }, p.synN[id] = 판 위의 서로 다른 구성원 수. 라인 효과 캐시(p.synC)를 비운다.
+      this.players.forEach((p) => {
+        p.syn = {}; p.synN = {}; p.synC = {};
+        (this.T.synergies || []).forEach((s) => {
+          const has = (id) => this.has(p, id), n = s.units.filter(has).length, lv = n ? this.synLevel(s, has) : 0;
+          if (n) p.synN[s.id] = n;
+          if (lv > 0) p.syn[s.id] = { s, lv, n, tier: (s.tiers || [])[lv - 1] || { lane: s.eff || {} } };
+        });
+      });
       this.units.forEach((u) => (u.aura = 0));
       this.units.forEach((src) => (src.def.p || []).forEach((x) => {
         if (x.k !== 'aura') return;
+        // 관씨 부자: 관평 오라 반경·비율
+        const sy = src.owner != null ? this.synFor(src.owner, src.def) : SYN0, r = x.r + sy.auraR, pct = Math.max(x.pct, sy.auraPct);
         this.units.forEach((u) => {
-          if (u.owner === src.owner && (!x.fac || x.fac === u.def.fac) && u.aura < x.pct && dist(u.x, u.y, src.x, src.y) <= x.r) u.aura = x.pct;
+          if (u.owner === src.owner && (!x.fac || x.fac === u.def.fac) && u.aura < pct && dist(u.x, u.y, src.x, src.y) <= r) u.aura = pct;
         });
       }));
-      // 인연 시너지: 인물이 모두 있으면 켜진다
-      this.players.forEach((p) => { p.syn = {}; (this.T.synergies || []).forEach((s) => { if (s.units.every((id) => this.has(p, id))) p.syn[s.id] = s; }); });
-      this.fieldSlow = this.players.reduce((m, p) => Math.max(m, ...this.teamPassives(p, 'fieldSlow').map((x) => x.pct), 0) + this.synVal(p, 'fieldSlow'), 0);
+      // 전장 감속: 장수 패시브·시너지 각각 플레이어 중 가장 큰 값만 쓴다(협동에서 인원수만큼 겹쳐 쌓이지 않게)
+      const fsPas = this.players.reduce((m, p) => Math.max(m, ...this.teamPassives(p, 'fieldSlow').map((x) => x.pct)), 0);
+      const fsSyn = this.players.reduce((m, p) => Math.max(m, this.synVal(p, 'fieldSlow')), 0);
+      this.fieldSlow = fsPas + fsSyn;
     }
-    // 이 유닛에 걸리는 시너지 효과 합(atk·guard·cdr·crit 목록)
+    // 이 유닛에 걸리는 인연 라인 효과 합(tier.lane만). 보스전 효과는 synergy.js가 출전 장수(c.syP)에 따로 건다.
+    // 라인 효과는 중간보스에도 일반 적처럼 걸린다(보스 전용 값이 없다). 결과는 장수별로 p.synC에 캐시(recomputeAuras가 비운다).
     synFor(owner, d) {
-      const p = this.players[owner], out = { atk: 0, guard: 0, cdr: 0, skill: 0, hp: 0, boss: 0, burn: 0, crit: [] };
-      if (!p || !p.syn) return out;
-      const add = (o, name) => {
-        ['atk', 'guard', 'cdr', 'skill', 'hp', 'boss', 'burn'].forEach((k) => { if (o[k]) out[k] += o[k]; });
-        if (o.crit) out.crit.push({ name, ch: o.crit.ch, mult: o.crit.mult });
-      };
-      Object.values(p.syn).forEach((s) => {
-        const e = s.eff || {};
-        if ((e.only || s.units).includes(d.id)) add(e, s.name);
-        if (s.per && s.per[d.id]) add(s.per[d.id], s.name);
-        if (e.facAtk && d.fac === e.facAtk.fac) out.atk += e.facAtk.pct;
+      const p = this.players[owner];
+      if (!p || !p.syn) return SYN0;
+      const C = p.synC || (p.synC = {});
+      if (C[d.id]) return C[d.id];
+      const out = { atk: 0, haste: 0, range: 0, splashR: 0, burn: 0, grantBurn: 0, burnSlow: 0, pierce: 0, multi: 0, slowAdd: 0, stunAdd: 0, auraR: 0, auraPct: 0, crit: [] };
+      let atkTop = 0;
+      const add = (o, name) => Object.keys(o).forEach((k) => {
+        const v = o[k];
+        if (k === 'crit') out.crit.push({ name, ch: v.ch, mult: v.mult });
+        else if (k === 'auraPct' || k === 'grantBurn' || k === 'burnSlow') out[k] = Math.max(out[k], v);
+        else if (typeof v === 'number' && k in out) { out[k] += v; if (k === 'atk') atkTop = Math.max(atkTop, v); }
+      });
+      Object.values(p.syn).forEach((x) => {
+        const L = (x.tier && x.tier.lane) || {};
+        if ((L.only || x.s.units).includes(d.id)) add(L, x.s.name);
+        if (L.per && L.per[d.id]) add(L.per[d.id], x.s.name);
+        if (L.facAtk && d.fac === L.facAtk.fac && d.tier > 0) out.atk += L.facAtk.pct; // 진영 전체(사수관: 오 유닛 전체)
+      });
+      // 라인 공격력 상한 +40%(설계 1-4절). 한 단계가 그보다 큰 값을 직접 주면(황건 봉기 1성 +60%) 그 값까지
+      // 라인 공격력 상한 +40%(설계 1-4절). 1성만 예외로 한 단계가 직접 주는 값까지(황건·백마·청주병 1성 +60~80%, 확장 6-1절)
+      out.atk = Math.min(d.tier === 1 ? Math.max(0.4, atkTop) : 0.4, out.atk);
+      return (C[d.id] = out);
+    }
+    // 시너지 단계(0 = 꺼짐). has(id) = 그 인물이 있는지. 켜지는 조건은 이 함수 한 곳에서만 정한다(recomputeAuras·조합 경고가 같이 쓴다).
+    // 지금 규칙: 인물이 모두 있으면 1. 단계형으로 바뀌어 s.tiers = [{ n: 2 }, { n: 3 }]처럼 인원 기준이 생기면 갖춘 인원으로 단계를 센다.
+    // 시그니처(s.core): core 장수가 없으면 그 단계를 세지 않는다(단계의 needCore가 false면 core 없이도 켜짐, 황건 봉기 3·5단계)
+    synLevel(s, has) {
+      const n = s.units.filter(has).length;
+      if (Array.isArray(s.tiers) && s.tiers.length) {
+        const core = !s.core || has(s.core);
+        let lv = 0;
+        s.tiers.forEach((t, i) => { if (n >= (t.n || t.need || 0) && (core || t.needCore === false)) lv = i + 1; });
+        return lv;
+      }
+      return n === s.units.length ? 1 : 0;
+    }
+    // 조합·제작 계획: remove = { 장수 id: 쓰는 수 }, add = 확정으로 생기는 장수 id(일반 조합은 무작위라 null)
+    combinePlan(p, defId) {
+      if (!this.canCombine(p, defId)) return null;
+      return { remove: { [defId]: this.T.combineNeed[this.defs[defId].tier] }, add: null };
+    }
+    craftPlan(p, id) {
+      const st = this.recipeOf(id) && this.recipeStatus(p, id);
+      if (!st || !st.ok) return null;
+      const remove = {}; st.parts.forEach((x) => (remove[x.id] = x.need));
+      return { remove, add: id };
+    }
+    // 이 계획대로 조합하면 꺼지거나 단계가 내려가는 시너지 목록 [{ s, from, to }] (to = 0이면 꺼짐). 판 상태는 바꾸지 않는다.
+    synergiesLostByCombine(p, plan) {
+      if (!p || !plan) return [];
+      const cnt = {};
+      this.units.forEach((u) => { if (u.owner === p.idx) cnt[u.def.id] = (cnt[u.def.id] || 0) + 1; });
+      const before = (id) => (cnt[id] || 0) > 0;
+      const after = (id) => (cnt[id] || 0) - ((plan.remove || {})[id] || 0) + (plan.add === id ? 1 : 0) > 0;
+      const out = [];
+      (this.T.synergies || []).forEach((s) => {
+        const from = this.synLevel(s, before);
+        if (!from) return;
+        const to = this.synLevel(s, after);
+        if (to < from) out.push({ s, from, to });
       });
       return out;
     }
-    synVal(p, k) { return Object.values(p.syn || {}).reduce((a, s) => a + ((s.eff || {})[k] || 0), 0); }
+    // 플레이어 단위 인연 라인 값(fieldSlow·upMax)의 합
+    synVal(p, k) { return Object.values(p.syn || {}).reduce((a, x) => a + (((x.tier && x.tier.lane) || {})[k] || 0), 0); }
 
     // ---- 플레이어 명령 ----
     cmd(kind, ids, x, y) {
@@ -274,7 +346,7 @@
         else if (kind === 'hold') { u.order = { t: 'hold' }; u.target = null; }
         else if (kind === 'focus') {
           // 점사: 다른 명령 전까지 유지되며, 사거리 안에 중간보스가 있으면 무조건 중간보스를 때린다
-          u.order = { t: 'focus' }; u.target = this.midInRange(u.x, u.y, this.range(u.def)) || u.target; u.scan = 0;
+          u.order = { t: 'focus' }; u.target = this.midInRange(u.x, u.y, this.rangeOf(u)) || u.target; u.scan = 0;
         }
       });
     }
@@ -299,7 +371,7 @@
       let made = 0, again = true;
       while (again) {
         again = false;
-        for (const t of [1, 2, 3, 4, 5]) for (const id of this.tierIds(t)) if (this.canCombine(p, id)) { this.combine(p, id); made++; again = true; }
+        for (const t of [1, 2, 3, 4, 5]) for (const id of this.tierIds(t)) if (this.canCombine(p, id) && !this.keepBlocks(p, id)) { this.combine(p, id); made++; again = true; }
       }
       return made;
     }
@@ -662,10 +734,10 @@
             continue;
           }
         }
-        if (e.burnT > 0) { e.burnT -= dt; e.hp -= e.burn * dt; if (e.hp <= 0) { this.killEnemy(e, this.players[0]); continue; } }
+        if (e.burnT > 0) { e.burnT -= dt; e.hp -= e.burn * dt; if (e.hp <= 0) { this.killEnemy(e, this.players[e.burnBy] || this.players[0]); continue; } } // 화상 처치는 마지막으로 불을 붙인 플레이어 몫(모르면 방장)
         if (e.stun > 0) { e.stun -= dt; continue; }
         if (e.slowT > 0) e.slowT -= dt; else e.slow = 0;
-        const sp = e.speed * (1 - e.slow) * (1 - (this.fieldSlow || 0));
+        const sp = e.speed * (1 - e.slow) * (1 - (this.fieldSlow || 0)) * (e.burnT > 0 && e.burnSlow ? 1 - e.burnSlow : 1); // burnSlow: 적벽대전 5단계
         let move = sp * dt;
         while (move > 0) {
           const [tx, ty] = PATH[(e.seg + 1) % 4], d = dist(e.x, e.y, tx, ty);
@@ -691,14 +763,25 @@
       for (const u of this.units) {
         if (u.def.tier === 0) continue;
         u.cd -= dt; u.scan -= dt; u.atkT = Math.max(0, (u.atkT || 0) - dt); u.moveT = Math.max(0, (u.moveT || 0) - dt);
-        const o = u.order, rng = this.range(u.def);
+        const o = u.order, rng = this.rangeOf(u);
         // 타워처럼 사거리 안의 적만 때리고, 벗어나면 쫓아가지 않는다
         if (u.target && (u.target.hp <= 0 || !this.enemies.includes(u.target) || dist(u.x, u.y, u.target.x, u.target.y) > rng)) u.target = null;
         // 조이스틱 직접 이동(모바일 라인): 고른 유닛을 조이스틱 방향으로 움직인다. 움직이는 동안은 공격하지 않고, 놓으면 그 자리를 지킨다.
+        // 공격 버튼을 누르고 있으면(J.atk) 움직이면서도 친다: 사거리 안의 중간보스가 먼저, 없으면 가장 가까운 적. 손을 떼면 원래대로.
         const J = this.laneJoy;
+        let la = false;
         if (J && u.owner === this.me.idx && J.ids.has(u.id)) {
           const jm = Math.hypot(J.x, J.y);
-          if (jm > 0.1) {
+          if (J.atk) {
+            la = true;
+            if (jm > 0.1) {
+              u.slot = null; u.order = { t: 'hold' };
+              const s = speed * Math.min(1, jm / 0.5) * dt;
+              u.x = clamp(u.x + (J.x / jm) * s, INNER.x0, INNER.x1); u.y = clamp(u.y + (J.y / jm) * s, INNER.y0, INNER.y1);
+              u.face = Math.atan2(J.y, J.x); u.moveT = 0.12;
+              if (u.target && dist(u.x, u.y, u.target.x, u.target.y) > rng) u.target = null;
+            }
+          } else if (jm > 0.1) {
             u.slot = null; u.order = { t: 'hold' }; u.target = null;
             const s = speed * Math.min(1, jm / 0.5) * dt;
             u.x = clamp(u.x + (J.x / jm) * s, INNER.x0, INNER.x1); u.y = clamp(u.y + (J.y / jm) * s, INNER.y0, INNER.y1);
@@ -706,10 +789,10 @@
             continue;
           }
         }
-        if (o.t === 'move') { if (this.moveTo(u, o.x, o.y, speed, dt)) u.order = { t: o.after || 'idle' }; continue; }
-        if (o.t === 'focus' && u.scan <= 0) {
+        if (!la && o.t === 'move') { if (this.moveTo(u, o.x, o.y, speed, dt)) u.order = { t: o.after || 'idle' }; continue; }
+        if ((la || o.t === 'focus') && u.scan <= 0) {
           u.scan = 0.05;
-          u.target = this.midInRange(u.x, u.y, rng) || u.target || this.nearestEnemy(u.x, u.y, rng);
+          u.target = this.midInRange(u.x, u.y, rng) || (la ? null : u.target) || this.nearestEnemy(u.x, u.y, rng);
         } else if (!u.target && u.scan <= 0) {
           u.scan = 0.1 + this.rand() * 0.08;
           u.target = this.nearestEnemy(u.x, u.y, rng);
@@ -717,8 +800,8 @@
         if (u.target) {
           const e = u.target;
           u.face = Math.atan2(e.y - u.y, e.x - u.x);
-          if (u.cd <= 0) { u.cd = this.attackTime(u.def) / (1 + this.hasteOf(u.owner, u.def)); u.atkT = 0.22; this.attackEnemy(u, e); }
-        } else if (o.t === 'amove') {
+          if (u.cd <= 0) { u.cd = this.attackTime(u.def) / (1 + this.hasteOf(u.owner, u.def) + (u.owner != null ? this.synFor(u.owner, u.def).haste : 0)); u.atkT = 0.22; this.attackEnemy(u, e); }
+        } else if (!la && o.t === 'amove') {
           if (this.moveTo(u, o.x, o.y, speed, dt)) u.order = { t: 'idle' };
         }
       }
@@ -752,19 +835,22 @@
     rollHit(d, u) {
       // 패시브 공통 처리: 치명, n번째 강타
       // procs: 이번 공격에서 터진 패시브 이름(화면에 알리기 위함)
-      let mult = 1, big = false;
+      // crit: 치명이 터졌는지(강타 everyN은 big만). 인연 트리거 crit이 쓴다
+      let mult = 1, big = false, crit = false;
       const procs = [];
-      this.passives(d, 'crit').forEach((x) => { if (this.rand() < x.ch) { mult *= x.mult; big = true; procs.push(x.name); } });
+      this.passives(d, 'crit').forEach((x) => { if (this.rand() < x.ch) { mult *= x.mult; big = true; crit = true; procs.push(x.name); } });
       if (u) {
         u.hits++;
         this.passives(d, 'everyN').forEach((x) => { if (u.hits % x.n === 0) { mult *= x.mult; big = true; procs.push(x.name); } });
-        // 시너지 치명(비장의 피 등)
-        if (u.owner != null) this.synFor(u.owner, d).crit.forEach((x) => { if (this.rand() < x.ch) { mult *= x.mult; big = true; procs.push(x.name); } });
+        // 시너지 치명(비장의 피 등): 보스전 장수(uid가 있음)는 보스전 인연 치명, 라인 유닛은 라인 인연 치명
+        const sc = u.uid != null ? this.synCrits(u) : u.owner != null ? this.synFor(u.owner, d).crit : [];
+        sc.forEach((x) => { if (this.rand() < x.ch) { mult *= x.mult; big = true; crit = true; procs.push(x.name); } });
       }
-      return { mult, big, procs };
+      return { mult, big, procs, crit };
     }
     attackEnemy(u, e) {
       const d = u.def, p = this.players[u.owner], atk = this.unitAtk(u), { mult, big, procs } = this.rollHit(d, u), wp = this.weapon(d);
+      const sy = u.owner != null ? this.synFor(u.owner, d) : SYN0;
       if (u.owner === this.me.idx) this.log('sfx', { s: wp, gap: 70 });
       const shoot = (t, amount) => {
         this.fx.push({ k: 'shot', wp, big: d.tier >= 9, x0: u.x, y0: u.y, x1: t.x, y1: t.y, t: 0, life: 0.24, c: this.shotColor(d) });
@@ -774,17 +860,19 @@
       };
       shoot(e, atk * mult);
       if (big) this.log('dmgtext', { x: e.x, y: e.y - 16, v: Math.round(atk * mult) });
-      this.passives(d, 'multi').forEach((x) => {
-        const near = this.enemies.filter((o) => o !== e && dist(o.x, o.y, e.x, e.y) < 200).slice(0, x.n);
-        near.forEach((o) => shoot(o, atk * 0.8));
-      });
+      const mn = this.passives(d, 'multi').reduce((m, x) => m + x.n, 0) + sy.multi; // 추가 타격(인연 multi 포함)
+      if (mn > 0) this.enemies.filter((o) => o !== e && dist(o.x, o.y, e.x, e.y) < 200).slice(0, mn).forEach((o) => shoot(o, atk * 0.8));
       this.passives(d, 'splash').forEach((x) => {
-        this.enemies.filter((o) => o !== e && dist(o.x, o.y, e.x, e.y) < x.r).slice(0, 12).forEach((o) => this.damageEnemy(o, atk * x.pct, u, p));
-        this.fx.push({ k: 'ring', x: e.x, y: e.y, r: x.r, t: 0, life: 0.25, c: this.shotColor(d) });
+        const r = x.r * (1 + sy.splashR);
+        this.enemies.filter((o) => o !== e && dist(o.x, o.y, e.x, e.y) < r).slice(0, 12).forEach((o) => this.damageEnemy(o, atk * x.pct, u, p));
+        this.fx.push({ k: 'ring', x: e.x, y: e.y, r, t: 0, life: 0.25, c: this.shotColor(d) });
       });
-      this.passives(d, 'slow').forEach((x) => { e.slow = Math.max(e.slow, x.pct); e.slowT = x.dur; });
-      this.passives(d, 'stun').forEach((x) => { if (!e.mid && this.rand() < x.ch) { e.stun = x.dur; procs.push(x.name); } });
-      this.passives(d, 'burn').forEach((x) => { e.burn = Math.max(e.burn, atk * x.pct * (1 + (u.owner != null ? this.synFor(u.owner, d).burn : 0))); e.burnT = x.dur; });
+      this.passives(d, 'slow').forEach((x) => { e.slow = Math.max(e.slow, x.pct + sy.slowAdd); e.slowT = x.dur; });
+      this.passives(d, 'stun').forEach((x) => { if (!e.mid && this.rand() < x.ch + sy.stunAdd) { e.stun = x.dur; procs.push(x.name); } });
+      // 화상: 인연 burn 배율. grantBurn = 화상 패시브가 없는 장수에게 주는 화상(적벽대전 황개), burnSlow = 화상 입은 적 이동 감소
+      const burns = this.passives(d, 'burn');
+      if (!burns.length && sy.grantBurn) burns.push({ pct: sy.grantBurn, dur: 3 });
+      burns.forEach((x) => { e.burn = Math.max(e.burn, atk * x.pct * (1 + sy.burn)); e.burnT = x.dur; if (u.owner != null) e.burnBy = u.owner; if (sy.burnSlow) e.burnSlow = Math.max(e.burnSlow || 0, sy.burnSlow); });
       // 6성 이상 내 유닛의 확률 패시브가 터지면 알린다(유닛마다 0.8초에 한 번까지)
       if (procs.length && u.owner === this.me.idx && d.tier >= 6 && !(u.procT > this.time)) {
         u.procT = this.time + 0.8;
@@ -798,6 +886,7 @@
       const d = u.def;
       let pierce = 0, bonus = 0;
       this.passives(d, 'pierce').forEach((x) => (pierce = Math.max(pierce, x.pct)));
+      if (u.owner != null) pierce = Math.min(1, pierce + this.synFor(u.owner, d).pierce); // 진의 기틀(라인)
       if (e.mid) this.passives(d, 'bossPct').forEach((x) => (bonus += x.pct));
       const v = Math.max(amount * 0.25, amount * (1 + bonus) - e.def * (1 - pierce));
       if (p === this.me) this.stats.dmgUnit[d.id] = (this.stats.dmgUnit[d.id] || 0) + Math.min(v, e.hp);
@@ -923,7 +1012,6 @@
       const f = this.fight, p = this.players[u.owner];
       let hpMul = 1;
       this.passives(u.def, 'hpPct').forEach((x) => (hpMul += x.pct));
-      hpMul += this.synFor(u.owner, u.def).hp;
       const mhp = this.rankOf[u.def.tier].hp * hpMul * this.mut.champHp;
       f.used[u.id] = true;
       // 협동에서는 모두 같은 점에서 나오지 않게 방 순번대로 위아래로 벌려 세운다
@@ -934,13 +1022,16 @@
       };
       const i = f.champs.findIndex((x) => x.slot === slot && x.owner === u.owner);
       if (i >= 0) f.champs[i] = c; else f.champs.push(c);
+      this.synDeployed(c); // 인연: 단계 확정·주장 지정·보스전 체력(synergy.js)
       return c;
     }
     beginFight(dep) {
       const f = this.fight;
+      if (!f) return; // 보스전이 이미 끝났거나 시작 전이면 아무것도 하지 않는다
       this.phase = 'boss';
       f.t = 0;
       this.log('bossFight', {});
+      this.synBegin();
       if (this.net && this.net.partyDeployed) this.checkPartyAchievements(dep || this.net.partyDeployed());
     }
     // 보스전이 끝난 직후 남은 버튼이 눌려도 예외가 나지 않게 fight가 없으면 빈 값으로 답한다
@@ -986,7 +1077,10 @@
       const nx = clamp(c.x + Math.cos(a) * l, ARENA.x0, ARENA.x1), ny = clamp(c.y + Math.sin(a) * l, ARENA.y0, ARENA.y1);
       this.fx.push({ k: 'dash', x0: c.x, y0: c.y, x1: nx, y1: ny, t: 0, life: 0.3, c: this.T.factions[c.def.fac].color });
       this.log('sfx', { s: 'dash' });
-      c.x = nx; c.y = ny; c.dashCd = this.R.dashCd; c.inv = Math.max(c.inv, 0.3); c.move = false;
+      const x0 = c.x, y0 = c.y;
+      c.x = nx; c.y = ny; c.dashCd = this.R.dashCd * (1 - this.synDashCdr(c)); c.inv = Math.max(c.inv, 0.3); c.move = false;
+      c.dashInv = 0.3; c.grazed = false; // 대시 무적 중 피격(장판파 dashGraze)
+      this.synFire(c, 'dash', { x0, y0 });
     }
     // 역할 패시브 합계(같은 종류가 여럿이면 더한다)
     pv(d, k) { return (d.p || []).filter((x) => x.k === k).reduce((s, x) => s + (x.pct || 0), 0); }
@@ -1018,7 +1112,7 @@
       if (this.isAuthority) f.boss.gap += v;
       else f.pendGap = (f.pendGap || 0) + v;
     }
-    champAtk(c) { return this.unitAtk(c.u) * (1 + c.buff + (c.pbuffT > 0 ? c.pbuff : 0) + (this.fight.patk || 0)) * this.mut.champAtk; }
+    champAtk(c) { return this.unitAtk(c.u, true) * (1 + c.buff + (c.pbuffT > 0 ? c.pbuff : 0) + (this.fight.patk || 0)) * this.mut.champAtk; }
     // 아군 전체 지원(치료·호령): 내 장수에 바로 적용하고 협동이면 다른 사령관에게도 보낸다
     support(k, v, dur) {
       this.applySupport({ k, v, dur });
@@ -1029,12 +1123,12 @@
       if (!f || this.phase !== 'boss') return;
       this.localChamps().forEach((c) => {
         if (c.dead) return;
-        if (d.k === 'heal') { c.hp = Math.min(c.mhp, c.hp + c.mhp * d.v); if (d.dur) this.fx.push({ k: 'aura', x: c.x, y: c.y, r: 70, t: 0, life: 0.6, c: '#8ee6a0' }); }
+        if (d.k === 'heal') { this.synHealC(c, c.mhp * d.v); if (d.dur) this.fx.push({ k: 'aura', x: c.x, y: c.y, r: 70, t: 0, life: 0.6, c: '#8ee6a0' }); }
         else if (d.k === 'guard') { c.coverV = Math.max(c.coverT > 0 ? c.coverV : 0, d.v); c.coverT = Math.max(c.coverT || 0, d.dur); c.coverMax = c.coverT; }
         else if (d.k === 'pshield') { c.pshT = Math.max(c.pshT || 0, d.dur); c.pshMax = c.pshT; }
         else if (d.k === 'haste') { c.hasteV = Math.max(c.hasteT > 0 ? c.hasteV : 0, d.v); c.hasteT = Math.max(c.hasteT || 0, d.dur); c.hasteMax = c.hasteT; }
         else if (d.k === 'hot') { c.hotV = Math.max(c.hotT > 0 ? c.hotV : 0, d.v); c.hotT = Math.max(c.hotT || 0, d.dur); }
-        else if (d.k === 'healLow') { if (c.hp < c.mhp * 0.5) { c.hp = Math.min(c.mhp, c.hp + c.mhp * d.v); this.fx.push({ k: 'aura', x: c.x, y: c.y, r: 60, t: 0, life: 0.5, c: '#8ee6a0' }); } }
+        else if (d.k === 'healLow') { if (c.hp < c.mhp * 0.5) { this.synHealC(c, c.mhp * d.v); this.fx.push({ k: 'aura', x: c.x, y: c.y, r: 60, t: 0, life: 0.5, c: '#8ee6a0' }); } }
         else if (d.k === 'rally') { c.pbuff = Math.max(c.pbuffT > 0 ? c.pbuff : 0, d.v); c.pbuffT = Math.max(c.pbuffT || 0, d.dur); c.pbuffMax = c.pbuffT; this.fx.push({ k: 'aura', x: c.x, y: c.y, r: 80, t: 0, life: 0.7, c: '#ffe07a' }); }
       });
     }
@@ -1071,14 +1165,18 @@
       const s = (c.def.sk || [])[i], f = this.fight;
       if (!f || !s || c.dead || c.skillCd[i] > 0) return false;
       if (s.k === 'charm' && (f.mech.hide || f.mech.charmCd > 0)) return false;
-      c.skillCd[i] = s.cd * (1 - Math.min(0.6, this.pv(c.def, 'cdr') + this.synFor(c.owner, c.def).cdr + this.sageVal(this.players[c.owner], 'sageCdr') + (f.pcdr || 0) + (this.mut.bossCdr || 0)));
+      // 재사용 단축 합은 60%까지. 넘친 몫은 같은 비율로 스킬 피해가 된다(설계 4-5절, 전역 규칙)
+      const cdrX = this.pv(c.def, 'cdr') + this.sageVal(this.players[c.owner], 'sageCdr') + (f.pcdr || 0) + (this.mut.bossCdr || 0);
+      c.skillCd[i] = s.cd * (1 - Math.min(0.6, cdrX));
       const ch = this.passives(c.def, 'chain').reduce((m, x) => m + x.n, 0);
       if (ch) c.skillCd = c.skillCd.map((v, j) => (j === i ? v : Math.max(0, v - ch))); c.atkT = 0.36; c.face = Math.atan2(y - c.y, x - c.x);
       this.log('dmgtext', { x: c.x, y: c.y - 86, v: s.n, big: true });
       const a = Math.atan2(y - c.y, x - c.x), b = f.boss;
       // 스킬 피해는 등급 표기 공격력 기준이며 조준이 빗나가면 0이다
-      const dmg = this.champAtk(c) / this.attackTime(c.def) * s.mult * (1 + this.pv(c.def, 'skillPct') + this.synFor(c.owner, c.def).skill);
-      const hitBoss = (extra) => { if (f.mech.hide) return; this.damageBoss(dmg, c, extra); this.log('dmgtext', { x: b.x, y: b.y - 90, v: Math.round(dmg), big: true }); };
+      // 인연: 스킬 피해(skillAmp), 다음 스킬 배율(출사표·오장원, 피해 스킬에만 쓰이고 사라진다)
+      const dmg = this.champAtk(c) / this.attackTime(c.def) * s.mult * (1 + this.pv(c.def, 'skillPct') + this.synGet(c, 'skillAmp') + Math.max(0, cdrX - 0.6)) * (s.mult > 0 ? 1 + this.synTakeNext(c) : 1);
+      const hitBoss = (extra) => { if (f.mech.hide) return; this.damageBoss(dmg, c, extra); this.log('dmgtext', { x: b.x, y: b.y - 90, v: Math.round(dmg), big: true }); this.synFire(c, 'skillHit', { s, i }); this.synFire(c, 'anyHit', {}); };
+      let spx = null, spy = null; // 원형 스킬이 떨어진 자리(수경 법진·메아리)
       if (s.k === 'line') {
         this.fx.push({ k: 'beam', x: c.x, y: c.y, a, len: s.len, w: s.w, t: 0, life: 0.5, c: s.fx, vx: s.vx }); this.log('shake', { v: 0.6 });
         if (inLine(b.x, b.y, c.x, c.y, a, s.len, s.w, 60)) hitBoss();
@@ -1089,6 +1187,7 @@
       } else if (s.k === 'circle') {
         const d = s.range ? Math.min(s.range, dist(c.x, c.y, x, y)) : 0;
         const px = clamp(c.x + Math.cos(a) * d, ARENA.x0, ARENA.x1), py = clamp(c.y + Math.sin(a) * d, ARENA.y0, ARENA.y1);
+        spx = px; spy = py;
         f.hazards.push({ own: true, vx: s.vx, x: px, y: py, r: s.r * (1 + this.pv(c.def, 'aoe')), delay: s.delay, t: 0, c: s.fx, dmg, stun: s.stun || 0, champ: c });
       } else if (s.k === 'buff') {
         c.buff = s.atk; c.buffT = s.dur; this.fx.push({ k: 'aura', x: c.x, y: c.y, r: 110, t: 0, life: 0.8, c: s.fx, vx: s.vx });
@@ -1096,7 +1195,7 @@
         c.shieldT = s.dur; c.inv = Math.max(c.inv, s.dur); this.fx.push({ k: 'aura', x: c.x, y: c.y, r: 90, t: 0, life: 0.7, c: s.fx, vx: s.vx });
       } else if (s.k === 'heal') {
         // 아군 전체(다른 사령관 포함) 치료
-        this.support('heal', s.pct, 1);
+        this.support('heal', s.pct * (1 + (c.syP ? c.syP.healAmp : 0)), 1); // 황건 봉기: 치료 스킬 회복 +
         if (s.hot) this.support('hot', s.hot, s.hotDur);
         const hb = this.pv(c.def, 'healBuff'); if (hb) this.support('rally', hb, 3);
         this.fx.push({ k: 'aura', x: c.x, y: c.y, r: 150, t: 0, life: 0.9, c: s.fx, vx: s.vx });
@@ -1138,52 +1237,64 @@
         if (!f.mech.hide) this.ampBoss(s.amp, s.dur);
         this.fx.push({ k: 'blast', x: b.x, y: b.y, r: 120, t: 0, life: 0.6, c: s.fx, vx: s.vx });
       }
+      this.synFire(c, 'skill', { s, i, a, px: spx, py: spy });
       this.log('skill', { name: s.n, c: s.fx });
       this.log('sfx', { s: 'skill' });
       return true;
     }
     healLeft() {
       const x = this.teamPassives(this.me, 'activeHeal')[0];
-      return x && this.fight ? Math.max(0, x.uses - this.fight.healUsed) : null;
+      return x && this.fight ? Math.max(0, x.uses + this.synHealBonus() - this.fight.healUsed) : null;
     }
     useHeal() {
       const x = this.teamPassives(this.me, 'activeHeal')[0];
       if (!x || this.phase !== 'boss' || !this.healLeft()) return false;
       this.fight.healUsed++;
-      this.localChamps().forEach((c) => { if (!c.dead) { c.hp = Math.min(c.mhp, c.hp + c.mhp * x.pct); this.fxBurst(c.x, c.y, '#a8ffb8', 70); } });
+      this.localChamps().forEach((c) => { if (!c.dead) { this.synHealC(c, c.mhp * x.pct); this.fxBurst(c.x, c.y, '#a8ffb8', 70); } });
       this.log('skill', { name: x.name, c: '#a8ffb8' });
       this.log('sfx', { s: 'ach' });
       return true;
     }
     // 딜미터 집계
-    addDealt(c, d) {
+    // syn: 인연 원군 피해는 "<장수> · 인연" 줄로 따로 센다
+    addDealt(c, d, syn) {
       if (!c) return;
-      const f = this.fight, key = c.owner === this.me.idx ? c.def.name : this.L('e_ally', { a: c.def.name }, `동맹 ${c.def.name}`);
+      const f = this.fight, key = (c.owner === this.me.idx ? c.def.name : this.L('e_ally', { a: c.def.name }, `동맹 ${c.def.name}`)) + (syn ? ' · ' + this.L('synTag', null, '인연') : '');
       f.dealt[key] = (f.dealt[key] || 0) + d;
       if (c.owner === this.me.idx) f.total += d;
     }
     damageBoss(v, c, opt) {
       const f = this.fight, b = f.boss;
       let pierce = 0, bonus = 0;
-      if (c) { this.passives(c.def, 'pierce').forEach((x) => (pierce = Math.max(pierce, x.pct))); this.passives(c.def, 'bossPct').forEach((x) => (bonus += x.pct)); bonus += this.synFor(c.owner, c.def).boss; if (b.hp < b.mhp * 0.3) bonus += this.pv(c.def, 'execute'); }
+      if (c) { this.passives(c.def, 'pierce').forEach((x) => (pierce = Math.max(pierce, x.pct))); this.passives(c.def, 'bossPct').forEach((x) => (bonus += x.pct)); if (b.hp < b.mhp * 0.3) bonus += this.pv(c.def, 'execute'); }
       if (f.mech.hide) return 0;
-      const d = Math.max(v * 0.25, v * (1 + bonus) - b.def * (1 - pierce)) * this.raidMul();
+      // 인연 보스전 피해(bdmg): 주장이 직접 넣는 피해에만. 원군 피해(opt.syn)에는 곱하지 않는다(이중 계산 방지)
+      const sy = c && c.syP && !(opt && opt.syn) ? 1 + this.synGet(c, 'bdmg') : 1;
+      const d0 = Math.max(v * 0.25, v * (1 + bonus) - b.def * (1 - pierce)) * this.raidMul() * sy;
+      const d = opt && opt.cap != null ? Math.max(0, Math.min(d0, opt.cap)) : d0; // 원군 피해 예산(synergy.js synHit)
+      if (c && c.syP) { if (opt && opt.syn) c.syAllyD = (c.syAllyD || 0) + d; else c.syOwnD = (c.syOwnD || 0) + d; } // 주장 자신의 피해·원군 피해 누계
       b.hp = Math.max(0, b.hp - d); b.flash = 0.1;
       this.raidOnBossDmg(d, c);
-      this.addDealt(c, d);
+      this.addDealt(c, d, opt && opt.syn);
       if (this.net) { f.pending += d; if (opt && opt.stun) f.pendStun = opt.stun; }
       if (opt && opt.stun) b.stun = Math.max(b.stun, opt.stun);
       return d;
     }
     hurtChamp(c, dmg) {
+      if (c.inv > 0 && c.dashInv > 0 && !c.grazed && !c.dead) { c.grazed = true; this.synFire(c, 'dashGraze', {}); }
       if (c.inv > 0 || c.dead || c.bench) return;
       // 탱커: 철벽 감쇄, 진영 사수 중에는 절반 더 줄인다
       const f = this.fight;
-      dmg *= 1 - Math.min(0.8, this.pv(c.def, 'guard') + this.synFor(c.owner, c.def).guard + (f.pguard || 0) + (c.coverT > 0 ? c.coverV : 0));
+      dmg *= 1 - Math.min(0.8, this.pv(c.def, 'guard') + this.synGet(c, 'guard') + (f.pguard || 0) + (c.coverT > 0 ? c.coverV : 0));
       if (c.tauntT > 0) dmg *= 0.5;
       if (c.hp < c.mhp * 0.3) dmg *= 1 - this.pv(c.def, 'lowGuard');
+      if (c.syShd > 0) { const ab = Math.min(c.syShd, dmg); c.syShd -= ab; dmg -= ab; } // 인연 보호막이 먼저 받는다
+      const before = c.hp;
       c.hp -= dmg; c.hurt = 0.2;
+      this.synHurt(c, dmg); // 인연 hurt 트리거(오왕의 수성·번성 사수 등)
       if (c.hp <= 0 && !c.lastUsed && this.passives(c.def, 'lastStand').length) { c.hp = 1; c.lastUsed = true; c.inv = 1; this.log('proc', { x: c.x, y: c.y, tx: c.x, ty: c.y, names: [this.passives(c.def, 'lastStand')[0].name || '칠종칠금'], c: '#ff9a5a' }); }
+      // 인연 버팀·부활(패시브 버팀 다음 순서), 아니면 체력 조건 트리거
+      if (c.hp <= 0) this.synDeath(c, before); else this.synFire(c, 'lowHp', {});
       if (c.reflT > 0 && !(c.reflCd > 0) && !f.mech.hide) {
         c.reflCd = 0.5;
         const v = this.champAtk(c) / this.attackTime(c.def) * c.reflMult;
@@ -1265,6 +1376,7 @@
       if (this.isAuthority) this.bossBrain(dt);
       this.raidTick(dt);
       this.stepHazards(dt);
+      this.synStep(dt); // 인연: 타이머·원군·법진·버프 시간
       // 일기토: 대기 장수는 결투장 밖에서 기다리고, 차례가 오면 입구에서 잠깐 무적으로 나온다
       f.champs.forEach((c) => {
         const was = c.bench, now = this.benched(c);
@@ -1272,7 +1384,7 @@
         if (was && !now) { c.x = 260; c.y = H / 2; c.tx = c.x; c.ty = c.y; c.inv = Math.max(c.inv, 1.5); }
         if (!now) this.stepChamp(c, dt);
       });
-      if (b.burnT > 0) { b.burnT -= dt; const d = b.burn * dt; b.hp = Math.max(0, b.hp - d); this.addDealt(b.burnC, d); if (this.net) f.pending += d; }
+      if (b.burnT > 0) { b.burnT -= dt; const d = b.burn * dt; b.hp = Math.max(0, b.hp - d); this.addDealt(b.burnC, d); if (b.burnC && b.burnC.syP) b.burnC.syOwnD = (b.burnC.syOwnD || 0) + d; if (this.net) f.pending += d; }
       if (this.net) this.net.tickFight(dt, this);
       if (this.isAuthority) {
         if (b.hp <= 0) this.endFight(true);
@@ -1355,6 +1467,7 @@
       this.log('pattern', { name: pat.n });
       this.log('sfx', { s: 'warn' });
       if (this.net) this.net.send('pattern', { n: pat.n });
+      this.synEvent('pattern', {}); // 연환지계(다른 사람은 net.js 'pattern'에서)
     }
     addHazards(list) {
       const f = this.fight, c = f.def.fx;
@@ -1382,8 +1495,8 @@
           if (!h.own) this.log('sfx', { s: 'boom', gap: 110 });
           if (h.own) {
             this.fx.push({ k: 'blast', x: h.x, y: h.y, r: h.r, t: 0, life: 0.6, c: h.c, vx: h.vx }); this.log('shake', { v: 0.8 });
-            if (dist(b.x, b.y, h.x, h.y) <= h.r + 60) { this.damageBoss(h.dmg, h.champ, { stun: h.stun }); this.log('dmgtext', { x: b.x, y: b.y - 90, v: Math.round(h.dmg), big: true }); }
-          } else f.champs.forEach((c) => { if (!c.dead && this.hazardHits(h, c.x, c.y, 16)) this.hurtChamp(c, h.dmg); });
+            if (dist(b.x, b.y, h.x, h.y) <= h.r + 60) { this.damageBoss(h.dmg, h.champ, { stun: h.stun }); this.log('dmgtext', { x: b.x, y: b.y - 90, v: Math.round(h.dmg), big: true }); if (h.champ) { this.synFire(h.champ, 'skillHit', {}); this.synFire(h.champ, 'anyHit', {}); } }
+          } else { f.champs.forEach((c) => { if (!c.dead && this.hazardHits(h, c.x, c.y, 16)) this.hurtChamp(c, h.dmg); }); this.synHazardFired(h); }
         }
         if (h.t >= h.delay + 0.28) f.hazards.splice(i, 1);
       }
@@ -1401,7 +1514,7 @@
       if (c.hasteT > 0) c.hasteT -= dt;
       if (c.reflT > 0) c.reflT -= dt;
       if (c.reflCd > 0) c.reflCd -= dt;
-      if (c.hotT > 0) { c.hotT -= dt; c.hp = Math.min(c.mhp, c.hp + c.mhp * c.hotV * dt); }
+      if (c.hotT > 0) { c.hotT -= dt; this.synHealC(c, c.mhp * c.hotV * dt); }
       const speed = 250;
       if (c.kt > 0) { c.kt -= dt; c.x = clamp(c.x + c.kx * dt, ARENA.x0, ARENA.x1); c.y = clamp(c.y + c.ky * dt, ARENA.y0, ARENA.y1); return; }
       if (!selected || c.ai) this.champAuto(c, dt);
@@ -1434,11 +1547,13 @@
         else { const s = Math.min(m, speed * dt); c.x += ((c.tx - c.x) / m) * s; c.y += ((c.ty - c.y) / m) * s; c.face = Math.atan2(c.ty - c.y, c.tx - c.x); c.moveT = 0.12; }
       }
       if (fo && !c.move && !joyMove && (!man || c.atkHold > 0) && d <= rng + 40 + (fo === b ? 0 : fo.r) && c.cd <= 0) {
-        c.cd = this.attackTime(c.def) * (1 - Math.min(0.6, this.pv(c.def, 'haste'))) / (1 + this.hasteOf(c.owner, c.def) + (c.hasteT > 0 ? c.hasteV : 0)); c.atkT = 0.24;
+        c.cd = this.attackTime(c.def) * (1 - Math.min(0.6, this.pv(c.def, 'haste'))) / (1 + this.hasteOf(c.owner, c.def) + (c.hasteT > 0 ? c.hasteV : 0) + this.synGet(c, 'haste')); c.atkT = 0.24;
         if (man) c.atkLock = Math.min(0.16, c.cd * 0.5); // 치는 동작 동안 발을 멈춘다
-        const { mult, big, procs } = this.rollHit(c.def, c), atk = this.champAtk(c);
+        const { mult, big, procs, crit } = this.rollHit(c.def, c), atk = this.champAtk(c);
         this.hitFoe(fo, atk * mult, c);
-        const ls = this.pv(c.def, 'lifesteal'); if (ls && fo === b) c.hp = Math.min(c.mhp, c.hp + c.mhp * ls);
+        // 인연 적중 트리거(보스를 친 평타만)
+        if (fo === b && !f.mech.hide) { this.synFire(c, 'hitN', { v: atk * mult }); if (crit) this.synFire(c, 'crit', {}); this.synFire(c, 'anyHit', {}); }
+        const ls = this.pv(c.def, 'lifesteal'); if (ls && fo === b) this.synHealC(c, c.mhp * ls);
         // 보스전 확률 패시브 발동: 이름과 함께 크게 알린다
         if (procs.length && c.owner === this.me.idx) this.log('proc', { x: c.x, y: c.y, tx: fo.x, ty: fo.y, names: procs, c: this.shotColor(c.def), v: Math.round(atk * mult) });
         // 디버퍼 평타: 보스가 받는 피해 증가
@@ -1454,7 +1569,7 @@
         this.fx.push({ k: 'spark', x: fo.x, y: fo.y - 20, t: -0.22, life: 0.22, c: this.shotColor(c.def), r: 44, a: c.face });
         if (c.owner === this.me.idx) this.log('sfx', { s: this.weapon(c.def), gap: 70 });
         if (big && fo === b) this.log('dmgtext', { x: b.x + 30, y: b.y - 70, v: Math.round(atk * mult) });
-        if (fo === b) this.passives(c.def, 'burn').forEach((x) => { b.burn = Math.max(b.burn, atk * x.pct * (1 + this.synFor(c.owner, c.def).burn)); b.burnT = x.dur; b.burnC = c; });
+        if (fo === b) this.passives(c.def, 'burn').forEach((x) => { b.burn = Math.max(b.burn, atk * x.pct * (1 + (c.syP ? c.syP.burnAmp : 0)) * (1 + this.synGet(c, 'bdmg'))); b.burnT = x.dur; b.burnC = c; });
       }
     }
     // 자동으로 움직이는 장수끼리 한 점에 겹치지 않게: 그 자리가 다른 장수(서 있는 곳, 가는 중이면 가려는 곳)와 가까울수록 큰 값.

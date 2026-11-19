@@ -214,13 +214,6 @@
     Art.fxPic(c, 'mc_rune2', x, y, s, s, t * 0.6, 0.9, { col: col || '#7dff8e', sy: 0.45 });
   }
   // 사거리: 선 대신 옅게 빛나는 원판 그림(Kenney circle_01)
-  // 사거리 테: 금 테 그림(gfx/ui_select, 테 바깥 반지름이 그림 폭의 46%)을 반지름 R에 맞춰 옅게 깐다. 안쪽은 비어 있다. 그림을 못 받았으면 그리지 않는다.
-  function rangeRing(c, x, y, R, a) {
-    const im = Art.pic('ui_select');
-    if (!im) return;
-    const s = (2 * R) / 0.92;
-    c.save(); c.globalAlpha = a; c.drawImage(im, x - s / 2, y - s / 2, s, s); c.restore();
-  }
   function rangeMark(c, x, y, R, col, a) {
     ringSpr(c, 'circle_01', col, x, y, R, 0, a);
   }

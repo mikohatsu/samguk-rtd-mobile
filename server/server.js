@@ -4,7 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path'), zlib =
 const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 8200, ROOT = path.join(__dirname, '..'), MAX_PLAYERS = 5, MAX_MESSAGE = 16 * 1024;
-const FILES = { '/': 'samguk-rtd.html', '/samguk-rtd.html': 'samguk-rtd.html', '/theme-samguk.js': 'theme-samguk.js', '/engine.js': 'engine.js', '/raid.js': 'raid.js', '/art.js': 'art.js', '/audio.js': 'audio.js', '/net.js': 'net.js', '/ai.js': 'ai.js', '/ui.js': 'ui.js', '/gfx/index.js': 'gfx/index.js' };
+const FILES = { '/': 'samguk-rtd.html', '/samguk-rtd.html': 'samguk-rtd.html', '/theme-samguk.js': 'theme-samguk.js', '/engine.js': 'engine.js', '/raid.js': 'raid.js', '/synergy.js': 'synergy.js', '/art.js': 'art.js', '/audio.js': 'audio.js', '/net.js': 'net.js', '/ai.js': 'ai.js', '/ui.js': 'ui.js', '/gfx/index.js': 'gfx/index.js' };
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg' };
 
 // 파일은 처음 한 번만 읽어 메모리에 두고(글자 파일은 gzip본도 함께), 바뀌면 다시 읽는다

@@ -85,6 +85,7 @@
   P.raidTick = function (dt) {
     const M = this.fight.mech;
     if (M.ampT > 0) M.ampT -= dt;
+    if (M.sampT > 0) M.sampT -= dt; // 인연 팀 보스 약화(samp)
     if (M.charmCd > 0) M.charmCd -= dt;
     if (M.charmT > 0) M.charmT -= dt;
     if (M.charmHold > 0) M.charmHold -= dt;
@@ -124,7 +125,8 @@
   // 보스 정면(반격 판정)
   P.inFront = function (c) { const f = this.fight, b = f.boss; return angDiff(Math.atan2(c.y - b.y, c.x - b.x), f.mech.face) < 1.1; };
   // damageBoss 안에서 호출: 피해 배율(그로기·약점)
-  P.raidMul = function () { const M = this.fight.mech; return (1 + M.vuln) * (M.gr > 0 ? 1.3 : 1) * (1 + (M.ampT > 0 ? M.amp : 0)); };
+  // samp(인연 팀 보스 약화)는 디버퍼 약점 간파(amp)와 따로 곱한다(둘 다 max라 한 채널이면 덮여 없어진다)
+  P.raidMul = function () { const M = this.fight.mech; return (1 + M.vuln) * (M.gr > 0 ? 1.3 : 1) * (1 + (M.ampT > 0 ? M.amp : 0)) * (1 + (M.sampT > 0 ? M.sampV : 0)); };
   // 반격도 한두 대가 아니라 정면에서 일정 피해를 넣어야 성공한다
   P.addCounter = function (v) {
     const M = this.fight.mech;
@@ -148,6 +150,12 @@
     if (d.cm && !(M.charmCd > 1)) this.charmBoss(d.cm[0], d.cm[1], d.cm[2]); // 팀 공유 재사용 중이면 받지 않는다
     if (d.ad) { if (!(M.adT > 0) || d.ad[0] >= M.adV) M.adV = d.ad[0]; M.adT = Math.max(M.adT || 0, d.ad[1]); }
     if (d.gp) b.gap += d.gp;
+    // 인연 팀 보스 약화: [값, 시간]. 값은 상한 50%, 플레이어 중 큰 값만
+    if (Array.isArray(d.sa) && typeof d.sa[0] === 'number' && typeof d.sa[1] === 'number' && d.sa[0] > 0) {
+      const v = Math.min(0.5, d.sa[0]), t = Math.min(10, Math.max(0, d.sa[1]));
+      if (!(M.sampT > 0) || v >= M.sampV) M.sampV = v;
+      M.sampT = Math.max(M.sampT || 0, t);
+    }
   };
 
   // ---- 오브젝트 ----
@@ -538,6 +546,7 @@
     return {
       g: r1(M.gr), v: M.vuln, c: r1(M.ctr), cp: M.ctr > 0 ? r2((M.ctrGot || 0) / (M.ctrNeed || 1)) : 0, a: M.ampT > 0 ? [r2(M.amp), r1(M.ampT)] : null, f: r2(M.face), h: M.hide ? 1 : 0, y: M.sym,
       // 미인계: [팀 공유 재사용 남은 시간, 매혹 남은 시간]
+      sa: M.sampT > 0 ? [r2(M.sampV), r1(M.sampT)] : null, // 인연 팀 보스 약화(옛 버전은 읽지 않는다)
       cm: M.charmT > 0 || M.charmCd > 0 ? [r1(Math.max(0, M.charmCd || 0)), r1(Math.max(0, M.charmT || 0))] : null,
       s: M.cast ? { n: M.cast.n, t: r1(M.cast.t), d: M.cast.dur, p: r2(M.cast.got / M.cast.need), sp: M.cast.spots || null } : null,
       // 오브젝트: 끝의 두 칸(cd, life)은 방장 교체용. 옛 버전은 앞 11칸만 읽는다.
@@ -568,6 +577,7 @@
     M.ctrGot = (m.cp || 0) * kn; M.ctrNeed = kn;
     if (x) M.ctrGo = M.ctr > 0 && x.cg && this.patternGen[x.cg.gen] ? { gen: x.cg.gen, p: x.cg.p || {}, v: x.cg.v || null, t: null } : null;
     if (m.a) { M.amp = m.a[0]; M.ampT = m.a[1]; } else M.ampT = 0;
+    if (Array.isArray(m.sa)) { M.sampV = Math.min(0.5, +m.sa[0] || 0); M.sampT = +m.sa[1] || 0; } else if ('sa' in m) M.sampT = 0;
     if (m.s) {
       const cn = x && Array.isArray(x.cn) && x.cn[0] > 0 ? x.cn : null, need = cn ? cn[0] : 1;
       M.cast = { n: m.s.n, t: m.s.t, dur: m.s.d, need, got: m.s.p * need, spots: m.s.sp };

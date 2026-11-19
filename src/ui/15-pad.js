@@ -81,11 +81,12 @@
     bar._pad = true;
     bar.addEventListener('pointerdown', (e) => {
       const b = e.target.closest('[data-sk]'), c = g && g.active();
-      if (!b || !c) return;
+      if (!b || (!c && !PAD.lane)) return;
       e.preventDefault(); e.stopPropagation();
       try { b.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
       const k = b.dataset.sk;
-      if (k === 'atk') { PAD.atk = e.pointerId; c.atkHold = 0.3; b.classList.add('on'); return; }
+      if (k === 'atk') { PAD.atk = e.pointerId; if (c && !PAD.lane) c.atkHold = 0.3; b.classList.add('on'); return; }
+      if (!c) return;
       if (k === 'heal') { g.useHeal(); return; }
       // 버튼의 data-cd는 화면 갱신(180ms) 때만 바뀌므로 엔진의 남은 재사용 시간을 직접 본다
       if (cdLeft(c, k) > BUF_EARLY) return;
@@ -172,7 +173,9 @@
   function padTick() {
     if (!g) return;
     // 라인: 고른 유닛들을 조이스틱 방향으로 직접 움직인다(다중 선택도 대형 그대로 함께 움직인다)
-    g.laneJoy = PAD.lane && PAD.jv && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv.x, y: PAD.jv.y } : null;
+    // 공격 버튼을 누르고 있으면(atk) 움직이면서도 사거리 안의 중간보스부터 친다. 라인은 각자 클라이언트가 돌리므로 협동에서도 내 유닛에만 걸린다.
+    const la = PAD.lane && PAD.atk != null;
+    g.laneJoy = PAD.lane && (PAD.jv || la) && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv ? PAD.jv.x : 0, y: PAD.jv ? PAD.jv.y : 0, atk: la } : null;
     const c = g.phase === 'boss' && !S.laneView ? g.active() : null;
     if (!c) { PAD.buf = null; return; }
     g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
@@ -194,12 +197,22 @@
     const bar = $('skillbar'), joy = $('joy'), c = inBoss() && g.phase === 'boss' ? g.active() : null;
     padInit();
     g.manual = !!c;
-    // 라인에서는 터치 기기에서 유닛을 고르면 조이스틱만 띄운다(공격·스킬 버튼 없음, 유닛은 사거리 안의 적을 알아서 친다)
+    // 라인에서는 터치 기기에서 유닛을 고르면 조이스틱과 공격 버튼만 띄운다(스킬 없음). 공격 버튼을 안 눌러도 유닛은 사거리 안의 적을 알아서 친다
     const lane = !c && !!S.coarse && laneOn() && !viewedPeer() && !g.over && S.sel.length > 0;
     PAD.lane = lane;
     $('stage').classList.toggle('lanejoy', lane);
     if (!c) {
-      if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; PAD.atk = null; PAD.aim = null; }
+      if (lane) {
+        if (bar.dataset.k !== 'lane') {
+          bar.dataset.k = 'lane'; PAD.atk = null; PAD.aim = null; PAD.buf = null;
+          const ic = (window.RTD_ICON && window.RTD_ICON('atk')) || '攻';
+          bar.innerHTML = `<button class="sk atk" data-sk="atk" type="button" style="--c:#ffb070" title="${esc(t('attackShort'))}">${ic}</button>`;
+          bar._cells = []; bar.hidden = false;
+        }
+        // 좁은 화면 CSS(폭 760px 미만)가 공격 버튼을 선택 창 위로 올릴 때 쓰는 선택 창 높이
+        const sb = $('selbar'), sh = sb && !sb.hidden ? sb.offsetHeight : 0;
+        if (sh && bar._selh !== sh) { bar._selh = sh; $('stage').style.setProperty('--selh', sh + 'px'); }
+      } else if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; PAD.atk = null; PAD.aim = null; }
       if (PAD.joy && PAD.joy.float) joyReset(); // 보스전이 끝났거나 라인 보기로 넘어갔다: 떠 있던 받침을 제자리로
       if (joy.hidden === lane) { joy.hidden = !lane; if (!lane) joyReset(); }
       return;

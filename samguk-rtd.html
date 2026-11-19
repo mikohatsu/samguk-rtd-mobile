@@ -431,6 +431,7 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 #tutgift.ready .gs, #tutgift.ready .btn { opacity: 1; pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) { #tutgift .gn span, #tutgift .gs, #tutgift .btn { transition: none; } }
 #drawer .row { min-height: 42px; }
+#drawer #pane > * { flex-shrink: 0; } /* 세로 flex 안에서 여러 줄 행이 내용보다 작게 눌려 넘치지 않게 */
 #drawer .btn { min-height: 34px; padding: 4px 12px; }
 /* ---- 오른쪽 서랍 C안: 전술 지도 탁자(낡은 지도 바탕 · 목패 칸 · 깃발 탭). 그림은 Canva 생성 ---- */
 #drawer { background: linear-gradient(rgba(18, 11, 6, .5), rgba(18, 11, 6, .62)), url(gfx/ui_c_map.png) center/100% 100% no-repeat, #2a1d12; border-left: 3px solid #5a3f22; }
@@ -470,10 +471,18 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 #perf[hidden] { display: none; }
 /* 라인에서 유닛을 골랐을 때: 조이스틱은 왼쪽 아래 구석, 선택 창은 그 오른쪽으로 비켜난다 */
 #stage.lanejoy #joy { bottom: calc(var(--sb) + 10px); left: calc(var(--sl, 0px) + 28px); z-index: 5; }
-#stage.lanejoy #selbar { left: calc(var(--sl, 0px) + 176px); transform: none; width: calc(100% - var(--sl, 0px) - 176px - var(--sr) - var(--rw) - 10px); }
+#stage.lanejoy #selbar { left: calc(var(--sl, 0px) + 176px); transform: none; width: calc(100% - var(--sl, 0px) - 176px - var(--sr) - var(--rw) - 106px); }
+/* 라인 공격 버튼(보스전 공격 버튼과 같은 모양·크기): 오른쪽 버튼 열(#rail) 바로 왼쪽 아래. 선택 창은 그 폭(96px)만큼 더 비켜난다 */
+#stage.lanejoy #skillbar { right: calc(var(--sr) + var(--rw) + 14px); bottom: calc(var(--sb) + 12px); z-index: 5; }
 /* 동료 카드 줄이 있을 때(#stage.hasparty, 16-hud): 조이스틱이 카드(폭 128)를 덮지 않게 카드 오른쪽에 두고, 선택 창은 그만큼 더 비켜난다 */
 #stage.lanejoy.hasparty #joy { left: calc(var(--sl, 0px) + 142px); }
-#stage.lanejoy.hasparty #selbar { left: calc(var(--sl, 0px) + 262px); width: calc(100% - var(--sl, 0px) - 262px - var(--sr) - var(--rw) - 10px); }
+#stage.lanejoy.hasparty #selbar { left: calc(var(--sl, 0px) + 262px); width: calc(100% - var(--sl, 0px) - 262px - var(--sr) - var(--rw) - 106px); }
+/* 좁은 가로 화면(아이폰 SE 등, 폭 760px 미만): 선택 창을 줄이면 조합 줄이 잘리므로 선택 창 폭은 그대로 두고 공격 버튼을 선택 창 위로 올린다 */
+@media (max-width: 759px) {
+  #stage.lanejoy #selbar { width: calc(100% - var(--sl, 0px) - 176px - var(--sr) - var(--rw) - 10px); }
+  #stage.lanejoy.hasparty #selbar { width: calc(100% - var(--sl, 0px) - 262px - var(--sr) - var(--rw) - 10px); }
+  #stage.lanejoy #skillbar { bottom: calc(var(--sb) + var(--selh, 110px) + 10px); }
+}
 #joy i { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: radial-gradient(circle at 45% 38%, rgba(255, 246, 225, .7), rgba(200, 170, 120, .45)); box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none; }
 #joy.on { border-color: rgba(255, 235, 200, .65); opacity: .85; }
 /* 보스전 중 라인 화면: 오른쪽 버튼 열(#rail)에 가리지 않게 맨 윗줄, 메뉴 버튼 왼쪽에 둔다 */
@@ -791,7 +800,30 @@ html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
   animation: rbspin 1.8s linear infinite; }
 @keyframes rbspin { to { transform: rotate(360deg); } }
 /* ---- 맵 왼쪽 시너지 줄: 육각 아이콘(대표 인물 얼굴) + 모은 수/필요 수. 덜 모은 것은 흑백으로 어둡게, 완성되면 금테 ---- */
-#synbar { position: absolute; top: 200px; left: var(--sl); z-index: 4; display: grid; grid-template-columns: repeat(3, max-content); gap: 6px 4px; pointer-events: none; }
+#synbar { position: absolute; top: 200px; left: var(--sl); z-index: 4; display: grid; grid-template-columns: repeat(3, max-content); gap: 6px 4px; pointer-events: none; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: none; padding: 7px 2px 4px 0; align-content: start; }
+#synbar::-webkit-scrollbar { display: none; }
+#synbar.scroll { pointer-events: auto; touch-action: pan-y; }
+/* 인연 v0.3: 단계 점(위)·등급 배지(오른쪽 위)·다음 단계까지 1명 남음(near) */
+.sy u { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); display: flex; gap: 1px; text-decoration: none; pointer-events: none; }
+.sy u i, .syn u.dt i { display: block; width: 4px; height: 4px; border-radius: 50%; background: rgba(20, 14, 10, .85); box-shadow: 0 0 0 1px rgba(214, 202, 176, .55); }
+.sy u i.on, .syn u.dt i.on { background: #ffd86a; box-shadow: 0 0 0 1px #8a6414; }
+.sy em { position: absolute; right: -4px; top: 2px; min-width: 11px; padding: 0 2px; border-radius: 5px; font: 700 8px/11px "IBM Plex Sans KR", sans-serif; font-style: normal; color: #1a120b; text-align: center; opacity: .55; }
+.sy.on em { opacity: 1; }
+.sy.near i { background: linear-gradient(160deg, #cfe6ff, #6aa8ff); }
+.syn em.gd { display: inline-block; padding: 0 4px; border-radius: 5px; font: 700 9px/13px "IBM Plex Sans KR", sans-serif; font-style: normal; color: #1a120b; vertical-align: 1px; }
+.syn u.dt { display: inline-flex; gap: 2px; text-decoration: none; vertical-align: 1px; }
+#achpop.sp { pointer-events: auto; max-width: min(360px, 62vw); max-height: calc(100vh - 8px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; background: rgba(16, 11, 8, .9); }
+#achpop .ac.lk { opacity: .3; border-style: dashed; } #achpop .ac.core { box-shadow: 0 0 0 1px #ffd86a; }
+#achpop .sts { margin-top: 6px; display: grid; gap: 3px; } #achpop .st { display: grid; gap: 1px; padding: 3px 5px; border-left: 2px solid rgba(214, 202, 176, .25); font-size: 11px; line-height: 1.35; color: #b8ab90; }
+#achpop .st.cur { border-left-color: #ffd86a; color: #f4ecd8; background: rgba(255, 216, 106, .08); } #achpop .st.past { color: #d6cab0; }
+#achpop .st .tn { font-weight: 700; } #achpop .st em { margin-left: 5px; padding: 0 4px; border-radius: 5px; font: 700 9px/13px "IBM Plex Sans KR", sans-serif; font-style: normal; color: #1a120b; }
+#achpop .st b { color: var(--brass); font-weight: 700; margin-right: 3px; } #achpop .sn { margin-top: 5px; font-size: 10.5px; color: #c9b48f; }
+/* 인연 배지(출전 카드·보스전 정보·유닛 정보): 등급색 점 + 이름 + 단계, 상한 초과는 흐리게 */
+.sybd { display: flex; flex-wrap: wrap; gap: 2px 4px; margin: 2px 0; }
+.sybd i { display: inline-flex; align-items: center; gap: 3px; font: 600 10px/14px "IBM Plex Sans KR", sans-serif; font-style: normal; color: #efe2c6; white-space: nowrap; }
+.sybd i b { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.sybd i u { text-decoration: none; padding: 0 3px; border-radius: 5px; background: rgba(255, 216, 106, .2); color: #ffd86a; }
+.sybd i.ov { opacity: .38; text-decoration: line-through; }
 .sypg { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: -1px; pointer-events: auto; font: 400 10px "Black Han Sans", sans-serif; color: #e8dcc0; text-shadow: 0 1px 2px #000; }
 .sypg button { width: 26px; height: 18px; padding: 0; border: 0; border-radius: 9px; background: rgba(14, 10, 8, .66); color: #ffd86a; font-size: 9px; line-height: 18px; }
 .sypg button:disabled { opacity: .35; }
@@ -1448,6 +1480,7 @@ html:not(.noic-gear) #lgear .ico { width: 44px; height: 44px; filter: drop-shado
 <script src="i18n.js"></script>
 <script src="engine.js"></script>
 <script src="raid.js"></script>
+<script src="synergy.js"></script>
 <script src="gfx/index.js"></script>
 <script src="art.js"></script>
 <script src="audio.js"></script>

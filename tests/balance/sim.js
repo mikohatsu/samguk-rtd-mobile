@@ -55,7 +55,7 @@ function play(diff, pol, seed) {
       if (lastFight !== g.fight) lastFight = g.fight;
       // 보스별 결과: 이기면 쓴 시간 비율(t/제한), 지면 -남은 체력 비율. 수치 여유(몇 배 더 세게 해도 되는지)를 보는 용도
       bossT[g.fight.def.round] = [g.fight.t / g.fight.limit, g.fight.boss.hp / g.fight.boss.mhp];
-      if (!synBoss.includes(g.fight.def.round) && g.fight.champs.some((c) => !c.dead && g.synFor(c.owner, c.def).atk + g.synFor(c.owner, c.def).skill + g.synFor(c.owner, c.def).crit.length > 0)) synBoss.push(g.fight.def.round);
+      if (!synBoss.includes(g.fight.def.round) && g.fight.champs.some((c) => !c.dead && c.syR && c.syR.length > 0)) synBoss.push(g.fight.def.round);
     }
   }
   const lostBoss = g.stats.bosses.find((b) => !b.win);

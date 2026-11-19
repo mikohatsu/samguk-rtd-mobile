@@ -28,35 +28,6 @@
     c.restore();
     return true;
   }
-  // 직선·사각 장판의 경고 띠(gfx/vs_warn: 붉은 먹·부적 느낌의 가로 띠). 그림 비율을 지켜 길이 방향으로 이어 붙이고(한 칸씩 좌우 반전해 이음매를 감춘다),
-  // 굵기 방향은 thick으로 늘인다. cx,cy = 띠 가운데, ang = 띠 방향. 그림이 아직 없으면 false(부른 쪽이 예전 모양으로 그린다).
-  function warnBand(c, cx, cy, len, thick, ang, a, add, from) {
-    const im = Art.pic('vs_warn');
-    if (!im) return false;
-    if (len < 1 || thick < 1 || !(a > 0.01)) return true;
-    const tw0 = (thick * im.width) / im.height, n = Math.max(1, Math.round(len / tw0)), tw = len / n;
-    c.save(); c.globalAlpha = Math.min(1, a); if (add) c.globalCompositeOperation = 'lighter';
-    c.translate(cx, cy); if (ang) c.rotate(ang);
-    // from(0~1): 시작 쪽에서 그 비율만큼만 보이게(차오르는 진행)
-    if (from != null) { c.beginPath(); c.rect(-len / 2, -thick / 2, len * Math.max(0, Math.min(1, from)), thick); c.clip(); }
-    for (let i = 0; i < n; i++) { c.save(); c.translate(-len / 2 + tw * (i + 0.5), 0); if (i % 2) c.scale(-1, 1); c.drawImage(im, -tw / 2 - 0.5, -thick / 2, tw + 1, thick); c.restore(); }
-    c.restore();
-    return true;
-  }
-  // 법진 그림(mc_rune1)을 받았나(투명도 0으로 불러 보면 그리지 않고 있는지만 알려 준다)
-  const runeOk = (c) => Art.fxPic(c, 'mc_rune1', 0, 0, 1, 1, 0, 0);
-  // 사각 구역을 경고 띠 여러 줄로 채운다(줄 굵기 60~150)
-  function warnRect(c, x, y, w, h, a, add, from) {
-    if (!Art.pic('vs_warn')) return false;
-    const rows = Math.max(1, Math.round(h / Math.max(60, Math.min(150, h)))), rh = h / rows;
-    for (let i = 0; i < rows; i++) warnBand(c, x + w / 2, y + rh * (i + 0.5), w, rh, 0, a, add, from);
-    return true;
-  }
-  // 사각 구역 테두리: 얇은 경고 띠를 네 변에(맥동)
-  function warnEdge(c, x, y, w, h, e, a) {
-    warnBand(c, x + w / 2, y + e / 2, w, e, 0, a, true); warnBand(c, x + w / 2, y + h - e / 2, w, e, 0, a, true);
-    warnBand(c, x + e / 2, y + h / 2, h, e, Math.PI / 2, a, true); warnBand(c, x + w - e / 2, y + h / 2, h, e, Math.PI / 2, a, true);
-  }
   function addVfx(o) {
     // 불꽃·파편 같은 잔조각은 화질에 따라 줄인다(큰 모양은 그대로)
     if ((o.k === 'spark' || o.k === 'debris' || o.k === 'ember') && Math.random() > qPart()) return;
@@ -139,16 +110,75 @@
     } else if (h.fx === 'flame' || h.fx === 'fireball') {
       Art.fxImg(c, 'fire', x, y, h.r * 1.3, UP, 1);
     } else if (h.fx === 'bolt' || h.fx === 'thunder') {
-      // 낙뢰 전조: 하늘에서 지직거리는 잔전기(Kenney 번개 그림, 매 프레임 좌우를 바꿔 깜빡인다)
+      // 낙뢰 전조: 하늘에서 내려오는 잔전기 한 줄(Kenney 번개 그림)
       const SK = window.RTD_SKFX;
-      if (SK) for (let i = 0; i < 2; i++) { const px = h.x + rnd(-h.r, h.r) * 0.6, len = 300 * q + 40; SK.spr(c, i ? 'spark_05' : 'spark_06', col, px, h.y - 300 + len / 2, (Math.random() < 0.5 ? -1 : 1) * len * 0.6, len, 0, 0.45 + Math.random() * 0.45); }
+      if (SK) { const len = 300 * q + 40; SK.spr(c, 'spark_06', col, h.x, h.y - 300 + len / 2, len * 0.6, len, 0, 0.3 * q); } // 예고가 읽히게 한 줄만, 깜빡임 없이
     }
   }
-  // 장판 표시: 어두운 위험 바탕 + 기술 색 테두리(빛남) + 터질 때까지 차오르는 안쪽
-  function teleStyle(c, col, p) {
-    c.strokeStyle = col; c.shadowColor = col; c.shadowBlur = 14; c.lineWidth = 3 + p * 2;
-    c.globalAlpha = 0.75 + Math.sin(performance.now() / 90) * 0.2 * p;
+  // ---- 장판 예고(v0.2.39) — 레이드 게임식 표준 예고 ----
+  // 1) 위험 구역: 차분한 반투명 바탕 + 피격 경계에 딱 맞춘 선명한 테두리(밝은 띠는 경계 안쪽, 어두운 띠는 바깥쪽 → 어느 바닥 색에서도 보인다)
+  // 2) 터지는 때: 안쪽(원은 가운데, 직선은 보스 쪽, 고리는 안쪽 둘레)에서 진한 채움이 차올라 테두리에 닿는 순간이 피해 프레임(h.t >= h.delay)
+  // 3) 예고 중에는 도는 법진·빛 번짐·깜빡임을 쓰지 않는다. 화려한 연출은 터지는 순간(hazardImpact)에만.
+  // 그림: Kenney circle_05(가운데가 평평한 부드러운 원판)를 물들여 장판 모양대로 잘라 깐다. 색·굵기는 TELE 한 곳에서 고친다.
+  const TELE = { fill: '#ff3b1f', dark: '#120402', edge: '#ffc49a', front: '#ffe2c8', safe: '#86ffa6', baseA: 0.2, darkA: 0.16, growA: 0.3, edgeW: 6, darkW: 4, frontW: 4 };
+  const teleC01 = (v) => Math.max(0, Math.min(1, v));
+  // path()로 만든 모양(evenodd)으로 잘라 원판 그림을 깐다. R = 그 모양을 다 덮는 반지름
+  function area(c, path, cx, cy, R, col, a) {
+    if (!(a > 0.01)) return;
+    const SK = window.RTD_SKFX, s = (Math.max(4, R) * 2) / 0.28;
+    c.save(); c.beginPath(); path(); c.clip('evenodd');
+    if (!(SK && SK.spr(c, 'circle_05', col, cx, cy, s, s, 0, a, false))) { c.globalAlpha = Math.min(1, a); c.fillStyle = col; c.fillRect(cx - R, cy - R, R * 2, R * 2); }
+    c.restore();
   }
+  const circ = (c, x, y, r) => { if (r > 0) { c.moveTo(x + r, y); c.arc(x, y, r, 0, Math.PI * 2); } };
+  // 장판 하나를 그린다. o.shape(off): 경계를 off만큼 키운(음수면 줄인) 모양, o.prog(p, off): 진행만큼 찬 모양(없으면 차오름 생략).
+  // o.lim: 전체에 먼저 거는 자르기(경기장 안 등). em: 곧 터질 장판일수록 1(차례로 터지는 장판끼리 순서가 보이게)
+  function tele(c, o, p, em, fired, q) {
+    const { cx, cy, R } = o;
+    c.save();
+    if (o.lim) { c.beginPath(); o.lim(); c.clip(); }
+    if (fired) { area(c, () => o.shape(0), cx, cy, R, TELE.fill, (TELE.baseA + TELE.growA) * (1 - q)); c.restore(); return; }
+    area(c, () => o.shape(0), cx, cy, R, TELE.dark, TELE.darkA * em);
+    area(c, () => o.shape(0), cx, cy, R, TELE.fill, TELE.baseA * em);
+    if (o.prog && p > 0.005) {
+      area(c, () => o.prog(p, 0), cx, cy, R, TELE.fill, TELE.growA);
+      area(c, () => { o.prog(p, 0); o.prog(p, -TELE.frontW); }, cx, cy, R, TELE.front, 0.75);
+    }
+    if (!o.noEdge) {
+      area(c, () => { o.shape(TELE.darkW); o.shape(0); }, cx, cy, R + TELE.darkW, TELE.dark, 0.55);
+      area(c, () => { o.shape(0); o.shape(-TELE.edgeW); }, cx, cy, R, TELE.edge, 0.7 + 0.3 * em);
+    }
+    c.restore();
+  }
+  // 모양 만들기
+  const shCircle = (c, x, y, r) => ({ cx: x, cy: y, R: r, shape: (off) => circ(c, x, y, r + off), prog: (p, off) => circ(c, x, y, r * p + off) });
+  const shRect = (c, x, y, w, h) => ({ cx: x + w / 2, cy: y + h / 2, R: Math.hypot(w, h) / 2 + 8,
+    shape: (off) => c.rect(x - off, y - off, w + off * 2, h + off * 2),
+    // 가운데에서 네 변으로 차오른다
+    prog: (p, off) => { const pw = Math.max(0, w * p + off * 2), ph = Math.max(0, h * p + off * 2); if (pw > 0 && ph > 0) c.rect(x + (w - pw) / 2, y + (h - ph) / 2, pw, ph); } });
+  // 직선(이미 translate·rotate한 좌표): 보스(0,0)에서 len까지, 폭 w. 보스 쪽에서 끝으로 차오른다
+  const shLine = (c, len, w) => ({ cx: len / 2, cy: 0, R: Math.hypot(len, w) / 2 + 8,
+    shape: (off) => c.rect(-off, -w / 2 - off, len + off * 2, w + off * 2),
+    prog: (p, off) => { const l = len * p + off; if (l > 0) c.rect(0, -w / 2, l, w); } });
+  // 부채꼴: off만큼 키우거나 줄인 모양(줄일 때는 꼭짓점을 안으로 밀고 양옆을 off만큼 좁힌다)
+  const coneP = (c, x, y, a, arc, r, off) => {
+    const hs = arc / 2, sn = Math.max(0.2, Math.sin(Math.min(hs, Math.PI / 2))), sh = off < 0 ? Math.min(r * 0.4, -off / sn) : -off / sn;
+    const ax = x + Math.cos(a) * sh, ay = y + Math.sin(a) * sh, rr = r + off;
+    if (rr <= 2) return;
+    const da = off < 0 ? Math.asin(Math.min(0.9, -off / rr)) : 0;
+    c.moveTo(ax, ay); c.arc(x, y, rr, a - hs + da, a + hs - da); c.closePath();
+  };
+  const shCone = (c, h) => ({ cx: h.x, cy: h.y, R: h.r, shape: (off) => coneP(c, h.x, h.y, h.a, h.arc, h.r, off),
+    prog: (p, off) => { const rr = h.r * p + off; if (rr > 2) { c.moveTo(h.x, h.y); c.arc(h.x, h.y, rr, h.a - h.arc / 2, h.a + h.arc / 2); c.closePath(); } } });
+  // 고리: 안쪽 둘레(r0)에서 바깥 둘레(r1)로 차오른다
+  const shDonut = (c, h) => ({ cx: h.x, cy: h.y, R: h.r1, shape: (off) => { circ(c, h.x, h.y, h.r1 + off); circ(c, h.x, h.y, Math.max(0.5, h.r0 - off)); },
+    prog: (p, off) => { const rr = h.r0 + (h.r1 - h.r0) * p + off; if (rr > h.r0) { circ(c, h.x, h.y, rr); circ(c, h.x, h.y, h.r0); } } });
+  const arenaRect = (c, off) => c.rect(ARENA.x0 - (off || 0), ARENA.y0 - (off || 0), ARENA.x1 - ARENA.x0 + (off || 0) * 2, ARENA.y1 - ARENA.y0 + (off || 0) * 2);
+  const farR = (x, y) => Math.max(Math.hypot(x - ARENA.x0, y - ARENA.y0), Math.hypot(x - ARENA.x1, y - ARENA.y0), Math.hypot(x - ARENA.x0, y - ARENA.y1), Math.hypot(x - ARENA.x1, y - ARENA.y1));
+  // 경기장 전체 위험(all·los): 한 점에서 퍼지는 진한 채움이 경기장 가장 먼 구석에 닿을 때 터진다
+  const shArena = (c, x, y) => { const R = farR(x, y); return { cx: x, cy: y, R, lim: () => arenaRect(c), shape: (off) => arenaRect(c, off), prog: (p, off) => circ(c, x, y, R * p + off) }; };
+  // 안전한 구역 표시: 초록
+  function safeEdge(c, path, cx, cy, R, a) { area(c, path, cx, cy, R, TELE.safe, a); }
   function drawHazard(c, h) {
     const p = Math.min(1, h.t / Math.max(0.01, h.delay)), fired = h.t >= h.delay;
     // 오래 남는 장판(불길·절벽)은 지속 시간 동안 일렁이며 남는다
@@ -156,161 +186,87 @@
     if (fired && !h.vd) { h.vd = 1; hazardImpact(h); }
     if (h.hide && !fired) return; // 팔진도: 생문은 문양으로만 알려 준다
     const col = visCol(h), now = performance.now() / 1000;
-    const alpha = live ? 0.4 + Math.sin(h.t * 12) * 0.06 : fired ? 0.75 * (1 - (h.t - h.delay - (h.dur || 0)) / 0.28) : 0.12 + p * 0.26;
-    const danger = 'rgba(176,22,12,1)';
+    // 터진 뒤 바탕이 사라지는 정도(0→1, 0.28초)
+    const q = teleC01((h.t - h.delay - (h.dur || 0)) / 0.28);
+    // 곧 터질 장판일수록 진하게(차례로 터지는 고리·낙석에서 다음 차례가 먼저 보이게)
+    const left = h.delay - h.t, em = 0.45 + 0.55 * teleC01((1.3 - left) / 0.8);
+    const after = fired && !live; // 터진 직후(바탕만 짧게 남았다 사라진다)
     c.save();
-    c.fillStyle = h.c; c.strokeStyle = h.c; c.lineWidth = 2; c.globalAlpha = Math.max(0, alpha);
     if (h.k === 'wind' || h.k === 'gaze') { if (fired && h.t < h.delay + h.dur) drawAura(c, h); }
     else if (h.k === 'rect') {
-      if (!fired && warnRect(c, h.x, h.y, h.rw, h.rh, 0.3 + p * 0.3)) {
-        // 경고 띠 그림으로 채우고, 같은 그림을 더하기로 진행만큼 밝힌다. 테두리도 얇은 띠(터질 때가 가까울수록 빠르게 맥동)
-        warnRect(c, h.x, h.y, h.rw, h.rh, 0.35 + p * 0.25, true, p);
-        const e = Math.max(10, Math.min(24, h.rw * 0.06, h.rh * 0.06));
-        warnEdge(c, h.x, h.y, h.rw, h.rh, e, 0.55 + Math.sin(now * (6 + p * 10)) * 0.25 * p);
-      } else if (!fired) {
-        c.globalAlpha = 0.18 + p * 0.2; c.fillStyle = danger; c.fillRect(h.x, h.y, h.rw, h.rh);
-        // 움직이는 사선 경고 무늬
-        c.save(); c.beginPath(); c.rect(h.x, h.y, h.rw, h.rh); c.clip();
-        c.globalAlpha = 0.16 + p * 0.18; c.strokeStyle = col; c.lineWidth = 10;
-        const off = (now * 60) % 48;
-        for (let d = -h.rh; d < h.rw + h.rh; d += 48) { c.beginPath(); c.moveTo(h.x + d + off, h.y); c.lineTo(h.x + d + off - h.rh, h.y + h.rh); c.stroke(); }
-        c.restore();
-        teleStyle(c, col, p); c.strokeRect(h.x + 3, h.y + 3, h.rw - 6, h.rh - 6); c.shadowBlur = 0;
-        c.globalAlpha = 0.9; c.fillStyle = col; c.fillRect(h.x, h.y + h.rh - 6, h.rw * p, 6);
-      } else if (live && h.fx === 'flame') {
-        // 타오르는 구획: 불길이 일렁인다(바닥은 주황 빛 그림을 구획 크기로 늘여 깐다)
+      const o = shRect(c, h.x, h.y, h.rw, h.rh);
+      if (live && h.fx === 'flame') {
+        // 타오르는 구획: 불길이 일렁인다(바닥은 주황 빛 그림을 구획 크기로 늘여 깐다). 경계는 예고와 같은 테두리로 남긴다
         if (window.RTD_SKFX) window.RTD_SKFX.spr(c, 'light_02', '#ff5a1a', h.x + h.rw / 2, h.y + h.rh / 2, h.rw * 1.25, h.rh * 1.25, 0, 0.45);
         for (let ix = 0; ix < 6; ix++) for (let iy = 0; iy < 3; iy++) {
           const fx = h.x + (ix + 0.5) * (h.rw / 6), fy = h.y + (iy + 0.6) * (h.rh / 3), fl = 0.8 + Math.sin(now * 9 + ix * 1.7 + iy * 2.3) * 0.2;
           Art.fxImg(c, 'fire', fx, fy - Math.min(h.rw / 6, h.rh / 3) * 0.3, Math.min(h.rw / 6, h.rh / 3) * 1.3 * fl, UP + Math.sin(now * 6 + ix + iy) * 0.12, 0.75);
         }
-      } else if (!warnRect(c, h.x, h.y, h.rw, h.rh, Math.max(0, alpha), true)) { c.fillRect(h.x, h.y, h.rw, h.rh); }
+        tele(c, Object.assign({}, o, { prog: null }), 1, 0.6, false);
+      } else if (live) tele(c, Object.assign({}, o, { prog: null }), 1, 0.8, false);
+      else tele(c, o, p, em, after, q);
     } else if (h.k === 'band') {
-      // 띠 밖이 위험: 위·아래 구역을 경고 띠 그림으로, 안전한 띠의 경계는 초록 빛줄기 그림
-      const AW = ARENA.x1 - ARENA.x0;
-      if (warnRect(c, ARENA.x0, ARENA.y0, AW, h.y0 - ARENA.y0, Math.max(0, alpha) * 1.4) && warnRect(c, ARENA.x0, h.y1, AW, ARENA.y1 - h.y1, Math.max(0, alpha) * 1.4)) {
-        if (!fired) { streak(c, '#a8ffb8', ARENA.x0, h.y0, ARENA.x1, h.y0, 8, 0.9); streak(c, '#a8ffb8', ARENA.x0, h.y1, ARENA.x1, h.y1, 8, 0.9); }
-      } else {
-        c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, h.y0 + OVER.y); c.fillRect(-OVER.x, h.y1, W + OVER.x * 2, H - h.y1 + OVER.y);
-        if (!fired) { c.globalAlpha = 1; c.strokeStyle = '#a8ffb8'; c.lineWidth = 3; c.beginPath(); c.moveTo(ARENA.x0, h.y0); c.lineTo(ARENA.x1, h.y0); c.moveTo(ARENA.x0, h.y1); c.lineTo(ARENA.x1, h.y1); c.stroke(); }
-      }
+      // 띠 밖이 위험: 경기장 위·아래 끝에서 진한 채움이 안전한 띠 쪽으로 차올라 띠 경계에 닿을 때 터진다. 안전한 띠 경계는 초록
+      const AW = ARENA.x1 - ARENA.x0, top = h.y0 - ARENA.y0, bot = ARENA.y1 - h.y1;
+      const o = { cx: (ARENA.x0 + ARENA.x1) / 2, cy: (ARENA.y0 + ARENA.y1) / 2, R: Math.hypot(AW, ARENA.y1 - ARENA.y0) / 2 + 8, lim: () => arenaRect(c),
+        shape: (off) => { c.rect(ARENA.x0 - off, ARENA.y0 - off, AW + off * 2, top + off * 2); c.rect(ARENA.x0 - off, h.y1 - off, AW + off * 2, bot + off * 2); },
+        prog: (pp, off) => { const t1 = top * pp + off, b1 = bot * pp + off; if (t1 > 0) c.rect(ARENA.x0, ARENA.y0, AW, t1); if (b1 > 0) c.rect(ARENA.x0, ARENA.y1 - b1, AW, b1); } };
+      tele(c, o, p, em, after, q);
+      if (!fired) safeEdge(c, () => { c.rect(ARENA.x0, h.y0, AW, TELE.edgeW); c.rect(ARENA.x0, h.y1 - TELE.edgeW, AW, TELE.edgeW); }, o.cx, o.cy, o.R, 0.95);
     } else if (h.k === 'all') {
-      // 경기장 전체: 경고 띠 그림을 경기장 가득(터지는 순간의 흰 섬광은 착탄 효과가 덮는다)
-      if (!warnRect(c, ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0, Math.max(0, alpha) * 1.4)) c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
+      // 경기장 전체: 가운데에서 퍼지는 채움이 구석에 닿을 때 터진다(터지는 순간의 흰 섬광은 착탄 효과가 덮는다)
+      tele(c, shArena(c, (ARENA.x0 + ARENA.x1) / 2, (ARENA.y0 + ARENA.y1) / 2), p, 1, after, q);
     } else if (h.k === 'los') {
-      if (!warnRect(c, ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0, Math.max(0, alpha) * 1.4)) c.fillRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
-      // 돌기둥 뒤 그림자 = 안전: 그림자 모양으로 잘라 낸 초록 빛 그림
-      const SK = window.RTD_SKFX;
-      g.fight.mech.objs.forEach((o) => {
+      // 보스에게서 퍼지는 채움이 구석에 닿을 때 터진다. 돌기둥 뒤 그림자 = 안전(초록 바탕)
+      tele(c, shArena(c, h.x, h.y), p, 1, after, q);
+      if (!fired) g.fight.mech.objs.forEach((o) => {
         if (o.k !== 'pillar') return;
         const a = Math.atan2(o.y - h.y, o.x - h.x), px = -Math.sin(a) * o.r * 0.8, py = Math.cos(a) * o.r * 0.8, ex = Math.cos(a) * 250, ey = Math.sin(a) * 250;
-        c.save(); c.beginPath(); c.moveTo(o.x + px, o.y + py); c.lineTo(o.x + px + ex, o.y + py + ey); c.lineTo(o.x - px + ex, o.y - py + ey); c.lineTo(o.x - px, o.y - py); c.closePath(); c.clip();
-        if (SK) { SK.spr(c, 'light_01', '#a8ffb8', o.x + ex / 2, o.y + ey / 2, 420, 420, 0, fired ? 0.35 : 0.8); SK.spr(c, 'light_02', '#a8ffb8', o.x + ex / 2, o.y + ey / 2, 320, 320, now, fired ? 0.2 : 0.5); }
-        else { c.globalAlpha = fired ? 0.2 : 0.45; c.fillStyle = '#a8ffb8'; c.fill(); }
-        c.restore();
+        const poly = () => { c.moveTo(o.x + px, o.y + py); c.lineTo(o.x + px + ex, o.y + py + ey); c.lineTo(o.x - px + ex, o.y - py + ey); c.lineTo(o.x - px, o.y - py); c.closePath(); };
+        area(c, poly, o.x + ex / 2, o.y + ey / 2, 200, TELE.safe, 0.42);
       });
-      if (!fired) Art.fxPic(c, 'mc_rune2', h.x, h.y, (60 + p * 40) * 2.1, (60 + p * 40) * 2.1, now, 0.9, { col: h.c });
     } else if (h.k === 'push') {
-      // 밀어내기: 퍼지는 빛 고리 그림
-      const rr = Math.max(4, fired ? h.r : h.r * p);
-      if (!ringSpr(c, 'circle_02', h.c, h.x, h.y, rr, 0, fired ? Math.max(0, alpha) : 0.7)) { c.globalAlpha = fired ? Math.max(0, alpha) : 0.6; c.lineWidth = 6; c.beginPath(); c.arc(h.x, h.y, rr, 0, 7); c.stroke(); }
+      // 밀어내기(피해 없음): 같은 예고. 가운데에서 차오른 채움이 테두리에 닿을 때 밀려난다
+      tele(c, shCircle(c, h.x, h.y, h.r), p, em, after, q);
     } else if (h.k === 'proj') {
       drawProj(c, h, col, fired);
-    } else if (h.own || h.k === 'circle') {
+    } else if (h.own) {
       // 내 장판(연출 이름이 없는 것 포함): 바닥 법진 그림과 차오르는 고리 그림(skillfx.tele)
-      if (h.own) { if (!(window.RTD_SKFX && window.RTD_SKFX.tele(c, h, p, fired))) { c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill(); if (!fired) { c.globalAlpha = 0.9; c.beginPath(); c.arc(h.x, h.y, h.r * p, 0, 7); c.stroke(); } } }
-      else if (!fired) {
-        // 바탕: 붉게 물든 법진 그림(gfx/mc_rune1)이 천천히 돌며 짙어진다. 안쪽에서 기술 색 빛 그림이 차오른다.
-        const SK = window.RTD_SKFX;
-        if (SK && Art.fxPic(c, 'mc_rune1', h.x, h.y, h.r * 2.05, h.r * 2.05, now * 0.35 + h.x, 0.3 + p * 0.45, { col: '#ff3a24' })) {
-          const rp = Math.max(4, h.r * p);
-          SK.spr(c, 'light_01', col, h.x, h.y, rp * 2.4, rp * 2.4, 0, 0.25 + p * 0.4);
-          ringSpr(c, 'circle_01', col, h.x, h.y, rp, 0, 0.75);
-        } else {
-          c.globalAlpha = 0.2 + p * 0.15; c.fillStyle = danger; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill();
-          const gr = c.createRadialGradient(h.x, h.y, 0, h.x, h.y, Math.max(1, h.r * p));
-          gr.addColorStop(0, col + '10'); gr.addColorStop(1, col + '88');
-          c.globalAlpha = 0.85; c.fillStyle = gr; c.beginPath(); c.arc(h.x, h.y, Math.max(1, h.r * p), 0, 7); c.fill();
-        }
-        // 테두리: 천천히 도는 불 고리(그림). 터질 때가 가까울수록 밝아진다
-        if (!vs(c, 'ring', h.x, h.y, h.r * 2.24, now * 0.5 + h.x, 0.55 + p * 0.45, true)) { teleStyle(c, col, p); c.setLineDash([16, 10]); c.lineDashOffset = -now * 40; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.stroke(); c.setLineDash([]); c.shadowBlur = 0; }
-        // 터지기 직전: 테두리에 흰 빛 고리 그림이 떠오른다
-        if (p > 0.82) ringSpr(c, 'circle_02', '#ffffff', h.x, h.y, h.r, 0, (p - 0.82) * 5);
-        const left = h.delay - h.t;
-        if (left < 0.5 && h.fx) drawFalling(c, h, 1 - left / 0.5);
-      } else if (live) {
-        // 남는 불길·장판
-        // 바닥은 빛 그림(불길이면 주황)을 장판 크기로 깐다
+      c.fillStyle = h.c; c.strokeStyle = h.c; c.lineWidth = 2; c.globalAlpha = fired ? Math.max(0, 0.75 * (1 - q)) : 0.12 + p * 0.26;
+      if (!(window.RTD_SKFX && window.RTD_SKFX.tele(c, h, p, fired))) { c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill(); if (!fired) { c.globalAlpha = 0.9; c.beginPath(); c.arc(h.x, h.y, h.r * p, 0, 7); c.stroke(); } }
+    } else if (h.k === 'circle') {
+      const o = shCircle(c, h.x, h.y, h.r);
+      if (live) {
+        // 남는 불길·장판: 바닥은 빛 그림(불길이면 주황)을 장판 크기로 깔고, 경계는 예고와 같은 테두리로 남긴다
         if (!(window.RTD_SKFX && window.RTD_SKFX.spr(c, 'light_02', h.fx === 'flame' ? '#ff5a1a' : h.c, h.x, h.y, h.r * 2.5, h.r * 2.5, now * 0.4, 0.5 + Math.sin(h.t * 12) * 0.06))) { c.globalAlpha = 0.3 + Math.sin(h.t * 12) * 0.05; c.fillStyle = h.fx === 'flame' ? '#7a1e08' : h.c; c.beginPath(); c.arc(h.x, h.y, h.r, 0, 7); c.fill(); }
         if (h.fx === 'flame' || h.fx === 'fireball') for (let i = 0; i < 5; i++) { const a = i * 1.26 + now, rr = h.r * 0.5; Art.fxImg(c, 'fire', h.x + Math.cos(a) * rr, h.y + Math.sin(a) * rr * 0.6 - h.r * 0.3, h.r * (0.8 + Math.sin(now * 8 + i) * 0.15), UP + Math.sin(now * 7 + i) * 0.12, 0.7); }
+        tele(c, Object.assign({}, o, { prog: null }), 1, 0.6, false);
+      } else {
+        tele(c, o, p, em, after, q);
+        // 떨어지는 물체(바위·불배·불화살 등)는 터지기 0.5초 전부터 내려온다
+        if (!fired && left < 0.5 && h.fx) drawFalling(c, h, 1 - left / 0.5);
       }
     } else if (h.k === 'line') {
       c.translate(h.x, h.y); c.rotate(h.a);
-      const warnOk = !!Art.pic('vs_warn');
-      if (!fired && warnOk) {
-        // 경고 띠 그림 + 같은 띠를 더하기로 진행만큼 + 양옆 가장자리는 기술 색 빛줄기 그림(터질 때가 가까울수록 밝게)
-        warnBand(c, h.len / 2, 0, h.len, h.w, 0, 0.3 + p * 0.3);
-        warnBand(c, h.len / 2, 0, h.len, h.w, 0, 0.4, true, p);
-        streak(c, col, 0, -h.w / 2, h.len, -h.w / 2, 6, 0.5 + p * 0.45); streak(c, col, 0, h.w / 2, h.len, h.w / 2, 6, 0.5 + p * 0.45);
-        if (VS.chev) { const cw = Math.max(26, Math.min(h.w * 0.62, 54)), st2 = Math.max(70, cw * 1.6), o2 = (now * 190) % st2; for (let d = o2; d < h.len; d += st2) vs(c, 'chev', d, 0, cw, 0, (0.45 + p * 0.5) * Math.min(1, d / 60, (h.len - d) / 60), true); }
-      } else if (fired && warnOk) {
-        warnBand(c, h.len / 2, 0, h.len, h.w, 0, Math.max(0, alpha) * 0.8, true);
-      } else if (!fired) {
-        c.globalAlpha = 0.18 + p * 0.18; c.fillStyle = danger; c.fillRect(0, -h.w / 2, h.len, h.w);
-        // 진행 방향으로 흐르는 화살표 무늬와 차오르는 띠
-        c.globalAlpha = 0.5; c.fillStyle = col + '66'; c.fillRect(0, -h.w / 2, h.len * p, h.w);
-        c.globalAlpha = 0.65; c.strokeStyle = col; c.lineWidth = 3;
-        const step = 60, off = (now * 160) % step;
-        if (VS.chev) { const cw = Math.max(26, Math.min(h.w * 0.62, 54)), st2 = Math.max(70, cw * 1.6), o2 = (now * 190) % st2; for (let d = o2; d < h.len; d += st2) vs(c, 'chev', d, 0, cw, 0, (0.45 + p * 0.5) * Math.min(1, d / 60, (h.len - d) / 60), true); }
-        else for (let d = off; d < h.len; d += step) { const s = Math.min(h.w * 0.32, 14); c.beginPath(); c.moveTo(d - s, -s); c.lineTo(d, 0); c.lineTo(d - s, s); c.stroke(); }
-        teleStyle(c, col, p); c.beginPath(); c.moveTo(0, -h.w / 2); c.lineTo(h.len, -h.w / 2); c.moveTo(0, h.w / 2); c.lineTo(h.len, h.w / 2); c.stroke(); c.shadowBlur = 0;
-      } else { c.globalAlpha *= 0.35; c.fillStyle = col; c.fillRect(0, -h.w / 2, h.len, h.w); }
+      tele(c, shLine(c, h.len, h.w), p, em, after, q);
     } else if (h.k === 'cone') {
-      const path = (r) => { c.beginPath(); c.moveTo(h.x, h.y); c.arc(h.x, h.y, r, h.a - h.arc / 2, h.a + h.arc / 2); c.closePath(); };
-      const SK = window.RTD_SKFX;
-      if (SK && runeOk(c)) {
-        // 부채꼴 모양으로 잘라 낸 그림: 붉은 법진 + 차오르는 기술 색 빛. 양쪽 가장자리는 빛줄기 그림.
-        const ea = 0.55 + p * 0.4, x1 = h.x + Math.cos(h.a - h.arc / 2) * h.r, y1 = h.y + Math.sin(h.a - h.arc / 2) * h.r, x2 = h.x + Math.cos(h.a + h.arc / 2) * h.r, y2 = h.y + Math.sin(h.a + h.arc / 2) * h.r;
-        if (!fired) {
-          c.save(); path(h.r); c.clip();
-          Art.fxPic(c, 'mc_rune1', h.x, h.y, h.r * 2.05, h.r * 2.05, now * 0.3, 0.35 + p * 0.4, { col: '#ff3a24' });
-          SK.spr(c, 'light_02', '#ff3a24', h.x, h.y, h.r * 2.2, h.r * 2.2, 0, 0.3 + p * 0.2);
-          c.restore();
-          c.save(); path(Math.max(2, h.r * p)); c.clip(); SK.spr(c, 'light_01', col, h.x, h.y, h.r * 2.6 * p + 4, h.r * 2.6 * p + 4, 0, 0.7); c.restore();
-          streak(c, col, h.x, h.y, x1, y1, 7, ea); streak(c, col, h.x, h.y, x2, y2, 7, ea);
-          c.save(); path(h.r * 1.04); c.clip(); ringSpr(c, 'circle_02', col, h.x, h.y, h.r, 0, ea); c.restore();
-        } else if (h.fx !== 'blade' && h.fx !== 'halberd') { c.save(); path(h.r); c.clip(); SK.spr(c, 'light_02', col, h.x, h.y, h.r * 2.4, h.r * 2.4, 0, Math.max(0, c.globalAlpha) * 0.9); c.restore(); } // 칼 휘두르기는 궤적 연출만 남긴다
-      } else if (!fired) {
-        c.globalAlpha = 0.2 + p * 0.15; c.fillStyle = danger; path(h.r); c.fill();
-        c.globalAlpha = 0.6; c.fillStyle = col + '77'; path(h.r * p); c.fill();
-        teleStyle(c, col, p); path(h.r); c.stroke(); c.shadowBlur = 0;
-      } else if (h.fx !== 'blade' && h.fx !== 'halberd') { c.globalAlpha *= 0.45; c.fillStyle = col; path(h.r); c.fill(); } // 칼 휘두르기는 궤적 연출만 남긴다
+      // 칼 휘두르기는 터진 뒤 궤적 연출만 남긴다
+      if (!fired || (h.fx !== 'blade' && h.fx !== 'halberd')) tele(c, shCone(c, h), p, em, after, q);
     } else if (h.k === 'donut') {
-      const ringPath = () => { c.beginPath(); c.arc(h.x, h.y, h.r1, 0, 7); c.arc(h.x, h.y, h.r0, 0, 7, true); };
-      const SK = window.RTD_SKFX, rok = SK && runeOk(c);
-      if (!fired && rok) {
-        // 고리 모양으로 잘라 낸 붉은 법진 그림 + 안쪽부터 차오르는 기술 색 빛 그림
-        c.save(); ringPath(); c.clip('evenodd');
-        Art.fxPic(c, 'mc_rune1', h.x, h.y, h.r1 * 2.05, h.r1 * 2.05, now * 0.25, 0.35 + p * 0.4, { col: '#ff3a24' });
-        SK.spr(c, 'light_02', '#ff3a24', h.x, h.y, h.r1 * 2.3, h.r1 * 2.3, 0, 0.3 + p * 0.2);
-        c.restore();
-        c.save(); c.beginPath(); c.arc(h.x, h.y, h.r0 + (h.r1 - h.r0) * p, 0, 7); c.arc(h.x, h.y, h.r0, 0, 7, true); c.clip('evenodd');
-        SK.spr(c, 'light_01', col, h.x, h.y, h.r1 * 2.6, h.r1 * 2.6, 0, 0.6); c.restore();
-      } else if (!fired) {
-        c.globalAlpha = 0.2 + p * 0.15; c.fillStyle = danger; ringPath(); c.fill();
-        c.globalAlpha = 0.55; c.fillStyle = col + '66'; c.beginPath(); c.arc(h.x, h.y, h.r0 + (h.r1 - h.r0) * p, 0, 7); c.arc(h.x, h.y, h.r0, 0, 7, true); c.fill();
-      }
-      if (!fired) {
-        if (vs(c, 'ring', h.x, h.y, h.r1 * 2.24, now * 0.4, 0.55 + p * 0.45, true)) { if (h.r0 > 24) vs(c, 'ring', h.x, h.y, h.r0 * 2.24, -now * 0.6, 0.5 + p * 0.4, true); }
-        else { teleStyle(c, col, p); c.setLineDash([18, 10]); c.lineDashOffset = now * 50; c.beginPath(); c.arc(h.x, h.y, h.r1, 0, 7); c.stroke(); c.beginPath(); c.arc(h.x, h.y, h.r0, 0, 7); c.stroke(); c.setLineDash([]); c.shadowBlur = 0; }
-      } else if (rok) { c.save(); ringPath(); c.clip('evenodd'); SK.spr(c, 'light_02', col, h.x, h.y, h.r1 * 2.5, h.r1 * 2.5, 0, Math.max(0, c.globalAlpha) * 0.9); c.restore(); }
-      else { c.globalAlpha *= 0.45; c.fillStyle = col; ringPath(); c.fill(); }
+      tele(c, shDonut(c, h), p, em, after, q);
     } else if (h.k === 'safe') {
-      c.beginPath(); c.rect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
-      h.spots.forEach((s) => { c.moveTo(s[0] + s[2], s[1]); c.arc(s[0], s[1], s[2], 0, 7, true); });
-      c.fill('evenodd');
-      // 안전한 자리: 초록 법진 그림 + 빛 고리 그림(바깥은 화면 덮개로 어둡게)
-      if (!fired) h.spots.forEach((s) => { Art.fxPic(c, 'mc_rune3', s[0], s[1], s[2] * 2.1, s[2] * 2.1, now * 0.5, 0.75, { col: '#a8ffb8' }); ringSpr(c, 'circle_02', '#a8ffb8', s[0], s[1], s[2], 0, 0.9); });
+      // 안전한 자리 밖이 위험: 경기장(자리 구멍 뚫음)을 위험 바탕으로, 자리 테두리는 초록.
+      // 터지는 때: 자리 밖에서 초록 고리가 좁혀 와 자리 테두리에 닿는 순간
+      const o = shArena(c, (ARENA.x0 + ARENA.x1) / 2, (ARENA.y0 + ARENA.y1) / 2);
+      o.shape = (off) => { arenaRect(c, off); h.spots.forEach((s) => circ(c, s[0], s[1], Math.max(1, s[2] - off))); };
+      o.prog = null; o.noEdge = true;
+      tele(c, o, p, 0.6 + 0.4 * p, after, q);
+      if (!fired) h.spots.forEach((s) => {
+        const R = s[2], rr = R * (1 + 1.6 * (1 - p));
+        area(c, () => { circ(c, s[0], s[1], R + TELE.darkW); circ(c, s[0], s[1], R); }, s[0], s[1], R + TELE.darkW, TELE.dark, 0.55);
+        safeEdge(c, () => { circ(c, s[0], s[1], R); circ(c, s[0], s[1], R - TELE.edgeW); }, s[0], s[1], R, 0.95);
+        safeEdge(c, () => { circ(c, s[0], s[1], rr); circ(c, s[0], s[1], rr - TELE.frontW); }, s[0], s[1], rr, 0.8);
+      });
     }
     c.restore();
   }

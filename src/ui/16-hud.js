@@ -95,13 +95,23 @@
       vol = `<div class="line" style="margin:8px 0;padding:8px;border:1px solid #ffd86a55;background:#ffd86a12"><b style="color:#ffd86a">${I.t('volHead')}</b> <small>${I.t('volHint')}</small><br>
         <button class="btn ${mine ? '' : 'go'}" data-act="volunteer" type="button" ${mine ? 'disabled' : ''}>${I.t(mine ? 'volDone' : 'volBtn')}</button> <small>${I.t('volList', { a: vs.length ? vs.map((p) => esc(p.state.name)).join(', ') : I.t('none') })}</small></div>`;
     }
+    // 조합 확인 창이 떠 있는 사이 재료가 사라졌으면(협동·자동 조합 등) 창을 닫는다
+    if (S.combineAsk && (g.over || !combinePlanOf(S.combineAsk.a, S.combineAsk.id))) { if (!g.over && S.combineAsk.drawer) S.drawer = S.combineAsk.drawer; S.combineAsk = null; }
     if (S.paused && !g.over) {
       key = 'paused'; h = `<div class="over"><div class="sheet" style="width:min(380px,100%);align-items:center;text-align:center"><h2>${t('paused')}</h2><div>${t('pausedHint')}</div><button class="btn go" data-act="resume" type="button" style="padding:10px 26px">${t('resume')}</button></div></div>`;
+    } else if (S.combineAsk) {
+      // 조합 확인: 이 조합으로 꺼지거나 약해지는 인연 시너지를 알리고 조합·취소를 고른다
+      const c = S.combineAsk;
+      key = 'cw' + c.a + c.id + c.uid;
+      // 단계와 등급을 같이: 「오호대장군 · 3단계(상) → 2단계(하)」
+      const gt = (s, lv) => t('synG' + ((s.tiers && s.tiers[lv - 1] && s.tiers[lv - 1].g) || 1));
+      const rows = c.lost.map((x) => `<span class="chip">${esc(x.s.name)} · ${x.to ? I.t('cwDownG', { a: x.from, b: x.to, ga: gt(x.s, x.from), gb: gt(x.s, x.to) }) : I.t('cwOffG', { a: x.from, ga: gt(x.s, x.from) })}</span>`).join('');
+      h = `<div class="over"><div class="sheet" style="width:min(420px,100%);align-items:center;text-align:center"><h2>${t('cwTitle')}</h2><div>${t('cwBody')}</div><div class="chips">${rows}</div><div><button class="btn" data-act="combineNo" type="button" style="padding:9px 20px">${t('cwCancel')}</button> <button class="btn warn" data-act="combineGo" type="button" style="padding:9px 20px">${t('cwGo')}</button></div></div></div>`;
     } else if (g.phase === 'bossPick' && g.fight && !g.fight.picked) {
       const ch = g.pickChoices(), n = g.slotCount(), f = g.fight;
       key = 'p' + S.pick.join() + ch.length + Math.ceil(f.pickT) + volKey;
       h = `<div class="over"><div class="sheet"><h2>${t('pickTitle')}</h2>${vol}<div>${I.t('pickInfo', { title: esc(f.def.title), name: esc(f.def.name), t: clock(f.limit), n, s: Math.ceil(f.pickT) })}<br><span style="color:var(--dim)">${I.t('recommendColon', { a: advise(g.bossStats(f.def).hp / (f.def.time * 0.45), n) })}</span></div>
-        <div class="grid">${ch.map((u) => `<button class="pickcard ${S.pick.includes(u.id) ? 'on' : ''}" data-act="pick" data-arg="${u.id}" type="button"><img class="pcpor" alt="" src="${Art.portrait(u.def)}"><strong style="color:${tierColor(u.def.tier)}">${esc(u.def.name)}</strong> ${roleBadge(u.def)}<small>${nwParts(I.t('pickCard', { r: rankName(u.def.tier), a: fmt(g.unitAtk(u)), h: fmt(g.rankOf[u.def.tier].hp) }))}${u.def.sk ? I.t('skillsList', { a: u.def.sk.map((s) => esc(s.n)).join('·') }) : ''}</small>${(u.def.p || []).length ? `<small class="pp">${u.def.p.map((x) => `<b>${esc(x.name)}</b> ${esc(x.desc)}`).join('<br>')}</small>` : ''}</button>`).join('')}</div>
+        <div class="grid">${ch.map((u) => `<button class="pickcard ${S.pick.includes(u.id) ? 'on' : ''}" data-act="pick" data-arg="${u.id}" type="button"><img class="pcpor" alt="" src="${Art.portrait(u.def)}"><strong style="color:${tierColor(u.def.tier)}">${esc(u.def.name)}</strong> ${roleBadge(u.def)}${synBadges(synBossFor(u.def))}<small>${nwParts(I.t('pickCard', { r: rankName(u.def.tier), a: fmt(g.unitAtk(u)), h: fmt(g.rankOf[u.def.tier].hp) }))}${u.def.sk ? I.t('skillsList', { a: u.def.sk.map((s) => esc(s.n)).join('·') }) : ''}</small>${(u.def.p || []).length ? `<small class="pp">${u.def.p.map((x) => `<b>${esc(x.name)}</b> ${esc(x.desc)}`).join('<br>')}</small>` : ''}</button>`).join('')}</div>
         <button class="btn go" data-act="pickGo" type="button" style="padding:9px">${t('deploy')} (${S.pick.length}/${n})</button></div></div>`;
     } else if (g.phase === 'bossPick') {
       h = `<div class="over"><div class="sheet"><h2>${t('waitAllies')}</h2>${vol}</div></div>`; key = 'w' + volKey;

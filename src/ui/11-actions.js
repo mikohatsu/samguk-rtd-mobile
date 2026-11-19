@@ -1,3 +1,13 @@
+  // 조합 전 시너지 확인: 꺼지거나 단계가 내려가는 시너지가 있으면 S.combineAsk에 담고 true(조합은 확인 창에서)
+  function combinePlanOf(kind, id) { return kind === 'craft' ? g.craftPlan(g.me, id) : g.combinePlan(g.me, id); }
+  function askCombine(kind, id, uid) {
+    const lost = g.synergiesLostByCombine(g.me, combinePlanOf(kind, id));
+    if (!lost.length) return false;
+    // 오른쪽 서랍(z-index 40)이 확인 창을 가리므로 잠시 닫았다가, 고른 뒤 다시 연다
+    S.combineAsk = { a: kind, id, uid, lost, drawer: S.drawer };
+    S.drawer = null;
+    return true;
+  }
   // ---- 행동: DOM 갱신 중에도 놓치지 않게 pointerdown 위임으로 받는다 ----
   function doAct(a, arg) {
     Snd.play('click', 40);
@@ -11,6 +21,7 @@
     else if (a === 'langSet') { if (arg !== I.lang) { if (!g) { I.setLang(arg); return; } try { localStorage.setItem('rtd-lang', arg); } catch (e) { /* 저장 불가 */ } toast(I.LANGS.find(([k]) => k === arg)[1] + ' — ' + t('langLater'), 'good'); } }
     else if (a === 'gfx') { if (Q.level !== arg) { Q.level = arg; Q.rs = 1; applyQuality(); sizeMap(); if (g) fit(); } }
     else if (a === 'fps30') { Q.fps30 = !Q.fps30; applyQuality(); }
+    else if (a === 'keepSyn') { if (g) { g.keepSyn = !g.keepSyn; try { localStorage.setItem('rtd-keepsyn', g.keepSyn ? '1' : '0'); } catch (e) { /* 저장 불가 */ } } }
     else if (a === 'perf') { Q.perf = !Q.perf; applyQuality(); }
     else if (a === 'credits') { if (window.RTD_CREDITS) window.RTD_CREDITS.open(); }
     else if (a === 'desel') { setSel([]); S.dropSel = null; S.rsel = null; setMode(null); }
@@ -18,7 +29,10 @@
     else if (a === 'modeMove') { if (inBoss() || S.sel.length) setMode('move'); }
     else if (a === 'stop') { if (inBoss()) g.arenaStop(); else g.cmd('focus', S.sel); setMode(null); }
     else if (a === 'esc') setMode(null);
-    else if (a === 'combine') { if (u) { const n = g.combine(p, u.def.id, u.id); if (n) setSel([n.id]); } }
+    // 직접 누른 조합·제작이 켜져 있는 인연 시너지를 끄거나 단계를 내리면 먼저 묻는다(16-hud renderOverlay의 확인 창). 자동 조합·AI 동맹은 묻지 않는다.
+    else if (a === 'combine') { if (u && !askCombine('combine', u.def.id, u.id)) { const n = g.combine(p, u.def.id, u.id); if (n) setSel([n.id]); } }
+    else if (a === 'combineGo') { const c = S.combineAsk; S.combineAsk = null; if (c) { if (c.drawer) S.drawer = c.drawer; const n = c.a === 'craft' ? g.craft(p, c.id) : g.combine(p, c.id, c.uid); if (n) setSel([n.id]); } }
+    else if (a === 'combineNo') { const c = S.combineAsk; S.combineAsk = null; if (c && c.drawer) S.drawer = c.drawer; }
     else if (a === 'sell') { if (list.length === 1 && u.def.tier === 1) { const v = g.sell(p, u); toast(I.t('disbanded', { a: u.def.name, c: T.currency, v }), 'good'); } }
     else if (a === 'speed') { speed = speed === 3 ? 1 : speed + 1; if (net) net.speedWant = speed; }
     else if (a === 'myview') S.view = null;
@@ -36,7 +50,7 @@
     else if (a === 'timer') { const el = document.querySelector(`.tw[data-r="${arg}"]`); if (el) el.classList.toggle('open'); }
     else if (a === 'useDrop') { if (S.dropSel && g.drops.some((d) => d.id === S.dropSel && d.kind !== 'item')) setMode('use'); }
     else if (a === 'up') g.buyUpgrade(p, arg);
-    else if (a === 'craft') { const n = g.craft(p, arg); if (n) setSel([n.id]); }
+    else if (a === 'craft') { if (!askCombine('craft', arg)) { const n = g.craft(p, arg); if (n) setSel([n.id]); } }
     else if (a === 'hire') g.hire(p, arg);
     else if (a === 'fuse') { const n = g.fuseItems(p, S.dropSel); if (n) S.dropSel = n.id; }
     else if (a === 'dismiss') { if (S.dismiss === arg) { g.dismiss(p, arg); S.dismiss = null; } else { S.dismiss = arg; toast(I.t('dismissConfirm', { a: defOf[arg].name }), 'warn'); setTimeout(() => { if (S.dismiss === arg) S.dismiss = null; }, 3000); } }

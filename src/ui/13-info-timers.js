@@ -45,7 +45,9 @@
     const l = g.localChamps(), act = g.active(), dead = l.some((c) => c.dead);
     setInfo(act ? unitInfo(act.u) : `<h3>${I.t('noChamp')}</h3><div class="sub">${I.t('noChampHint')}</div>`);
     const subs = g.pickChoices().slice(0, 6);
-    const hpLine = act ? `<div class="line">${I.t('curHp')} <strong>${fmt(act.hp)} / ${fmt(act.mhp)}</strong></div>` : '';
+    // 내 장수 HP + 걸린 보스전 인연(상한 초과는 흐리게, 스택 수)
+    const sy = act && act.syR ? act.syR.map((R) => ({ s: R.s, lv: R.lv, g: R.g })).concat((act.syOver || []).map((id) => { const s = T.synergies.find((x) => x.id === id), x = g.me.syn[id]; return { s, lv: x ? x.lv : 1, g: x ? x.tier.g : 1, over: true }; })) : [];
+    const hpLine = act ? `<div class="line">${I.t('curHp')} <strong>${fmt(act.hp)} / ${fmt(act.mhp)}</strong></div>${sy.length ? `<div class="line">${synBadges(sy, act)}</div>` : ''}` : '';
     const mini = l.map((c, i) => `<button class="btn ${c === act ? 'on' : ''}" data-act="champ" data-arg="${i}" type="button" ${c.dead ? 'disabled' : ''}>${i + 1}. ${esc(c.def.name)} ${Math.round((c.hp / c.mhp) * 100)}%</button>`).join('');
     setRecipes(`${hpLine}${dead && !g.mut.relay ? `<div class="h">${I.t('subDeploy')}</div><div class="chips">${subs.map((u) => `<button class="btn" data-act="sub" data-arg="${u.id}" type="button">${esc(u.def.name)} ${rankTag(u.def.tier)}</button>`).join('') || I.t('noSubs')}</div>` : ''}<div class="mini">${mini}</div>`);
     const left = g.healLeft();
@@ -147,47 +149,88 @@
       if (el) box.scrollTop = el.offsetTop - box.offsetTop;
     }
   }
-  // ---- 맵 왼쪽 시너지 줄: 인연마다 육각 아이콘(대표 인물 얼굴)과 모은 수/필요 수. 완성되면 금색으로 켜진다. ----
-  // 누르면(마우스는 올리면) 필요한 인물과 효과가 업적 설명과 같은 반투명 창으로 뜬다. 왼쪽 정보 줄 바로 아래에 놓고, 넘치면 쪽 넘김 화살표.
+  // 이 장수가 출전하면 받을 보스전 인연(지금 판 기준): 시그니처는 core만. 등급 높은 순 → 표 순서, 상한을 넘는 것은 over
+  function synBossFor(d) {
+    const p = g && g.me, max = g.synMaxPerCarry || 5;
+    if (!p || !p.syn || !d.tier) return [];
+    const out = [];
+    (T.synergies || []).forEach((s, i) => { const x = p.syn[s.id]; if (x && x.tier && x.tier.boss && (s.core ? s.core === d.id : s.units.includes(d.id))) out.push({ s, lv: x.lv, g: x.tier.g || 1, o: i }); });
+    out.sort((a, b) => b.g - a.g || a.o - b.o);
+    out.forEach((x, i) => (x.over = i >= max));
+    return out;
+  }
+  // 인연 배지 한 줄(출전 카드·보스전 정보): 등급색 점 + 단계 수, 상한 초과는 흐리게. stacks: 보스전 중이면 쌓인 수
+  function synBadges(list, champ) {
+    return list.length ? `<span class="sybd">${list.map((x) => {
+      const tr = x.s.tiers[x.lv - 1], key = champ && champ.syS && tr && tr.boss ? ((tr.boss.rules || []).map((r) => r.do.find((q) => q.k === 'stack')).find(Boolean) || {}).key : null, st = key ? champ.syS[key] : null; // 쌓인 수
+      return `<i class="${x.over ? 'ov' : ''}" title="${esc(x.s.name)}${x.over ? ' · ' + esc(t('synOverCap')) : ''}"><b style="background:${GRADE_COL[x.g]}"></b>${esc(x.s.name)} ${x.lv}${st && st.n > 0 ? ` <u>${st.n}</u>` : ''}</i>`;
+    }).join('')}</span>` : '';
+  }
+  // ---- 맵 왼쪽 인연 줄(v0.3 단계형): 인연마다 육각 아이콘(대표 인물 얼굴) + 진행(모은 수/다음 단계 인원) + 단계 점 + 등급 배지. ----
+  // 켜진 것 → 다음 단계까지 1명 남은 것 → 나머지 순. 50개가 넘어도 줄이 세로로 스크롤된다(쪽 넘김 없음).
+  // 누르면(마우스는 올리면) 단계 표·구성원·보스전 안내가 뜬다(창 안을 스크롤할 수 있다).
+  const GRADE_COL = ['#9a8e78', '#7ed08c', '#6aa8ff', '#c08aff', '#ffd86a', '#ff8a5a'];
+  const gradeTxt = (gr) => t('synG' + Math.max(1, Math.min(5, gr)));
   let synRep = null;
-  // 대표 인물: 다른 인연에 가장 덜 나오는 인물(같은 얼굴이 여러 줄에 겹치지 않게)
+  // 대표 인물: 시그니처는 core, 아니면 다른 인연에 가장 덜 나오는 인물(같은 얼굴이 여러 칸에 겹치지 않게)
   function synFace(s) {
     if (!synRep) {
       const cnt = {}; synRep = {};
       (T.synergies || []).forEach((x) => x.units.forEach((id) => { cnt[id] = (cnt[id] || 0) + 1; }));
-      (T.synergies || []).forEach((x) => { synRep[x.id] = x.units.slice().sort((a, b) => cnt[a] - cnt[b])[0]; });
+      (T.synergies || []).forEach((x) => { synRep[x.id] = x.core || x.units.filter((id) => defOf[id].tier > 0).sort((a, b) => cnt[a] - cnt[b] || defOf[b].tier - defOf[a].tier)[0] || x.units[0]; });
     }
     return defOf[synRep[s.id]];
   }
+  // 인연 하나의 진행: 모은 수 n, 단계 lv, 다음 단계 인원 next(없으면 마지막 단계 인원), 다음까지 남은 수 gap, 지금(없으면 다음) 등급
+  function synProg(s, p) {
+    const n = (p.synN && p.synN[s.id]) || 0, x = p.syn && p.syn[s.id], lv = x ? x.lv : 0, tiers = s.tiers || [];
+    const nt = tiers[lv] || null, next = nt ? nt.n : (tiers[tiers.length - 1] || { n: s.units.length }).n;
+    const gr = (tiers[Math.max(0, lv - 1)] || {}).g || 1;
+    return { s, n, lv, on: lv > 0, next, gap: nt ? Math.max(0, nt.n - n) : 0, g: lv ? gr : (tiers[0] || {}).g || 1, coreMiss: !!(s.core && !g.has(p, s.core)) };
+  }
+  function synVisible(p) {
+    return (T.synergies || []).map((s) => synProg(s, p)).filter((x) => (x.s.hidden ? x.on : x.n > 0))
+      .sort((a, b) => b.on - a.on || (b.on ? b.g - a.g : 0) || (a.gap === 1) * -1 + (b.gap === 1) * 1 || b.n / b.next - a.n / a.next);
+  }
+  const dotsOf = (x) => (x.s.tiers || []).map((tr, i) => `<i class="${i < x.lv ? 'on' : ''}"></i>`).join('');
   function renderSynBar(vis) {
     const bar = $('synbar'), show = laneOn() && !viewedPeer() && !g.over && vis.length > 0;
     if (bar.hidden !== !show) bar.hidden = !show;
     if (!show) { if (S.synPop) showSyn(null); return; }
-    // 왼쪽 정보 줄 바로 아래에 3칸씩 놓는다. 한 화면에 다 안 들어가면 아래의 작은 화살표로 쪽을 넘긴다.
-    const hud = $('hud'), vh = window.innerHeight / zoom, item = vh <= 430 ? 41 : vh >= 600 ? 59 : 47, cols = 3;
-    const left = hud.offsetLeft, topY = hud.offsetTop + hud.offsetHeight + 6, avail = vh - topY - 4;
-    let rows = Math.max(1, Math.floor(avail / item));
-    const paged = vis.length > rows * cols;
-    if (paged) rows = Math.max(1, Math.floor((avail - 24) / item));
-    const per = rows * cols, pages = Math.max(1, Math.ceil(vis.length / per));
-    S.synPage = Math.max(0, Math.min(S.synPage || 0, pages - 1));
-    const top = vis.slice(S.synPage * per, S.synPage * per + per);
+    // 왼쪽 정보 줄 바로 아래에 3칸씩 놓고, 화면 아래까지 넘치면 줄 안에서 세로로 스크롤한다
+    const hud = $('hud'), vh = window.innerHeight / zoom;
+    const left = hud.offsetLeft, topY = hud.offsetTop + hud.offsetHeight + 6, avail = Math.max(60, vh - topY - 4);
     // 얼굴 그림은 주소가 길어 매번 만들지 않는다(구성이 바뀌거나 5초마다 한 번만 다시 그린다 — 그림이 늦게 불러져도 따라온다)
-    const key = top.map(({ s, n, on }) => s.id + n + (on ? '!' : '')).join() + '+' + S.synPage + '/' + pages + '@' + Math.floor(performance.now() / 5000);
+    const key = vis.map((x) => x.s.id + x.n + ':' + x.lv).join() + '@' + Math.floor(performance.now() / 5000);
     if (bar.dataset.key !== key) {
       bar.dataset.key = key;
-      bar.innerHTML = top.map(({ s, n, on }) => `<button class="sy ${on ? 'on' : ''}" data-syn="${s.id}" type="button" aria-label="${esc(s.name)}"><i><img alt="" src="${Art.portrait(synFace(s))}"></i><b>${n}/${s.units.length}</b></button>`).join('')
-        + (pages > 1 ? `<div class="sypg"><button data-pg="-1" type="button" ${S.synPage ? '' : 'disabled'} aria-label="prev">◀</button><span>${S.synPage + 1}/${pages}</span><button data-pg="1" type="button" ${S.synPage < pages - 1 ? '' : 'disabled'} aria-label="next">▶</button></div>` : '');
+      bar.innerHTML = vis.map((x) => `<button class="sy ${x.on ? 'on' : ''} ${x.gap === 1 && !x.coreMiss ? 'near' : ''}" data-syn="${x.s.id}" type="button" aria-label="${esc(x.s.name)}"><i><img alt="" src="${Art.portrait(synFace(x.s))}"></i><u>${dotsOf(x)}</u><em style="background:${GRADE_COL[x.g]}">${esc(gradeTxt(x.g))}</em><b>${x.n}/${x.next}</b></button>`).join('');
     }
-    const pos = left + ',' + topY;
-    if (bar.dataset.pos !== pos) { bar.dataset.pos = pos; bar.style.left = left + 'px'; bar.style.top = topY + 'px'; }
+    const pos = left + ',' + topY + ',' + Math.round(avail);
+    if (bar.dataset.pos !== pos) { bar.dataset.pos = pos; bar.style.left = left + 'px'; bar.style.top = topY + 'px'; bar.style.maxHeight = Math.round(avail) + 'px'; }
+    // 넘칠 때만 줄이 손가락을 받아 스크롤한다(안 넘치면 아래 전장을 가리지 않게 통과)
+    const sc = bar.scrollHeight > bar.clientHeight + 2; if (bar.classList.contains('scroll') !== sc) bar.classList.toggle('scroll', sc);
+  }
+  // 단계 표: 단계마다 인원·등급·라인 효과·보스전 효과, 지금 단계 강조
+  function synTiersHtml(x) {
+    const st = I.synTierText;
+    return (x.s.tiers || []).map((tr, i) => {
+      const d = st ? st(T, x.s, tr) : { lane: '', boss: '' };
+      return `<div class="st ${i === x.lv - 1 ? 'cur' : i < x.lv ? 'past' : ''}"><span class="tn">${esc(t('synTierN', { n: tr.n }))}<em style="background:${GRADE_COL[tr.g || 1]}">${esc(gradeTxt(tr.g || 1))}</em></span>`
+        + `<span><b>${esc(t('synLaneH'))}</b> ${esc(d.lane || t('synNone'))}</span><span><b>${esc(t('synBossH'))}</b> ${esc(d.boss || t('synNone'))}</span></div>`;
+    }).join('');
   }
   function showSyn(id, el) {
     const pop = $('achpop'), s = id && (T.synergies || []).find((x) => x.id === id), p = g && g.me;
-    if (!s || !el || !p) { if (S.synPop) pop.hidden = true; S.synPop = null; return; }
-    const have = s.units.filter((u) => g.has(p, u)).length, on = !!(p.syn && p.syn[s.id]);
-    const chips = s.units.map((u) => { const d = defOf[u]; return `<span class="ac ${g.has(p, u) ? 'have' : ''}" style="color:${(d.tier && tierColor(d.tier)) || '#f4ecd8'}">${esc(d.name)}</span>`; }).join('');
-    pop.innerHTML = `<strong>${s.hidden ? '★ ' : ''}${esc(s.name)} <span style="font:400 12px 'Black Han Sans',sans-serif;color:${on ? '#ffd86a' : '#cfc3a8'}">${have}/${s.units.length}</span></strong><div class="chips">${chips}</div><div style="margin-top:5px;color:${on ? '#f4ecd8' : 'var(--dim)'}">${esc(s.desc)}</div>`;
+    if (!s || !el || !p) { if (S.synPop) { pop.hidden = true; pop.classList.remove('sp'); } S.synPop = null; return; }
+    const x = synProg(s, p);
+    // 구성원: 가진 사람 밝게, 없는 사람 흐리게, 잠긴 장수는 흐린 점선, core는 금 테
+    const chips = s.units.map((u) => { const d = defOf[u], lk = g.isLocked && g.isLocked(u); return `<span class="ac ${g.has(p, u) ? 'have' : ''} ${lk ? 'lk' : ''} ${s.core === u ? 'core' : ''}" style="color:${(d.tier && tierColor(d.tier)) || '#f4ecd8'}">${esc(d.name)}</span>`; }).join('');
+    pop.innerHTML = `<strong>${s.hidden ? '★ ' : ''}${esc(s.name)} <span style="font:400 12px 'Black Han Sans',sans-serif;color:${x.on ? '#ffd86a' : '#cfc3a8'}">${x.n}/${x.next}</span></strong>`
+      + `<div class="chips">${chips}</div>${x.coreMiss ? `<div class="sn">${esc(t('synCore', { a: defOf[s.core].name }))}</div>` : ''}`
+      + `<div style="margin-top:4px;color:${x.on ? '#f4ecd8' : 'var(--dim)'}">${esc(s.desc)}</div><div class="sts">${synTiersHtml(x)}</div>`
+      + `<div class="sn">${esc(t('synBossNote', { n: g.synMaxPerCarry || 5 }))}</div>`;
+    pop.classList.add('sp');
     pop.hidden = false; S.synPop = id;
     const r = el.getBoundingClientRect();
     pop.style.left = Math.min($('synbar').getBoundingClientRect().right / zoom + 8, window.innerWidth / zoom - pop.offsetWidth - 4) + 'px';
@@ -196,18 +239,20 @@
   {
     const bar = $('synbar');
     // 터치: 누르면 뜨고, 다른 곳을 누르면 닫힌다(닫기는 10-input의 업적 창 처리와 같이 쓴다). 마우스: 올리면 뜨고 벗어나면 닫힌다.
-    bar.addEventListener('click', (e) => { const pg = e.target.closest('[data-pg]'); if (pg) { S.synPage = (S.synPage || 0) + +pg.dataset.pg; showSyn(null); return; } const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
+    bar.addEventListener('click', (e) => { const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
     bar.addEventListener('pointerover', (e) => { if (e.pointerType === 'touch') return; const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
-    bar.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') showSyn(null); });
+    bar.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && !(e.relatedTarget && $('achpop').contains(e.relatedTarget))) showSyn(null); });
+    bar.addEventListener('scroll', () => { if (S.synPop) showSyn(null); }, { passive: true });
   }
-  // 인연 시너지 목록(전황 서랍): 모인 인물 수 / 필요 수, 켜지면 밝게
+  // 인연 목록(전황 서랍): 진행·등급·지금 단계 효과. 켜진 것 → 1명 남은 것 → 나머지
   function renderSyn() {
     const box = $('synlist'), p = g.me;
-    const vis = (T.synergies || []).map((s) => ({ s, n: s.units.filter((id) => g.has(p, id)).length, on: !!(p.syn && p.syn[s.id]) }))
-      .filter((x) => (x.s.hidden ? x.on : x.n > 0)).sort((a, b) => b.on - a.on || b.n / b.s.units.length - a.n / a.s.units.length);
-    const h = !vis.length ? `<div class="sub" style="padding:6px 10px">${t('synergyHint')}</div>` : vis.map(({ s }) => {
-      const have = s.units.filter((id) => g.has(p, id)), on = p.syn && p.syn[s.id];
-      return `<div class="syn ${on ? 'on' : ''}" title="${esc(s.desc)}"><span class="cnt">${have.length}/${s.units.length}</span><b>${s.hidden ? '★ ' : ''}${esc(s.name)}</b><div class="us">${s.units.map((id) => `<span class="${g.has(p, id) ? 'h' : ''}">${esc(defOf[id].name)}</span>`).join(' · ')}</div><small style="grid-column:2">${esc(s.desc)}</small></div>`;
+    const vis = synVisible(p);
+    const h = !vis.length ? `<div class="sub" style="padding:6px 10px">${t('synergyHint')}</div>` : vis.map((x) => {
+      const s = x.s, tr = (s.tiers || [])[Math.max(0, x.lv - 1)], d = tr && I.synTierText ? I.synTierText(T, s, tr) : { lane: '', boss: '' };
+      return `<div class="syn ${x.on ? 'on' : ''}" title="${esc(s.desc)}"><span class="cnt">${x.n}/${x.next}</span><b>${s.hidden ? '★ ' : ''}${esc(s.name)} <em class="gd" style="background:${GRADE_COL[x.g]}">${esc(gradeTxt(x.g))}</em> <u class="dt">${dotsOf(x)}</u></b>`
+        + `<div class="us">${s.units.map((id) => `<span class="${g.has(p, id) ? 'h' : ''}">${esc(defOf[id].name)}</span>`).join(' · ')}</div>`
+        + `<small style="grid-column:2">${x.on ? esc([d.lane, d.boss].filter(Boolean).join(' / ')) : esc(s.desc)}</small></div>`;
     }).join('');
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
     renderSynBar(vis);

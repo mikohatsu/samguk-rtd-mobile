@@ -129,6 +129,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       }
     }
     g = opt.snap ? E.Game.restore(T, opt.snap) : new E.Game(T, opt);
+    // 설정 「인연 유지」(기본 켬): 자동 조합이 켜진 인연 단계의 마지막 한 기를 남긴다. 기기 설정 'rtd-keepsyn' = '0'이면 끔
+    try { g.keepSyn = localStorage.getItem('rtd-keepsyn') !== '0'; } catch (e) { g.keepSyn = true; }
     // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기)
     S.saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo'; S.saveT = 0;
     // 판 표: 로그인해 있으면 서버에서 받아 둔다(결과·전적은 이 표가 있어야 서버가 받는다). 이어하기는 저장해 둔 표를 다시 쓴다.

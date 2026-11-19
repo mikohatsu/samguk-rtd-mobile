@@ -221,6 +221,7 @@
   const flagAt = (m) => FLAGS.find((f) => m.x > f.x - 6 && m.x < f.x + 50 && m.y > f.y - 64 && m.y < f.y + 4);
   function showFlag(f, e) {
     const pop = $('achpop');
+    pop.classList.remove('sp'); // 인연 창 모양(스크롤)을 업적 창에 남기지 않는다
     if (!f) { pop.hidden = true; return; }
     const a = f.a, c = a.cond, ids = c.units || c.anyOf || [];
     // 여러 기가 필요한 조건은 (보유/필요)를 붙이고, 다 모아야 진하게 켠다

@@ -33,8 +33,8 @@ const r = L.runSolo({
     // 살아 있는 me의 키가 저장본에 있고, 불러온 값이 같은가(idx는 자리 번호라 뺀다)
     if (g.me.usedItems) sawUsed = true;
     Object.keys(g.me).forEach((k) => {
-      // idx: 자리 번호. syn: 유닛으로 다시 계산되는 값(engine.js recomputeAuras). arrangeAll: AI 사령관만 켜는 값(ai.js:25)
-      if (k === 'idx' || k === 'syn' || k === 'arrangeAll' || lostKeys.has(k)) return;
+      // idx: 자리 번호. syn·synN·synC: 유닛으로 다시 계산되는 값(engine.js recomputeAuras). arrangeAll: AI 사령관만 켜는 값(ai.js:25)
+      if (k === 'idx' || k === 'syn' || k === 'synN' || k === 'synC' || k === 'arrangeAll' || lostKeys.has(k)) return;
       if (!(k in s1.me)) lostKeys.set(k, `R${g.round} 저장본에 없음`);
       else if (JSON.stringify(g.me[k]) !== JSON.stringify(g2.me[k])) lostKeys.set(k, `R${g.round} 값이 달라짐`);
     });

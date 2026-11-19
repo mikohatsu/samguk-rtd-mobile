@@ -369,28 +369,63 @@
 `;
   // 인연 시너지(이름·설명), 변형 규칙(이름·이득·손해), 업적(이름·조건), 소모품 설명
   const SYN = `
-도원결의|桃園の誓い|Oath of the Peach Garden|桃园结义||3武将の攻撃力+12%、ボス戦の被ダメージ-10%|3 generals: ATK +12%, boss damage taken -10%|三人攻击+12%，首领战受伤-10%
-손씨 삼대|孫家三代|Three Generations of Sun|孙氏三代||呉の全ユニット攻撃力+6%、3武将のスキル再使用-10%|All Wu units ATK +6%; 3 generals' skill cooldown -10%|吴国全体攻击+6%，三人技能冷却-10%
-비장의 피|飛将の血|Blood of the Flying General|飞将之血||2武将が10%の確率で2倍ダメージ|Both deal double damage 10% of the time|两人10%几率造成2倍伤害
-연환지계|連環の計|Chain Stratagem|连环之计||全敵の移動速度-5%、呂布・董卓の攻撃力+10%|All enemies -5% speed; Lu Bu and Dong Zhuo ATK +10%|全体敌人移速-5%，吕布·董卓攻击+10%
-적벽대전|赤壁の戦い|Battle of Red Cliffs|赤壁之战||周瑜の攻撃力+20%・炎上+40%、諸葛亮・黄蓋の炎上+20%|Zhou Yu ATK +20% and burn +40%; Zhuge Liang and Huang Gai burn +20%|周瑜攻击+20%·燃烧+40%，诸葛亮·黄盖燃烧+20%
-와룡봉추|臥龍鳳雛|Sleeping Dragon and Young Phoenix|卧龙凤雏||2武将のスキル再使用-10%、スキルダメージ+15%|Both: skill cooldown -10%, skill damage +15%|两人技能冷却-10%，技能伤害+15%
-오호대장군|五虎大将軍|Five Tiger Generals|五虎上将||5武将の攻撃力+12%|5 generals: ATK +12%|五人攻击+12%
-영천의 모사|潁川の謀士|Strategists of Yingchuan|颍川谋士||魏の全ユニット攻撃力+6%、3武将のスキル再使用-10%|All Wei units ATK +6%; 3 generals' skill cooldown -10%|魏国全体攻击+6%，三人技能冷却-10%
-관씨 부자|関家父子|Guan Father and Son|关氏父子||関平の攻撃力+25%、関羽の攻撃力+10%|Guan Ping ATK +25%, Guan Yu ATK +10%|关平攻击+25%，关羽攻击+10%
-장판파|長坂の戦い|Changban|长坂坡||2武将の攻撃力+8%、趙雲の被ダメージ-15%|Both ATK +8%; Zhao Yun damage taken -15%|两人攻击+8%，赵云受伤-15%
-신정의 결투|神亭の一騎討ち|Duel at Shenting|神亭之斗||2武将が10%の確率で2倍ダメージ|Both deal double damage 10% of the time|两人10%几率造成2倍伤害
-동오 대도독|東呉の大都督|Grand Commanders of Wu|东吴大都督||呉の全ユニット攻撃力+6%、4武将のスキルダメージ+15%|All Wu units ATK +6%; 4 generals' skill damage +15%|吴国全体攻击+6%，四人技能伤害+15%
-남만왕 부부|南蛮王夫妻|King and Queen of Nanman|南蛮王夫妇||2武将の攻撃力+10%、ボス戦の体力+25%|Both ATK +10%, boss HP +25%|两人攻击+10%，首领战生命+25%
-완성의 악래|宛城の悪来|E Lai of Wancheng|宛城恶来||典韋のボス戦体力+30%、曹操の被ダメージ-15%|Dian Wei boss HP +30%; Cao Cao damage taken -15%|典韦首领战生命+30%，曹操受伤-15%
-천수의 기린아|天水の麒麟児|Qilin of Tianshui|天水麒麟儿||姜維の攻撃力+25%、諸葛亮のスキル再使用-8%|Jiang Wei ATK +25%; Zhuge Liang skill cooldown -8%|姜维攻击+25%，诸葛亮技能冷却-8%
-진의 기틀|晋の礎|Foundation of Jin|晋之基业||2武将のボスへのダメージ+12%|Both deal +12% boss damage|两人对首领伤害+12%
-하비의 책사|下邳の策士|Strategist of Xiapi|下邳谋士||呂布の攻撃力+15%、被ダメージ-10%|Lu Bu ATK +15%, damage taken -10%|吕布攻击+15%，受伤-10%
-수경문하|水鏡門下|Students of Water Mirror|水镜门下||諸葛亮・龐統のスキルダメージ+20%、スキル再使用-10%|Zhuge Liang and Pang Tong: skill damage +20%, cooldown -10%|诸葛亮·庞统技能伤害+20%，冷却-10%
-괄골요독|刮骨療毒|Scraping the Bone|刮骨疗毒||関羽のボス戦体力+30%、被ダメージ-10%|Guan Yu boss HP +30%, damage taken -10%|关羽首领战生命+30%，受伤-10%
-소패왕의 반려|小覇王の伴侶|Little Conqueror's Wife|小霸王之妻||孫策の攻撃力+15%、ボスへのダメージ+10%|Sun Ce ATK +15%, boss damage +10%|孙策攻击+15%，对首领伤害+10%
-미주랑의 반려|美周郎の伴侶|Handsome Zhou's Wife|美周郎之妻||周瑜の攻撃力+15%、炎上ダメージ+30%|Zhou Yu ATK +15%, burn damage +30%|周瑜攻击+15%，燃烧伤害+30%
-문희귀한|文姫帰漢|Wenji Returns to Han|文姬归汉||魏の全ユニット攻撃力+5%、曹操のスキル再使用-10%|All Wei units ATK +5%; Cao Cao skill cooldown -10%|魏国全体攻击+5%，曹操技能冷却-10%
+도원결의|桃園の誓い|Oath of the Peach Garden|桃园结义||義兄弟が傍らに現れて共に斬り、ボス戦ごとに一度倒れても立ち上がる。|Sworn brothers appear and strike beside you; once per boss fight you rise again after falling.|结义兄弟现身同斩，每场首领战倒下一次也能再起。
+오호대장군|五虎大将軍|Five Tiger Generals|五虎上将||ラインに残った五虎将が闘技場の外からボスを射る。|Tiger Generals left on the lane fire at the boss from outside the arena.|留在战线上的五虎将从场外射击首领。
+관씨 부자|関父子|Guan Father and Son|关氏父子||青竜偃月斬が息子と共に二度三度と襲いかかる。|Green Dragon Slash strikes two or three times, together with his son.|青龙偃月斩与儿子一同连斩两三次。
+수경문하|水鏡門下|Students of Water Mirror|水镜门下||スキルの跡に水鏡の陣が残り、ボスを削り続ける。|Water Mirror circles stay where skills land and keep wearing the boss down.|技能落点留下水镜法阵，持续削减首领。
+적벽대전|赤壁の戦い|Battle of Red Cliffs|赤壁之战||黄蓋の火船がボスに突っ込む。周瑜・陸遜が揃えば火船が重なる。|Huang Gai's fire ships ram the boss. With Zhou Yu and Lu Xun, the ships come in pairs.|黄盖火船撞向首领。周瑜与陆逊齐聚则火船成双。
+출사표|出師表|The Northern Expedition|出师表||長く戦うほど北伐の気勢が積み上がる。|The longer you fight, the more the Northern Expedition's momentum builds.|战得越久，北伐之势越盛。
+오장원|五丈原|Wuzhang Plains|五丈原||大技をかわせば反撃の策が炸裂する。臥竜と総達が揃えば七星灯が命をつなぐ。|Dodge a big attack and a counter-plan bursts. With both rivals, the Seven-Star Lamp keeps you alive.|躲过大招即引爆反击之计。卧龙与司马懿同在，七星灯续命。
+장판파|長坂の戦い|Changban|长坂坡||ダッシュで切り込むたびに強くなる。張飛がいれば長坂橋で一喝する。|Grows stronger every time you dash in. With Zhang Fei, he roars from Changban Bridge.|每次冲刺突入都更强。有张飞则当阳桥一声断喝。
+입촉|入蜀|Entering Shu|入蜀||スキルを使うたびに西川の将たちが共に射る。|Each time you use a skill, the generals of Western Shu fire with you.|每次使用技能，西川诸将一同射击。
+인술|仁術|Art of Benevolence|仁术||あふれた回復がシールドになり、元気なほど強く打つ。|Overflow healing becomes a shield; the healthier you are, the harder you hit.|溢出的治疗化为护盾，越健康打得越狠。
+진의 기틀|晋の礎|Foundation of Jin|晋之基业||打つほど印が溜まり、満ちると炸裂する。|Marks pile up with every hit and burst when full.|越打印记越多，满后引爆。
+위의 모신|魏の謀臣|Strategists of Wei|魏之谋臣||謀士たちの策でボスの被ダメージが増え、次の攻撃が遅れる。|The strategists' schemes make the boss take more damage and delay its next attack.|谋士之计令首领受伤增加、下一招延迟。
+호치와 악래|虎痴と悪来|Xu Chu and Dian Wei|虎痴与恶来||護衛が傍らに立ち、共に戦い攻撃を防ぐ。|Bodyguards stand at your side, fight with you and block blows.|护卫立于身旁，并肩作战并挡下攻击。
+문희귀한|文姫帰漢|Cai Wenji Returns|文姬归汉||胡笳十八拍の歌が軍を奮い立たせる。|The Eighteen Songs of a Nomad Flute rouse the army.|胡笳十八拍之歌鼓舞全军。
+조씨·하후씨 종친|曹・夏侯一門|Cao-Xiahou Clan|曹夏侯宗亲||一族が守る主将は追い詰められるほど強くなる。|A champion guarded by the clan grows stronger when cornered.|宗族守护的主将越陷险境越强。
+손씨 삼대|孫家三代|Three Generations of Sun|孙氏三代||会心が出るほど孫家の気勢が速くなる。|The more crits land, the faster the Sun family's momentum.|暴击越多，孙家之势越快。
+신정의 결투|神亭の一騎打ち|Duel at Shenting|神亭酣战||生涯の好敵手が闘技場の向こうで共に戦う。|A lifelong rival fights alongside you from across the arena.|一生的宿敌在场对面并肩作战。
+강동이교|江東の二喬|Two Qiaos of Jiangdong|江东二乔||二喬の歌がスキルを高める。孫策と周瑜が揃えば断金の交わりで続けて打つ。|The Qiaos' songs empower skills. With Sun Ce and Zhou Yu, their bond strikes in turn.|二乔之歌强化技能。孙策与周瑜同在则以断金之交接连出击。
+동오 대도독|東呉の大都督|Grand Commanders of Wu|东吴大都督||大都督が順番に指揮する。呉王がいれば四人同時に。|The grand commanders take command in turn. With the King of Wu, all four at once.|大都督轮流指挥。有吴王则四人同时。
+합비 공방|合肥の攻防|Siege of Hefei|合肥之战||甘寧の百騎が夜襲をかけ、ボスを揺さぶる。|Gan Ning's hundred riders raid at night and shake the boss.|甘宁百骑夜袭，动摇首领。
+비장의 피|飛将の血|Blood of the Flying General|飞将之血||会心が出るたびに娘が背後から突く。義父まで揃えばさらに鋭い。|Each crit, his daughter stabs from behind. With his adoptive father too, even fiercer.|每次暴击，女儿从背后突刺。义父也在则更加凌厉。
+연환지계|連環の計|Chained Stratagem|连环计||ボスが攻撃するたびに鎖が巻きつき、巻き切ると断ち切って炸裂する。|Each boss attack winds the chain; when fully wound, it breaks and bursts.|首领每次出招锁链缠绕，缠满后断链引爆。
+하비의 책사|下邳の軍師|Strategist of Xiapi|下邳谋士||ダッシュすると張遼が共に突撃する。|When you dash, Zhang Liao charges with you.|冲刺时张辽一同冲锋。
+백보천양|百歩穿楊|Hundred-Pace Archers|百步穿杨||弓の将が集まるほど矢が降り注ぐ。|The more archers gather, the more arrows rain down.|弓将越多，箭雨越密。
+충의|忠義|Loyalty|忠义||追い詰められるほど耐え、さらに強く打つ。|The more cornered, the more you endure and the harder you hit.|越陷险境越能撑住，打得越狠。
+태평도|太平道|Way of Great Peace|太平道||道術で落雷を呼ぶ。治療する時も雷が落ちる。|Calls lightning with sorcery; healing brings thunder too.|以道术召雷，治疗时也降雷。
+황건 봉기|黄巾の蜂起|Yellow Turban Uprising|黄巾起义||★1を五種残せば黄巾が立ち上がる。董卓までいれば黄天の気勢が天を覆う。|Keep all five ★1 types and the Yellow Turbans rise. With Dong Zhuo too, the Yellow Sky covers the heavens.|留下五种1星，黄巾便起。连董卓也在，黄天之势遮天。
+남만왕 부부|南蛮王夫妻|King and Queen of Nanman|南蛮王夫妇||祝融の飛刀が飛び交い、孟獲は打たれるほど猛然とやり返す。|Zhurong's flying knives fly, and Meng Huo hits back harder the more he is struck.|祝融飞刀纷飞，孟获越挨打越凶猛反击。
+오관참장|五関斬将|Five Passes, Six Generals|过五关斩六将||斬り伏せた将の名にかけ、ボスが弱るほど強く斬る。|By the names of the generals he cut down, he strikes harder as the boss weakens.|以斩落诸将之名，首领越弱斩得越狠。
+와룡|臥竜|Sleeping Dragon|卧龙||策を三度重ねると八陣が炸裂する。|Three schemes stacked set off the Eight Formations.|三次计策叠起，八阵图爆发。
+미주랑|美周郎|Handsome Zhou|美周郎||曲を誤れば振り返る周郎 — 火攻めが二度三度と襲う。|Zhou who turns at a wrong note — fire attacks strike two and three times.|曲有误周郎顾——火攻连袭两三次。
+삼영전|三英戦呂布|Three Heroes vs Lu Bu|三英战吕布||三人がかりでも構わない。好敵手が多いほど無双が目覚める。|Three at once? Fine. The more rivals, the more his peerless might awakens.|三人齐上也无妨。对手越多，无双越觉醒。
+고평릉의 변|高平陵の変|Gaoping Tombs Incident|高平陵之变||耐えて待ち、隙を突く。|Endure, wait, and strike the opening.|隐忍等待，乘隙出击。
+오자양장|五子良将|Five Elite Generals|五子良将||魏の五名将がラインを守り、ボス戦では主君の傍らに立つ。|Wei's five fine generals hold the lane and stand by their lord in boss fights.|魏五良将镇守战线，首领战中立于主公身旁。
+인덕의 군주|仁徳の君主|Lord of Benevolence|仁德之主||治療するたびに従う者たちの気勢が上がる。|Each heal lifts the spirit of those who follow.|每次治疗，追随者士气高涨。
+오왕의 수성|呉王の守成|Wu King Holds Fast|吴王守成||打たれるほど反撃が溜まるタンク主将。|A tank champion whose counterattack builds as he takes hits.|越挨打反击越强的坦克主将。
+단기 포위 돌파|単騎の包囲突破|Lone Rider Breakthrough|单骑突围||スキルを使うと包囲を破った騎兵と弓兵が共に射る。|Using a skill makes the cavalry and archers who broke the siege fire with you.|使用技能时，突围的骑兵与弓兵一同射击。
+귀재|鬼才|Demonic Talent|鬼才||短く太く — 最初の1分で決着をつける。|Short and fierce — ends it in the first minute.|短而猛——第一分钟内定胜负。
+번성 사수|樊城死守|Defense of Fancheng|樊城死守||関羽の水攻めにも城を守る。ラインの敵が遅くなる。|Holds the castle even against Guan Yu's flood. Lane enemies slow down.|关羽水淹亦守城。战线敌人减速。
+왕좌지재|王佐の才|Talent of a King's Aide|王佐之才||王を補佐する才 — 共に戦う皆が強くなる。|A gift for aiding kings — everyone fighting alongside grows stronger.|辅佐王者之才——并肩作战者皆变强。
+만인지적|万人の敵|Match for Ten Thousand|万人敌||一喝でボスをくじき、馬超と夜通し渡り合う。|A roar breaks the boss, and he duels Ma Chao all night.|一声断喝挫败首领，与马超夜战。
+상산 조자룡|常山の趙子竜|Zilong of Changshan|常山赵子龙||七つ目の槍ごとに七進七出。|Every seventh thrust, in and out seven times.|每第七枪，七进七出。
+서량 철기|西涼の鉄騎|Xiliang Cavalry|西凉铁骑||西涼の鉄騎がラインもボスも踏みにじる。|Xiliang's iron cavalry tramples both lane and boss.|西凉铁骑践踏战线与首领。
+소패왕|小覇王|Little Conqueror|小霸王||江東を平定した気勢がスキルごとに積み上がる。|The momentum that conquered Jiangdong builds with every skill.|平定江东之势随技能累积。
+이릉대전|夷陵の戦い|Battle of Yiling|夷陵之战||七百里の陣を焼くようにスキルの跡に火が残る。|Like burning seven hundred li of camps, fire lingers where skills land.|如火烧七百里连营，技能落点留下火焰。
+상국의 폭정|相国の暴政|Chancellor's Tyranny|相国暴政||暴君はたやすく倒れない。|A tyrant does not fall easily.|暴君不会轻易倒下。
+폐월수화|閉月羞花|Beauty That Shames the Moon|闭月羞花||美女たちに囲まれ傾国の美が輝く。|Surrounded by beauties, her kingdom-toppling charm shines.|佳人环绕，倾国之色更显光彩。
+삼국정립|三国鼎立|Three Kingdoms Stand|三国鼎立||三人の君主が揃えば天下は三つに立つ。|When the three rulers gather, the realm stands in three.|三位君主齐聚，天下三分。
+위무의 패업|魏武の覇業|Wei's Hegemony|魏武霸业||魏の謀臣・名将が揃い覇業を成す。|Wei's strategists and generals gather to build an empire.|魏之谋臣、名将齐聚，成就霸业。
+촉한의 영웅|蜀漢の英雄|Heroes of Shu-Han|蜀汉英雄||蜀の英雄たちが闘技場の外から共に戦う。|Shu's heroes fight with you from outside the arena.|蜀之英雄在场外并肩作战。
+강동의 영걸|江東の英傑|Heroes of Jiangdong|江东英杰||江東の英傑が集えば長江に火船が絶えない。|When Jiangdong's heroes gather, fire ships never stop on the Yangtze.|江东英杰齐聚，长江火船不绝。
+군웅할거|群雄割拠|Rival Warlords|群雄割据||天下の群雄が集い、ボスが攻撃するたびに気勢を溜める。|The realm's warlords gather and build momentum each time the boss attacks.|天下群雄齐聚，首领每次出招都积蓄气势。
+단기의 맹장|単騎の猛将|Lone Rider Generals|单骑猛将||ダッシュで単騎敵陣を切り裂く猛将たち。|Fierce generals who dash alone through enemy lines.|以冲刺单骑撕裂敌阵的猛将们。
+사수관|汜水関|Sishui Pass|汜水关||江東の虎が汜水関を叩き、呉の軍勢が奮い立つ。|The Tiger of Jiangdong storms Sishui Pass and Wu's armies rise.|江东猛虎叩击汜水关，吴军士气高涨。
+목우유마|木牛流馬|Wooden Ox|木牛流马||木牛と連弩がラインを支え、ボス戦では補給が途切れない。|Wooden oxen and repeating crossbows hold the lane; supplies never stop in boss fights.|木牛与连弩支撑战线，首领战中补给不断。
+백마의종|白馬義従|White Horse Volunteers|白马义从||序盤のラインを支える白馬騎兵隊。|White-horse cavalry that hold the early lane.|支撑前期战线的白马骑兵队。
+청주병|青州兵|Qingzhou Troops|青州兵||曹操が集めた黄巾の兵がラインを埋める。|The Yellow Turbans Cao Cao took in fill the lane.|曹操收编的黄巾之众填满战线。
 간손미|簡孫糜|Jian, Sun and Mi|简孙糜||全強化の最大段階+5|All upgrade caps +5|全部强化上限+5
 `;
   const MUT = `

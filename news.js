@@ -10,6 +10,13 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.0', d: '2026-11-19', items: [
+      ['인연 시너지를 새로 만들었습니다. 58개의 인연이 모인 인원에 따라 단계(2·3·4명…)와 등급(하~극+)으로 켜지고, 불멸·신화 장수마다 대표 인연이 있습니다.', '縁のシナジーを一新しました。58の縁が集まった人数に応じて段階（2・3・4人…）と等級（下〜極+）で発動し、不滅・神話の武将にはそれぞれ代表の縁があります。', 'Bond synergies have been rebuilt: 58 bonds now activate in tiers by member count (2, 3, 4…) with grades from Low to Supreme+, and every Immortal and Mythic general has a signature bond.', '羁绊协同全面重做：58个羁绊按集齐人数分阶段（2、3、4人…）和等级（下~极+）激活，每位不灭、神话武将都有专属羁绊。'],
+      ['인연은 보스전에 나가는 장수 한 명을 키웁니다. 동료의 원군 사격, 화선 돌격, 표식 폭발, 부활 같은 효과가 생기고, 협동에서는 다른 사람의 원군도 이름표와 함께 보입니다.', '縁はボス戦に出陣する武将一人を強化します。仲間の援軍射撃、火船突撃、印の爆発、復活などの効果が加わり、協力プレイでは他の人の援軍も名札付きで表示されます。', 'Bonds empower the one general you send into the boss fight, with effects such as reinforcement volleys, fire ships, exploding marks and revives. In co-op, other players’ reinforcements appear with name tags.', '羁绊强化出战Boss战的那一位武将，新增援军射击、火船突击、印记爆炸、复活等效果；合作模式中也会显示其他玩家的援军并附带名牌。'],
+      ['인연이 꺼지는 조합에는 확인 창이 뜨고, 설정에서 자동 조합이 켜진 인연을 지키게 할 수 있습니다.', '縁が解除される合成では確認画面が出ます。設定で自動合成が発動中の縁を維持するようにできます。', 'Combines that would break a bond now ask for confirmation, and a setting lets auto-combine keep active bonds.', '会解除羁绊的合成会弹出确认，并可在设置中让自动合成保留已激活的羁绊。'],
+      ['라인에 공격 버튼이 생겼습니다. 유닛을 움직이며 누르면 사거리 안의 중간보스를 먼저 때립니다.', 'ラインに攻撃ボタンを追加しました。ユニットを動かしながら押すと、射程内の中ボスを優先して攻撃します。', 'Added an attack button in the lane: hold it while moving units to hit mid-bosses in range first.', '线路新增攻击按钮：移动单位时按住即可优先攻击射程内的中Boss。'],
+      ['보스 범위 공격 예고를 알아보기 쉽게 바꿨습니다. 범위 경계가 또렷하고, 안쪽이 다 차오르는 순간 터집니다. 보스전 사거리 표시도 라인과 같게 맞췄습니다.', 'ボスの範囲攻撃の予告を見やすくしました。範囲の境目がはっきりし、内側が満ちた瞬間に発動します。ボス戦の射程表示もラインと同じにしました。', 'Boss area-attack warnings are now easy to read: clear edges, and they detonate the moment the fill reaches the edge. The boss-fight range circle now matches the lane.', 'Boss范围攻击预警更易辨认：边界清晰，内部填满的瞬间触发。Boss战射程显示也与线路一致。'],
+    ] },
     { v: '0.2.38', d: '2026-11-19', items: [
       ['장각·제갈량·사마의 경기장 바닥에 팔괘 문양이 돌아왔습니다. 조조전과 여포전의 바닥 색을 다듬었습니다.', '張角・諸葛亮・司馬懿の闘技場の床に八卦の紋様が戻りました。曹操戦と呂布戦の床の色を調整しました。', 'The bagua emblem is back on the floors of the Zhang Jiao, Zhuge Liang and Sima Yi arenas, and the Cao Cao and Lu Bu arena floor colors were adjusted.', '张角、诸葛亮、司马懿的场地地面重新加入了八卦纹样，并调整了曹操战和吕布战的地面颜色。'],
       ['보스전에서 장수가 1명일 때는 왼쪽 아래 장수 전환 카드를 숨겨 보스와 조이스틱을 가리지 않게 했습니다.', 'ボス戦で武将が1人のときは左下の武将切り替えカードを隠し、ボスやスティックの邪魔にならないようにしました。', 'In boss fights with a single general, the general-switch card in the lower left is now hidden so it no longer covers the boss or the joystick.', 'Boss战中只有1名武将时，隐藏左下角的武将切换卡片，不再遮挡Boss和摇杆。'],

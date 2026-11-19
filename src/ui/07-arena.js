@@ -182,12 +182,72 @@
     const b = s.f.boss, cx = S.cam.x, cy = S.cam.y, px = cx + (b.x - cx) * s.m, py = cy + (b.y - 40 - cy) * s.m;
     c.translate(cx, cy); c.scale(s.z, s.z); c.translate(-px, -py);
   }
+  // ---- 인연 시너지 보스전 연출(synergy.js가 넣은 fx·상태를 기존 그림으로만 그린다: 장수 그림·병사 그림·vs_fireship·fxa_*·mc_rune·pic_star·ray_sun·fx_fire) ----
+  // 남의 원군(협동 presence sv로 받은 것, f.who = 주인 닉네임)은 0.6 투명도로 그리고 머리 위에 주인 이름표를 붙인다
+  function synSprite(id) { const d = defOf[id]; return d ? Art.unitSprite(d, 0, 0) : Art.soldierSprite(T.waves[0]); }
+  // 바닥 장판(수경 법진·이릉 불 장판): 보스·장수 아래에 그린다
+  function drawSynFields(c, t, f) {
+    (f.synF || []).forEach((o) => {
+      const a = Math.min(1, o.t / 0.4, (o.max - o.t) / 0.25 + 0.2) * 0.85;
+      if (o.vis === 'fire') { for (let k = 0; k < 5; k++) { const ang = k * 1.257 + t * 0.6; Art.fxImg(c, 'fire', o.x + Math.cos(ang) * o.r * 0.55, o.y + Math.sin(ang) * o.r * 0.32, o.r * 0.9, 0, a * 0.8); } }
+      else Art.fxPic(c, 'mc_rune' + (1 + (Math.round(o.x + o.y) % 3)), o.x, o.y, o.r * 2.1, o.r * 2.1, t * 0.5, a, { col: '#a0d8ff', sy: 0.5 });
+    });
+  }
+  function drawSyn(c, t, f, b) {
+    const ease = (p) => (p < 0.15 ? p / 0.15 : p > 0.75 ? (1 - p) / 0.25 : 1);
+    for (const o of g.fx) {
+      if (o.t < 0) continue;
+      const p = Math.min(1, o.t / o.life), al = o.who ? 0.6 : 1;
+      if (o.k === 'synAlly') {
+        // 원군 장수: 나타나 보스 쪽으로 살짝 내딛었다가 사라진다
+        const dx = (o.tx || b.x) - o.x, dy = (o.ty || b.y) - o.y, dd = Math.hypot(dx, dy) || 1, lunge = Math.sin(Math.min(1, p * 2) * Math.PI) * 16;
+        const x = o.x + (dx / dd) * lunge, y = o.y + (dy / dd) * lunge;
+        c.globalAlpha = ease(p) * al; Art.drawSprite(c, synSprite(o.id), x, y, 70, dx < 0); c.globalAlpha = 1;
+        if (o.who) bossTag(c, o.who, x, y - 52, '500 13px "IBM Plex Sans KR", sans-serif', '#d8f0ff');
+      } else if (o.k === 'synShip') {
+        const x = o.x0 + (o.x1 - o.x0) * p, y = o.y0 + (o.y1 - o.y0) * p;
+        vs(c, 'fireship', x, y - 26, 150, Math.sin(t * 6 + o.y0) * 0.06, al * Math.min(1, (1 - p) * 6 + 0.2), false, o.x1 < o.x0);
+        Art.fxAnim(c, 'smoke', (t * 1.3) % 1, x - 60, y - 10, 70, 70, 0, 0.5 * al, null, { col: '#ff9a5a' });
+        if (o.who) bossTag(c, o.who, x, y - 70, '500 13px "IBM Plex Sans KR", sans-serif', '#d8f0ff');
+      } else if (o.k === 'synRider') {
+        // 기병 돌격: 그림을 왼쪽에서 오른쪽으로 옮기고 흙먼지를 남긴다
+        const x = o.x0 + (o.x1 - o.x0) * p;
+        c.globalAlpha = al * Math.min(1, (1 - p) * 8); Art.drawSprite(c, synSprite(o.id), x, o.y, 58, false); c.globalAlpha = 1;
+        Art.fxAnim(c, 'smoke', (p * 3) % 1, x - 34, o.y + 8, 56, 56, 0, 0.45 * al, null, { col: '#d8c8a8' });
+        if (o.who && p < 0.2) bossTag(c, o.who, x, o.y - 46, '500 13px "IBM Plex Sans KR", sans-serif', '#d8f0ff');
+      } else if (o.k === 'synAnim') Art.fxAnim(c, o.name, p, o.x, o.y, o.r * 2, o.r * 2, 0, 1, null, o.col ? { col: o.col } : undefined);
+      else if (o.k === 'synStars') {
+        // 칠성등: 일곱 별이 주장 둘레를 돌다가 하나씩 꺼진다
+        const u = f.champs.find((x) => x.uid === o.uid) || o;
+        for (let k = 0; k < 7; k++) { if (k / 7 < p) continue; const a = t * 1.6 + k * 0.898; Art.fxPic(c, 'pic_star', u.x + Math.cos(a) * 62, u.y - 30 + Math.sin(a) * 30, 26, 26, a, 0.9, { col: '#ffe9a6' }); }
+      }
+    }
+    // 내 장수 상태: 호위 원군(곁을 따라다님), 다음 스킬 강화(빛살), 쌓인 표식·연환(보스 머리 위 별)
+    let row = 0;
+    f.champs.forEach((u) => {
+      if (u.dead || u.bench) return;
+      (u.syAl || []).forEach((al2) => {
+        if (!g.synAlPos) return;
+        const [x, y] = g.synAlPos(u, al2), a = Math.min(1, al2.t / 0.5, (al2.max - al2.t) / 0.3);
+        c.globalAlpha = Math.max(0, a); Art.drawSprite(c, synSprite(al2.id), x, y, 62, b.x < x); c.globalAlpha = 1;
+      });
+      if (u.syNext && u.syNext.t > 0) Art.fxPic(c, 'ray_sun', u.x, u.y - 70, 96, 96, t * 0.8, 0.55 + Math.sin(t * 5) * 0.15, { col: '#ffd86a' });
+      Object.keys(u.syS || {}).forEach((key) => {
+        const st = u.syS[key];
+        if (!st.mark || !(st.n > 0)) return;
+        const w = 20, x0 = b.x - ((st.max - 1) * w) / 2, y = b.y - 150 - row * 22;
+        for (let k = 0; k < st.max; k++) Art.fxPic(c, 'pic_star', x0 + k * w, y, 22, 22, 0, k < st.n ? 1 : 0.22, { col: st.mark });
+        row++;
+      });
+    });
+  }
   function drawArena(t) {
     const c = ctx, f = g.fight, a = f.def.arena, b = f.boss, IS = introState();
     if (!arenaFloor(c, a, f.def.id)) drawMotif(c, a.motif, '#f0e0c0', t);
     // 경계 난간: 등장 연출 중에도 그린다(난간 밖 바닥이 어두워져서, 난간을 숨기면 밝기가 끊기는 줄이 그대로 드러난다)
     arenaRim(c, f, 1);
     f.hazards.forEach((h) => drawHazard(c, h));
+    drawSynFields(c, t, f); // 인연 바닥 장판
     drawRaid(c, t);
     // 보스(잠행 중에는 보이지 않는다. 분신 기믹에서는 그림자가 있는 쪽이 진짜)
     const M = f.mech;
@@ -292,8 +352,8 @@
       FALLEN.delete(u);
       if (u === act) {
         // 내 장수: 발밑 금색 문양 그림 + 옅은 사거리 원판 그림 + 이동 목표까지 빛줄기 그림
-        // 사거리 표시: 채운 연두색 원판(얼룩처럼 보였다) 대신 얇은 금 테 그림(gfx/ui_select)만 옅게. 안쪽은 채우지 않는다
-        rangeRing(c, u.x, u.y, g.range(u.def) + 40, 0.24);
+        // 사거리 표시: 라인과 같은 연두색 원판(rangeMark). 반지름은 engine 보스전 타격 판정(d <= rng + 40)과 맞춘다
+        rangeMark(c, u.x, u.y, g.range(u.def) + 40, '#7dff8e', 0.22);
         selMark(c, u.x, u.y + CHAMP_R * 0.72, CHAMP_R, t);
         if (u.move) streak(c, '#7dff8e', u.x, u.y, u.tx, u.ty, 5, 0.55);
       }
@@ -309,6 +369,7 @@
       bar(c, u.x, u.y - 80, 76 * uiS(), 7 * uiS(), u.hp / u.mhp, u.hp / u.mhp < 0.3 ? '#ff6a50' : '#7ed08c');
     });
     drawAim(c);
+    drawSyn(c, t, f, b); // 인연 원군·화선·기병·표식
     Object.values(f.ghosts).forEach((o) => {
       if (!o.def) return;
       // 동료 장수는 받은 위치를 0.1초 늦게 이어 그린다(net.ghostAt). 판정 좌표 o.x, o.y는 그대로 둔다

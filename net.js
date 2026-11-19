@@ -199,7 +199,7 @@
       // 방 채팅: 서버가 거른 글만 보인다(내가 보낸 글도 서버를 거쳐 돌아온 것을 쓴다)
       this.t.on('chat', (d, peer, self) => { if (!self && d && this.onChat) this.onChat(d, peer); });
       this.t.on('chatno', (d) => { if (d && this.onChatNo) this.onChatNo(d); }); // 내 채팅이 막혔을 때(도배·광고) 서버가 나에게만 보낸다
-      this.t.on('pattern', (d, peer, self) => { if (!self && this.game && obj(d) && this.fromHost(peer, self)) { this.game.log('pattern', { name: d.n }); this.game.log('sfx', { s: 'warn' }); } });
+      this.t.on('pattern', (d, peer, self) => { if (!self && this.game && obj(d) && this.fromHost(peer, self)) { this.game.log('pattern', { name: d.n }); this.game.log('sfx', { s: 'warn' }); if (this.game.synEvent) this.game.synEvent('pattern', {}); } });
       this.t.on('pop', (d, peer, self) => {
         const g = this.game;
         if (!self && g && g.defs[d.id]) g.log('pop', { def: g.defs[d.id], who: d.name, remote: true });
@@ -361,8 +361,9 @@
         f.flushT = 0.25;
         const po = Object.keys(f.pendObj).length ? f.pendObj : null;
         // ctr: 정면 피해(반격 게이지), sg: 디버퍼가 무력화 게이지에 더 넣는 양, amp: 보스 약화
-        if ((f.pending > 0 || po || f.pendCtr || f.pendAmp || f.pendCharm || f.pendAd || f.pendGap) && !this.isHost()) this.send('dmg', { ad: f.pendAd || null, gp: f.pendGap || 0, v: Math.round(f.pending), stun: f.pendStun || 0, o: po, ctr: Math.round(f.pendCtr || 0), sg: Math.round(f.pendSg || 0), amp: f.pendAmp || null, cm: f.pendCharm || null });
-        f.pending = 0; f.pendStun = 0; f.pendObj = {}; f.pendCtr = 0; f.pendSg = 0; f.pendAmp = null; f.pendCharm = null; f.pendAd = null; f.pendGap = 0;
+        // sa: 인연 팀 보스 약화(samp) [값, 시간]
+        if ((f.pending > 0 || po || f.pendCtr || f.pendAmp || f.pendCharm || f.pendAd || f.pendGap || f.pendSamp) && !this.isHost()) this.send('dmg', { sa: f.pendSamp || null, ad: f.pendAd || null, gp: f.pendGap || 0, v: Math.round(f.pending), stun: f.pendStun || 0, o: po, ctr: Math.round(f.pendCtr || 0), sg: Math.round(f.pendSg || 0), amp: f.pendAmp || null, cm: f.pendCharm || null });
+        f.pending = 0; f.pendStun = 0; f.pendObj = {}; f.pendCtr = 0; f.pendSg = 0; f.pendAmp = null; f.pendCharm = null; f.pendAd = null; f.pendGap = 0; f.pendSamp = null;
       }
       if (this.isHost() && f.syncT <= 0) {
         f.syncT = 0.2;
@@ -370,12 +371,16 @@
         this.send('bs', { x: Math.round(b.x), y: Math.round(b.y), hp: Math.round(b.hp), t: round1(f.t), m: g.raidWire() });
       }
       const c = g.firstLocal();
-      this.t.presence({ cx: c ? Math.round(c.x) : null, cy: c ? Math.round(c.y) : null, ch: c ? c.def.id : null, hpf: c ? round1(c.hp / c.mhp) : 0, dmg: Math.round(f.total) });
+      const pres = { cx: c ? Math.round(c.x) : null, cy: c ? Math.round(c.y) : null, ch: c ? c.def.id : null, hpf: c ? round1(c.hp / c.mhp) : 0, dmg: Math.round(f.total) };
+      // 인연 원군 연출(남의 화면에 이름표와 함께 그린다, 피해 없음). 새 연출이 있을 때만 싣는다
+      const sv = g.synWire ? g.synWire() : null; if (sv) pres.sv = sv;
+      this.t.presence(pres);
       f.ghosts = {};
       const tn = nowMs();
       this.roster().forEach((p) => {
         // 판정용 좌표는 마지막으로 받은 값 그대로(방장의 표적 선택·사기 합산). 그림은 07-arena가 ghostAt으로 이어 그린다
         if (!p.me && p.state.ch && p.state.cx != null) f.ghosts[p.id] = { id: p.id, x: p.state.cx, y: p.state.cy, alive: true, ghost: true, def: g.defs[p.state.ch], hpf: p.state.hpf, name: p.state.name };
+        if (!p.me && Array.isArray(p.state.sv) && g.synRemote) g.synRemote(p.id, p.state.name, p.state.sv);
         // 도착 갈고리가 없는 전송(Claude room·가상 방): 값이 바뀌었을 때 여기서 기록한다
         if (!p.me && !this.t.presHook) {
           const G = this.gh[p.id], L = G && G.buf[G.buf.length - 1];
