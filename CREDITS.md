@@ -86,6 +86,11 @@
 - 사용자 결정(2026-11-12): 무료 요금제 생성물을 크레딧에 표기하고 쓴다.
 - 상업 이용: 개발자가 확인(2026-11-17) — Higgsfield는 워터마크가 없는 생성물이면 상업 이용이 가능하고, 지금은 유료 요금제를 쓴다. 위 그림에는 보이는 워터마크가 없다(로비 배경 다시 확인, 2026-11-17). 앞으로 만드는 그림은 유료 요금제로 생성한다.
 
+## 스토어 이미지(앱에는 포함 안 됨)
+- 2026-11-20 App Store·Google Play 소개 사진(store/screenshots/)의 배경 2장: Canva AI(generate-image)로 생성 — 노을 전장(media MAHbdehmOVc, 디자인 DAHbdrlOz8M), 불타는 밤 전장(media MAHbdjJ5dHE, 디자인 DAHbdigRhkc). separate-image-layers → export-design으로 원본 해상도(2868×1434)를 받음. 불 배경은 Canva가 위 테두리 장식에 "20" 글자를 넣어서 아래 테두리를 뒤집어 덮음. 워터마크 없음 확인(2026-11-20). 원본 F:\samguk-media\storei\.
+- 사진 속 게임 화면은 v0.3.0 실제 캡처(테스트 서버), 그래픽 이미지의 장수 그림은 게임의 gfx/il_gwanu.jpg·il_joun.jpg.
+- 문구 글꼴: 衡山毛筆フォント(제목), Zen Antique(부제, OFL 1.1) — art_src/fonts_src의 전체 글꼴. 이미지에 글자로 넣는 것은 두 글꼴 모두 허용(글꼴 파일은 배포하지 않음).
+
 ## 아직 남은 것 (출시 전)
 - (완료 2026-11-11) 앱 아이콘·시작 화면: Canva AI로 만든 art_src/app_icon.png에서 scripts/build-icons.py로 안드로이드·iOS용을 만든다.
 - 일본 스토어 문구에서 "三国志"는 설명·키워드에만 쓰고, 앱 이름에는 쓰지 않는다(코에이테크모의 등록 상표 "三國志"와 혼동을 피하기 위해. 현재 이름 "三国ランダムディフェンス"는 해당 없음).

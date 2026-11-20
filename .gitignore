@@ -29,3 +29,6 @@ CLAUDE.local.md
 # 받은 무료 에셋 원본 묶음(크다). 가공한 결과는 gfx/, 출처는 CREDITS.md
 art_src/vfx_dl/
 art_src/fonts_src/
+
+# 스토어 등록물(영상·소개 사진) — 앱·저장소에 넣지 않는다
+store/
