@@ -88,7 +88,8 @@
     if (!P.SocialLogin) throw new Error('not_configured');
     if (!ssoReady) {
       const cfg = {};
-      if (!droid) cfg.apple = {};
+      // useProperTokenExchange: Apple이 authorization code를 따로 돌려준다(서버가 refresh token으로 바꿔 두었다가 계정 삭제 때 철회)
+      if (!droid) cfg.apple = { useProperTokenExchange: true };
       if (droid && SSO.googleWeb) cfg.google = { webClientId: SSO.googleWeb, mode: 'online', skipAuthOnlyAuthorizationAfterSignIn: true };
       if (!droid && SSO.googleIOS) cfg.google = { iOSClientId: SSO.googleIOS, iOSServerClientId: SSO.googleWeb || undefined, mode: 'online' };
       ssoReady = P.SocialLogin.initialize(cfg);
@@ -100,14 +101,24 @@
     if (!ssoHas(provider)) throw new Error('not_configured');
     await ssoInit();
     // 안드로이드 기본 BridgeActivity에서는 scopes를 넘기면 거절된다(profile·email은 기본 포함)
-    const options = provider === 'apple' ? { scopes: ['name'] } : droid ? {} : { scopes: ['profile'] };
+    // Apple: 이름·이메일을 요청하지 않는다(빈 배열. scopes를 빼면 플러그인이 이름·이메일을 기본으로 요청한다). 처리방침 「氏名は保存しません」, 실명이 닉네임 기본값이 되지 않게
+    const options = provider === 'apple' ? { scopes: [] } : droid ? {} : { scopes: ['profile'] };
     let r;
     try { r = await P.SocialLogin.login({ provider, options }); } catch (e) { throw new Error(/cancel/i.test(String(e && e.message)) ? 'cancel' : 'bad_token'); }
     const res = (r && r.result) || {};
     const tok = res.idToken;
     if (!tok) throw new Error('bad_token');
-    const nm = res.profile && (res.profile.givenName || res.profile.name);
+    // Apple은 이름을 쓰지 않는다(예전 시험 로그인 때 플러그인이 기기에 남긴 이름이 돌아와도 버린다)
+    const nm = provider === 'apple' ? '' : res.profile && (res.profile.givenName || res.profile.name);
+    if (provider === 'apple' && res.authorizationCode) sendAppleCode(tok, res.authorizationCode);
     return { idToken: tok, name: nm || '' };
+  }
+  // Apple authorization code를 서버에 넘긴다(서버가 refresh token으로 바꿔 두고, 계정 삭제 때 Apple에 철회한다. 심사 지침 5.1.1(v)).
+  // 로그인 흐름과 따로 보내고 기다리지 않는다. 실패해도 로그인은 그대로(서버에 Apple 키 설정이 없으면 503).
+  function sendAppleCode(idToken, code) {
+    const base = root.RTD_API;
+    if (!base || typeof fetch !== 'function') return;
+    fetch(base + '/api/auth/apple/code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken, code }) }).catch(() => {});
   }
   async function signOut(provider) { try { if (on && P.SocialLogin) await P.SocialLogin.logout({ provider }); } catch (e) { /* 이미 로그아웃 */ } }
 

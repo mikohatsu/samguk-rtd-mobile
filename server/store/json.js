@@ -119,6 +119,14 @@ module.exports = function jsonStore(dir) {
       }
       u.coins = (u.coins || 0) + m.coins; mark(); return P('ok');
     },
+    // ---------- Sign in with Apple refresh token(2026-11-20): 계정 삭제 때 Apple에 철회하려고 둔다. pg.js와 함수 모양이 같다 ----------
+    // 열쇠는 Apple 이용자 식별자(sub). 계정이 생기기 전에 올 수 있어 계정과 묶지 않는다.
+    putAppleToken: (sub, token) => { db.apple = db.apple || {}; db.apple[sub] = { t: token, at: Date.now() }; mark(); return P(); },
+    appleToken: (sub) => P(db.apple && db.apple[sub] ? db.apple[sub].t : null),
+    // token을 주면 그 값일 때만 지운다(그 사이 새로 받은 토큰은 남긴다)
+    dropAppleToken: (sub, token) => { const x = db.apple && db.apple[sub]; if (x && (!token || x.t === token)) { delete db.apple[sub]; mark(); } return P(); },
+    // before보다 오래됐고 연결된 계정이 없는 것(가입을 끝내지 않았거나, 계정 삭제 때 철회가 실패한 것)
+    orphanAppleTokens: (before) => P(Object.keys(db.apple || {}).filter((s) => db.apple[s].at < before && !db.links['apple:' + s]).map((s) => ({ sub: s, token: db.apple[s].t }))),
     // 시험·이전용
     _raw: () => db,
   };

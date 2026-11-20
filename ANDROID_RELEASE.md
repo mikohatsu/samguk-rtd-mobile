@@ -68,7 +68,7 @@ GitHub 저장소 › Settings › Secrets and variables › Actions › New repo
 ### 6) AdMob
 - https://admob.google.com › 앱 추가 › Android › (스토어 등록 전이면 "아직 등록 안 됨"으로) → **앱 ID**(`ca-app-pub-…~…`)
 - 광고 단위 2개: **전면**, **보상형** → 각각 ID(`ca-app-pub-…/…`)
-- 결제·세금 정보 입력, `app-ads.txt`는 스토어 등록 뒤 안내대로(필요하면 Claude가 서버에 올림).
+- 결제·세금 정보 입력. `app-ads.txt`: 서버가 이미 `/app-ads.txt`로 내준다(2026-11-20, 저장소 맨 위 `app-ads.txt`, 지금은 자리표시). 게시자 ID(`pub-…`)를 알려 주면 Claude가 줄을 넣고 배포한다. AdMob은 Play 등록정보의 **웹사이트** 도메인 맨 위에서 찾으므로 그 칸에 서버 주소(또는 내 도메인)를 적는다.
 - 세 ID를 Claude에게 전달.
 
 ### 7) 결제 상품 (플레이 콘솔 › 수익 창출 › 인앱 상품)
@@ -109,6 +109,8 @@ GitHub 저장소 › Settings › Secrets and variables › Actions › New repo
 | AdMob 안드로이드 앱 ID | `android/app/src/main/AndroidManifest.xml` `com.google.android.gms.ads.APPLICATION_ID` |
 | AdMob 광고 단위 ID 2개 | `native.js` `REAL.android` |
 | 서비스 계정 JSON | 서버 파일 + `/etc/rtd-online.env` `GOOGLE_PLAY_SA=<경로>` → `sudo systemctl restart rtd-online` |
+| AdMob 게시자 ID | 저장소 맨 위 `app-ads.txt`에 `google.com, pub-…, DIRECT, f08c47fec0942fa0` 한 줄 → 서버 배포 |
+| (iOS) Sign in with Apple 키 | 서버 `/etc/rtd-online.env`: `APPLE_SIGNIN_KEY_PATH`(.p8 경로), `APPLE_SIGNIN_KEY_ID`, `APPLE_TEAM_ID`, (생략 가능) `APPLE_SIGNIN_CLIENT_ID` → 재시작. 계정 삭제 때 Apple 연결 끊기용. 자세한 것은 `MAC_HANDOFF.md` 3-B |
 
 ---
 

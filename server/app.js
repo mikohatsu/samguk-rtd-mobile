@@ -127,6 +127,19 @@ async function verifyIdToken(name, tok) {
   return String(body.sub);
 }
 
+// ---------- Sign in with Apple 연결 끊기(계정 삭제 때 Apple refresh token 철회, 지침 5.1.1(v)) ----------
+// 설정(APPLE_SIGNIN_KEY_PATH·APPLE_SIGNIN_KEY_ID·APPLE_TEAM_ID)이 없으면 꺼진 채로 돌고 로그만 남긴다. 자세한 것은 apple-revoke.js
+const APPLE = require('./apple-revoke').makeRevoker();
+const APPLE_ORPHAN_MS = 24 * 3600000;
+// 연결된 계정 없이 하루 지난 토큰(가입을 끝내지 않음, 삭제 때 철회 실패)을 철회하고 지운다
+async function sweepAppleTokens() {
+  if (!APPLE.on() || !store) return;
+  for (const x of await store.orphanAppleTokens(Date.now() - APPLE_ORPHAN_MS)) {
+    const r = await APPLE.revoke(x.token);
+    if (r !== 'fail') await store.dropAppleToken(x.sub, x.token);
+  }
+}
+
 // ---------- 장수 해금(동전·보상형 광고·앱스토어 결제) ----------
 const UNL = THEME.unlock;
 const unlockKey = (id) => UNL.key(id);
@@ -491,6 +504,18 @@ async function handle(req, res, url, query) {
     if (banned(res, u)) return;
     return json(res, 200, { token: await issue(u), me: profile(u) });
   }
+  // Apple 로그인 때 받은 authorization code를 refresh token으로 바꿔 둔다(계정 삭제 때 철회용). 앱(native.js)이 로그인 직후 따로 부른다.
+  // 계정과 상관없이 Apple ID 토큰으로 본인을 확인한다(이 요청이 /api/auth/apple보다 먼저 올 수 있다).
+  if (url === '/api/auth/apple/code') {
+    if (limited(ip, 'acode', 30, 600000)) return json(res, 429, { error: 'slow_down' });
+    if (!APPLE.on()) return json(res, 503, { error: 'not_configured' });
+    let sub;
+    try { sub = await verifyIdToken('apple', b.idToken); } catch (e) { return json(res, 401, { error: 'bad_token' }); }
+    const rt = await APPLE.exchange(b.code);
+    if (!rt) return json(res, 400, { error: 'bad_token' }); // 코드가 틀림·만료(앱은 이 응답을 보여 주지 않는다)
+    await store.putAppleToken(sub, rt);
+    return json(res, 200, { ok: true });
+  }
   // Apple·Google: 이미 연결된 계정이면 로그인. 처음이면 새 계정(약관 동의 필요).
   // 게스트로 로그인한 채 부르면(link) 그 게스트 계정에 연결해 기록을 그대로 옮긴다.
   const prov = url === '/api/auth/apple' ? 'apple' : url === '/api/auth/google' ? 'google' : null;
@@ -706,16 +731,22 @@ async function handle(req, res, url, query) {
     // 탈퇴: 비밀번호 계정은 비밀번호를, Apple·Google·게스트는 '삭제' 확인 문자를 받고 계정·연결·토큰·기록을 모두 지운다
     if (limited('u:' + u.id, 'del', 10, 600000)) return json(res, 429, { error: 'slow_down' });
     if (u.pw ? !sameHex(await hashPw(String(b.password || ''), u.salt), u.pw) : b.confirm !== 'DELETE') return json(res, 401, { error: 'wrong' });
+    const appleSub = u.prov === 'apple' && u.sub ? u.sub : null, appleRt = appleSub ? await store.appleToken(appleSub) : null;
     await store.deleteUser(u.id);
     dropConns(u.id); // 열려 있는 방·로비 연결도 닫는다
+    // Apple로 로그인한 계정: Apple 쪽 연결도 끊는다. 실패하면 토큰을 남겨 두고 sweepAppleTokens가 다시 시도한다(삭제 자체는 끝낸다)
+    if (appleSub) {
+      if (!appleRt) console.warn('[apple] 계정 삭제: 저장된 Apple 토큰이 없어 철회하지 못함', u.id);
+      else { const r = await APPLE.revoke(appleRt); if (r !== 'fail') await store.dropAppleToken(appleSub, appleRt); }
+    }
     return json(res, 200, { ok: true });
   }
   return json(res, 404, { error: 'not_found' });
 }
 
 // ---------- 정적 파일 ----------
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.json': 'application/json', '.css': 'text/css; charset=utf-8', '.mp3': 'audio/mpeg' };
-const PAGES = { '/': 'samguk-rtd.html', '/privacy': 'legal/privacy.html', '/terms': 'legal/terms.html', '/delete-account': 'legal/delete-account.html', '/tokushoho': 'legal/tokushoho.html' };
+const TYPES = { '.txt': 'text/plain; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.json': 'application/json', '.css': 'text/css; charset=utf-8', '.mp3': 'audio/mpeg' };
+const PAGES = { '/': 'samguk-rtd.html', '/privacy': 'legal/privacy.html', '/terms': 'legal/terms.html', '/delete-account': 'legal/delete-account.html', '/tokushoho': 'legal/tokushoho.html', '/app-ads.txt': 'app-ads.txt' }; // app-ads.txt: AdMob 판매자 확인(저장소 맨 위 파일)
 const SAFE = /^\/(samguk-rtd\.html|[a-z0-9-]+\.js|gfx\/[A-Za-z0-9_]+\.(png|jpg|js)|fonts\/[A-Za-z0-9_-]+\.woff2|fonts\/fonts\.css|legal\/[a-z-]+\.html|i18n\/[a-z]{2}\.js|bgm\/[a-z_]+\.mp3)$/;
 const fileCache = new Map();
 function load(file, cb) {
@@ -983,6 +1014,7 @@ async function start(opts = {}) {
   store = await openStore({ dataDir: DATA, databaseUrl: process.env.DATABASE_URL, pool: opts.pool });
   await refreshSanctions(); // 운영 제재 목록(못 읽으면 서버를 띄우지 않는다)
   const modT = setInterval(() => refreshSanctions().catch((e) => console.error('[mod] 제재 목록을 읽지 못함(앞선 목록 유지):', e && e.message)), MOD_REFRESH_MS); if (modT.unref) modT.unref();
+  const appleT = setInterval(() => sweepAppleTokens().catch((e) => console.error('[apple] 남은 토큰 정리 실패:', e && e.message)), 3600000); if (appleT.unref) appleT.unref();
   await new Promise((r) => server.listen(opts.port != null ? opts.port : PORT, r));
   console.log(`삼국 랜덤 디펜스 온라인 서버(${store.kind}): http://localhost:${server.address().port}`);
   return { server, store };

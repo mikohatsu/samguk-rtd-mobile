@@ -232,6 +232,19 @@ module.exports = function pgStore(pool) {
       }).catch((e) => { if (e.code === '23505') return 'no'; throw e; });
     },
     async deleteUser(uid) { await q('DELETE FROM accounts WHERE id = $1', [uid]); },
+    // ---------- Sign in with Apple refresh token(2026-11-20). json.js와 함수 모양이 같다 ----------
+    async putAppleToken(sub, token) {
+      await q('INSERT INTO apple_tokens (subject, refresh_token, updated_at) VALUES ($1, $2, now()) ON CONFLICT (subject) DO UPDATE SET refresh_token = EXCLUDED.refresh_token, updated_at = now()', [sub, token]);
+    },
+    async appleToken(sub) { const r = await q('SELECT refresh_token FROM apple_tokens WHERE subject = $1', [sub]); return r.rows[0] ? r.rows[0].refresh_token : null; },
+    async dropAppleToken(sub, token) {
+      if (token) await q('DELETE FROM apple_tokens WHERE subject = $1 AND refresh_token = $2', [sub, token]);
+      else await q('DELETE FROM apple_tokens WHERE subject = $1', [sub]);
+    },
+    async orphanAppleTokens(before) {
+      const r = await q("SELECT t.subject, t.refresh_token FROM apple_tokens t LEFT JOIN identities i ON i.provider = 'apple' AND i.subject = t.subject WHERE i.subject IS NULL AND t.updated_at < $1 LIMIT 100", [new Date(before)]);
+      return r.rows.map((x) => ({ sub: x.subject, token: x.refresh_token }));
+    },
     async rankLevel(n) {
       const r = await q('SELECT id FROM accounts ORDER BY xp DESC, created_at LIMIT $1', [n]);
       return Promise.all(r.rows.map((x) => hydrate(x.id)));

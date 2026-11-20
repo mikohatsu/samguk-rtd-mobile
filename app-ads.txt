@@ -1,0 +1,4 @@
+# app-ads.txt - placeholder until the real AdMob publisher ID is known.
+# Replace this comment block with the line shown in AdMob > Apps > View all apps > app-ads.txt, e.g.
+#   google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+# Served by server/app.js at /app-ads.txt (must be the root of the developer website domain in the store listing).

@@ -1,6 +1,6 @@
 # iOS 출시 안내 (Mac)
 
-마지막 정리: 2026-11-18. 이 문서 하나만 보면 됩니다.
+마지막 정리: 2026-11-20(v0.3.1 대기분 반영). 이 문서 하나만 보면 됩니다.
 
 - **1장** 지금 어디까지 됐나
 - **2장** 내가 할 일 (순서대로) ← 여기만 따라가면 됩니다
@@ -22,6 +22,9 @@
 | iOS 프로젝트 설정 | 가로 전용, 아이콘·시작 화면, 개인정보 매니페스트, 4개 언어 앱 이름·추적 허용 문구, Sign in with Apple 권한 파일, SKAdNetwork 50개. 모두 프로젝트에 들어가 있음 |
 | iOS 빌드 | 시뮬레이터용(서명 없이) 빌드 **성공**. 만들어진 앱 안에 위 설정 파일이 다 들어간 것 확인 |
 | 게임 스튜디오 템플릿 | 이 Mac에 설치됨(v1.3.0). git에는 없음 |
+| 채팅 운영 | 욕설 가림·신고·차단(앱), 채팅 금지·계정 정지·신고 열람(서버 `server/admin.js`, v0.2.34부터. 절차 `server/MODERATION.md`) |
+| 버전·빌드 번호 | `package.json` 한 곳에서 자동(2026-11-20) → 4장 「버전과 빌드 번호」 |
+| Apple 로그인 이름 | 이름·이메일을 요청하지 않는다(2026-11-20, `native.js`). 처리방침 「氏名は保存しません」과 일치 |
 
 ### 아직 안 된 것
 
@@ -33,7 +36,7 @@
 | Apple 로그인 | 코드는 완성. Apple 쪽 설정이 남음 → 2장 3번 |
 | Google 로그인 | 코드는 완성. 켤지 말지 결정 필요. 설정 전에는 "준비 중"으로 막혀 있음 |
 | 인앱 결제 | 앱 코드 완성(`@capgo/native-purchases`, 2026-11-18). 서버에 애플 루트 인증서(APPLE_IAP_ROOT_CA)를 넣기 전에는 결제 버튼이 숨는다. Mac에서 `npx cap sync ios` 후 Xcode가 새 Swift 패키지를 받는다. **첫 출시에 결제 포함(2026-11-18 결정)** → 2장 9-2번 |
-| 채팅 계정 정지 기능 | 없음(신고·차단·욕설 가림은 있음) |
+| Apple 로그인 연결 끊기(계정 삭제 시) | 서버 코드 완성(2026-11-20, `server/apple-revoke.js`). **.p8 키와 환경 변수를 넣어야 켜진다** → 3-B. 넣기 전에는 로그만 남기고 건너뜀 |
 
 ---
 
@@ -62,7 +65,7 @@
 
 - [ ] **11. 법률 확인 의뢰** — 약관·처리방침의 채팅 조항, 신고 기록 보관 기간, 외국 사업자 고지, 개인 주소 공개 여부, 약관의 결제 조항(7~11조: 환불, 미성년자 구매 취소, 구매 내용 유지, 서비스 종료 시 처리), 특정상거래법 표시(`legal/tokushoho.html`: 개인 판매자의 주소·전화번호 표시 방법)
 - [ ] **12. 상표 조회** — J-PlatPat에서 「三国志」 등 키워드
-- [ ] **13. Higgsfield 약관 확인** — 원문을 확인하거나 유료 요금제로 다시 생성(`CREDITS.md`의 확인 필요 항목)
+- [ ] **13. Higgsfield 상업 이용 근거 남기기** — `CREDITS.md` 기록: 개발자가 2026-11-17에 확인(워터마크 없는 생성물은 상업 이용 가능, 지금은 유료 요금제, 앞으로 만드는 그림은 유료 요금제로). 다만 v0.2.4~v0.2.10 그림은 무료 요금제로 만들었으므로, 확인한 약관 원문의 주소·날짜(가능하면 사본)를 `CREDITS.md`에 적어 두면 끝
 - [ ] **14. 신고 처리 운영 정하기** — 누가 얼마나 자주 볼지 정하고 실제로 보기
 
 ### 선택
@@ -94,9 +97,25 @@
 
 1. https://developer.apple.com → Certificates, IDs & Profiles → Identifiers → `com.hongsungjae.sangokurtd` → **Sign in with Apple** 체크
 2. Keys → 새 키 만들기 → Sign in with Apple 체크 → **.p8 파일** 내려받기(한 번만 받을 수 있음)
-3. .p8 파일, **Key ID**, **Team ID**를 Claude에게 전달 → 서버에 "계정 삭제 시 Apple 연결 끊기"를 넣음(Apple 심사 요구 사항)
+3. .p8 파일, **Key ID**, **Team ID**를 Claude에게 전달(.p8은 채팅에 붙이지 말고 파일 위치만) → 서버에 올리고 아래 환경 변수를 넣음
 
-번들 ID를 바꾸면 서버 환경 변수 `APPLE_AUDS`도 같이 바꿔야 합니다.
+**계정 삭제 시 Apple 연결 끊기(심사 지침 5.1.1(v))** — 코드는 끝남(2026-11-20, `server/apple-revoke.js`):
+- 앱이 Apple 로그인 직후 받은 authorization code를 서버 `/api/auth/apple/code`로 보내고, 서버가 Apple에서 refresh token으로 바꿔 DB(`apple_tokens` 표)에 둔다.
+- 계정을 지우면 서버가 `https://appleid.apple.com/auth/revoke`로 그 토큰을 철회한다. 실패하면 토큰을 남겨 두고 한 시간마다 다시 시도한다(연결된 계정 없이 하루 지난 토큰).
+- 서버 `/etc/rtd-online.env`에 넣을 값(키는 저장소에 넣지 않는다):
+
+| 변수 | 값 |
+|---|---|
+| `APPLE_SIGNIN_KEY_PATH` | .p8 파일 경로, 예 `/etc/rtd-online/AuthKey_XXXXXXXXXX.p8` (`sudo chown rtd:rtd`, `chmod 600`) |
+| `APPLE_SIGNIN_KEY_ID` | Key ID(10자) |
+| `APPLE_TEAM_ID` | Team ID(10자) |
+| `APPLE_SIGNIN_CLIENT_ID` | (생략 가능) 번들 ID `com.hongsungjae.sangokurtd`. 비우면 `APPLE_AUDS`의 첫 값 |
+
+  넣은 뒤 `sudo systemctl restart rtd-online`. 켜지면 서버 로그에 `[apple] … 꺼짐`이 더 나오지 않는다. 시험: `node tests/server-apple-revoke.js`.
+- 이 기능이 생기기 전에 Apple로 가입한 계정은 저장된 토큰이 없어 철회하지 못한다(로그로 남음). 출시 전 시험 계정뿐이면 문제없다.
+- Apple 로그인은 이름·이메일을 요청하지 않는다(`native.js` `scopes: []`). 닉네임은 이용자가 정한다.
+
+번들 ID를 바꾸면 서버 환경 변수 `APPLE_AUDS`(와 `APPLE_SIGNIN_CLIENT_ID`)도 같이 바꿔야 합니다.
 
 ### 3-C. 광고 (AdMob)
 
@@ -106,7 +125,9 @@
 4. 광고 콘텐츠 등급 설정
 5. ID 3개를 Claude에게 전달
 
-Claude가 할 일(ID를 받은 뒤): `Info.plist`의 앱 ID 교체, `native.js`의 광고 ID 교체와 시험 모드 끄기, 서버에 `app-ads.txt` 추가.
+Claude가 할 일(ID를 받은 뒤): `Info.plist`의 앱 ID 교체, `native.js`의 광고 ID 교체와 시험 모드 끄기, 저장소 맨 위 `app-ads.txt`에 게시자 줄(`google.com, pub-…, DIRECT, f08c47fec0942fa0`)을 넣고 서버 배포.
+
+`app-ads.txt`: 서버가 `/app-ads.txt`로 내준다(2026-11-20 `server/app.js`, 서버 재시작 필요). 지금은 주석만 있는 자리표시 파일. AdMob은 **스토어에 적은 개발자 웹사이트 도메인의 맨 위**에서 찾으므로, 스토어의 마케팅(개발자) URL을 이 서버 주소(또는 나중의 내 도메인)로 적어야 한다.
 
 참고:
 
@@ -241,9 +262,17 @@ CREDITS.md        에셋 출처
 | `ios/App/App/PrivacyInfo.xcprivacy` | 개인정보 매니페스트 |
 | `ios/App/App/App.entitlements` | Sign in with Apple |
 | `ios/App/App/Assets.xcassets` | 아이콘·시작 화면(`scripts/build-icons.py`가 만듦, 배경색 `#1a120c`) |
-| `Package.resolved` | 외부 패키지 버전 고정 |
+| `Package.resolved` | 외부 패키지 버전 고정. 쓰지 않는 `facebook-ios-sdk` 줄은 2026-11-20에 뺐다(로그인 플러그인의 Facebook은 `capacitor.config.json`에서 꺼져 있고 소스는 `#if canImport`로만 들어간다). Mac에서 `npx cap sync ios`·빌드 뒤 이 파일에 facebook이 다시 생기면 Claude에게 알리기 |
 
 외부 패키지는 Swift Package Manager로 받습니다(CocoaPods 불필요). 첫 빌드는 내려받기 때문에 오래 걸리고, 시간 초과로 실패하면 다시 돌리면 됩니다.
+
+### 버전과 빌드 번호
+
+- 버전은 `package.json`의 `version` 한 곳. `npm run build`(그래서 `npm run sync`·`npm run ios`)가 `scripts/sync-ios-version.js`를 불러 Xcode 프로젝트의 `MARKETING_VERSION`(= 버전, 예 `0.3.1`)과 `CURRENT_PROJECT_VERSION`(= a×10000+b×100+c, 예 `301`)을 맞춘다. 안드로이드 `versionCode`와 같은 수다.
+- 배포마다 버전을 올리므로 빌드 번호도 저절로 커진다. **같은 버전을 App Store Connect에 다시 올려야 할 때만** `IOS_BUILD_SUFFIX=1 npm run sync` → 빌드 `301.1`.
+- Xcode 화면(General › Identity)에서 Version·Build를 손으로 바꾸지 않는다(다음 빌드 때 덮어써진다). 버전만 맞출 때는 `npm run ios-version`.
+- 첫 공개 버전을 1.0.0으로 할지는 사용자 결정. 정하면 `package.json`만 바꾼다.
+- 스토어에 올린 빌드마다 `v<버전>` git 태그를 단다.
 
 ### 서버
 

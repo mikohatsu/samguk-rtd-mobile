@@ -10,6 +10,9 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.1', d: '2026-11-20', items: [
+      ['Apple로 로그인할 때 이름과 메일 주소를 묻지 않습니다. Apple로 만든 계정을 지우면 Apple 쪽 연결도 함께 해제됩니다.', 'Appleでサインインするとき、名前とメールアドレスを求めなくなりました。Appleで作成したアカウントを削除すると、Apple側の連携も解除されます。', 'Sign in with Apple no longer asks for your name or email, and deleting an Apple-linked account now also disconnects it on Apple’s side.', '使用Apple登录时不再请求姓名和邮箱；删除通过Apple创建的账号时，也会同时解除Apple端的关联。'],
+    ] },
     { v: '0.3.0', d: '2026-11-19', items: [
       ['인연 시너지를 새로 만들었습니다. 58개의 인연이 모인 인원에 따라 단계(2·3·4명…)와 등급(하~극+)으로 켜지고, 불멸·신화 장수마다 대표 인연이 있습니다.', '縁のシナジーを一新しました。58の縁が集まった人数に応じて段階（2・3・4人…）と等級（下〜極+）で発動し、不滅・神話の武将にはそれぞれ代表の縁があります。', 'Bond synergies have been rebuilt: 58 bonds now activate in tiers by member count (2, 3, 4…) with grades from Low to Supreme+, and every Immortal and Mythic general has a signature bond.', '羁绊协同全面重做：58个羁绊按集齐人数分阶段（2、3、4人…）和等级（下~极+）激活，每位不灭、神话武将都有专属羁绊。'],
       ['인연은 보스전에 나가는 장수 한 명을 키웁니다. 동료의 원군 사격, 화선 돌격, 표식 폭발, 부활 같은 효과가 생기고, 협동에서는 다른 사람의 원군도 이름표와 함께 보입니다.', '縁はボス戦に出陣する武将一人を強化します。仲間の援軍射撃、火船突撃、印の爆発、復活などの効果が加わり、協力プレイでは他の人の援軍も名札付きで表示されます。', 'Bonds empower the one general you send into the boss fight, with effects such as reinforcement volleys, fire ships, exploding marks and revives. In co-op, other players’ reinforcements appear with name tags.', '羁绊强化出战Boss战的那一位武将，新增援军射击、火船突击、印记爆炸、复活等效果；合作模式中也会显示其他玩家的援军并附带名牌。'],

@@ -1,11 +1,12 @@
 {
   "name": "sangoku-random-defense",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Sangoku Random Defense mobile app (Capacitor)",
   "scripts": {
     "ui": "node scripts/build-ui.js",
-    "build": "node scripts/build-ui.js && node scripts/build-www.js",
+    "ios-version": "node scripts/sync-ios-version.js",
+    "build": "node scripts/build-ui.js && node scripts/build-www.js && node scripts/sync-ios-version.js",
     "sync": "npm run build && npx cap sync ios",
     "ios": "npm run build && npx cap sync ios && npx cap open ios",
     "server": "node server/app.js"
