@@ -177,14 +177,17 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 .sheet { width: min(760px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 14px; background: var(--lacquer); border: 1px solid var(--line); overflow: hidden; }
 .sheet h2 { margin: 0; font: 400 24px var(--display); color: var(--brass); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 5px; overflow-y: auto; min-height: 0; }
-.pickcard { background: var(--panel); border: 1px solid var(--line); padding: 5px 7px; text-align: left; }
+.pickcard { background: var(--panel); border: 1px solid var(--line); padding: 5px 7px; text-align: left; min-width: 0; overflow-wrap: break-word; display: flex; flex-direction: column; justify-content: flex-start; } /* 버튼 기본(내용 세로 가운데) 대신 위 정렬: 짧은 카드가 긴 카드 옆에서 가운데로 떠 보이지 않게 */
+.pickcard .pcb { display: block; min-width: 0; }
 .pickcard.on { border-color: var(--good); background: #2f3a26; }
 .pickcard small { color: var(--dim); display: block; }
 .pickcard .nw { white-space: nowrap; }
 .pickcard .pp { margin-top: 3px; font-size: 10.5px; line-height: 1.35; }
 .pickcard .pp b { color: #e8dcc0; font-weight: 700; }
 .pickcard .pcpor { float: left; width: 46px; height: 46px; margin: 0 7px 3px 0; border-radius: 8px; object-fit: cover; object-position: top; background: #1c140e; border: 1px solid var(--line); }
-.pickcard::after { content: ''; display: block; clear: both; }
+.pickcard .pcb::after { content: ''; display: block; clear: both; }
+.pickcard .sybd i { white-space: normal; align-items: flex-start; } .pickcard .sybd i b { margin-top: 3.5px; } /* 긴 인연 이름(영어 등)이 카드 오른쪽 밖으로 잘리지 않게 줄바꿈 */
+.sheet .btn[data-act=pickGo] { min-height: 44px; }
 .role { display: inline-block; padding: 0 5px; border: 1px solid; font-size: 11px; font-weight: 700; line-height: 1.5; }
 #title { position: fixed; inset: 0; z-index: 5; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); background: var(--ink); overflow: auto; }
 #hero { position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 36px max(16px, env(safe-area-inset-left, 0px)); overflow: hidden; min-height: 240px; }
@@ -828,6 +831,26 @@ html[lang="en"] #battlebtn, html[lang="zh"] #battlebtn { font-size: 34px; }
 .sypg button { width: 26px; height: 18px; padding: 0; border: 0; border-radius: 9px; background: rgba(14, 10, 8, .66); color: #ffd86a; font-size: 9px; line-height: 18px; }
 .sypg button:disabled { opacity: .35; }
 #synbar[hidden] { display: none; }
+/* 인연 줄 끝 「인연 목록」 버튼과 전체 인연 창(#synall, 13-info-timers renderSynAll). 칸 그림(.sy)은 줄과 같고, 칸을 누르면 인연 창(#achpop.sx)이 창 위에 뜬다 */
+.syall { grid-column: 1 / -1; justify-self: start; pointer-events: auto; margin-top: 1px; padding: 2px 9px; border: 1px solid rgba(205, 167, 91, .6); border-radius: 9px; background: rgba(14, 10, 8, .74); color: #ffd86a; font: 700 10.5px/15px var(--ui); white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+.syall:active { transform: scale(.95); filter: brightness(.85); }
+#synall { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: var(--st) var(--sr) var(--sb) var(--sl); background: rgba(13, 9, 7, .62); }
+#synall[hidden] { display: none; }
+#synall .sabox { width: min(640px, 100%); max-height: 100%; min-height: 0; display: flex; flex-direction: column; background: linear-gradient(rgba(18, 11, 6, .5), rgba(18, 11, 6, .62)), url(gfx/ui_c_map.png) center/100% 100% no-repeat, #2a1d12; border: 2px solid #5a3f22; box-shadow: 0 10px 30px rgba(0, 0, 0, .6); }
+#synall .sahead { display: flex; align-items: center; gap: 8px; padding: 2px 4px 0 12px; }
+#synall .sahead b { flex: 1; font: 400 17px "Black Han Sans", var(--ui); color: #ffd86a; text-shadow: 0 1px 2px #000; }
+#synall .saclose { width: 40px; height: 40px; padding: 0; border: 0; background: none; color: #f4ecd8; }
+#synall .saclose .ico { width: 30px; height: 30px; line-height: 30px; font-size: 18px; }
+#synall .sabody { min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 0 10px 10px; }
+#synall h4 { margin: 6px 0 7px; font: 700 12px var(--ui); color: #e6c578; }
+#synall h4 small { margin-left: 5px; font-size: 11px; color: #c9b48f; }
+#synall .sagrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px 6px; }
+#synall .sar { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 46px; padding: 6px 5px 3px; border: 1px solid rgba(205, 167, 91, .25); border-radius: 6px; background: rgba(16, 11, 8, .5); color: #c9b48f; text-align: left; -webkit-tap-highlight-color: transparent; }
+#synall .sar.on { border-color: rgba(255, 216, 106, .6); color: #f4ecd8; }
+#synall .sar:active { filter: brightness(.85); }
+#synall .sar .sy { flex: none; pointer-events: none; }
+#synall .sar .san { min-width: 0; font: 600 11px/1.25 var(--ui); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#achpop.sp.sx { z-index: 31; }
 .sy { --hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); pointer-events: auto; position: relative; width: 36px; height: 40px; padding: 0; margin: 0; border: 0; background: none; display: block; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .65)); -webkit-tap-highlight-color: transparent; }
 .sy i { position: absolute; inset: 0; box-sizing: border-box; padding: 2px; display: block; font-style: normal; clip-path: var(--hex); background: rgba(150, 138, 118, .7); }
 .sy i img, .sy i span { display: block; width: 100%; height: 100%; clip-path: var(--hex); background: #17100b; }
@@ -1375,6 +1398,97 @@ html:not(.noic-gear) #lgear .ico { width: 44px; height: 44px; filter: drop-shado
 #hud.boss .party { flex-direction: row; gap: 4px; margin-top: 2px; }
 #hud .pf { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; object-position: top; background: #1c140e; border: 1px solid rgba(205, 167, 91, .45); opacity: .85; }
 #hud .pf.alert { border: 2px solid #ff7a60; opacity: 1; } #hud .pf.away { opacity: .4; }
+/* ---- 협동 방 대기실(전투 시작 창의 방 단계, 들어온 뒤 #setup.inroom) ----
+   한 화면에: 위(창 머리 자리) 방 코드 현판·인원·나가기 / 가운데 참가자 카드 다섯 / 아래 [난이도 | 채팅 | 출진].
+   장식은 있는 그림만: 카드 틀 ui_frame, 초상 테 ui_select, 관직 문장 rank_N, 코드 현판 ui_c_tablet, 출진 붓자국 ui_ink, 난이도 현판 ui_title */
+#setup.inroom .wz-box { position: relative; }
+#setup.inroom #wztitle, #setup.inroom #wzsteps { visibility: hidden; }
+#setup.inroom .wz[data-step="room"] { overflow: hidden; padding: 6px 14px 8px; gap: 0; }
+#setup.inroom #netbox { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0; border: 0; background: none; }
+#setup.inroom #roster:empty { display: none; }
+#setup.inroom #lobby { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 176px; grid-template-rows: auto minmax(0, 1fr); gap: 8px 10px; margin: 0; padding: 0; border: 0; background: none; }
+#setup.inroom #lobby[hidden] { display: none; }
+/* 머리: 창 제목 자리에 올린다(뒤로·닫기 버튼 사이) */
+#setup.inroom .lb-head { position: absolute; z-index: 4; top: 16px; left: 66px; right: 66px; height: 56px; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.lb-code { flex: none; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 8px; border-style: solid; border-width: 6px 12px; border-image: url(gfx/ui_c_tablet.png) 34 46 fill / 6px 12px stretch; }
+.lb-code span { font-size: 11px; color: #e3cfa2; white-space: nowrap; }
+#setup #lbcode { font-size: 24px; line-height: 1; letter-spacing: .14em !important; color: #ffe08a; text-shadow: 0 1px 0 #3a1408, 0 0 8px rgba(255, 200, 80, .35); }
+#setup .lb-head #lbcopy { flex: none; min-height: 44px; padding: 0 12px; }
+#setup .lb-head #lbleave { flex: none; min-height: 44px; padding: 0 12px; }
+#lbnet { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-style: normal; line-height: 1.2; white-space: nowrap; }
+#lbnet .on { font-size: 10.5px; color: #9fd8a0; }
+#lbnet b { font-size: 15px; color: var(--gold-hi, #ffd86a); font-variant-numeric: tabular-nums; }
+/* 참가자 카드 */
+#setup.inroom .lb-slots { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0; padding-top: 7px; }
+#setup .lb-slot { position: relative; min-height: 0; height: 124px; padding: 2px 2px 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px; border-radius: 0; background: none; box-shadow: none; border-style: solid; border-width: 8px; border-image: url(gfx/ui_frame.png) 20 fill stretch; text-align: center; animation: none; }
+#setup .lb-slot.in { animation: lbIn .42s cubic-bezier(.2, .9, .3, 1.2) both; }
+#setup .lb-slot.me { box-shadow: 0 0 0 2px #ffd86a, 0 0 14px rgba(255, 216, 106, .35); }
+#setup .lb-slot.host:not(.me) { box-shadow: 0 0 0 1px #c99a2e; }
+.lb-pt { position: relative; flex: none; width: 60px; height: 60px; margin-top: 2px; }
+#setup .lb-pt .av { position: absolute; left: 9px; top: 9px; width: 42px; height: 42px; border: 0; border-radius: 50%; object-fit: cover; object-position: top; background: #2a1d14; }
+.lb-ring { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .7)); }
+.lb-rk { position: absolute; right: -14px; bottom: -2px; width: 24px; height: 24px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .8)); }
+.lb-nm { max-width: 100%; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; line-height: 1.3; color: #f4ecd8; text-shadow: 0 1px 2px #000; }
+.lb-gr { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; line-height: 1.3; color: #e3c27a; }
+.lb-tag { position: absolute; z-index: 2; top: -13px; padding: 0 6px; border-radius: 3px; font-size: 10px; font-weight: 700; line-height: 16px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.lb-tag.host { left: -6px; right: auto; background: #c99a2e; color: #14100d; }
+.lb-tag.mine { right: -6px; background: #ffd86a; color: #2a1608; }
+#setup .lb-slot.empty { color: var(--dim); opacity: .62; }
+.lb-slot.empty .lb-ring { opacity: .45; filter: grayscale(.7) brightness(.8); animation: lbWait 2.6s ease-in-out infinite; }
+.lb-slot.empty .lb-nm { color: #cbbd9c; font-weight: 400; }
+.lb-slot.empty .lb-gr { color: #9a8c70; white-space: normal; line-height: 1.25; }
+@keyframes lbIn { from { opacity: 0; transform: translateY(10px) scale(.92); } to { opacity: 1; transform: none; } }
+@keyframes lbWait { 50% { opacity: .75; } }
+/* 아래 줄: 왼쪽(방장 = 난이도 고르기, 손님 = 방장 설정) · 가운데 채팅 · 오른쪽 출진 */
+#setup.inroom .lb-cfg, #setup.inroom #wzroomdiff { grid-column: 1; grid-row: 2; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; margin: 0; scrollbar-width: thin; scrollbar-color: rgba(201,164,92,.6) transparent; }
+#setup.inroom #lobby.host .lb-cfg { display: none; }
+#setup.inroom #lobby:not(.host) #wzroomdiff { display: none; }
+.lb-cfg { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.lb-cl { font-size: 11px; color: #d8c8a8; }
+.lb-dn { padding: 4px 30px 5px; background: url(gfx/ui_title.png) center / 100% 100% no-repeat; font-size: 16px; font-weight: 700; line-height: 1.3; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.lb-muts { display: grid; gap: 4px; width: 100%; }
+#setup.inroom #wzroomdiff .sec { padding: 0; border: 0; background: none; }
+#setup.inroom #wzroomdiff #diffsec > .label { display: none; }
+/* 방장 난이도: 네 개가 스크롤 없이 보이게 2×2 낮은 버튼, 버튼마다 이름 + 한 줄(열림 = 라운드·체력, 잠김 = 여는 조건) */
+#setup.inroom #wzroomdiff { overflow-x: hidden; }
+#setup.inroom #wzroomdiff .choice.diffs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-auto-rows: 46px; gap: 5px; }
+#setup.inroom #wzroomdiff .choice.diffs button { min-width: 0; min-height: 0; height: 46px; padding: 2px 4px; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 14px; line-height: 1.15; border-top-width: 2px; }
+#setup.inroom #wzroomdiff .choice.diffs button small, #setup.inroom #wzroomdiff .choice.diffs button .lk { display: block; max-width: 100%; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; line-height: 1.25; font-weight: 400; }
+#setup.inroom #wzroomdiff .choice.diffs button .lk { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; text-overflow: clip; font-size: 9.5px; line-height: 1.15; font-weight: 700; word-break: auto-phrase; }
+#setup.inroom #wzroomdiff .choice.diffs button .lk .ico.lock { width: 11px; height: 11px; margin-right: 2px; vertical-align: -1px; }
+#setup.inroom #wzroomdiff .choice.diffs button.lock small { display: none; }
+#setup.inroom #wzroomdiff #mutbox { margin-top: 6px; }
+#setup.inroom #chat { grid-column: 2; grid-row: 2; min-height: 0; display: flex; flex-direction: column; margin: 0; padding: 4px 6px 6px; border: 1px solid rgba(201,164,92,.35); border-radius: var(--r-m, 6px); background: rgba(8,5,3,.45); }
+#setup.inroom #chatlog { flex: 1 1 auto; height: auto; min-height: 0; font-size: 12.5px; line-height: 1.45; }
+#chatlog .cl { padding: 1px 2px; border-radius: 3px; }
+#chatlog .cl b { font-size: 12px; }
+#chatlog .cl b::after { content: '\FF1A'; color: rgba(255,216,106,.6); }
+#chatlog .cl span:not(.op) { min-width: 0; overflow-wrap: anywhere; }
+#chatlog .cl .op { display: none; }
+#chatlog .cl.sel { background: rgba(255,240,210,.08); }
+#chatlog .cl.sel { flex-wrap: wrap; }
+#chatlog .cl.sel .op { display: flex; flex-basis: 100%; justify-content: flex-end; gap: 8px; }
+#chatlog .sys { padding: 1px 2px; font-size: 11px; line-height: 1.35; color: #a89a7e; }
+#setup.inroom #chat .inline { margin-top: 4px; }
+#setup.inroom #chat .inline input { min-height: 40px; }
+#setup.inroom #chat .inline .btn { flex: none; min-height: 40px; padding: 0 12px; }
+/* 출진 버튼: 창 바닥 줄 대신 오른쪽 아래 칸에 붓자국(로비 출진 버튼과 같은 그림) */
+#setup.inroom .wz-foot { position: absolute; z-index: 4; right: 14px; bottom: 24px; width: 176px; padding: 0; border: 0; justify-content: center; }
+#setup.inroom #startbtn { width: 100%; min-width: 0; min-height: 64px; padding: 4px 12px; border: 1px solid #e9c98a; border-radius: var(--r-m, 6px); background: linear-gradient(180deg, #d0452a, #a3271a 60%, #7e1c12); box-shadow: inset 0 1px 0 rgba(255, 220, 170, .45), 0 3px 10px rgba(0, 0, 0, .55); color: #fff3dc; font-size: 20px; line-height: 1.2; text-shadow: 0 2px 0 #4a1408; white-space: normal; }
+#setup.inroom #startbtn:not(:disabled) { animation: lbGo 2.4s ease-in-out infinite; }
+#setup.inroom #startbtn:disabled { opacity: 1; border-color: rgba(201,164,92,.45); background: rgba(20,12,8,.72); box-shadow: none; color: #d8c8a8; font-size: 14px; text-shadow: none; animation: mtBlink 1.8s ease-in-out infinite; }
+@keyframes lbGo { 50% { box-shadow: inset 0 1px 0 rgba(255, 220, 170, .45), 0 0 14px rgba(255, 140, 70, .65); } }
+@media (max-width: 720px) { #setup.inroom #lobby { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 150px; } #setup.inroom .wz-foot { width: 150px; } #setup.inroom #startbtn { font-size: 17px; } .lb-code { gap: 6px; } #setup #lbcode { font-size: 21px; } .lb-code span { display: none; } }
+@media (max-height: 380px) { #setup .lb-slot { height: 108px; } .lb-pt { width: 52px; height: 52px; } #setup .lb-pt .av { left: 8px; top: 8px; width: 36px; height: 36px; } .lb-rk { width: 22px; height: 22px; } }
+@media (min-height: 600px) { #setup .lb-slot { height: 168px; } .lb-pt { width: 84px; height: 84px; } #setup .lb-pt .av { left: 13px; top: 13px; width: 58px; height: 58px; } .lb-rk { width: 36px; height: 36px; } .lb-nm { font-size: 15px; } .lb-gr { font-size: 12px; } }
+@media (prefers-reduced-motion: reduce) { #setup .lb-slot.in, .lb-slot.empty .lb-ring, #setup.inroom #startbtn { animation: none !important; } }
+/* 입장 대기 화면(#match): 준비 띠를 크게, 준비되면 카드가 밝아지며 한 번 맥박, 머리줄에 준비 인원 */
+.mt-cnt { padding: 2px 10px; border: 1px solid rgba(201,164,92,.55); border-radius: 3px; background: rgba(10,6,4,.6); font-size: 13px; font-weight: 700; color: #e9dcc0; font-variant-numeric: tabular-nums; }
+.mt-cnt.all { border-color: #ffd86a; color: #ffd86a; }
+.mt-st { align-self: stretch; margin: auto -2px 0; padding: 3px 0 2px; background: rgba(0,0,0,.45); border-top: 1px solid rgba(201,164,92,.25); font-size: 12px; }
+.mt-st.ok { background: linear-gradient(180deg, rgba(201,154,46,.55), rgba(120,80,20,.55)); border-top-color: #ffd86a; color: #fff3c4; font-size: 13px; text-shadow: 0 1px 2px #000; animation: mtOk .5s ease-out; }
+.mt-slot:not(.rdy) .mt-emb { filter: saturate(.6) brightness(.8); transition: filter .3s; }
+@keyframes mtOk { 0% { transform: scale(1.25); filter: brightness(1.8); } 100% { transform: none; filter: none; } }
 </style>
 
 <div id="app" hidden>
@@ -1387,6 +1501,7 @@ html:not(.noic-gear) #lgear .ico { width: 44px; height: 44px; filter: drop-shado
     <div id="toasts"></div>
     <div id="lanehint" hidden></div>
     <div id="achpop" hidden></div>
+    <div id="synall" hidden></div>
     <button id="backbtn" class="btn go" data-act="myview" data-i18n="myField" type="button" hidden>내 전장으로</button>
     <button id="bossbtn" class="btn" data-act="laneView" type="button" hidden></button>
     <div id="skillbar" hidden></div>
@@ -1457,7 +1572,7 @@ html:not(.noic-gear) #lgear .ico { width: 44px; height: 44px; filter: drop-shado
           <div class="label"><span data-i18n="room"></span> <span class="hint" data-i18n="roomHint"></span></div>
           <div class="inline"><input id="code" maxlength="6" data-i18n-ph="roomCode" aria-label="room code"><button class="btn" id="jn" type="button" data-i18n="joinRoom"></button><button class="btn" id="mk" type="button" data-i18n="makeRoom"></button></div>
           <div id="lobby" hidden>
-            <div class="lb-head"><span data-i18n="roomCode"></span><b id="lbcode"></b><button class="btn" id="lbcopy" type="button" data-i18n="copy"></button><i id="lbnet"></i><button class="btn" id="lbleave" type="button" data-i18n="roomLeave"></button></div>
+            <div class="lb-head"><div class="lb-code"><span data-i18n="roomCode"></span><b id="lbcode"></b><button class="btn" id="lbcopy" type="button" data-i18n="copy"></button></div><i id="lbnet"></i><button class="btn" id="lbleave" type="button" data-i18n="roomLeave"></button></div>
             <div class="lb-slots" id="lbslots"></div>
             <div class="lb-cfg" id="lbcfg"></div>
             <div id="wzroomdiff"></div>

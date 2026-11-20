@@ -3861,18 +3861,36 @@
       .sort((a, b) => b.on - a.on || (b.on ? b.g - a.g : 0) || (a.gap === 1) * -1 + (b.gap === 1) * 1 || b.n / b.next - a.n / a.next);
   }
   const dotsOf = (x) => (x.s.tiers || []).map((tr, i) => `<i class="${i < x.lv ? 'on' : ''}"></i>`).join('');
+  // 다음 단계에 core가 필요한데 core가 없으면 지금은 노릴 수 없는 인연이다(needCore: false 단계는 core 없이도 노릴 수 있다)
+  const synCoreOk = (x, p) => { const nt = (x.s.tiers || [])[x.lv]; return !x.s.core || g.has(p, x.s.core) || !!(nt && nt.needCore === false); };
+  // 왼쪽 줄(2026-11-21 정리): 켜진 것(등급 높은 순) + 다음 단계까지 1명 남고 core 조건을 채운 것(가까운 순).
+  // 6칸까지(켜진 것이 6개를 넘으면 켜진 것만 9칸까지). 화면 아래까지 자리가 모자라면 들어가는 줄 수만큼만(목록 버튼이 늘 보이게).
+  // 나머지는 줄 끝 「인연 목록」 창에서 본다.
+  const SYN_BAR_MIN = 6, SYN_BAR_MAX = 9;
+  function synBarList(vis, p, room) {
+    const on = vis.filter((x) => x.on), near = vis.filter((x) => !x.on && x.gap === 1 && synCoreOk(x, p)).sort((a, b) => b.n / b.next - a.n / a.next || b.g - a.g);
+    return on.concat(near).slice(0, Math.min(room, Math.max(SYN_BAR_MIN, Math.min(SYN_BAR_MAX, on.length))));
+  }
+  const synCell = (x, tag) => `<${tag} class="sy ${x.on ? 'on' : ''} ${x.gap === 1 && !x.coreMiss ? 'near' : ''}"${tag === 'button' ? ` data-syn="${x.s.id}" type="button" aria-label="${esc(x.s.name)}"` : ''}><i><img alt="" src="${Art.portrait(synFace(x.s))}"></i><u>${dotsOf(x)}</u><em style="background:${GRADE_COL[x.g]}">${esc(gradeTxt(x.g))}</em><b>${x.n}/${x.next}</b></${tag}>`;
   function renderSynBar(vis) {
-    const bar = $('synbar'), show = laneOn() && !viewedPeer() && !g.over && vis.length > 0;
+    const bar = $('synbar'), show = laneOn() && !viewedPeer() && !g.over;
     if (bar.hidden !== !show) bar.hidden = !show;
-    if (!show) { if (S.synPop) showSyn(null); return; }
+    if (!show) { if (S.synPop) showSyn(null); if (S.synAll) openSynAll(false); return; }
     // 왼쪽 정보 줄 바로 아래에 3칸씩 놓고, 화면 아래까지 넘치면 줄 안에서 세로로 스크롤한다
     const hud = $('hud'), vh = window.innerHeight / zoom;
-    const left = hud.offsetLeft, topY = hud.offsetTop + hud.offsetHeight + 6, avail = Math.max(60, vh - topY - 4);
+    // 아래 안전 영역(아이폰 홈 막대): #synall의 padding-bottom(var(--sb) = max(6px, env(safe-area-inset-bottom)))을 화면 크기가 바뀔 때만 읽는다
+    const szk = window.innerWidth + 'x' + window.innerHeight;
+    if (S.synSbK !== szk) { S.synSbK = szk; S.synSb = parseFloat(getComputedStyle($('synall')).paddingBottom) || 6; }
+    const left = hud.offsetLeft, topY = hud.offsetTop + hud.offsetHeight + 6, avail = Math.max(60, vh - topY - S.synSb - 4);
     // 얼굴 그림은 주소가 길어 매번 만들지 않는다(구성이 바뀌거나 5초마다 한 번만 다시 그린다 — 그림이 늦게 불러져도 따라온다)
-    const key = vis.map((x) => x.s.id + x.n + ':' + x.lv).join() + '@' + Math.floor(performance.now() / 5000);
+    // 칸 한 줄 높이(칸 + 줄 간격)는 그려진 칸에서 재어 둔다. 목록 버튼 자리(약 24px)와 위 여백(7px)을 빼고 들어가는 줄 수 × 3칸
+    const rows = Math.max(1, Math.floor((avail - 31) / (S.synRowH || 46)));
+    const list = synBarList(vis, g.me, rows * 3), more = vis.length - list.length;
+    const key = list.map((x) => x.s.id + x.n + ':' + x.lv).join() + '|' + more + '@' + Math.floor(performance.now() / 5000);
     if (bar.dataset.key !== key) {
       bar.dataset.key = key;
-      bar.innerHTML = vis.map((x) => `<button class="sy ${x.on ? 'on' : ''} ${x.gap === 1 && !x.coreMiss ? 'near' : ''}" data-syn="${x.s.id}" type="button" aria-label="${esc(x.s.name)}"><i><img alt="" src="${Art.portrait(synFace(x.s))}"></i><u>${dotsOf(x)}</u><em style="background:${GRADE_COL[x.g]}">${esc(gradeTxt(x.g))}</em><b>${x.n}/${x.next}</b></button>`).join('');
+      bar.innerHTML = list.map((x) => synCell(x, 'button')).join('') + `<button class="syall" data-synall="1" type="button">${esc(t('synAll'))}${more > 0 ? ` (${more})` : ''}</button>`;
+      const c = bar.querySelector('.sy'); if (c) S.synRowH = c.offsetHeight + (parseFloat(getComputedStyle(bar).rowGap) || 6);
     }
     const pos = left + ',' + topY + ',' + Math.round(avail);
     if (bar.dataset.pos !== pos) { bar.dataset.pos = pos; bar.style.left = left + 'px'; bar.style.top = topY + 'px'; bar.style.maxHeight = Math.round(avail) + 'px'; }
@@ -3898,19 +3916,52 @@
       + `<div class="chips">${chips}</div>${x.coreMiss ? `<div class="sn">${esc(t('synCore', { a: defOf[s.core].name }))}</div>` : ''}`
       + `<div style="margin-top:4px;color:${x.on ? '#f4ecd8' : 'var(--dim)'}">${esc(s.desc)}</div><div class="sts">${synTiersHtml(x)}</div>`
       + `<div class="sn">${esc(t('synBossNote', { n: g.synMaxPerCarry || 5 }))}</div>`;
-    pop.classList.add('sp');
+    const inAll = !!el.closest('#synall');
+    pop.classList.add('sp'); pop.classList.toggle('sx', inAll);
     pop.hidden = false; S.synPop = id;
-    const r = el.getBoundingClientRect();
-    pop.style.left = Math.min($('synbar').getBoundingClientRect().right / zoom + 8, window.innerWidth / zoom - pop.offsetWidth - 4) + 'px';
+    const r = el.getBoundingClientRect(), vw = window.innerWidth / zoom;
+    const lx = inAll ? (r.right / zoom + 6 + pop.offsetWidth <= vw - 4 ? r.right / zoom + 6 : r.left / zoom - pop.offsetWidth - 6) : $('synbar').getBoundingClientRect().right / zoom + 8;
+    pop.style.left = Math.max(4, Math.min(lx, vw - pop.offsetWidth - 4)) + 'px';
     pop.style.top = Math.max(4, Math.min(r.top / zoom, window.innerHeight / zoom - pop.offsetHeight - 4)) + 'px';
   }
   {
     const bar = $('synbar');
     // 터치: 누르면 뜨고, 다른 곳을 누르면 닫힌다(닫기는 10-input의 업적 창 처리와 같이 쓴다). 마우스: 올리면 뜨고 벗어나면 닫힌다.
-    bar.addEventListener('click', (e) => { const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
+    bar.addEventListener('click', (e) => { if (e.target.closest('[data-synall]')) { showSyn(null); openSynAll(true); return; } const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
     bar.addEventListener('pointerover', (e) => { if (e.pointerType === 'touch') return; const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
     bar.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && !(e.relatedTarget && $('achpop').contains(e.relatedTarget))) showSyn(null); });
     bar.addEventListener('scroll', () => { if (S.synPop) showSyn(null); }, { passive: true });
+    // 전체 인연 창: 칸을 누르면 인연 창, 빈 곳을 누르면 인연 창만 닫고, 바깥 어두운 곳·닫기 버튼은 창을 닫는다
+    const all = $('synall');
+    all.addEventListener('click', (e) => {
+      if (e.target === all || e.target.closest('[data-synclose]')) { showSyn(null); openSynAll(false); return; }
+      const b = e.target.closest('[data-syn]');
+      if (b) showSyn(b.dataset.syn, b); else showSyn(null);
+    });
+    all.addEventListener('scroll', () => { if (S.synPop) showSyn(null); }, { passive: true, capture: true });
+  }
+  // 전체 인연 창(왼쪽 줄 끝 「인연 목록」): 58개 전부를 발동 중 / 진행 중 / 시작 안 함으로 나눈다. 숨은 인연(hidden)은 켜질 때까지 뺀다.
+  function openSynAll(on) {
+    const box = $('synall');
+    S.synAll = !!on; box.hidden = !on;
+    if (on) { box.dataset.key = ''; renderSynAll(); const b = box.querySelector('.sabody'); if (b) b.scrollTop = 0; } else box.innerHTML = '';
+  }
+  function renderSynAll() {
+    const box = $('synall'), p = g.me;
+    if (!S.synAll || !p) return;
+    const all = (T.synergies || []).map((s) => synProg(s, p)).filter((x) => !x.s.hidden || x.on);
+    const on = all.filter((x) => x.on).sort((a, b) => b.g - a.g || b.lv - a.lv);
+    // 진행 중: 노릴 수 있는 것(core 조건 충족) 먼저, 그 안에서 남은 수가 적은 순. core가 없어 못 켜는 것은 뒤로
+    const prog = all.filter((x) => !x.on && x.n > 0).sort((a, b) => synCoreOk(b, p) - synCoreOk(a, p) || a.gap - b.gap || b.n / b.next - a.n / a.next);
+    const none = all.filter((x) => !x.on && !x.n);
+    const key = all.map((x) => x.n + ':' + x.lv).join() + '@' + Math.floor(performance.now() / 5000);
+    if (box.dataset.key === key) return;
+    box.dataset.key = key;
+    const sc = box.querySelector('.sabody'), top = sc ? sc.scrollTop : 0;
+    const grp = (k, l) => (l.length ? `<h4>${esc(t(k))}<small>${l.length}</small></h4><div class="sagrid">${l.map((x) => `<button class="sar ${x.on ? 'on' : ''}" data-syn="${x.s.id}" type="button">${synCell(x, 'span')}<span class="san">${x.s.hidden ? '★ ' : ''}${esc(x.s.name)}</span></button>`).join('')}</div>` : '');
+    box.innerHTML = `<div class="sabox" role="dialog" aria-label="${esc(t('synAll'))}"><div class="sahead"><b>${esc(t('synAll'))}</b><button class="saclose" data-synclose="1" type="button" aria-label="${esc(t('close'))}"><i class="ico close" aria-hidden="true"></i></button></div>`
+      + `<div class="sabody">${grp('synGrpOn', on)}${grp('synGrpProg', prog)}${grp('synGrpNone', none)}</div></div>`;
+    const nb = box.querySelector('.sabody'); if (nb && top) nb.scrollTop = top;
   }
   // 인연 목록(전황 서랍): 진행·등급·지금 단계 효과. 켜진 것 → 1명 남은 것 → 나머지
   function renderSyn() {
@@ -3924,6 +3975,7 @@
     }).join('');
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
     renderSynBar(vis);
+    if (S.synAll) renderSynAll();
     // 이번 판 변형 규칙(악몽 +N)
     const mb = $('mutlist'), mt = $('mutt');
     if (g.muts && g.muts.length && !mb.dataset.done) {
@@ -4310,14 +4362,14 @@
   const rIcon = (k) => (RAIL_PIC[k] ? `<img class="ri" alt="" src="gfx/ic_${k}.png?v=5">` : `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${RAIL_ICON[k]}"/></svg>`);
   function renderHud() {
     const vp = viewedPeer(), ln = vp && vp.state.ln;
-    const gold = ln ? +ln.g || 0 : g.me.gold, lives = ln ? ln.l | 0 : g.lives, en = ln ? ln.n | 0 : g.enemyCount(), own = ln ? (ln.u || []).length : g.units.filter((u) => u.owner === 0).length;
+    const gold = ln ? +ln.g || 0 : g.me.gold, lives = ln ? ln.l | 0 : g.lives, en = ln ? ln.n | 0 : g.enemyCount();
     const tm = g.phase === 'wave' ? clock(Math.max(0, g.R.roundTime - g.roundT)) : g.phase === 'boss' && g.fight ? clock(Math.max(0, g.fight.limit - g.fight.t)) : '-';
     const cell = (l, v, cls) => `<div class="hs ${cls || ''}"><small>${l}</small><b>${v}</b></div>`;
     // 보스전 화면(bossV)에서는 접는다: 라운드 칸 하나 + 동료 얼굴 줄만. 남은 시간은 전장 위 가운데(07-arena)에 크게 나오므로 여기서는 뺀다.
     // 보스전 중 라인 보기에서도 결투 시간 칸은 뺀다(같은 시간이 'ボス戦に戻る' 버튼에 있다).
     const bossV = g.phase === 'boss' && !S.laneView;
     let h = bossV ? `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}</div>`
-      : `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${g.phase === 'boss' ? '' : cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '') + cell(t('troops'), own)}</div>`;
+      : `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${g.phase === 'boss' ? '' : cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '')}</div>`; // 병력 칸은 뺐다(2026-11-21 사용자 요청)
     const hd = S.hudNext || {};
     // 보스전 동안 '다음 보스' 칸은 지금 싸우는 보스와 그 남은 시간이라 뺀다. 중간 보스 칸은 라인 화면에서만.
     const chips = bossV ? '' : (hd.mids || []).map((m) => `<span class="nc mid" data-act="drawer" data-arg="war">${Array.isArray(m) ? `<span class="nw">${esc(m[0])}</span> <span class="nw">${esc(m[1])}</span>` : esc(m)}</span>`).join('') + (hd.boss && g.phase !== 'boss' ? `<span class="nc boss" data-act="drawer" data-arg="war">${t('nextBoss')}<br><b>${esc(hd.boss)}</b></span>` : '');
@@ -4407,9 +4459,9 @@
       h = `<div class="over"><div class="sheet" style="width:min(420px,100%);align-items:center;text-align:center"><h2>${t('cwTitle')}</h2><div>${t('cwBody')}</div><div class="chips">${rows}</div><div><button class="btn" data-act="combineNo" type="button" style="padding:9px 20px">${t('cwCancel')}</button> <button class="btn warn" data-act="combineGo" type="button" style="padding:9px 20px">${t('cwGo')}</button></div></div></div>`;
     } else if (g.phase === 'bossPick' && g.fight && !g.fight.picked) {
       const ch = g.pickChoices(), n = g.slotCount(), f = g.fight;
-      key = 'p' + S.pick.join() + ch.length + Math.ceil(f.pickT) + volKey;
-      h = `<div class="over"><div class="sheet"><h2>${t('pickTitle')}</h2>${vol}<div>${I.t('pickInfo', { title: esc(f.def.title), name: esc(f.def.name), t: clock(f.limit), n, s: Math.ceil(f.pickT) })}<br><span style="color:var(--dim)">${I.t('recommendColon', { a: advise(g.bossStats(f.def).hp / (f.def.time * 0.45), n) })}</span></div>
-        <div class="grid">${ch.map((u) => `<button class="pickcard ${S.pick.includes(u.id) ? 'on' : ''}" data-act="pick" data-arg="${u.id}" type="button"><img class="pcpor" alt="" src="${Art.portrait(u.def)}"><strong style="color:${tierColor(u.def.tier)}">${esc(u.def.name)}</strong> ${roleBadge(u.def)}${synBadges(synBossFor(u.def))}<small>${nwParts(I.t('pickCard', { r: rankName(u.def.tier), a: fmt(g.unitAtk(u)), h: fmt(g.rankOf[u.def.tier].hp) }))}${u.def.sk ? I.t('skillsList', { a: u.def.sk.map((s) => esc(s.n)).join('·') }) : ''}</small>${(u.def.p || []).length ? `<small class="pp">${u.def.p.map((x) => `<b>${esc(x.name)}</b> ${esc(x.desc)}`).join('<br>')}</small>` : ''}</button>`).join('')}</div>
+      key = 'p' + S.pick.join() + ch.length + volKey; // 남은 초는 키에 넣지 않는다(매초 다시 그리면 목록 스크롤이 맨 위로 튄다). 아래에서 .pkT 글자만 바꾼다
+      h = `<div class="over"><div class="sheet"><h2>${t('pickTitle')}</h2>${vol}<div>${I.t('pickInfo', { title: esc(f.def.title), name: esc(f.def.name), t: clock(f.limit), n, s: `<span class="pkT">${Math.ceil(f.pickT)}</span>` })}<br><span style="color:var(--dim)">${I.t('recommendColon', { a: advise(g.bossStats(f.def).hp / (f.def.time * 0.45), n) })}</span></div>
+        <div class="grid">${ch.map((u) => `<button class="pickcard ${S.pick.includes(u.id) ? 'on' : ''}" data-act="pick" data-arg="${u.id}" type="button"><span class="pcb"><img class="pcpor" alt="" src="${Art.portrait(u.def)}"><strong style="color:${tierColor(u.def.tier)}">${esc(u.def.name)}</strong> ${roleBadge(u.def)}${synBadges(synBossFor(u.def))}<small>${nwParts(I.t('pickCard', { r: rankName(u.def.tier), a: fmt(g.unitAtk(u)), h: fmt(g.rankOf[u.def.tier].hp) }))}${u.def.sk ? I.t('skillsList', { a: u.def.sk.map((s) => esc(s.n)).join('·') }) : ''}</small>${(u.def.p || []).length ? `<small class="pp">${u.def.p.map((x) => `<b>${esc(x.name)}</b> ${esc(x.desc)}`).join('<br>')}</small>` : ''}</span></button>`).join('')}</div>
         <button class="btn go" data-act="pickGo" type="button" style="padding:9px">${t('deploy')} (${S.pick.length}/${n})</button></div></div>`;
     } else if (g.phase === 'bossPick') {
       h = `<div class="over"><div class="sheet"><h2>${t('waitAllies')}</h2>${vol}</div></div>`; key = 'w' + volKey;
@@ -4440,7 +4492,13 @@
       if (waitXp) { key = 'ox' + (S.xpPlaying ? 'p' : ''); h = `<div class="over xpwait">${S.xpPlaying ? '' : `<div class="xpsend">${t('sendingResult')}</div>`}</div>`; }
       else { key = 'o' + (S.xpGained != null ? S.xpGained : ''); h = endStats(); }
     }
-    if (box.dataset.key !== key) { box.innerHTML = h; box.dataset.key = key; }
+    if (box.dataset.key !== key) {
+      // 출진 카드를 고를 때마다 다시 그려도 목록 스크롤 자리를 지킨다(아래쪽 장수를 누르면 맨 위로 튀던 문제)
+      const og = key[0] === 'p' && (box.dataset.key || '')[0] === 'p' ? box.querySelector('.grid') : null, st = og ? og.scrollTop : 0;
+      box.innerHTML = h; box.dataset.key = key;
+      if (st) { const ng = box.querySelector('.grid'); if (ng) ng.scrollTop = st; }
+    }
+    if (key[0] === 'p' && g.fight) { const el = box.querySelector('.pkT'), v = String(Math.max(0, Math.ceil(g.fight.pickT))); if (el && el.textContent !== v) el.textContent = v; }
     // 기다림 창이 떠 있는 동안에는 오른쪽 위 메뉴 버튼이 창 위로 올라온다(CSS #stage.pz). 창이 사라지면 기다린 시간도 지운다.
     { const pz = key[0] === 'z', stg = $('stage'); if (!pz) S.pzAt = 0; if (stg.classList.contains('pz') !== pz) stg.classList.toggle('pz', pz); }
     $('backbtn').hidden = !viewedPeer();
@@ -4819,15 +4877,20 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const host = m.host(), mi = ros.findIndex((p) => p.me), dn = (T.difficulties.find((x) => x.id === m.diff) || {}).name || '';
       const nx = mi >= 0 ? mtNextHtml(m.acc()) : '';
       el.className = (first ? '' : 'mt-still ') + (Q.level === 'low' ? 'mt-low' : '');
-      el.innerHTML = `<div class="mt-head"><b class="mt-diff" style="color:${DIFF_COL[m.diff] || '#ffd86a'}">${esc(dn)}${m.mutLv | 0 ? ` +${m.mutLv | 0}` : ''}</b><span class="mt-wait">${t('mt_wait')}</span></div>`
+      el.innerHTML = `<div class="mt-head"><b class="mt-diff" style="color:${DIFF_COL[m.diff] || '#ffd86a'}">${esc(dn)}${m.mutLv | 0 ? ` +${m.mutLv | 0}` : ''}</b><span class="mt-wait">${t('mt_wait')}</span><b class="mt-cnt" id="mtcnt"></b></div>`
         + `<div class="mt-row">${ros.map((p, i) => mtCardHtml(p, i, ord.indexOf(i), p.id === host)).join('')}${nx ? `<div class="mt-next" style="grid-column:${mi + 1}">${nx}</div>` : ''}</div>`
         + `<div class="mt-tip">${t('mt_tip' + m.tip)}</div>`;
       el.hidden = false;
     }
+    // 준비 표시: 카드 아래 띠(준비되면 금빛으로 한 번 맥박) + 머리줄 '준비 n/m'
+    let nOk = 0;
     ros.forEach((p, i) => {
       const s = el.querySelector(`[data-st="${i}"]`), ok = !!m.ready(p);
-      if (s && s.dataset.ok !== String(ok)) { s.dataset.ok = String(ok); s.textContent = t(ok ? 'mt_ready' : 'mt_loading'); s.classList.toggle('ok', ok); }
+      if (ok) nOk++;
+      if (s && s.dataset.ok !== String(ok)) { s.dataset.ok = String(ok); s.textContent = t(ok ? 'mt_ready' : 'mt_loading'); s.classList.toggle('ok', ok); const sl = s.closest('.mt-slot'); if (sl) sl.classList.toggle('rdy', ok); }
     });
+    const cn = $('mtcnt'), ct = t('mt_cnt', { a: nOk, b: ros.length });
+    if (cn && cn.textContent !== ct) { cn.textContent = ct; cn.classList.toggle('all', nOk === ros.length); }
   }
   function mtStop(m) {
     clearInterval(m.iv); m.done = true;
@@ -5007,23 +5070,36 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       if (window.RTD_LOBBY) window.RTD_LOBBY.refresh();
     };
     function refreshAcc() { const ah = accHtml(); if ($('accbox').dataset.html !== ah) { $('accbox').innerHTML = ah; $('accbox').dataset.html = ah; bindAcc(); } }
-    // 로비: 방 코드, 다섯 자리(이름·등급·방장 표시), 방장이 고른 설정
+    // 로비: 방 코드 현판, 다섯 자리 카드(초상·관직 문장·이름·관직·레벨, 방장·나 표시), 방장이 고른 설정
+    // 카드는 바뀐 자리만 다시 그린다(새로 들어온 사람 카드만 등장 연출이 걸리고, 다른 카드는 깜빡이지 않는다)
+    const lbSlotHtml = (p, i) => {
+      if (!p) return `<div class="lb-slot empty"><div class="lb-pt"><img class="lb-ring" alt="" src="gfx/ui_select.png"></div><b class="lb-nm">${t('emptySeat')}</b><small class="lb-gr">${t('lb_invite')}</small></div>`;
+      const st = p.state || {}, r = mtRank(st.gr), gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
+      return `<div class="lb-slot in${p.me ? ' me' : ''}${i === 0 ? ' host' : ''}" data-id="${esc(String(p.id))}">${i === 0 ? `<span class="lb-tag host">${t('host')}</span>` : ''}${p.me ? `<span class="lb-tag mine">${t('me')}</span>` : ''}`
+        + `<div class="lb-pt"><img class="av" alt="" src="${Art.portrait(defOf[st.ic] || defOf.cav)}"><img class="lb-ring" alt="" src="gfx/ui_select.png"><img class="lb-rk" alt="" src="gfx/rank_${r}.png" onerror="this.remove()"></div>`
+        + `<b class="lb-nm">${esc(st.name || '?')}</b><small class="lb-gr">${esc(gr)}${gr && st.lv ? ' · ' : ''}${st.lv ? t('level', { n: st.lv | 0 }) : ''}</small></div>`;
+    };
     const renderLobby = () => {
       const box = $('lobby');
       box.hidden = !lobby;
       if (!lobby) return;
       const r = lobby.roster(), hostCfg = r[0] && r[0].state.cfg;
+      box.classList.toggle('host', lobby.isHost()); // 방장: 왼쪽 칸이 난이도 고르기, 손님: 방장 설정 요약
       $('lbcode').textContent = lobby.code || '';
-      $('lbnet').textContent = t('roomOnline');
-      $('lbslots').innerHTML = Array.from({ length: 5 }, (_, i) => {
-        const p = r[i];
-        if (!p) return `<div class="lb-slot empty">${t('emptySeat')}</div>`;
-        const nm = p.state.name || '?';
-        return `<div class="lb-slot in ${p.me ? 'me' : ''}">${i === 0 ? `<span class="host">★ ${t('host')}</span>` : ''}<img class="av" alt="" src="${Art.portrait(defOf[p.state.ic] || defOf.cav)}"><span>${esc(nm)}${p.me ? ` (${t('me')})` : ''}</span>${gradeTag(p.state)}</div>`;
-      }).join('');
+      const nIn = Math.min(5, r.length), net = `<span class="on">${t('roomOnline')}</span><b>${t('lb_people', { n: nIn })}</b>`;
+      if ($('lbnet').dataset.h !== net) { $('lbnet').dataset.h = net; $('lbnet').innerHTML = net; }
+      const sl = $('lbslots');
+      Array.from({ length: 5 }, (_, i) => lbSlotHtml(r[i], i)).forEach((h, i) => {
+        const c = sl.children[i];
+        if (c && c.dataset.h === h) return;
+        const tmp = document.createElement('div'); tmp.innerHTML = h; const el = tmp.firstChild; el.dataset.h = h;
+        if (c) sl.replaceChild(el, c); else sl.appendChild(el);
+      });
+      while (sl.children.length > 5) sl.lastChild.remove();
       const hc = lobby.isHost() ? { diff: cfg.diff, mutLv: +cfg.mutLv, muts: cfg.muts } : hostCfg;
       const dn = hc ? (T.difficulties.find((d) => d.id === hc.diff) || {}).name : '';
-      $('lbcfg').innerHTML = hc ? `${t('hostCfg')}: <b>${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>${!lobby.isHost() && (hc.muts || []).length ? `<div style="display:grid;gap:4px;margin-top:5px">${hc.muts.map(mutCard).join('')}</div>` : ''}` : '';
+      const ch = hc ? `<span class="lb-cl">${t('hostCfg')}</span><b class="lb-dn" style="color:${DIFF_COL[hc.diff] || '#ffd86a'}">${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>${!lobby.isHost() && (hc.muts || []).length ? `<div class="lb-muts">${hc.muts.map(mutCard).join('')}</div>` : ''}` : '';
+      if ($('lbcfg').dataset.h !== ch) { $('lbcfg').dataset.h = ch; $('lbcfg').innerHTML = ch; }
     };
     // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 레벨·누적 경험치와 무관·문관 칭호. 서버(app.js)의 RANK_LV, 경험치 식(40·(레벨-1)²)과 같다
     const RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];

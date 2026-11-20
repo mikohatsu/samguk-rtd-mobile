@@ -105,23 +105,36 @@
       if (window.RTD_LOBBY) window.RTD_LOBBY.refresh();
     };
     function refreshAcc() { const ah = accHtml(); if ($('accbox').dataset.html !== ah) { $('accbox').innerHTML = ah; $('accbox').dataset.html = ah; bindAcc(); } }
-    // 로비: 방 코드, 다섯 자리(이름·등급·방장 표시), 방장이 고른 설정
+    // 로비: 방 코드 현판, 다섯 자리 카드(초상·관직 문장·이름·관직·레벨, 방장·나 표시), 방장이 고른 설정
+    // 카드는 바뀐 자리만 다시 그린다(새로 들어온 사람 카드만 등장 연출이 걸리고, 다른 카드는 깜빡이지 않는다)
+    const lbSlotHtml = (p, i) => {
+      if (!p) return `<div class="lb-slot empty"><div class="lb-pt"><img class="lb-ring" alt="" src="gfx/ui_select.png"></div><b class="lb-nm">${t('emptySeat')}</b><small class="lb-gr">${t('lb_invite')}</small></div>`;
+      const st = p.state || {}, r = mtRank(st.gr), gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
+      return `<div class="lb-slot in${p.me ? ' me' : ''}${i === 0 ? ' host' : ''}" data-id="${esc(String(p.id))}">${i === 0 ? `<span class="lb-tag host">${t('host')}</span>` : ''}${p.me ? `<span class="lb-tag mine">${t('me')}</span>` : ''}`
+        + `<div class="lb-pt"><img class="av" alt="" src="${Art.portrait(defOf[st.ic] || defOf.cav)}"><img class="lb-ring" alt="" src="gfx/ui_select.png"><img class="lb-rk" alt="" src="gfx/rank_${r}.png" onerror="this.remove()"></div>`
+        + `<b class="lb-nm">${esc(st.name || '?')}</b><small class="lb-gr">${esc(gr)}${gr && st.lv ? ' · ' : ''}${st.lv ? t('level', { n: st.lv | 0 }) : ''}</small></div>`;
+    };
     const renderLobby = () => {
       const box = $('lobby');
       box.hidden = !lobby;
       if (!lobby) return;
       const r = lobby.roster(), hostCfg = r[0] && r[0].state.cfg;
+      box.classList.toggle('host', lobby.isHost()); // 방장: 왼쪽 칸이 난이도 고르기, 손님: 방장 설정 요약
       $('lbcode').textContent = lobby.code || '';
-      $('lbnet').textContent = t('roomOnline');
-      $('lbslots').innerHTML = Array.from({ length: 5 }, (_, i) => {
-        const p = r[i];
-        if (!p) return `<div class="lb-slot empty">${t('emptySeat')}</div>`;
-        const nm = p.state.name || '?';
-        return `<div class="lb-slot in ${p.me ? 'me' : ''}">${i === 0 ? `<span class="host">★ ${t('host')}</span>` : ''}<img class="av" alt="" src="${Art.portrait(defOf[p.state.ic] || defOf.cav)}"><span>${esc(nm)}${p.me ? ` (${t('me')})` : ''}</span>${gradeTag(p.state)}</div>`;
-      }).join('');
+      const nIn = Math.min(5, r.length), net = `<span class="on">${t('roomOnline')}</span><b>${t('lb_people', { n: nIn })}</b>`;
+      if ($('lbnet').dataset.h !== net) { $('lbnet').dataset.h = net; $('lbnet').innerHTML = net; }
+      const sl = $('lbslots');
+      Array.from({ length: 5 }, (_, i) => lbSlotHtml(r[i], i)).forEach((h, i) => {
+        const c = sl.children[i];
+        if (c && c.dataset.h === h) return;
+        const tmp = document.createElement('div'); tmp.innerHTML = h; const el = tmp.firstChild; el.dataset.h = h;
+        if (c) sl.replaceChild(el, c); else sl.appendChild(el);
+      });
+      while (sl.children.length > 5) sl.lastChild.remove();
       const hc = lobby.isHost() ? { diff: cfg.diff, mutLv: +cfg.mutLv, muts: cfg.muts } : hostCfg;
       const dn = hc ? (T.difficulties.find((d) => d.id === hc.diff) || {}).name : '';
-      $('lbcfg').innerHTML = hc ? `${t('hostCfg')}: <b>${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>${!lobby.isHost() && (hc.muts || []).length ? `<div style="display:grid;gap:4px;margin-top:5px">${hc.muts.map(mutCard).join('')}</div>` : ''}` : '';
+      const ch = hc ? `<span class="lb-cl">${t('hostCfg')}</span><b class="lb-dn" style="color:${DIFF_COL[hc.diff] || '#ffd86a'}">${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>${!lobby.isHost() && (hc.muts || []).length ? `<div class="lb-muts">${hc.muts.map(mutCard).join('')}</div>` : ''}` : '';
+      if ($('lbcfg').dataset.h !== ch) { $('lbcfg').dataset.h = ch; $('lbcfg').innerHTML = ch; }
     };
     // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 레벨·누적 경험치와 무관·문관 칭호. 서버(app.js)의 RANK_LV, 경험치 식(40·(레벨-1)²)과 같다
     const RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];

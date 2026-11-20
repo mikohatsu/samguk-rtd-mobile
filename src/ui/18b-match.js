@@ -54,15 +54,20 @@
       const host = m.host(), mi = ros.findIndex((p) => p.me), dn = (T.difficulties.find((x) => x.id === m.diff) || {}).name || '';
       const nx = mi >= 0 ? mtNextHtml(m.acc()) : '';
       el.className = (first ? '' : 'mt-still ') + (Q.level === 'low' ? 'mt-low' : '');
-      el.innerHTML = `<div class="mt-head"><b class="mt-diff" style="color:${DIFF_COL[m.diff] || '#ffd86a'}">${esc(dn)}${m.mutLv | 0 ? ` +${m.mutLv | 0}` : ''}</b><span class="mt-wait">${t('mt_wait')}</span></div>`
+      el.innerHTML = `<div class="mt-head"><b class="mt-diff" style="color:${DIFF_COL[m.diff] || '#ffd86a'}">${esc(dn)}${m.mutLv | 0 ? ` +${m.mutLv | 0}` : ''}</b><span class="mt-wait">${t('mt_wait')}</span><b class="mt-cnt" id="mtcnt"></b></div>`
         + `<div class="mt-row">${ros.map((p, i) => mtCardHtml(p, i, ord.indexOf(i), p.id === host)).join('')}${nx ? `<div class="mt-next" style="grid-column:${mi + 1}">${nx}</div>` : ''}</div>`
         + `<div class="mt-tip">${t('mt_tip' + m.tip)}</div>`;
       el.hidden = false;
     }
+    // 준비 표시: 카드 아래 띠(준비되면 금빛으로 한 번 맥박) + 머리줄 '준비 n/m'
+    let nOk = 0;
     ros.forEach((p, i) => {
       const s = el.querySelector(`[data-st="${i}"]`), ok = !!m.ready(p);
-      if (s && s.dataset.ok !== String(ok)) { s.dataset.ok = String(ok); s.textContent = t(ok ? 'mt_ready' : 'mt_loading'); s.classList.toggle('ok', ok); }
+      if (ok) nOk++;
+      if (s && s.dataset.ok !== String(ok)) { s.dataset.ok = String(ok); s.textContent = t(ok ? 'mt_ready' : 'mt_loading'); s.classList.toggle('ok', ok); const sl = s.closest('.mt-slot'); if (sl) sl.classList.toggle('rdy', ok); }
     });
+    const cn = $('mtcnt'), ct = t('mt_cnt', { a: nOk, b: ros.length });
+    if (cn && cn.textContent !== ct) { cn.textContent = ct; cn.classList.toggle('all', nOk === ros.length); }
   }
   function mtStop(m) {
     clearInterval(m.iv); m.done = true;

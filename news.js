@@ -10,6 +10,11 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.2', d: '2026-11-21', items: [
+      ['협력 대기방을 새로 꾸몄습니다. 방 코드가 크게 보이고, 참가자 카드에 관직과 레벨, 방장·나 표시가 붙으며, 입장 대기 화면에서 준비한 인원을 한눈에 볼 수 있습니다.', '協力ルームを一新しました。ルームコードが大きく表示され、参加者カードに官職・レベルとホスト・自分の表示が付き、入場待ち画面では準備済みの人数がひと目で分かります。', 'The co-op room has been redesigned: a large room code, player cards with rank, level and host/you tags, and a clear ready count on the waiting screen.', '合作房间全新改版：房间代码更醒目，参与者卡片显示官职、等级以及房主/自己标记，入场等待画面可一眼看出已准备人数。'],
+      ['보스 출진 카드가 위쪽으로 정렬되어 이름이 잘리지 않고, 장수를 골라도 목록이 맨 위로 튀지 않습니다.', 'ボス戦の出陣カードを上揃えにし、名前が切れないようにしました。武将を選んでも一覧が先頭に戻らなくなりました。', 'Boss sortie cards are now top-aligned so names are no longer cut off, and the list no longer jumps back to the top when you pick a general.', 'Boss出阵卡片改为顶部对齐，名称不再被截断；选择武将时列表也不会跳回顶部。'],
+      ['왼쪽 정보칸에서 병력 표시를 빼고, 인연은 발동 중이거나 곧 켜질 것만 보이게 했습니다. 전체 인연은 「縁一覧」 버튼으로 볼 수 있습니다.', '左の情報欄から兵力表示をなくし、縁は発動中やもうすぐ発動するものだけを表示するようにしました。すべての縁は「縁一覧」ボタンで確認できます。', 'The troop count was removed from the left panel, and only active or nearly complete bonds are listed there. Tap “All bonds” to see every bond.', '左侧信息栏移除了兵力显示，羁绊只显示已激活或即将激活的项目；全部羁绊可通过「羁绊一览」按钮查看。'],
+    ] },
     { v: '0.3.1', d: '2026-11-20', items: [
       ['Apple로 로그인할 때 이름과 메일 주소를 묻지 않습니다. Apple로 만든 계정을 지우면 Apple 쪽 연결도 함께 해제됩니다.', 'Appleでサインインするとき、名前とメールアドレスを求めなくなりました。Appleで作成したアカウントを削除すると、Apple側の連携も解除されます。', 'Sign in with Apple no longer asks for your name or email, and deleting an Apple-linked account now also disconnects it on Apple’s side.', '使用Apple登录时不再请求姓名和邮箱；删除通过Apple创建的账号时，也会同时解除Apple端的关联。'],
     ] },

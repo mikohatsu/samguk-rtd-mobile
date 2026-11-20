@@ -28,6 +28,8 @@
     room: ['협동 방', '協力ルーム', 'Co-op room', '合作房间'], roomHint: ['최대 5인', '最大5人', 'Up to 5', '最多5人'], roomCode: ['방 코드', 'ルームコード', 'Room code', '房间码'],
     makeRoom: ['방 만들기', 'ルーム作成', 'Create room', '创建房间'], joinRoom: ['입장', '入室', 'Join', '加入'], copy: ['복사', 'コピー', 'Copy', '复制'], copied: ['복사됨', 'コピー済み', 'Copied', '已复制'],
     emptySeat: ['빈 자리', '空き', 'Empty', '空位'], host: ['방장', 'ホスト', 'Host', '房主'], me: ['나', '自分', 'me', '我'], hostCfg: ['방장 설정', 'ホスト設定', 'Host settings', '房主设置'],
+    lb_people: ['{n}/5명', '{n}/5人', '{n}/5', '{n}/5人'], lb_invite: ['코드를 보내 초대', 'コードを送って招待', 'Share the code', '发送房间码邀请'],
+    mt_cnt: ['준비 {a}/{b}', '準備 {a}/{b}', 'Ready {a}/{b}', '准备 {a}/{b}'],
     roomOnline: ['연결됨', '接続済み', 'Connected', '已连接'], connecting: ['연결 중…', '接続中…', 'Connecting…', '连接中…'], roomFull: ['방이 가득 찼습니다. 다른 방 코드를 쓰세요.', '満員です。別のコードを使ってください。', 'Room is full. Try another code.', '房间已满，请换一个房间码。'],
     noServer: ['서버에 연결할 수 없습니다. 인터넷 연결을 확인하세요.', 'サーバーに接続できません。通信状況を確認してください。', 'Cannot reach the server. Check your connection.', '无法连接服务器，请检查网络。'],
     start: ['출정', '出陣', 'Deploy', '出征'], startHost: ['출정 (방장)', '出陣（ホスト）', 'Start (host)', '出征（房主）'], waitHost: ['방장이 시작하기를 기다리는 중', 'ホストの開始待ち', 'Waiting for the host', '等待房主开始'], joinFirst: ['방에 먼저 들어가세요', '先にルームに入ってください', 'Join a room first', '请先加入房间'],
@@ -157,6 +159,8 @@
     synG1: ['하', '下', 'C', '下'], synG2: ['중', '中', 'B', '中'], synG3: ['상', '上', 'A', '上'], synG4: ['극', '極', 'S', '极'], synG5: ['극+', '極+', 'S+', '极+'],
     synBossLine: ['보스전 인연(이 장수가 출전하면)', 'ボス戦の縁（この武将が出陣すると）', 'Boss bonds (if this unit is deployed)', '首领战羁绊（此武将出战时）'],
     synOverCap: ['상한 초과', '上限超過', 'Over cap', '超出上限'],
+    // 왼쪽 인연 줄 끝 버튼과 전체 인연 창(13-info-timers): 켜진 것 / 진행 중 / 시작 안 함
+    synAll: ['인연 목록', '縁一覧', 'All bonds', '羁绊一览'], synGrpOn: ['발동 중', '発動中', 'Active', '已激活'], synGrpProg: ['진행 중', '進行中', 'In progress', '进行中'], synGrpNone: ['시작 안 함', '未着手', 'Not started', '未开始'],
     synHelpH: ['인연 시너지', '縁のシナジー', 'Bond synergies', '羁绊'],
     synHelp1: ['보스전 인연 효과는 출전한 구성원 중 한 명(주장)에게만, 한 장수에 {n}개까지 걸립니다(등급 높은 순).', 'ボス戦の縁の効果は出陣した構成員のうち1人（主将）だけに、1人{n}個まで（等級の高い順）。', 'Boss bond effects go to one deployed member (your carry), up to {n} per champion (highest grade first).', '首领战羁绊效果只作用于出战成员中的一人（主将），每名武将最多{n}个（等级高者优先）。'],
     synHelp2: ['스킬 재사용 단축이 합쳐서 60%를 넘으면, 넘친 만큼 스킬 피해가 오릅니다.', 'スキル再使用短縮の合計が60%を超えると、超えた分だけスキルダメージが上がります。', 'Cooldown reduction above 60% in total turns into the same amount of skill damage.', '技能冷却缩减合计超过60%时，超出部分转为等量技能伤害。'],

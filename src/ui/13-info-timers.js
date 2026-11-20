@@ -193,18 +193,36 @@
       .sort((a, b) => b.on - a.on || (b.on ? b.g - a.g : 0) || (a.gap === 1) * -1 + (b.gap === 1) * 1 || b.n / b.next - a.n / a.next);
   }
   const dotsOf = (x) => (x.s.tiers || []).map((tr, i) => `<i class="${i < x.lv ? 'on' : ''}"></i>`).join('');
+  // 다음 단계에 core가 필요한데 core가 없으면 지금은 노릴 수 없는 인연이다(needCore: false 단계는 core 없이도 노릴 수 있다)
+  const synCoreOk = (x, p) => { const nt = (x.s.tiers || [])[x.lv]; return !x.s.core || g.has(p, x.s.core) || !!(nt && nt.needCore === false); };
+  // 왼쪽 줄(2026-11-21 정리): 켜진 것(등급 높은 순) + 다음 단계까지 1명 남고 core 조건을 채운 것(가까운 순).
+  // 6칸까지(켜진 것이 6개를 넘으면 켜진 것만 9칸까지). 화면 아래까지 자리가 모자라면 들어가는 줄 수만큼만(목록 버튼이 늘 보이게).
+  // 나머지는 줄 끝 「인연 목록」 창에서 본다.
+  const SYN_BAR_MIN = 6, SYN_BAR_MAX = 9;
+  function synBarList(vis, p, room) {
+    const on = vis.filter((x) => x.on), near = vis.filter((x) => !x.on && x.gap === 1 && synCoreOk(x, p)).sort((a, b) => b.n / b.next - a.n / a.next || b.g - a.g);
+    return on.concat(near).slice(0, Math.min(room, Math.max(SYN_BAR_MIN, Math.min(SYN_BAR_MAX, on.length))));
+  }
+  const synCell = (x, tag) => `<${tag} class="sy ${x.on ? 'on' : ''} ${x.gap === 1 && !x.coreMiss ? 'near' : ''}"${tag === 'button' ? ` data-syn="${x.s.id}" type="button" aria-label="${esc(x.s.name)}"` : ''}><i><img alt="" src="${Art.portrait(synFace(x.s))}"></i><u>${dotsOf(x)}</u><em style="background:${GRADE_COL[x.g]}">${esc(gradeTxt(x.g))}</em><b>${x.n}/${x.next}</b></${tag}>`;
   function renderSynBar(vis) {
-    const bar = $('synbar'), show = laneOn() && !viewedPeer() && !g.over && vis.length > 0;
+    const bar = $('synbar'), show = laneOn() && !viewedPeer() && !g.over;
     if (bar.hidden !== !show) bar.hidden = !show;
-    if (!show) { if (S.synPop) showSyn(null); return; }
+    if (!show) { if (S.synPop) showSyn(null); if (S.synAll) openSynAll(false); return; }
     // 왼쪽 정보 줄 바로 아래에 3칸씩 놓고, 화면 아래까지 넘치면 줄 안에서 세로로 스크롤한다
     const hud = $('hud'), vh = window.innerHeight / zoom;
-    const left = hud.offsetLeft, topY = hud.offsetTop + hud.offsetHeight + 6, avail = Math.max(60, vh - topY - 4);
+    // 아래 안전 영역(아이폰 홈 막대): #synall의 padding-bottom(var(--sb) = max(6px, env(safe-area-inset-bottom)))을 화면 크기가 바뀔 때만 읽는다
+    const szk = window.innerWidth + 'x' + window.innerHeight;
+    if (S.synSbK !== szk) { S.synSbK = szk; S.synSb = parseFloat(getComputedStyle($('synall')).paddingBottom) || 6; }
+    const left = hud.offsetLeft, topY = hud.offsetTop + hud.offsetHeight + 6, avail = Math.max(60, vh - topY - S.synSb - 4);
     // 얼굴 그림은 주소가 길어 매번 만들지 않는다(구성이 바뀌거나 5초마다 한 번만 다시 그린다 — 그림이 늦게 불러져도 따라온다)
-    const key = vis.map((x) => x.s.id + x.n + ':' + x.lv).join() + '@' + Math.floor(performance.now() / 5000);
+    // 칸 한 줄 높이(칸 + 줄 간격)는 그려진 칸에서 재어 둔다. 목록 버튼 자리(약 24px)와 위 여백(7px)을 빼고 들어가는 줄 수 × 3칸
+    const rows = Math.max(1, Math.floor((avail - 31) / (S.synRowH || 46)));
+    const list = synBarList(vis, g.me, rows * 3), more = vis.length - list.length;
+    const key = list.map((x) => x.s.id + x.n + ':' + x.lv).join() + '|' + more + '@' + Math.floor(performance.now() / 5000);
     if (bar.dataset.key !== key) {
       bar.dataset.key = key;
-      bar.innerHTML = vis.map((x) => `<button class="sy ${x.on ? 'on' : ''} ${x.gap === 1 && !x.coreMiss ? 'near' : ''}" data-syn="${x.s.id}" type="button" aria-label="${esc(x.s.name)}"><i><img alt="" src="${Art.portrait(synFace(x.s))}"></i><u>${dotsOf(x)}</u><em style="background:${GRADE_COL[x.g]}">${esc(gradeTxt(x.g))}</em><b>${x.n}/${x.next}</b></button>`).join('');
+      bar.innerHTML = list.map((x) => synCell(x, 'button')).join('') + `<button class="syall" data-synall="1" type="button">${esc(t('synAll'))}${more > 0 ? ` (${more})` : ''}</button>`;
+      const c = bar.querySelector('.sy'); if (c) S.synRowH = c.offsetHeight + (parseFloat(getComputedStyle(bar).rowGap) || 6);
     }
     const pos = left + ',' + topY + ',' + Math.round(avail);
     if (bar.dataset.pos !== pos) { bar.dataset.pos = pos; bar.style.left = left + 'px'; bar.style.top = topY + 'px'; bar.style.maxHeight = Math.round(avail) + 'px'; }
@@ -230,19 +248,52 @@
       + `<div class="chips">${chips}</div>${x.coreMiss ? `<div class="sn">${esc(t('synCore', { a: defOf[s.core].name }))}</div>` : ''}`
       + `<div style="margin-top:4px;color:${x.on ? '#f4ecd8' : 'var(--dim)'}">${esc(s.desc)}</div><div class="sts">${synTiersHtml(x)}</div>`
       + `<div class="sn">${esc(t('synBossNote', { n: g.synMaxPerCarry || 5 }))}</div>`;
-    pop.classList.add('sp');
+    const inAll = !!el.closest('#synall');
+    pop.classList.add('sp'); pop.classList.toggle('sx', inAll);
     pop.hidden = false; S.synPop = id;
-    const r = el.getBoundingClientRect();
-    pop.style.left = Math.min($('synbar').getBoundingClientRect().right / zoom + 8, window.innerWidth / zoom - pop.offsetWidth - 4) + 'px';
+    const r = el.getBoundingClientRect(), vw = window.innerWidth / zoom;
+    const lx = inAll ? (r.right / zoom + 6 + pop.offsetWidth <= vw - 4 ? r.right / zoom + 6 : r.left / zoom - pop.offsetWidth - 6) : $('synbar').getBoundingClientRect().right / zoom + 8;
+    pop.style.left = Math.max(4, Math.min(lx, vw - pop.offsetWidth - 4)) + 'px';
     pop.style.top = Math.max(4, Math.min(r.top / zoom, window.innerHeight / zoom - pop.offsetHeight - 4)) + 'px';
   }
   {
     const bar = $('synbar');
     // 터치: 누르면 뜨고, 다른 곳을 누르면 닫힌다(닫기는 10-input의 업적 창 처리와 같이 쓴다). 마우스: 올리면 뜨고 벗어나면 닫힌다.
-    bar.addEventListener('click', (e) => { const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
+    bar.addEventListener('click', (e) => { if (e.target.closest('[data-synall]')) { showSyn(null); openSynAll(true); return; } const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
     bar.addEventListener('pointerover', (e) => { if (e.pointerType === 'touch') return; const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); });
     bar.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && !(e.relatedTarget && $('achpop').contains(e.relatedTarget))) showSyn(null); });
     bar.addEventListener('scroll', () => { if (S.synPop) showSyn(null); }, { passive: true });
+    // 전체 인연 창: 칸을 누르면 인연 창, 빈 곳을 누르면 인연 창만 닫고, 바깥 어두운 곳·닫기 버튼은 창을 닫는다
+    const all = $('synall');
+    all.addEventListener('click', (e) => {
+      if (e.target === all || e.target.closest('[data-synclose]')) { showSyn(null); openSynAll(false); return; }
+      const b = e.target.closest('[data-syn]');
+      if (b) showSyn(b.dataset.syn, b); else showSyn(null);
+    });
+    all.addEventListener('scroll', () => { if (S.synPop) showSyn(null); }, { passive: true, capture: true });
+  }
+  // 전체 인연 창(왼쪽 줄 끝 「인연 목록」): 58개 전부를 발동 중 / 진행 중 / 시작 안 함으로 나눈다. 숨은 인연(hidden)은 켜질 때까지 뺀다.
+  function openSynAll(on) {
+    const box = $('synall');
+    S.synAll = !!on; box.hidden = !on;
+    if (on) { box.dataset.key = ''; renderSynAll(); const b = box.querySelector('.sabody'); if (b) b.scrollTop = 0; } else box.innerHTML = '';
+  }
+  function renderSynAll() {
+    const box = $('synall'), p = g.me;
+    if (!S.synAll || !p) return;
+    const all = (T.synergies || []).map((s) => synProg(s, p)).filter((x) => !x.s.hidden || x.on);
+    const on = all.filter((x) => x.on).sort((a, b) => b.g - a.g || b.lv - a.lv);
+    // 진행 중: 노릴 수 있는 것(core 조건 충족) 먼저, 그 안에서 남은 수가 적은 순. core가 없어 못 켜는 것은 뒤로
+    const prog = all.filter((x) => !x.on && x.n > 0).sort((a, b) => synCoreOk(b, p) - synCoreOk(a, p) || a.gap - b.gap || b.n / b.next - a.n / a.next);
+    const none = all.filter((x) => !x.on && !x.n);
+    const key = all.map((x) => x.n + ':' + x.lv).join() + '@' + Math.floor(performance.now() / 5000);
+    if (box.dataset.key === key) return;
+    box.dataset.key = key;
+    const sc = box.querySelector('.sabody'), top = sc ? sc.scrollTop : 0;
+    const grp = (k, l) => (l.length ? `<h4>${esc(t(k))}<small>${l.length}</small></h4><div class="sagrid">${l.map((x) => `<button class="sar ${x.on ? 'on' : ''}" data-syn="${x.s.id}" type="button">${synCell(x, 'span')}<span class="san">${x.s.hidden ? '★ ' : ''}${esc(x.s.name)}</span></button>`).join('')}</div>` : '');
+    box.innerHTML = `<div class="sabox" role="dialog" aria-label="${esc(t('synAll'))}"><div class="sahead"><b>${esc(t('synAll'))}</b><button class="saclose" data-synclose="1" type="button" aria-label="${esc(t('close'))}"><i class="ico close" aria-hidden="true"></i></button></div>`
+      + `<div class="sabody">${grp('synGrpOn', on)}${grp('synGrpProg', prog)}${grp('synGrpNone', none)}</div></div>`;
+    const nb = box.querySelector('.sabody'); if (nb && top) nb.scrollTop = top;
   }
   // 인연 목록(전황 서랍): 진행·등급·지금 단계 효과. 켜진 것 → 1명 남은 것 → 나머지
   function renderSyn() {
@@ -256,6 +307,7 @@
     }).join('');
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
     renderSynBar(vis);
+    if (S.synAll) renderSynAll();
     // 이번 판 변형 규칙(악몽 +N)
     const mb = $('mutlist'), mt = $('mutt');
     if (g.muts && g.muts.length && !mb.dataset.done) {

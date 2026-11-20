@@ -841,6 +841,12 @@
       const ia = e.target.closest('[data-iap]'); if (ia) { busyBtn(ia, L('working'), iapBuy(ia.dataset.iap)); return; }
       const ir = e.target.closest('[data-iaprestore]'); if (ir) { busyBtn(ir, L('working'), iapRestore()); return; }
       const eq = e.target.closest('[data-equip]'); if (eq) { equip(eq.dataset.equip, eq.dataset.id, eq.dataset.unit); return; }
+      // 방 채팅: 신고·차단 버튼은 줄을 누르면 그 줄에만 보인다(평소에는 대화만 촘촘히)
+      const cln = !e.target.closest('button') && e.target.closest('#chatlog .cl');
+      if (cln) { const on = !cln.classList.contains('sel'); $('chatlog').querySelectorAll('.cl.sel').forEach((x) => x.classList.remove('sel')); cln.classList.toggle('sel', on);
+        // 펼친 줄(신고·차단 버튼 포함)이 채팅 칸 안에 보이도록 채팅 칸만 스크롤한다
+        if (on) { const log = $('chatlog'), lr = log.getBoundingClientRect(), r = cln.getBoundingClientRect(), dB = r.bottom - lr.bottom + 2, dT = r.top - lr.top; log.scrollTop += dB > 0 ? Math.min(dB, dT) : Math.min(0, dT); } // 줄이 칸보다 크면 줄 머리를 우선
+        return; }
       const rp = e.target.closest('[data-chatrep]'); if (rp) { if (!armed(rp)) return; const l = C.getLobby(); C.api('/api/report', { room: l && l.code, slot: rp.dataset.chatrep, nick: rp.dataset.nick, text: rp.dataset.text }).then(() => chatLine(`<div class="sys">${L('reported')}</div>`)); rp.disabled = true; return; }
       const lch = e.target.closest('[data-lch]'); if (lch) { lcSend({ k: 'ch', n: +lch.dataset.lch }); return; }
       const lrp = e.target.closest('[data-lcrep]'); if (lrp) { if (!armed(lrp)) return; C.api('/api/report', { room: '#lobby', slot: lrp.dataset.lcrep, nick: lrp.dataset.nick, text: lrp.dataset.text }).then(() => lcPush({ sys: L('reported') })); lrp.disabled = true; return; }
