@@ -10,6 +10,10 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.6', d: '2026-11-23', items: [
+      ['유닛 정보 창을 새로 꾸몄습니다. 등급 테두리 초상, 핵심 능력치, 속한 인연(n/m), 이름이 붙은 스킬을 한눈에 보고, 합성·해산은 오른쪽 큰 버튼으로 합니다. 「상세」를 누르면 조합식과 스킬 설명 전체가 보입니다.', 'ユニット情報画面を一新しました。等級枠の肖像・主要能力値・所属する縁(n/m)・名前付きのスキルがひと目で分かり、合成・解散は右の大きなボタンで行えます。「詳細」で全レシピとスキル説明を確認できます。', 'Redesigned the unit info panel: a rank-framed portrait, key stats, the bonds it belongs to (n/m) and named skills at a glance, with combine/disband on a big button at the right. Tap "Details" for all recipes and full skill descriptions.', '全新设计了单位信息面板：带等级边框的头像、主要属性、所属羁绊(n/m)和带名称的技能一目了然，合成与解散使用右侧的大按钮。点击「详细」可查看全部配方和技能说明。'],
+      ['해산은 받을 금화를 보여 주고 두 번 눌러야 실행됩니다. 스킬 설명은 다른 곳을 누를 때까지 떠 있습니다.', '解散は受け取る金貨を表示し、2回押すと実行されます。スキル説明はほかの場所を押すまで表示されたままになります。', 'Disband now shows the gold you will get and needs two taps. Skill descriptions stay open until you tap elsewhere.', '解散会显示可获得的金币，需要点击两次才会执行。技能说明会一直显示，直到点击其他位置。'],
+    ] },
     { v: '0.3.5', d: '2026-11-23', items: [
       ['업적 깃발이 화면 크기에 맞춰 오른쪽 버튼 옆 빈 자리에 놓여, 버튼에 가려지지 않고 누를 수 있습니다.', '実績の旗が画面サイズに合わせて右側ボタンの横の空きスペースに並び、ボタンに隠れずに押せるようになりました。', 'Achievement flags now line up in the free space beside the right-side buttons, so they are never hidden and can always be tapped.', '成就旗帜会根据画面大小排列在右侧按钮旁的空白处，不再被按钮遮挡，可以点击。'],
       ['전투 화면 그리기를 가볍게 해 휴대폰에서 프레임이 더 잘 나옵니다.', '戦闘画面の描画を軽くし、スマートフォンでのフレームレートが上がりました。', 'Battle rendering is lighter, giving smoother frame rates on phones.', '减轻了战斗画面的绘制负担，手机上的帧率更流畅。'],

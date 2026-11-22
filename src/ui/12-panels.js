@@ -211,6 +211,107 @@
     if (!list.length && !need) lines.push(`<div class="sub line">${t('noRecipe')}</div>`);
     return lines.join('');
   }
+  // ---- 선택 정보 바(2026-11-23 안 A): 위 [초상(등급 틀) | 가운데 4줄 | 큰 행동 1개], 아래 [가장 가까운 조합식 1줄 | 상세]. ----
+  // 가운데 4줄: ① 등급 글자·이름·강화·진영·역할 ② 핵심 수치 3개(버프는 색+화살표) ③ 이 유닛이 속한 인연 칩(n/m, 누르면 인연 창) ④ 스킬·패시브 이름 알약(누르면 설명 고정).
+  // 나머지(조합식 전체·인연 단계·해산·능력치 출처·기술 전문)는 바 위에 뜨는 상세 카드(#ucard, unitCard)에서 우선순위 순으로 본다.
+  // atk를 주면 다른 사령관 유닛(읽기 전용): 행동·인연·강화 단계는 보이지 않는다.
+  const recipesUsing = (d) => {
+    const score = (id) => { const st = g.recipeStatus(g.me, id); return st.parts.filter((x) => x.have >= x.need).length / st.parts.length; };
+    return Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id) && !(g.isLocked && g.isLocked(id))).map((id) => ({ id, s: score(id) })).sort((a, b) => b.s - a.s);
+  };
+  // 이 유닛이 속한 인연(숨은 인연은 켜졌을 때만): 켜진 것(등급 높은 순) → 진행 많은 순
+  function unitSyns(d) {
+    const p = g.me; if (!p || !d.tier) return [];
+    return (T.synergies || []).filter((s) => s.units.includes(d.id)).map((s) => synProg(s, p)).filter((x) => !x.s.hidden || x.on)
+      .sort((a, b) => b.on - a.on || (b.on ? b.g - a.g : 0) || b.n / b.next - a.n / a.next);
+  }
+  const synChip = (x) => `<button class="usy ${x.on ? 'on' : ''}" data-syn="${x.s.id}" type="button"><b style="background:${GRADE_COL[x.g]}"></b>${x.s.hidden ? '★' : ''}${esc(x.s.name)}<em>${x.n}/${x.next}</em></button>`;
+  const skillPill = (s) => `<button class="pill sk" type="button" ${tipAttr(s.n, t('active'), skillDesc(s))}>${icon(SKILL_ICON[s.k], s.fx)}<span>${esc(s.n)}</span><em>${esc(I.t('sec', { n: s.cd }))}</em></button>`;
+  const passivePill = (x) => `<button class="pill ps" type="button" ${tipAttr(x.name, t('passive'), x.desc)}>${icon(PASSIVE_ICON[x.k], '#e6c578')}<span>${esc(x.name)}</span></button>`;
+  // 등급 글자(전설·신화·불멸은 이름 앞 글자, 1~7성은 별) + 이름 + 강화 + 진영 + 역할. 등급은 색과 글자 둘 다로 보인다(색약 대비)
+  function unitLine1(d, lv, remote) {
+    const f = T.factions[d.fac];
+    const rk = d.tier >= 8 ? `<span class="urk rk${d.tier}">${esc(rankName(d.tier))}</span>` : '';
+    const st = d.tier >= 1 && d.tier <= 7 ? `<span class="stars" style="color:${tierColor(d.tier)}">${'★'.repeat(d.tier)}</span>` : '';
+    const up = !remote && lv > 0 ? `<span class="plus">+${lv}</span>` : '';
+    return `<div class="ul1">${rk}<b class="unm" style="color:${tierColor(d.tier) || '#f4ecd8'}">${esc(d.name)}</b>${up}${st}<span class="ufac" style="color:${f.color}">${d.tier ? '' : esc(I.t('special')) + ' · '}${esc(f.name)}</span>${roleBadge(d)}</div>`;
+  }
+  // 공격력·공격 간격·사거리(그리고 full이면 체력). 버프로 오른 값은 빨강+↑, 내린 값은 파랑+↓
+  function unitStatVals(u, atk) {
+    const d = u.def, remote = atk != null;
+    const spd = remote ? 1 : 1 + g.hasteOf(g.me.idx, d) + g.synFor(g.me.idx, d).haste;
+    const base = g.rankOf[d.tier].atk * g.attackTime(d), now = remote ? atk : g.unitAtk(u), iv = g.attackTime(d) / spd;
+    const ac = remote ? '' : buffCls(now / base), ic = buffCls(g.attackTime(d) / iv), ar = (c) => (c === 'bup' ? '↑' : c === 'bdn' ? '↓' : '');
+    return { base, atk: `<b class="${ac}">${fmt(now)}${ar(ac)}</b>`, iv: `<b class="${ic}">${I.t('sec', { n: iv.toFixed(2) })}${ar(ic)}</b>`, rg: `<b>${remote || g.inFight(u) ? g.range(d) : Math.round(g.rangeOf(u))}</b>` };
+  }
+  function unitBar(u, atk) {
+    const d = u.def, remote = atk != null, lv = remote ? 0 : g.upgradeLevel(g.me, d);
+    let h = unitLine1(d, lv, remote);
+    if (d.tier) { const v = unitStatVals(u, atk); h += `<div class="ul2"><span>${I.t('atk')} ${v.atk}</span><span>${I.t('interval')} ${v.iv}</span><span>${I.t('range')} ${v.rg}</span></div>`; }
+    const sy = remote ? [] : unitSyns(d);
+    if (sy.length) h += `<div class="uchips">${sy.map(synChip).join('')}</div>`;
+    const pills = (d.sk || []).map(skillPill).concat((d.p || []).map(passivePill));
+    if (pills.length) h += `<div class="upills">${pills.join('')}</div>`;
+    return `<button class="upor t${d.tier}" data-act="ucard" type="button" style="--gc:${tierColor(d.tier) || '#9a8e78'}" aria-label="${esc(I.t('detOpen'))}"><img alt="" src="${Art.portrait(d)}"></button><div class="umid">${h}</div>`;
+  }
+  // 1성 해산으로 받을 금화 범위(engine disbandValue와 같은 계산: R.disbandGold × 난이도 sellGold)
+  function sellRange() {
+    const [a, b] = g.R.disbandGold, k = g.diff.sellGold || 1, f = (v) => (k === 1 ? v : Math.max(1, Math.round(v * k))), x = f(a), y = f(b);
+    return x === y ? `${x}` : `${x}~${y}`;
+  }
+  // 해산은 두 번 눌러야 한다(11-actions sell: 처음 누르면 S.sellArm, 3초 안에 한 번 더)
+  const sellBtn = (u, big) => {
+    const arm = S.sellArm === u.id, lab = esc(arm ? I.t('sellAgain') : t('disband')), gold = `<i class="ico coin" aria-hidden="true"></i>+${sellRange()}`;
+    return big ? `<button class="ubig sell ${arm ? 'arm' : ''}" data-act="sell" type="button"><b>${lab}</b><small>${gold}</small></button>`
+      : `<button class="btn warn usellb ${arm ? 'arm' : ''}" data-act="sell" type="button">${lab} <small>${gold}</small></button>`;
+  };
+  // 오른쪽 큰 행동 1개: 같은 유닛 합성이 되면 合成, 아니면 1성은 해산, 그 밖에는 합성 진행(누를 수 없음). 불멸·특수는 없음
+  function unitPrimary(u) {
+    const d = u.def, need = T.combineNeed[d.tier], have = need ? g.ownedOf(g.me, d.id).length : 0;
+    const cap = need ? `${Math.min(have, need)}/${need} → ${esc(rankTag(d.tier + 1))}` : '';
+    if (need && have >= need) return { k: 'combine', html: `<button class="ubig go" data-act="combine" type="button"><b>${I.t('combineBtn')}${S.coarse ? '' : ' R'}</b><small>${cap}</small></button>` };
+    if (d.tier === 1 && !g.inFight(u)) return { k: 'sell', html: sellBtn(u, true) };
+    if (need) return { k: 'prog', html: `<button class="ubig" data-act="combine" type="button" disabled><b>${I.t('combineBtn')}</b><small>${cap}</small></button>` };
+    return { k: '', html: '' };
+  }
+  // 아래 줄: 완성에 가장 가까운 조합식 1줄(같은 유닛 합성 진행이 오른쪽 버튼에 안 보일 때는 그것도 후보) + 상세 카드 버튼
+  function unitNear(u, prim) {
+    const d = u.def, need = T.combineNeed[d.tier], used = recipesUsing(d);
+    const self = need && prim.k === 'sell' ? g.ownedOf(g.me, d.id).length / need : -1;
+    let line;
+    if (self >= 0 && (!used.length || self >= used[0].s)) line = `<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(g.ownedOf(g.me, d.id).length, need), b: need, r: rankName(d.tier + 1) })}</span></div>`;
+    else if (used.length) line = recipeLine(used[0].id);
+    else line = `<div class="rc none"><span class="rp">${t('noRecipeS')}</span></div>`;
+    return line + ucardBtn();
+  }
+  const ucardBtn = () => `<button class="umore ${S.ucard ? 'on' : ''}" data-act="ucard" type="button" aria-expanded="${S.ucard ? 'true' : 'false'}">${I.t(S.ucard ? 'detClose' : 'detOpen')} ${S.ucard ? '▾' : '▴'}</button>`;
+  // 상세 카드: 위에서 아래로 우선순위(① 합성·조합식 전체 ② 인연·해산 ③ 보스전 역할·인연 ④ 능력치와 버프 출처 ⑤ 스킬·패시브 전문)
+  function unitCard(u, atk) {
+    const d = u.def, remote = atk != null, lv = remote ? 0 : g.upgradeLevel(g.me, d);
+    const sec = (k, body, cls) => (body ? `<section class="${cls || ''}"><h4>${esc(k)}</h4>${body}</section>` : '');
+    let h = `<div class="uch">${unitLine1(d, lv, remote)}${d.title ? `<div class="ucs">${esc(d.title)}</div>` : ''}</div>`;
+    if (!remote) {
+      const need = T.combineNeed[d.tier], used = recipesUsing(d);
+      let rc = '';
+      if (need) { const have = g.ownedOf(g.me, d.id).length; rc += `<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(have, need), b: need, r: rankName(d.tier + 1) })}</span><button class="btn ${have >= need ? 'go' : ''}" data-act="combine" type="button" ${have >= need ? '' : 'disabled'}>${I.t('combineBtn')}</button></div>`; }
+      rc += used.map((x) => recipeLine(x.id)).join('');
+      h += sec(t('cardRecipe'), rc); // 관련 조합식이 없으면(불멸 등) 칸째 뺀다 — 바 아래 줄이 이미 '관련 조합식 없음'을 보인다
+      const sy = unitSyns(d);
+      h += sec(t('synTag'), sy.length ? `<div class="usyl">${sy.map(synChip).join('')}</div>` : '');
+      if (d.tier === 1 && !g.inFight(u)) h += `<section class="usell"><span>${esc(t('disbandDesc'))}</span>${sellBtn(u, false)}</section>`;
+    }
+    const sb = remote || !d.tier || g.inFight(u) ? [] : synBossFor(d);
+    if (d.role || sb.length) h += `<section>${d.role ? `<div>${roleBadge(d)} <small class="dim">${esc(T.roles[d.role].desc)}</small></div>` : ''}${sb.length ? `<div class="ubs"><small class="dim">${esc(t('synBossLine'))}</small>${synBadges(sb)}</div>` : ''}</section>`;
+    if (d.tier) {
+      const v = unitStatVals(u, atk), src = remote ? [] : atkSources(u), hs = remote ? [] : hasteSources(u);
+      const det = remote ? '' : `<div class="sdet"><span>${I.t('baseAtk')} ${fmt(v.base)}</span>${src.map((x) => `<span class="${x.v >= 0 ? 'bup' : 'bdn'}">${esc(x.n)} ${pctTxt(x.v)}</span>`).join('')}${hs.map((x) => `<span class="bup">${esc(x.n)} ${I.t('speedShort')} ${pctTxt(x.v)}</span>`).join('')}${src.length || hs.length ? '' : `<span>${I.t('noBuff')}</span>`}</div>`;
+      h += sec(t('cardStats'), `<div class="ust"><span>${I.t('atk')} ${v.atk}</span><span>${I.t('hp')} <b>${fmt(g.rankOf[d.tier].hp)}</b></span><span>${I.t('interval')} ${v.iv}</span><span>${I.t('range')} ${v.rg}</span></div>${det}`);
+    }
+    const sk = (d.sk || []).map((s) => `<div class="usk">${icon(SKILL_ICON[s.k], s.fx)}<div><b>${esc(s.n)}</b><small>${esc(t('active'))} · ${esc(I.t('cooldown', { n: s.cd }))}</small><p>${esc((SKILL_TEXT[s.k] || (() => ''))(s))}</p></div></div>`).join('')
+      + (d.p || []).map((x) => `<div class="usk ps">${icon(PASSIVE_ICON[x.k], '#e6c578')}<div><b>${esc(x.name)}</b><small>${esc(t('passive'))}</small><p>${esc(x.desc)}</p></div></div>`).join('');
+    h += sec(t('cardSkills'), sk);
+    return h;
+  }
   // 명령 패널은 스타크래프트처럼 선택한 대상의 것만 보여준다. 칸은 아이콘이고, 마우스를 올리면 설명이 뜬다.
   const ICON = {
     move: 'M12 3v18M3 12h18M12 3 9 6M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3',

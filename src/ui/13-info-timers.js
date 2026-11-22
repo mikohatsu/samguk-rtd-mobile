@@ -1,46 +1,85 @@
+  // 선택 정보 바(안 A). 상태: 라인 정지 / 동료 전장(읽기 전용) / 드롭 / 선택 없음 / 다중 선택 / 한 기(+상세 카드). 보스전은 renderFight.
+  // 선택 해제 X(#selx)는 바 왼쪽 위 모서리에 따로 있어 오른쪽 큰 행동(합성·해산)과 떨어져 있다.
+  const plain = (h, sub) => `<div class="umid"><div class="ul1"><b class="unm">${h}</b></div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
   function renderInfo() {
-    if (inBoss()) return renderFight();
-    if (!laneOn()) { setInfo(`<h3>${g.fight ? esc(g.fight.def.title) : ''}</h3><div class="sub">${I.t('laneStopped')}</div>`); setRecipes(''); setCmds(fillCmds([])); return; }
+    // 고른 대상이 바뀌면 상세 카드·해산 확인을 닫는다
+    const vp0 = laneOn() && !inBoss() ? viewedPeer() : null, l0 = vp0 || !laneOn() || inBoss() ? [] : selUnits();
+    const uk = vp0 ? (S.rsel && S.rsel.peer === vp0.id ? 'r' + vp0.id + S.rsel.d.id : '') : l0.length === 1 && !S.dropSel ? 'u' + l0[0].id : '';
+    if (S.ucardK !== uk) { S.ucardK = uk; S.ucard = false; S.sellArm = null; }
+    if (!uk) S.ucard = false;
+    if (inBoss()) { ucardShow(''); return renderFight(); }
+    if (!laneOn()) { setInfo(plain(g.fight ? esc(g.fight.def.title) : '', I.t('laneStopped'))); setRecipes(''); setCmds(''); ucardShow(''); return; }
     const vp = viewedPeer();
     if (vp) {
       const r = S.rsel && S.rsel.peer === vp.id ? S.rsel : null;
-      setInfo(r ? unitInfo({ def: r.d }, r.atk) : `<h3>${esc(I.t('peerField', { a: vp.state.name }))}</h3><div class="sub">${I.t('peerHint')}</div>`);
-      setRecipes(`<div class="sub line">${I.t('peerUnits')}</div>`);
-      setCmds(fillCmds(r ? (r.d.p || []).map(passiveCell).concat((r.d.sk || []).map((s) => skillCell(s))) : []));
+      setInfo(r ? unitBar({ def: r.d }, r.atk) : plain(esc(I.t('peerField', { a: vp.state.name })), I.t('peerHint')));
+      setRecipes(`<div class="rc none"><span class="rp">${I.t('peerUnits')}</span></div>${r ? ucardBtn() : ''}`);
+      setCmds('');
+      ucardShow(r && S.ucard ? unitCard({ def: r.d }, r.atk) : '');
       return;
     }
     const list = selUnits(), p = g.me, drop = S.dropSel ? g.drops.find((d) => d.id === S.dropSel) : null;
     if (drop) {
-      setInfo(dropInfo(drop));
-      { const rid = drop.kind === 'item' && Object.keys(T.recipes).find((id) => g.recipeOf(id).item === drop.item); 
+      setInfo(`<div class="umid">${dropInfo(drop)}</div>`);
+      { const rid = drop.kind === 'item' && Object.keys(T.recipes).find((id) => g.recipeOf(id).item === drop.item);
         // 신화 아이템 4개 → 랜덤 불멸 아이템(모바일은 접힌 정보 칸 대신 늘 보이는 조합식 줄에 둔다)
         const myth = drop.kind === 'item' && T.items.find((i) => i.id === drop.item).tier === 9, ok = myth && g.canFuse(p);
         const fuse = myth ? `<div class="rc"><span class="rp">${I.t('fuseHave', { n: g.mythItems(p).length })}</span><button class="btn ${ok ? 'go' : ''}" data-act="fuse" type="button" ${ok ? '' : 'disabled'}>${I.t('fuseBtn')}</button></div>` : '';
         setRecipes((rid ? recipeLine(rid) : '') + fuse); }
-      setCmds(fillCmds(drop.kind === 'item' ? [] : [cmdBtn('useDrop', I.t('use'), '', true, S.cmdMode === 'use')]));
+      setCmds(drop.kind === 'item' ? '' : `<button class="ubig ${S.cmdMode === 'use' ? 'on' : ''}" data-act="useDrop" type="button"><b>${I.t('use')}</b></button>`);
+      ucardShow('');
       return;
     }
-    if (!list.length) { setInfo(`<h3>${I.t('commandHead')}</h3><div class="sub">${I.t('commandHint')}</div>`); setRecipes(`<div class="sub line">${I.t('recipeHint')}</div>`); setCmds(fillCmds([])); return; }
-    const u = list[0], d = u.def, mob = list.some((x) => x.def.tier > 0);
-    if (list.length === 1) setInfo(unitInfo(u));
-    else {
-      const c = {}; list.forEach((x) => (c[x.def.id] = (c[x.def.id] || 0) + 1));
-      // 등급 높은 순으로, 등급 색과 함께. 누르면 그 유닛만 다시 선택한다.
-      const ids = Object.keys(c).sort((a, b) => defOf[b].tier - defOf[a].tier);
-      setInfo(`<h3>${I.t('nSelected', { n: list.length })}</h3><div class="chips">${ids.map((id) => `<button class="chip" data-act="selDef" data-arg="${id}" type="button" style="color:${tierColor(defOf[id].tier)};border-color:${tierColor(defOf[id].tier)}">${esc(defOf[id].name)} ${rankTag(defOf[id].tier)} ×${c[id]}</button>`).join('')}</div>`);
-    }
-    // 이동·어택땅·점사 아이콘은 뺐다(터치·키 M/A/S로는 그대로 쓴다)
-    const cells = [];
+    if (!list.length) { setInfo(plain(I.t('commandHead'), I.t('commandHint'))); setRecipes(`<div class="rc none"><span class="rp">${I.t('recipeHint')}</span></div>`); setCmds(''); ucardShow(''); return; }
+    const u = list[0];
     if (list.length === 1) {
-      (d.p || []).forEach((x) => cells.push(passiveCell(x)));
-      (d.sk || []).forEach((s) => cells.push(skillCell(s)));
-      if (d.tier === 1) cells.push(cmdBtn('sell', t('disband'), '', true));
-      if (!S.coarse) { /* PC는 Esc로 해제 */ }
-      setRecipes(unitRecipes(u));
-    } else setRecipes(`<div class="sub line">${I.t('recipeOne')}</div>`);
-    cells.push(cmdBtn('desel', t('deselect'), '', true));
-    setCmds(fillCmds(cells));
+      const prim = unitPrimary(u);
+      setInfo(unitBar(u));
+      setCmds(prim.html);
+      setRecipes(unitNear(u, prim));
+      ucardShow(S.ucard ? unitCard(u) : '');
+      return;
+    }
+    // 다중 선택: 같은 유닛 묶음 카드(초상 + ×n, 등급 높은 순). 초상을 누르면 그 유닛만 다시 선택, 묶음이 합성 인원을 채우면 그 자리에서 合成
+    const c = {}; list.forEach((x) => (c[x.def.id] = (c[x.def.id] || 0) + 1));
+    const ids = Object.keys(c).sort((a, b) => defOf[b].tier - defOf[a].tier || c[b] - c[a]);
+    const grp = (id) => {
+      const d = defOf[id], need = T.combineNeed[d.tier], ok = !!need && c[id] >= need && g.ownedOf(p, id).length >= need;
+      return `<div class="grp" style="--gc:${tierColor(d.tier) || '#9a8e78'}"><button class="gsel" data-act="selDef" data-arg="${id}" type="button" title="${esc(d.name)} ${esc(rankTag(d.tier))}" aria-label="${esc(d.name)} ${esc(rankTag(d.tier))} ×${c[id]}"><img alt="" src="${Art.portrait(d)}"><em>×${c[id]}</em></button>${ok ? `<button class="btn go" data-act="combine" data-arg="${id}" type="button">${I.t('combineBtn')}</button>` : ''}</div>`;
+    };
+    setInfo(`<div class="umid"><div class="ul1"><b class="unm">${I.t('nSelected', { n: list.length })}</b></div><div class="grps">${ids.map(grp).join('')}</div></div>`);
+    setRecipes(`<div class="rc none"><span class="rp">${I.t('recipeOne')}</span></div>`);
+    setCmds('');
+    ucardShow('');
   }
+  // 상세 카드(#ucard): 선택 바 바로 위에 같은 왼쪽 끝으로 뜬다. 바깥을 누르면 카드만 닫히고 선택과 전투는 그대로다.
+  function ucardShow(h) {
+    const c = $('ucard'), sb = $('selbar');
+    if (!h || sb.hidden) { if (!c.hidden) { c.hidden = true; c.innerHTML = ''; c.dataset.html = ''; c.dataset.pos = ''; } return; }
+    const body = `<div class="ucb">${h}</div>`;
+    if (c.dataset.html !== body) {
+      const sc = c.querySelector('.ucb'), top = sc ? sc.scrollTop : 0;
+      c.innerHTML = body; c.dataset.html = body;
+      const nb = c.querySelector('.ucb'); if (nb && top) nb.scrollTop = top;
+    }
+    if (c.hidden) c.hidden = false;
+    const ph = c.offsetParent ? c.offsetParent.clientHeight : window.innerHeight / zoom;
+    const pos = [sb.offsetLeft, sb.offsetWidth, sb.offsetTop, ph].join();
+    if (c.dataset.pos !== pos) {
+      c.dataset.pos = pos;
+      c.style.left = sb.offsetLeft + 'px'; c.style.width = Math.min(sb.offsetWidth, 560) + 'px';
+      c.style.bottom = (ph - sb.offsetTop + 8) + 'px'; c.style.maxHeight = Math.max(120, Math.min(sb.offsetTop - 8 - 8, ph * 0.6)) + 'px';
+    }
+  }
+  document.addEventListener('pointerdown', (e) => {
+    if (!S.ucard || !e.target.closest || e.target.closest('#ucard, #selbar, #achpop, #tutbox')) return;
+    S.ucard = false; dirty();
+  }, true);
+  // 바·카드 안 인연 칩: 누르면 그 인연 창(단계 표·구성원). 마우스로 바깥을 누르면 닫힌다(터치는 10-input이 닫는다)
+  ['selbar', 'ucard'].forEach((id) => $(id).addEventListener('click', (e) => { const b = e.target.closest('[data-syn]'); if (b) showSyn(b.dataset.syn, b); }));
+  document.addEventListener('pointerdown', (e) => {
+    if (S.synPop && e.target.closest && !e.target.closest('#achpop, [data-syn], #synbar')) showSyn(null);
+  }, true);
   function renderFight() {
     const l = g.localChamps(), act = g.active(), dead = l.some((c) => c.dead);
     setInfo(act ? unitInfo(act.u) : `<h3>${I.t('noChamp')}</h3><div class="sub">${I.t('noChampHint')}</div>`);
@@ -68,7 +107,7 @@
   // 명령칸 설명 팝업
   {
     const tip = document.createElement('div'); tip.id = 'cmdtip'; tip.hidden = true; document.body.appendChild(tip);
-    let cur = null;
+    let cur = null, pin = false;
     const show = (el) => {
       cur = el;
       tip.innerHTML = `<b>${esc(el.dataset.tn)}</b><small>${esc(el.dataset.tt)}</small>${el.dataset.td ? `<div>${esc(el.dataset.td)}</div>` : ''}`;
@@ -77,16 +116,22 @@
       const x = Math.min(r.left / z, window.innerWidth / z - tip.offsetWidth - 6), y = r.top / z - tip.offsetHeight - 8;
       tip.style.left = Math.max(4, x) + 'px'; tip.style.top = (y < 4 ? r.bottom / z + 8 : y) + 'px';
     };
-    $('cmds').addEventListener('mouseover', (e) => { const el = e.target.closest('[data-tn]'); if (el && el !== cur) show(el); else if (!el) { tip.hidden = true; cur = null; } });
-    $('cmds').addEventListener('mouseleave', () => { tip.hidden = true; cur = null; });
-    let tipT = 0;
-    $('cmds').addEventListener('pointerdown', (e) => {
-      if (e.pointerType !== 'touch') return;
-      const el = e.target.closest('[data-tn]'); if (!el) return;
-      show(el); clearTimeout(tipT); tipT = setTimeout(() => { tip.hidden = true; cur = null; }, 2600);
+    const hide = () => { tip.hidden = true; cur = null; pin = false; };
+    // 마우스: 올리면 뜨고 벗어나면 닫힌다. 누르면(터치·마우스) 설명이 고정되고, 다른 곳을 누르면 닫힌다(2.6초 자동 닫힘 폐지, 2026-11-23)
+    ['selbar', 'ucard'].forEach((id) => {
+      const box = $(id);
+      box.addEventListener('mouseover', (e) => { if (pin) return; const el = e.target.closest('[data-tn]'); if (el && el !== cur) show(el); else if (!el && cur) hide(); });
+      box.addEventListener('mouseleave', () => { if (!pin && cur) hide(); });
+      // 누름이 스크롤로 바뀌면 click이 오지 않는다 → 알약 줄을 밀어 보는 손가락은 설명을 띄우지 않는다
+      box.addEventListener('click', (e) => { const el = e.target.closest('[data-tn]'); if (!el) return; if (pin && cur === el) { hide(); return; } show(el); pin = true; });
     });
-    // 칸이 다시 그려지면 같은 자리의 새 칸으로 설명을 이어 준다
-    setInterval(() => { if (cur && !cur.isConnected) { tip.hidden = true; cur = null; } }, 300);
+    document.addEventListener('pointerdown', (e) => { if (cur && !(e.target.closest && e.target.closest('[data-tn]'))) hide(); }, true);
+    // 칸이 다시 그려지면(수치가 바뀌어 바를 새로 그림) 같은 이름의 새 칸으로 설명을 이어 준다
+    setInterval(() => {
+      if (!cur || cur.isConnected) return;
+      const n = [...document.querySelectorAll('#selbar [data-tn], #ucard [data-tn]')].find((x) => x.dataset.tn === cur.dataset.tn && x.dataset.tt === cur.dataset.tt && x.getClientRects().length);
+      if (n) { const p = pin; show(n); pin = p; } else hide();
+    }, 300);
   }
   // 권장 화력을 등급·업글·기수로 풀어 쓴다
   function advise(need, n) {
@@ -248,10 +293,19 @@
       + `<div class="chips">${chips}</div>${x.coreMiss ? `<div class="sn">${esc(t('synCore', { a: defOf[s.core].name }))}</div>` : ''}`
       + `<div style="margin-top:4px;color:${x.on ? '#f4ecd8' : 'var(--dim)'}">${esc(s.desc)}</div><div class="sts">${synTiersHtml(x)}</div>`
       + `<div class="sn">${esc(t('synBossNote', { n: g.synMaxPerCarry || 5 }))}</div>`;
-    const inAll = !!el.closest('#synall');
-    pop.classList.add('sp'); pop.classList.toggle('sx', inAll);
+    const inAll = !!el.closest('#synall'), inBar = !!el.closest('#selbar, #ucard');
+    pop.classList.add('sp'); pop.classList.toggle('sx', inAll); pop.classList.toggle('sb', inBar);
     pop.hidden = false; S.synPop = id;
     const r = el.getBoundingClientRect(), vw = window.innerWidth / zoom;
+    // 선택 바·상세 카드의 인연 칩: 칩 바로 위에 띄운다(자리가 모자라면 화면 위 끝부터)
+    pop.style.maxHeight = '';
+    if (inBar) {
+      // 창이 칩·바를 덮지 않게 칩 위 자리만큼만 키우고, 넘치면 창 안에서 스크롤한다
+      pop.style.maxHeight = Math.max(100, r.top / zoom - 10) + 'px';
+      pop.style.left = Math.max(4, Math.min(r.left / zoom, vw - pop.offsetWidth - 4)) + 'px';
+      pop.style.top = Math.max(4, r.top / zoom - pop.offsetHeight - 6) + 'px';
+      return;
+    }
     const lx = inAll ? (r.right / zoom + 6 + pop.offsetWidth <= vw - 4 ? r.right / zoom + 6 : r.left / zoom - pop.offsetWidth - 6) : $('synbar').getBoundingClientRect().right / zoom + 8;
     pop.style.left = Math.max(4, Math.min(lx, vw - pop.offsetWidth - 4)) + 'px';
     pop.style.top = Math.max(4, Math.min(r.top / zoom, window.innerHeight / zoom - pop.offsetHeight - 4)) + 'px';

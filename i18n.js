@@ -462,6 +462,12 @@
     laneHint: ['유닛을 눌러 고른 뒤 옮겨 배치하세요', 'ユニットをタップして選び、移動させて配置しましょう', 'Tap a unit to select it, then move it into place', '点击单位选中后，移动到合适位置'],
     frontWarn: ['전선이 가득 차 갑니다. 가득 차면 라이프가 줄어듭니다', '戦線が埋まりつつあります。満杯になるとライフが減ります', 'The front is filling up. When full, you lose lives', '防线即将挤满，满了会扣除生命'],
     waitPz: ['{a}의 연결을 기다리는 중입니다.', '{a}の接続を待っています。', 'Waiting for {a} to reconnect.', '正在等待{a}重新连接。'],
+    // 선택 정보 바·상세 카드(2026-11-23 안 A)
+    sellAgain: ['한 번 더', 'もう一度', 'Tap again', '再按一次'],
+    noRecipeS: ['관련 조합식 없음', '関連レシピなし', 'No recipes', '无相关配方'],
+    cardRecipe: ['조합식', 'レシピ', 'Recipes', '配方'],
+    cardStats: ['능력치', 'ステータス', 'Stats', '属性'],
+    cardSkills: ['스킬·패시브', 'スキル・パッシブ', 'Skills & passives', '技能・被动'],
   };
   const idx = { ko: 0, ja: 1, en: 2, zh: 3 }[lang];
   function t(key, vars) {

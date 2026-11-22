@@ -30,10 +30,18 @@
     else if (a === 'stop') { if (inBoss()) g.arenaStop(); else g.cmd('focus', S.sel); setMode(null); }
     else if (a === 'esc') setMode(null);
     // 직접 누른 조합·제작이 켜져 있는 인연 시너지를 끄거나 단계를 내리면 먼저 묻는다(16-hud renderOverlay의 확인 창). 자동 조합·AI 동맹은 묻지 않는다.
-    else if (a === 'combine') { if (u && !askCombine('combine', u.def.id, u.id)) { const n = g.combine(p, u.def.id, u.id); if (n) setSel([n.id]); } }
+    // arg가 있으면 다중 선택 묶음 카드의 合成: 그 유닛으로 합성한다(13-info-timers renderInfo)
+    else if (a === 'combine') { const cu = arg ? list.find((x) => x.def.id === arg) : u; if (cu && !askCombine('combine', cu.def.id, cu.id)) { const n = g.combine(p, cu.def.id, cu.id); if (n) setSel([n.id]); } }
     else if (a === 'combineGo') { const c = S.combineAsk; S.combineAsk = null; if (c) { if (c.drawer) S.drawer = c.drawer; const n = c.a === 'craft' ? g.craft(p, c.id) : g.combine(p, c.id, c.uid); if (n) setSel([n.id]); } }
     else if (a === 'combineNo') { const c = S.combineAsk; S.combineAsk = null; if (c && c.drawer) S.drawer = c.drawer; }
-    else if (a === 'sell') { if (list.length === 1 && u.def.tier === 1) { const v = g.sell(p, u); toast(I.t('disbanded', { a: u.def.name, c: T.currency, v }), 'good'); } }
+    // 해산은 되돌릴 수 없어 두 번 누른다: 처음 누르면 버튼이 '한 번 더'로 바뀌고 3초 안에 같은 유닛으로 다시 눌러야 해산한다(설정의 나가기와 같은 방식)
+    else if (a === 'sell') {
+      if (list.length === 1 && u.def.tier === 1) {
+        if (S.sellArm === u.id) { S.sellArm = null; const v = g.sell(p, u); toast(I.t('disbanded', { a: u.def.name, c: T.currency, v }), 'good'); }
+        else { const id = u.id; S.sellArm = id; setTimeout(() => { if (S.sellArm === id) { S.sellArm = null; dirty(); } }, 3000); }
+      }
+    }
+    else if (a === 'ucard') S.ucard = !S.ucard;
     else if (a === 'speed') { speed = speed === 3 ? 1 : speed + 1; if (net) net.speedWant = speed; }
     else if (a === 'myview') S.view = null;
     else if (a === 'statDet') { S.statDet = !S.statDet; const sb = $('selbar'); if (sb && S.statDet) sb.classList.add('exp'); }
