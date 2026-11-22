@@ -19,6 +19,9 @@ body { background: var(--ink); color: var(--paper); font: 13px/1.45 var(--ui); u
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+/* 터치 시 파란 탭 강조·포커스 테두리 제거(키보드 :focus-visible 테두리는 위 규칙대로 유지) */
+html, body, * { -webkit-tap-highlight-color: transparent; }
+:focus:not(:focus-visible) { outline: none; }
 #app { position: fixed; inset: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px) 0; display: grid; grid-template: 0 minmax(0, 1fr) 0 196px / 250px minmax(0, 1fr) 270px; padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 #top { grid-column: 1 / 4; display: none; align-items: center; gap: 16px; padding: 0 12px; background: var(--lacquer); border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
 #top b { font-family: var(--display); font-weight: 400; font-size: 17px; color: var(--brass); }

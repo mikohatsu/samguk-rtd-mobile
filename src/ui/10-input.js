@@ -73,7 +73,7 @@
       S.lastClick = { t: now, id: u.def.id };
       return;
     }
-    const f = g.phase === 'wave' ? flagAt(m) : null;
+    const f = g.phase === 'wave' ? flagAt(e) : null;
     if (f) { showFlag(f, e); return; } // 다른 곳을 누를 때까지 띄워 둔다(아래 pointerdown에서 닫는다)
     // 빈 곳: 고른 게 있으면 그리로 '공격하며 이동'(가는 길에 사거리 안의 적이 있으면 멈춰서 때린다), 없으면 아무것도 안 함
     // 터치: 유닛은 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
@@ -157,7 +157,7 @@
       if (touch.mode === 'pan') panBy(touch.cx, touch.cy, dx, dy);
       return;
     }
-    if (g && e.pointerType !== 'touch') showFlag(g.phase === 'wave' && !S.drag ? flagAt(m) : null, e);
+    if (g && e.pointerType !== 'touch') showFlag(g.phase === 'wave' && !S.drag ? flagAt(e) : null, e);
     if (S.drag) { S.drag.x1 = m.x; S.drag.y1 = m.y; if (dist(S.drag.x0, S.drag.y0, m.x, m.y) > 10) S.drag.moved = true; }
   });
   view.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') $('achpop').hidden = true; });

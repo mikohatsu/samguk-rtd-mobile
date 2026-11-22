@@ -602,14 +602,74 @@
     const SK = window.RTD_SKFX;
     if (SK) SK.spr(c, 'circle_05', '#000000', x, y, w * 1.5, w * 1.5, 0, a, false, 0.36);
   }
+  // 적 병사: 발밑 그림자와 몸 그림을 그림·크기별로 한 장에 합쳐 두고 한 번에 찍는다(blobShadow + drawSprite와 같은 모양, 그리기 호출 절반).
+  // 맞아서 기우는 순간과 정예(사이에 후광을 그린다)는 부른 쪽이 따로 그린다. 그림자 알파 0.5, 그림자 폭 = 크기×0.7×1.5, 높이는 그 0.36배.
+  const SHADOWED = new WeakMap();
+  function soldierShadowed(img, sz, dy) {
+    let m = SHADOWED.get(img); if (!m) SHADOWED.set(img, (m = {}));
+    const key = sz + ',' + dy; if (m[key]) return m[key];
+    const SK = window.RTD_SKFX, sh = SK && SK.tint ? SK.tint('circle_05', '#000000') : null;
+    if (!sh || !img.width) return null;
+    const r = img.width / sz, s = sz * 1.05, hx = Math.max(sz / 2, s / 2), y0 = -0.6 * sz, y1 = Math.max(0.4 * sz, dy + s * 0.18);
+    const ox = 1 + hx * r, oy = 1 - y0 * r, cv = document.createElement('canvas');
+    cv.width = Math.ceil(hx * 2 * r) + 2; cv.height = Math.ceil((y1 - y0) * r) + 2;
+    const x = cv.getContext('2d');
+    x.setTransform(r, 0, 0, r, ox, oy);
+    x.globalAlpha = 0.5; x.drawImage(sh, -s / 2, dy - s * 0.18, s, s * 0.36);
+    x.globalAlpha = 1; x.drawImage(img, -sz / 2, -0.6 * sz, sz, sz);
+    return (m[key] = { cv, ox: ox / r, oy: oy / r, w: cv.width / r, h: cv.height / r });
+  }
+  function drawShadowed(c, o, x, y, flip) {
+    if (!flip) { c.drawImage(o.cv, x - o.ox, y - o.oy, o.w, o.h); return; }
+    c.save(); c.translate(x, y); c.scale(-1, 1); c.drawImage(o.cv, -o.ox, -o.oy, o.w, o.h); c.restore();
+  }
   // 체력·게이지 막대: 틀은 어두운 금속 판 그림(gfx/ui_tab, 9조각으로 늘임), 채움만 사각형. 그림이 없으면 예전 막대.
+  // 틀(9조각)과 어두운 바탕은 크기·화면 배율별로 한 번 그려 두고 한 장으로 찍는다.
+  // 적 60명이면 매 프레임 틀 조각만 540번 그리던 것(라인 전체 그리기 호출의 2/3)이 60번이 된다. 모양은 같다.
+  const BARC = new Map();
+  function barFrame(fr, w, h, p, k) {
+    const key = ((w * 64) | 0) + ',' + ((h * 64) | 0) + ',' + k;
+    let cv = BARC.get(key);
+    if (cv) return cv;
+    if (BARC.size > 48) { BARC.forEach((v) => { v.width = v.height = 0; }); BARC.clear(); }
+    const fw = w + p * 2, fh = h + p * 2;
+    cv = document.createElement('canvas'); cv.width = Math.ceil(fw * k) + 2; cv.height = Math.ceil(fh * k) + 2;
+    const x = cv.getContext('2d');
+    x.setTransform(k, 0, 0, k, 1, 1);
+    Art.nine(x, fr, 0, 0, fw, fh, 12, Math.max(2, p * 1.4));
+    x.fillStyle = 'rgba(0,0,0,.6)'; x.fillRect(p, p, w, h);
+    BARC.set(key, cv);
+    return cv;
+  }
   function bar(c, x, y, w, h, f, col) {
     const fr = Art.pic('ui_tab');
-    if (fr) { const p = Math.max(1.5, h * 0.4); Art.nine(c, fr, x - w / 2 - p, y - p, w + p * 2, h + p * 2, 12, Math.max(2, p * 1.4)); }
+    if (fr) {
+      const p = Math.max(1.5, h * 0.4), m = c.getTransform(), k = Math.max(0.25, Math.round(Math.hypot(m.a, m.b) * 100) / 100);
+      const cv = barFrame(fr, w, h, p, k);
+      c.drawImage(cv, x - w / 2 - p - 1 / k, y - p - 1 / k, cv.width / k, cv.height / k);
+      // 채움(색 + 위쪽 40% 밝은 줄)도 색·높이별 한 장을 가로로 늘여 찍는다(사각형 두 번 → 그림 한 번)
+      const fw = w * Math.max(0, Math.min(1, f));
+      if (fw > 0) { const st = barFill(col, h, k); c.drawImage(st, x - w / 2, y, fw, h); }
+      return;
+    }
     c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(x - w / 2, y, w, h);
     c.fillStyle = col; c.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, f)), h);
     // 위쪽 절반을 밝게 한 줄 덮어 납작한 띠가 아니라 둥근 막대처럼 보이게
     c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, f)), h * 0.4);
+  }
+  const BARF = new Map();
+  function barFill(col, h, k) {
+    const key = col + ',' + ((h * 64) | 0) + ',' + k;
+    let cv = BARF.get(key);
+    if (cv) return cv;
+    if (BARF.size > 48) { BARF.forEach((v) => { v.width = v.height = 0; }); BARF.clear(); }
+    cv = document.createElement('canvas'); cv.width = 4; cv.height = Math.max(1, Math.round(h * k));
+    const x = cv.getContext('2d'), sy = cv.height / h;
+    x.setTransform(1, 0, 0, sy, 0, 0);
+    x.fillStyle = col; x.fillRect(0, 0, 4, h);
+    x.fillStyle = 'rgba(255,255,255,.18)'; x.fillRect(0, 0, 4, h * 0.4);
+    BARF.set(key, cv);
+    return cv;
   }
   // 스킬 이펙트를 쓴 장수의 등급(이펙트 모양 vx와 색이 같은 스킬을 가진 결투장 장수 중 가장 높은 등급). 처음 볼 때 한 번 찾고,
   // 그때 신화·불멸이면 흔들림과 묵직한 소리를 더한다. 게임 객체에는 아무것도 붙이지 않는다.
@@ -727,12 +787,42 @@
     if (k === 'speed' || w.length === 1) return n.slice(0, 2);
     return w[0][0] + w[w.length - 1][0];
   };
-  // 오른쪽 여백에 3열로 모아 세운다
-  const flagPos = () => {
-    const rows = Math.ceil(T.achievements.length / 3), step = Math.min(68, 820 / (rows - 1));
-    return T.achievements.map((a, i) => ({ a, x: W - 174 + Math.floor(i / rows) * 58, y: 128 + (i % rows) * step }));
-  };
-  const FLAGS = flagPos();
+  // 깃발 자리(flagLayout): 전장 좌표가 아니라 화면 고정 좌표(무대 CSS px)로 잡는다.
+  // 화면 비율마다 맵이 보이는 폭이 달라서, 전장 오른쪽 여백에 박아 두면 휴대폰·태블릿에서 오른쪽 버튼 열(#rail)·배속 버튼(#tr) 밑에 깔렸다.
+  // 길 바깥 가장자리 ~ 오른쪽 버튼 열 사이의 빈 띠를 DOM 단추 위치로 재고, 그 안에 깃발이 가장 크게 들어가는 열 수를 골라 격자로 세운다.
+  const FLAGS = T.achievements.map((a) => ({ a }));
+  const FCW = 60, FCH = 72, FKMIN = 0.5; // 깃발 한 칸(그림 단위). 빈 띠가 좁아 이 배율(FKMIN)도 안 나오면 띠를 길 쪽으로 넓힌다(깃발은 유닛·적 밑에 깔린다)
+  let flagL = null, flagLT = 0;
+  function flagLayout() {
+    const B = S.base, now = performance.now();
+    // DOM 위치 재기는 0.5초에 한 번(화면 크기가 바뀌면 바로)
+    if (flagL && flagL.sw === B.sw && flagL.sh === B.sh && flagL.dpr === B.dpr && now - flagLT < 500) return flagL;
+    flagLT = now;
+    const st = $('stage').getBoundingClientRect(), kx = B.sw / (st.width || 1), ky = B.sh / (st.height || 1);
+    const box = (el) => { if (!el || el.hidden || !el.getClientRects().length) return null; const r = el.getBoundingClientRect(); return r.width ? { l: (r.left - st.left) * kx, t: (r.top - st.top) * ky, r: (r.right - st.left) * kx, b: (r.bottom - st.top) * ky } : null; };
+    const pad = 6, rail = box($('rail')), th = 24, n = FLAGS.length;
+    const right = (rail ? rail.l : B.sw - 8) - pad;
+    // 길 바깥 가장자리(길 가운데 줄 + 44단위), 카메라를 푼 바탕 배율 기준
+    const edge = B.sw / 2 + (ROAD.x1 + 44 - W / 2) * B.s0;
+    let top = pad, bot = B.sh - pad, left = Math.max(pad, Math.min(edge, right - 40));
+    // 위아래 단추(배속·메뉴, 보스전 버튼, 내 전장으로, 라인 공격 버튼)와 겹치는 만큼 띠를 줄인다
+    const clip = () => ['tr', 'bossbtn', 'backbtn', 'skillbar'].forEach((id) => { const r = box($(id)); if (!r || r.r <= left || r.l >= right) return; if ((r.t + r.b) / 2 < B.sh / 2) top = Math.max(top, r.b + pad); else bot = Math.min(bot, r.t - pad); });
+    const best = (w) => { let o = null; for (let cols = 1; cols <= 8; cols++) { const rows = Math.ceil(n / cols), k = Math.min(1, w / (cols * FCW), (bot - top - th) / (rows * FCH)); if (!o || k > o.k) o = { cols, rows, k }; } return o; };
+    clip();
+    let G = best(right - left);
+    if (G.k < FKMIN) {
+      // 좁은 화면(4:3 태블릿 등): FKMIN 배율이 나오는 가장 좁은 폭까지 띠를 왼쪽(길 쪽)으로 넓힌다
+      for (let cols = 1; cols <= 8; cols++) if ((bot - top - th) / (Math.ceil(n / cols) * FCH) >= FKMIN) { left = Math.max(pad, right - cols * FCW * FKMIN); break; }
+      clip(); G = best(right - left);
+    }
+    const cw = FCW * G.k, ch = Math.min((bot - top - th) / G.rows, FCH * G.k * 1.25), gw = cw * G.cols, x0 = left + (right - left - gw) / 2;
+    FLAGS.forEach((f, i) => { f.x = x0 + Math.floor(i / G.rows) * cw; f.y = top + th + (i % G.rows) * ch; f.w = cw; f.h = ch; });
+    flagL = { sw: B.sw, sh: B.sh, dpr: B.dpr, l: Math.floor(Math.min(left, x0)), t: Math.floor(top), r: Math.ceil(Math.max(right, x0 + gw)), b: Math.ceil(top + th + G.rows * ch), k: G.k, cols: G.cols, cx: x0 + gw / 2, th };
+    flagL.key = [flagL.l, flagL.t, flagL.r, flagL.b, G.k.toFixed(3), G.cols].join();
+    flagL.cells = FLAGS.map((f) => [f.x, f.y, f.w, f.h]);
+    S.flagL = flagL; // 시험·디버그용(무대 CSS px의 깃발 칸 x·y·w·h)
+    return flagL;
+  }
   // 전황: 왼쪽 맵 여백에 세로로 놓는다
   function drawStats() {
     const c = ctx, vp = viewedPeer(), ln = vp && vp.state.ln;
@@ -772,31 +862,35 @@
     return ACH_TINT[key];
   }
   function drawFlags(c) {
-    const key = Object.keys(g.me.done).join() + '|' + g.mode + g.party + '|' + (I.lang || '') + '|' + achLoaded;
+    const L = flagLayout(), dpr = S.base.dpr;
+    const key = Object.keys(g.me.done).join() + '|' + g.mode + g.party + '|' + (I.lang || '') + '|' + achLoaded + '|' + L.key + '|' + dpr;
     if (flagKey !== key || !flagCv) {
       flagKey = key;
-      if (!flagCv) { flagCv = document.createElement('canvas'); flagCv.width = 220; flagCv.height = H; }
+      if (!flagCv) flagCv = document.createElement('canvas');
+      flagCv.width = Math.max(1, Math.ceil((L.r - L.l) * dpr)); flagCv.height = Math.max(1, Math.ceil((L.b - L.t) * dpr));
       const x = flagCv.getContext('2d');
-      x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, 220, H); x.translate(-(W - 205), 0);
-      paintFlags(x);
+      x.setTransform(dpr, 0, 0, dpr, -L.l * dpr, -L.t * dpr);
+      paintFlags(x, L);
     }
-    c.drawImage(flagCv, W - 205, 0);
+    // 화면 고정 좌표(카메라·흔들림과 무관)로 찍는다. 유닛·적은 이 위에 그려진다.
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(flagCv, Math.round(L.l * dpr), Math.round(L.t * dpr)); c.restore();
   }
-  function paintFlags(c) {
+  function paintFlags(c, L) {
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
-    c.font = '400 34px "Black Han Sans", sans-serif'; c.strokeStyle = 'rgba(32, 21, 12, .85)'; c.lineWidth = 6;
-    c.strokeText(I.t('ach'), W - 98, 38); c.fillStyle = '#e6c578'; c.fillText(I.t('ach'), W - 98, 38);
+    c.font = '400 20px "Black Han Sans", sans-serif'; c.strokeStyle = 'rgba(32, 21, 12, .85)'; c.lineWidth = 4;
+    c.strokeText(I.t('ach'), L.cx, L.t + L.th / 2); c.fillStyle = '#e6c578'; c.fillText(I.t('ach'), L.cx, L.t + L.th / 2);
     for (const f of FLAGS) {
       const done = g.me.done[f.a.id], kind = achKind(f.a), col = tierColor(achTier(f.a));
       // 인원이 모자라 열리지 않는 협동 업적은 흐리게
       const closed = kind === 'party' && !g.partyAchOpen(f.a.cond);
       c.globalAlpha = done ? 1 : closed ? 0.18 : 0.55;
-      c.save(); c.translate(f.x, f.y);
+      // 칸 왼쪽 아래(깃대 밑동)를 원점으로, 그림 단위(칸 60×72)를 배율 k로 줄여 그린다
+      c.save(); c.translate(f.x + 5 * L.k, f.y + f.h - (f.h - 70 * L.k) / 2); c.scale(L.k, L.k);
       const label = achLabel(f.a);
       const sp = achSprite(ACH_PIC[kind], col);
       if (sp) {
         // 그림 깃발: 높이를 맞춰 세우고 천 가운데에 글자를 쓴다
-        const hh = kind === 'bond' ? 50 : 66, ww = (hh * sp.width) / sp.height, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
+        const hh = kind === 'bond' ? 45 : 66, ww = (hh * sp.width) / sp.height, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
         c.drawImage(sp, kind === 'bond' ? -2 : -4, -hh, ww, hh);
         // 깃발 글자: 휴대폰에서 깨알이 되지 않게 천 폭에 맞는 한도에서 키우고 굵은 제목 글꼴로
         c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 5; c.font = `400 ${label.length > 2 ? 17 : 21}px "Black Han Sans", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -831,7 +925,12 @@
       c.globalAlpha = 1;
     }
   }
-  const flagAt = (m) => FLAGS.find((f) => m.x > f.x - 6 && m.x < f.x + 50 && m.y > f.y - 64 && m.y < f.y + 4);
+  // e: 포인터 이벤트(화면 좌표). 깃발 칸 전체가 누르는 자리다.
+  const flagAt = (e) => {
+    if (!flagL) return null;
+    const r = view.getBoundingClientRect(), x = ((e.clientX - r.left) / (r.width || 1)) * S.base.sw, y = ((e.clientY - r.top) / (r.height || 1)) * S.base.sh;
+    return FLAGS.find((f) => x >= f.x && x < f.x + f.w && y >= f.y && y < f.y + f.h) || null;
+  };
   function showFlag(f, e) {
     const pop = $('achpop');
     pop.classList.remove('sp'); // 인연 창 모양(스크롤)을 업적 창에 남기지 않는다
@@ -930,16 +1029,20 @@
       } else {
         const hit = (e.hitT || 0) / 0.14, ex = e.x + Math.cos(e.hitA || 0) * 7 * hit, ey = e.y + Math.sin(e.hitA || 0) * 7 * hit - Math.abs(Math.sin(t * 12 + e.id)) * 3;
         const v = [2, 0, 2, 4][e.seg], img = Art.soldierSprite(e.w, v, Math.sin(t * 11 + e.id) > 0 ? 1 : 2), sz = e.elite ? 96 : 60;
-        // 발밑 그림자: 누런 길 위에서도 적이 바탕에서 떠 보이게
-        blobShadow(c, ex, ey + (e.elite ? 26 : 16), sz * 0.7, 0.5);
-        if (e.elite && SK) {
-          // 군웅할거 정예: 장수 후광과 같은 방식(그림) — 금빛 바닥 빛 + 금색 법진 + 솟는 빛 알갱이
-          const pu = 0.75 + Math.sin(t * 4 + e.id) * 0.25;
-          SK.spr(c, 'light_01', '#ffd86a', ex, ey + 4, 128, 128, t * 0.3, 0.45 * pu);
-          Art.fxPic(c, 'mc_rune3', ex, ey + 22, 84, 84, t * 0.7, 0.75, { col: '#ffd86a', sy: 0.42 });
-          for (let i = 0; i < 4; i++) { const ph = (t * 0.9 + i / 4 + e.id * 0.13) % 1; SK.spr(c, 'star_04', '#ffe9a8', ex + Math.sin(i * 1.9 + t) * 22, ey + 20 - ph * 70, 14, 14, 0, Math.sin(ph * Math.PI) * 0.8); }
+        // 발밑 그림자: 누런 길 위에서도 적이 바탕에서 떠 보이게. 보통 병사는 그림자와 몸을 합친 한 장으로 찍는다(soldierShadowed)
+        const sw = !e.elite && !(hit > 0) ? soldierShadowed(img, sz, 16) : null;
+        if (sw) { drawShadowed(c, sw, ex, ey, e.seg === 2); }
+        else {
+          blobShadow(c, ex, ey + (e.elite ? 26 : 16), sz * 0.7, 0.5);
+          if (e.elite && SK) {
+            // 군웅할거 정예: 장수 후광과 같은 방식(그림) — 금빛 바닥 빛 + 금색 법진 + 솟는 빛 알갱이
+            const pu = 0.75 + Math.sin(t * 4 + e.id) * 0.25;
+            SK.spr(c, 'light_01', '#ffd86a', ex, ey + 4, 128, 128, t * 0.3, 0.45 * pu);
+            Art.fxPic(c, 'mc_rune3', ex, ey + 22, 84, 84, t * 0.7, 0.75, { col: '#ffd86a', sy: 0.42 });
+            for (let i = 0; i < 4; i++) { const ph = (t * 0.9 + i / 4 + e.id * 0.13) % 1; SK.spr(c, 'star_04', '#ffe9a8', ex + Math.sin(i * 1.9 + t) * 22, ey + 20 - ph * 70, 14, 14, 0, Math.sin(ph * Math.PI) * 0.8); }
+          }
+          Art.drawSprite(c, img, ex, ey, sz, e.seg === 2, hit * 0.25);
         }
-        Art.drawSprite(c, img, ex, ey, sz, e.seg === 2, hit * 0.25);
         if (hit > 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = hit * 0.8; Art.drawSprite(c, img, ex, ey, sz, e.seg === 2, hit * 0.25); c.restore(); }
         // 적 체력 막대: 휴대폰 배율을 곱한다(예전 28×3은 화면에서 1px 남짓이었다)
         if (e.elite) bar(c, e.x, e.y - 50, 74 * us, 6 * us, e.hp / e.mhp, '#ffd86a');
@@ -3156,7 +3259,7 @@
       S.lastClick = { t: now, id: u.def.id };
       return;
     }
-    const f = g.phase === 'wave' ? flagAt(m) : null;
+    const f = g.phase === 'wave' ? flagAt(e) : null;
     if (f) { showFlag(f, e); return; } // 다른 곳을 누를 때까지 띄워 둔다(아래 pointerdown에서 닫는다)
     // 빈 곳: 고른 게 있으면 그리로 '공격하며 이동'(가는 길에 사거리 안의 적이 있으면 멈춰서 때린다), 없으면 아무것도 안 함
     // 터치: 유닛은 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
@@ -3240,7 +3343,7 @@
       if (touch.mode === 'pan') panBy(touch.cx, touch.cy, dx, dy);
       return;
     }
-    if (g && e.pointerType !== 'touch') showFlag(g.phase === 'wave' && !S.drag ? flagAt(m) : null, e);
+    if (g && e.pointerType !== 'touch') showFlag(g.phase === 'wave' && !S.drag ? flagAt(e) : null, e);
     if (S.drag) { S.drag.x1 = m.x; S.drag.y1 = m.y; if (dist(S.drag.x0, S.drag.y0, m.x, m.y) > 10) S.drag.moved = true; }
   });
   view.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') $('achpop').hidden = true; });
@@ -3987,6 +4090,10 @@
   function renderSyn() {
     const box = $('synlist'), p = g.me;
     const vis = synVisible(p);
+    // 목록 글은 인연별 진행·단계·가진 장수가 바뀔 때만 다시 만든다(0.18초마다 58개 인연 설명문을 새로 짓던 것)
+    const hk = I.lang + '|' + vis.map((x) => x.s.id + (x.on ? '+' : '-') + x.n + '/' + x.next + ':' + x.lv + ':' + x.g + ':' + x.s.units.map((id) => (g.has(p, id) ? 1 : 0)).join('')).join();
+    if (box.dataset.hk !== hk) {
+    box.dataset.hk = hk;
     const h = !vis.length ? `<div class="sub" style="padding:6px 10px">${t('synergyHint')}</div>` : vis.map((x) => {
       const s = x.s, tr = (s.tiers || [])[Math.max(0, x.lv - 1)], d = tr && I.synTierText ? I.synTierText(T, s, tr) : { lane: '', boss: '' };
       return `<div class="syn ${x.on ? 'on' : ''}" title="${esc(s.desc)}"><span class="cnt">${x.n}/${x.next}</span><b>${s.hidden ? '★ ' : ''}${esc(s.name)} <em class="gd" style="background:${GRADE_COL[x.g]}">${esc(gradeTxt(x.g))}</em> <u class="dt">${dotsOf(x)}</u></b>`
@@ -3994,6 +4101,7 @@
         + `<small style="grid-column:2">${x.on ? esc([d.lane, d.boss].filter(Boolean).join(' / ')) : esc(s.desc)}</small></div>`;
     }).join('');
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
+    }
     renderSynBar(vis);
     if (S.synAll) renderSynAll();
     // 이번 판 변형 규칙(악몽 +N)

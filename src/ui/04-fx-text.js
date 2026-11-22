@@ -114,12 +114,42 @@
     if (k === 'speed' || w.length === 1) return n.slice(0, 2);
     return w[0][0] + w[w.length - 1][0];
   };
-  // 오른쪽 여백에 3열로 모아 세운다
-  const flagPos = () => {
-    const rows = Math.ceil(T.achievements.length / 3), step = Math.min(68, 820 / (rows - 1));
-    return T.achievements.map((a, i) => ({ a, x: W - 174 + Math.floor(i / rows) * 58, y: 128 + (i % rows) * step }));
-  };
-  const FLAGS = flagPos();
+  // 깃발 자리(flagLayout): 전장 좌표가 아니라 화면 고정 좌표(무대 CSS px)로 잡는다.
+  // 화면 비율마다 맵이 보이는 폭이 달라서, 전장 오른쪽 여백에 박아 두면 휴대폰·태블릿에서 오른쪽 버튼 열(#rail)·배속 버튼(#tr) 밑에 깔렸다.
+  // 길 바깥 가장자리 ~ 오른쪽 버튼 열 사이의 빈 띠를 DOM 단추 위치로 재고, 그 안에 깃발이 가장 크게 들어가는 열 수를 골라 격자로 세운다.
+  const FLAGS = T.achievements.map((a) => ({ a }));
+  const FCW = 60, FCH = 72, FKMIN = 0.5; // 깃발 한 칸(그림 단위). 빈 띠가 좁아 이 배율(FKMIN)도 안 나오면 띠를 길 쪽으로 넓힌다(깃발은 유닛·적 밑에 깔린다)
+  let flagL = null, flagLT = 0;
+  function flagLayout() {
+    const B = S.base, now = performance.now();
+    // DOM 위치 재기는 0.5초에 한 번(화면 크기가 바뀌면 바로)
+    if (flagL && flagL.sw === B.sw && flagL.sh === B.sh && flagL.dpr === B.dpr && now - flagLT < 500) return flagL;
+    flagLT = now;
+    const st = $('stage').getBoundingClientRect(), kx = B.sw / (st.width || 1), ky = B.sh / (st.height || 1);
+    const box = (el) => { if (!el || el.hidden || !el.getClientRects().length) return null; const r = el.getBoundingClientRect(); return r.width ? { l: (r.left - st.left) * kx, t: (r.top - st.top) * ky, r: (r.right - st.left) * kx, b: (r.bottom - st.top) * ky } : null; };
+    const pad = 6, rail = box($('rail')), th = 24, n = FLAGS.length;
+    const right = (rail ? rail.l : B.sw - 8) - pad;
+    // 길 바깥 가장자리(길 가운데 줄 + 44단위), 카메라를 푼 바탕 배율 기준
+    const edge = B.sw / 2 + (ROAD.x1 + 44 - W / 2) * B.s0;
+    let top = pad, bot = B.sh - pad, left = Math.max(pad, Math.min(edge, right - 40));
+    // 위아래 단추(배속·메뉴, 보스전 버튼, 내 전장으로, 라인 공격 버튼)와 겹치는 만큼 띠를 줄인다
+    const clip = () => ['tr', 'bossbtn', 'backbtn', 'skillbar'].forEach((id) => { const r = box($(id)); if (!r || r.r <= left || r.l >= right) return; if ((r.t + r.b) / 2 < B.sh / 2) top = Math.max(top, r.b + pad); else bot = Math.min(bot, r.t - pad); });
+    const best = (w) => { let o = null; for (let cols = 1; cols <= 8; cols++) { const rows = Math.ceil(n / cols), k = Math.min(1, w / (cols * FCW), (bot - top - th) / (rows * FCH)); if (!o || k > o.k) o = { cols, rows, k }; } return o; };
+    clip();
+    let G = best(right - left);
+    if (G.k < FKMIN) {
+      // 좁은 화면(4:3 태블릿 등): FKMIN 배율이 나오는 가장 좁은 폭까지 띠를 왼쪽(길 쪽)으로 넓힌다
+      for (let cols = 1; cols <= 8; cols++) if ((bot - top - th) / (Math.ceil(n / cols) * FCH) >= FKMIN) { left = Math.max(pad, right - cols * FCW * FKMIN); break; }
+      clip(); G = best(right - left);
+    }
+    const cw = FCW * G.k, ch = Math.min((bot - top - th) / G.rows, FCH * G.k * 1.25), gw = cw * G.cols, x0 = left + (right - left - gw) / 2;
+    FLAGS.forEach((f, i) => { f.x = x0 + Math.floor(i / G.rows) * cw; f.y = top + th + (i % G.rows) * ch; f.w = cw; f.h = ch; });
+    flagL = { sw: B.sw, sh: B.sh, dpr: B.dpr, l: Math.floor(Math.min(left, x0)), t: Math.floor(top), r: Math.ceil(Math.max(right, x0 + gw)), b: Math.ceil(top + th + G.rows * ch), k: G.k, cols: G.cols, cx: x0 + gw / 2, th };
+    flagL.key = [flagL.l, flagL.t, flagL.r, flagL.b, G.k.toFixed(3), G.cols].join();
+    flagL.cells = FLAGS.map((f) => [f.x, f.y, f.w, f.h]);
+    S.flagL = flagL; // 시험·디버그용(무대 CSS px의 깃발 칸 x·y·w·h)
+    return flagL;
+  }
   // 전황: 왼쪽 맵 여백에 세로로 놓는다
   function drawStats() {
     const c = ctx, vp = viewedPeer(), ln = vp && vp.state.ln;
@@ -159,31 +189,35 @@
     return ACH_TINT[key];
   }
   function drawFlags(c) {
-    const key = Object.keys(g.me.done).join() + '|' + g.mode + g.party + '|' + (I.lang || '') + '|' + achLoaded;
+    const L = flagLayout(), dpr = S.base.dpr;
+    const key = Object.keys(g.me.done).join() + '|' + g.mode + g.party + '|' + (I.lang || '') + '|' + achLoaded + '|' + L.key + '|' + dpr;
     if (flagKey !== key || !flagCv) {
       flagKey = key;
-      if (!flagCv) { flagCv = document.createElement('canvas'); flagCv.width = 220; flagCv.height = H; }
+      if (!flagCv) flagCv = document.createElement('canvas');
+      flagCv.width = Math.max(1, Math.ceil((L.r - L.l) * dpr)); flagCv.height = Math.max(1, Math.ceil((L.b - L.t) * dpr));
       const x = flagCv.getContext('2d');
-      x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, 220, H); x.translate(-(W - 205), 0);
-      paintFlags(x);
+      x.setTransform(dpr, 0, 0, dpr, -L.l * dpr, -L.t * dpr);
+      paintFlags(x, L);
     }
-    c.drawImage(flagCv, W - 205, 0);
+    // 화면 고정 좌표(카메라·흔들림과 무관)로 찍는다. 유닛·적은 이 위에 그려진다.
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(flagCv, Math.round(L.l * dpr), Math.round(L.t * dpr)); c.restore();
   }
-  function paintFlags(c) {
+  function paintFlags(c, L) {
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
-    c.font = '400 34px "Black Han Sans", sans-serif'; c.strokeStyle = 'rgba(32, 21, 12, .85)'; c.lineWidth = 6;
-    c.strokeText(I.t('ach'), W - 98, 38); c.fillStyle = '#e6c578'; c.fillText(I.t('ach'), W - 98, 38);
+    c.font = '400 20px "Black Han Sans", sans-serif'; c.strokeStyle = 'rgba(32, 21, 12, .85)'; c.lineWidth = 4;
+    c.strokeText(I.t('ach'), L.cx, L.t + L.th / 2); c.fillStyle = '#e6c578'; c.fillText(I.t('ach'), L.cx, L.t + L.th / 2);
     for (const f of FLAGS) {
       const done = g.me.done[f.a.id], kind = achKind(f.a), col = tierColor(achTier(f.a));
       // 인원이 모자라 열리지 않는 협동 업적은 흐리게
       const closed = kind === 'party' && !g.partyAchOpen(f.a.cond);
       c.globalAlpha = done ? 1 : closed ? 0.18 : 0.55;
-      c.save(); c.translate(f.x, f.y);
+      // 칸 왼쪽 아래(깃대 밑동)를 원점으로, 그림 단위(칸 60×72)를 배율 k로 줄여 그린다
+      c.save(); c.translate(f.x + 5 * L.k, f.y + f.h - (f.h - 70 * L.k) / 2); c.scale(L.k, L.k);
       const label = achLabel(f.a);
       const sp = achSprite(ACH_PIC[kind], col);
       if (sp) {
         // 그림 깃발: 높이를 맞춰 세우고 천 가운데에 글자를 쓴다
-        const hh = kind === 'bond' ? 50 : 66, ww = (hh * sp.width) / sp.height, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
+        const hh = kind === 'bond' ? 45 : 66, ww = (hh * sp.width) / sp.height, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
         c.drawImage(sp, kind === 'bond' ? -2 : -4, -hh, ww, hh);
         // 깃발 글자: 휴대폰에서 깨알이 되지 않게 천 폭에 맞는 한도에서 키우고 굵은 제목 글꼴로
         c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 5; c.font = `400 ${label.length > 2 ? 17 : 21}px "Black Han Sans", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -218,7 +252,12 @@
       c.globalAlpha = 1;
     }
   }
-  const flagAt = (m) => FLAGS.find((f) => m.x > f.x - 6 && m.x < f.x + 50 && m.y > f.y - 64 && m.y < f.y + 4);
+  // e: 포인터 이벤트(화면 좌표). 깃발 칸 전체가 누르는 자리다.
+  const flagAt = (e) => {
+    if (!flagL) return null;
+    const r = view.getBoundingClientRect(), x = ((e.clientX - r.left) / (r.width || 1)) * S.base.sw, y = ((e.clientY - r.top) / (r.height || 1)) * S.base.sh;
+    return FLAGS.find((f) => x >= f.x && x < f.x + f.w && y >= f.y && y < f.y + f.h) || null;
+  };
   function showFlag(f, e) {
     const pop = $('achpop');
     pop.classList.remove('sp'); // 인연 창 모양(스크롤)을 업적 창에 남기지 않는다

@@ -10,6 +10,11 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.5', d: '2026-11-23', items: [
+      ['업적 깃발이 화면 크기에 맞춰 오른쪽 버튼 옆 빈 자리에 놓여, 버튼에 가려지지 않고 누를 수 있습니다.', '実績の旗が画面サイズに合わせて右側ボタンの横の空きスペースに並び、ボタンに隠れずに押せるようになりました。', 'Achievement flags now line up in the free space beside the right-side buttons, so they are never hidden and can always be tapped.', '成就旗帜会根据画面大小排列在右侧按钮旁的空白处，不再被按钮遮挡，可以点击。'],
+      ['전투 화면 그리기를 가볍게 해 휴대폰에서 프레임이 더 잘 나옵니다.', '戦闘画面の描画を軽くし、スマートフォンでのフレームレートが上がりました。', 'Battle rendering is lighter, giving smoother frame rates on phones.', '减轻了战斗画面的绘制负担，手机上的帧率更流畅。'],
+      ['안드로이드: 버튼을 누를 때 파란 강조가 나오지 않고, 게임 중에는 아래 내비게이션 막대를 숨깁니다(가장자리를 쓸면 잠깐 나타남).', 'Android：ボタンを押したときの青いハイライトをなくし、ゲーム中は下のナビゲーションバーを隠します(端をスワイプすると一時的に表示)。', 'Android: no more blue tap highlight on buttons, and the bottom navigation bar is hidden during play (swipe from the edge to show it briefly).', 'Android：点击按钮时不再出现蓝色高亮，游戏中隐藏底部导航栏(从边缘滑动可暂时显示)。'],
+    ] },
     { v: '0.3.4', d: '2026-11-23', items: [
       ['AI 동맹·협동 판에서 안내 말풍선이 떠 있는 동안 화면 전체가 어둡게 덮여 유닛이 흐려 보이던 문제를 고쳤습니다. 이제 안내할 곳만 금빛 테두리로 비춥니다.', 'AI同盟・協力プレイで案内の吹き出しが出ている間、画面全体が暗くなりユニットがぼやけて見えた問題を修正しました。案内する場所だけを金色の枠で示します。', 'Fixed the whole screen being darkened while a tip was shown in AI-ally and co-op games, which made units look blurry. Tips now just highlight the spot with a gold ring.', '修复了在AI同盟和合作模式中显示提示时整个画面变暗、单位看起来模糊的问题。现在只用金色边框标出提示位置。'],
     ] },

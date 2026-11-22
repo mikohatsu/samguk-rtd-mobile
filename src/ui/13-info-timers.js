@@ -299,6 +299,10 @@
   function renderSyn() {
     const box = $('synlist'), p = g.me;
     const vis = synVisible(p);
+    // 목록 글은 인연별 진행·단계·가진 장수가 바뀔 때만 다시 만든다(0.18초마다 58개 인연 설명문을 새로 짓던 것)
+    const hk = I.lang + '|' + vis.map((x) => x.s.id + (x.on ? '+' : '-') + x.n + '/' + x.next + ':' + x.lv + ':' + x.g + ':' + x.s.units.map((id) => (g.has(p, id) ? 1 : 0)).join('')).join();
+    if (box.dataset.hk !== hk) {
+    box.dataset.hk = hk;
     const h = !vis.length ? `<div class="sub" style="padding:6px 10px">${t('synergyHint')}</div>` : vis.map((x) => {
       const s = x.s, tr = (s.tiers || [])[Math.max(0, x.lv - 1)], d = tr && I.synTierText ? I.synTierText(T, s, tr) : { lane: '', boss: '' };
       return `<div class="syn ${x.on ? 'on' : ''}" title="${esc(s.desc)}"><span class="cnt">${x.n}/${x.next}</span><b>${s.hidden ? '★ ' : ''}${esc(s.name)} <em class="gd" style="background:${GRADE_COL[x.g]}">${esc(gradeTxt(x.g))}</em> <u class="dt">${dotsOf(x)}</u></b>`
@@ -306,6 +310,7 @@
         + `<small style="grid-column:2">${x.on ? esc([d.lane, d.boss].filter(Boolean).join(' / ')) : esc(s.desc)}</small></div>`;
     }).join('');
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
+    }
     renderSynBar(vis);
     if (S.synAll) renderSynAll();
     // 이번 판 변형 규칙(악몽 +N)

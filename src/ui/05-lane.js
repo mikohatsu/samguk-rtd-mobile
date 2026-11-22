@@ -33,16 +33,20 @@
       } else {
         const hit = (e.hitT || 0) / 0.14, ex = e.x + Math.cos(e.hitA || 0) * 7 * hit, ey = e.y + Math.sin(e.hitA || 0) * 7 * hit - Math.abs(Math.sin(t * 12 + e.id)) * 3;
         const v = [2, 0, 2, 4][e.seg], img = Art.soldierSprite(e.w, v, Math.sin(t * 11 + e.id) > 0 ? 1 : 2), sz = e.elite ? 96 : 60;
-        // 발밑 그림자: 누런 길 위에서도 적이 바탕에서 떠 보이게
-        blobShadow(c, ex, ey + (e.elite ? 26 : 16), sz * 0.7, 0.5);
-        if (e.elite && SK) {
-          // 군웅할거 정예: 장수 후광과 같은 방식(그림) — 금빛 바닥 빛 + 금색 법진 + 솟는 빛 알갱이
-          const pu = 0.75 + Math.sin(t * 4 + e.id) * 0.25;
-          SK.spr(c, 'light_01', '#ffd86a', ex, ey + 4, 128, 128, t * 0.3, 0.45 * pu);
-          Art.fxPic(c, 'mc_rune3', ex, ey + 22, 84, 84, t * 0.7, 0.75, { col: '#ffd86a', sy: 0.42 });
-          for (let i = 0; i < 4; i++) { const ph = (t * 0.9 + i / 4 + e.id * 0.13) % 1; SK.spr(c, 'star_04', '#ffe9a8', ex + Math.sin(i * 1.9 + t) * 22, ey + 20 - ph * 70, 14, 14, 0, Math.sin(ph * Math.PI) * 0.8); }
+        // 발밑 그림자: 누런 길 위에서도 적이 바탕에서 떠 보이게. 보통 병사는 그림자와 몸을 합친 한 장으로 찍는다(soldierShadowed)
+        const sw = !e.elite && !(hit > 0) ? soldierShadowed(img, sz, 16) : null;
+        if (sw) { drawShadowed(c, sw, ex, ey, e.seg === 2); }
+        else {
+          blobShadow(c, ex, ey + (e.elite ? 26 : 16), sz * 0.7, 0.5);
+          if (e.elite && SK) {
+            // 군웅할거 정예: 장수 후광과 같은 방식(그림) — 금빛 바닥 빛 + 금색 법진 + 솟는 빛 알갱이
+            const pu = 0.75 + Math.sin(t * 4 + e.id) * 0.25;
+            SK.spr(c, 'light_01', '#ffd86a', ex, ey + 4, 128, 128, t * 0.3, 0.45 * pu);
+            Art.fxPic(c, 'mc_rune3', ex, ey + 22, 84, 84, t * 0.7, 0.75, { col: '#ffd86a', sy: 0.42 });
+            for (let i = 0; i < 4; i++) { const ph = (t * 0.9 + i / 4 + e.id * 0.13) % 1; SK.spr(c, 'star_04', '#ffe9a8', ex + Math.sin(i * 1.9 + t) * 22, ey + 20 - ph * 70, 14, 14, 0, Math.sin(ph * Math.PI) * 0.8); }
+          }
+          Art.drawSprite(c, img, ex, ey, sz, e.seg === 2, hit * 0.25);
         }
-        Art.drawSprite(c, img, ex, ey, sz, e.seg === 2, hit * 0.25);
         if (hit > 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = hit * 0.8; Art.drawSprite(c, img, ex, ey, sz, e.seg === 2, hit * 0.25); c.restore(); }
         // 적 체력 막대: 휴대폰 배율을 곱한다(예전 28×3은 화면에서 1px 남짓이었다)
         if (e.elite) bar(c, e.x, e.y - 50, 74 * us, 6 * us, e.hp / e.mhp, '#ffd86a');

@@ -31,6 +31,13 @@
   function spr(c, n, col, x, y, w, h, rot, a, add, sy) {
     if (!(a > 0.01)) return true;
     const im = col ? tint(n, col) : img(n); if (!im) return false;
+    // 돌리지 않는 그림(그림자·바닥 빛 등)은 상태 저장·변환 없이 바로 찍는다(같은 결과, 호출 수만 준다)
+    if (!rot) {
+      const ga = c.globalAlpha, go = c.globalCompositeOperation, k = sy || 1;
+      if (add !== false) c.globalCompositeOperation = 'lighter';
+      c.globalAlpha = Math.min(1, a); c.drawImage(im, x - w / 2, y - (h * k) / 2, w, h * k);
+      c.globalAlpha = ga; c.globalCompositeOperation = go; return true;
+    }
     c.save(); if (add !== false) c.globalCompositeOperation = 'lighter';
     c.globalAlpha = Math.min(1, a); c.translate(x, y); if (sy) c.scale(1, sy); if (rot) c.rotate(rot);
     c.drawImage(im, -w / 2, -h / 2, w, h); c.restore(); return true;
@@ -381,5 +388,5 @@
     return true;
   }
 
-  root.RTD_SKFX = { fx, tele, tierAura, setQuality: (q) => (Q = q), spr, ready: () => loaded >= NAMES.length };
+  root.RTD_SKFX = { fx, tele, tierAura, setQuality: (q) => (Q = q), spr, tint, ready: () => loaded >= NAMES.length };
 })(typeof window !== 'undefined' ? window : globalThis);

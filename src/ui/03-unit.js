@@ -222,12 +222,72 @@
     const SK = window.RTD_SKFX;
     if (SK) SK.spr(c, 'circle_05', '#000000', x, y, w * 1.5, w * 1.5, 0, a, false, 0.36);
   }
+  // 적 병사: 발밑 그림자와 몸 그림을 그림·크기별로 한 장에 합쳐 두고 한 번에 찍는다(blobShadow + drawSprite와 같은 모양, 그리기 호출 절반).
+  // 맞아서 기우는 순간과 정예(사이에 후광을 그린다)는 부른 쪽이 따로 그린다. 그림자 알파 0.5, 그림자 폭 = 크기×0.7×1.5, 높이는 그 0.36배.
+  const SHADOWED = new WeakMap();
+  function soldierShadowed(img, sz, dy) {
+    let m = SHADOWED.get(img); if (!m) SHADOWED.set(img, (m = {}));
+    const key = sz + ',' + dy; if (m[key]) return m[key];
+    const SK = window.RTD_SKFX, sh = SK && SK.tint ? SK.tint('circle_05', '#000000') : null;
+    if (!sh || !img.width) return null;
+    const r = img.width / sz, s = sz * 1.05, hx = Math.max(sz / 2, s / 2), y0 = -0.6 * sz, y1 = Math.max(0.4 * sz, dy + s * 0.18);
+    const ox = 1 + hx * r, oy = 1 - y0 * r, cv = document.createElement('canvas');
+    cv.width = Math.ceil(hx * 2 * r) + 2; cv.height = Math.ceil((y1 - y0) * r) + 2;
+    const x = cv.getContext('2d');
+    x.setTransform(r, 0, 0, r, ox, oy);
+    x.globalAlpha = 0.5; x.drawImage(sh, -s / 2, dy - s * 0.18, s, s * 0.36);
+    x.globalAlpha = 1; x.drawImage(img, -sz / 2, -0.6 * sz, sz, sz);
+    return (m[key] = { cv, ox: ox / r, oy: oy / r, w: cv.width / r, h: cv.height / r });
+  }
+  function drawShadowed(c, o, x, y, flip) {
+    if (!flip) { c.drawImage(o.cv, x - o.ox, y - o.oy, o.w, o.h); return; }
+    c.save(); c.translate(x, y); c.scale(-1, 1); c.drawImage(o.cv, -o.ox, -o.oy, o.w, o.h); c.restore();
+  }
   // 체력·게이지 막대: 틀은 어두운 금속 판 그림(gfx/ui_tab, 9조각으로 늘임), 채움만 사각형. 그림이 없으면 예전 막대.
+  // 틀(9조각)과 어두운 바탕은 크기·화면 배율별로 한 번 그려 두고 한 장으로 찍는다.
+  // 적 60명이면 매 프레임 틀 조각만 540번 그리던 것(라인 전체 그리기 호출의 2/3)이 60번이 된다. 모양은 같다.
+  const BARC = new Map();
+  function barFrame(fr, w, h, p, k) {
+    const key = ((w * 64) | 0) + ',' + ((h * 64) | 0) + ',' + k;
+    let cv = BARC.get(key);
+    if (cv) return cv;
+    if (BARC.size > 48) { BARC.forEach((v) => { v.width = v.height = 0; }); BARC.clear(); }
+    const fw = w + p * 2, fh = h + p * 2;
+    cv = document.createElement('canvas'); cv.width = Math.ceil(fw * k) + 2; cv.height = Math.ceil(fh * k) + 2;
+    const x = cv.getContext('2d');
+    x.setTransform(k, 0, 0, k, 1, 1);
+    Art.nine(x, fr, 0, 0, fw, fh, 12, Math.max(2, p * 1.4));
+    x.fillStyle = 'rgba(0,0,0,.6)'; x.fillRect(p, p, w, h);
+    BARC.set(key, cv);
+    return cv;
+  }
   function bar(c, x, y, w, h, f, col) {
     const fr = Art.pic('ui_tab');
-    if (fr) { const p = Math.max(1.5, h * 0.4); Art.nine(c, fr, x - w / 2 - p, y - p, w + p * 2, h + p * 2, 12, Math.max(2, p * 1.4)); }
+    if (fr) {
+      const p = Math.max(1.5, h * 0.4), m = c.getTransform(), k = Math.max(0.25, Math.round(Math.hypot(m.a, m.b) * 100) / 100);
+      const cv = barFrame(fr, w, h, p, k);
+      c.drawImage(cv, x - w / 2 - p - 1 / k, y - p - 1 / k, cv.width / k, cv.height / k);
+      // 채움(색 + 위쪽 40% 밝은 줄)도 색·높이별 한 장을 가로로 늘여 찍는다(사각형 두 번 → 그림 한 번)
+      const fw = w * Math.max(0, Math.min(1, f));
+      if (fw > 0) { const st = barFill(col, h, k); c.drawImage(st, x - w / 2, y, fw, h); }
+      return;
+    }
     c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(x - w / 2, y, w, h);
     c.fillStyle = col; c.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, f)), h);
     // 위쪽 절반을 밝게 한 줄 덮어 납작한 띠가 아니라 둥근 막대처럼 보이게
     c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, f)), h * 0.4);
+  }
+  const BARF = new Map();
+  function barFill(col, h, k) {
+    const key = col + ',' + ((h * 64) | 0) + ',' + k;
+    let cv = BARF.get(key);
+    if (cv) return cv;
+    if (BARF.size > 48) { BARF.forEach((v) => { v.width = v.height = 0; }); BARF.clear(); }
+    cv = document.createElement('canvas'); cv.width = 4; cv.height = Math.max(1, Math.round(h * k));
+    const x = cv.getContext('2d'), sy = cv.height / h;
+    x.setTransform(1, 0, 0, sy, 0, 0);
+    x.fillStyle = col; x.fillRect(0, 0, 4, h);
+    x.fillStyle = 'rgba(255,255,255,.18)'; x.fillRect(0, 0, 4, h * 0.4);
+    BARF.set(key, cv);
+    return cv;
   }

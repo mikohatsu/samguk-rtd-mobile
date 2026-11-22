@@ -226,6 +226,12 @@
   }
   // o(선택): { col 물들일 색, sy 세로 납작함(바닥에 눕힐 때), op 합성 모드(기본 더하기) }
   function blit(c, im, sx, sy0, sw, sh, x, y, w, h, rot, alpha, o) {
+    if (!rot) {
+      const ga = c.globalAlpha, go = c.globalCompositeOperation, k = (o && o.sy) || 1;
+      c.globalCompositeOperation = (o && o.op) || 'lighter'; c.globalAlpha = Math.max(0, Math.min(1, alpha));
+      c.drawImage(im, sx, sy0, sw, sh, x - w / 2, y - (h * k) / 2, w, h * k);
+      c.globalAlpha = ga; c.globalCompositeOperation = go; return;
+    }
     c.save(); c.globalCompositeOperation = (o && o.op) || 'lighter'; c.globalAlpha = Math.max(0, Math.min(1, alpha));
     c.translate(x, y); if (o && o.sy) c.scale(1, o.sy); if (rot) c.rotate(rot);
     c.drawImage(im, sx, sy0, sw, sh, -w / 2, -h / 2, w, h);
@@ -303,6 +309,8 @@
   // (그림판이 아직 안 불러졌을 때 옛 도형 그림이 저장돼 계속 보이던 문제: 생성 그림이 있는 장수는 불러진 뒤에만 저장)
   const portrait = (d) => urls[d.id] || ((GFX[d.id] && !ok(gimg[d.id])) ? unitSprite(d).toDataURL() : (urls[d.id] = unitSprite(d).toDataURL()));
   function drawSprite(c, img, x, y, size, flip, rot, sy) {
+    // 돌리기·뒤집기·찌그러뜨리기가 없으면 변환 없이 바로 찍는다(같은 결과)
+    if (!rot && !flip && !sy) { c.drawImage(img, x - size / 2, y - size * 0.6, size, size); return; }
     c.save(); c.translate(x, y); if (rot) c.rotate(rot); if (flip) c.scale(-1, 1); if (sy) c.scale(1 / sy, sy);
     c.drawImage(img, -size / 2, -size * 0.6, size, size);
     c.restore();
