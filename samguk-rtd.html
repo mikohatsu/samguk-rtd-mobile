@@ -414,6 +414,8 @@ html[lang="ja"] #selbar .cmd kbd { font-size: 9px; white-space: nowrap; }
 /* 튜토리얼: 비추는 테두리(바깥은 어둡게, 눌림은 통과)와 말풍선 */
 #tutring { position: fixed; z-index: 90; border: 2px solid #ffd86a; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .45), 0 0 18px rgba(255, 216, 106, .7); pointer-events: none; transition: all .2s; }
 #tutring[hidden], #tutbox[hidden] { display: none; }
+/* 게임이 멈추지 않는 안내(AI 동맹·협동 판의 팁): 화면 전체를 어둡게 덮지 않고 고리만 비춘다(tutorial.js place). 덮은 채로 전투가 돌면 유닛이 어둡게 번져 보였다 */
+#tutring.nodim { box-shadow: 0 0 18px rgba(255, 216, 106, .7); }
 #tutbox { position: fixed; z-index: 91; padding: 12px 14px; border-radius: 12px; background: linear-gradient(180deg, #3a2a1c, #241a12); border: 1px solid #ffd86a; color: #f4ecd8; box-shadow: 0 8px 24px rgba(0, 0, 0, .6); font-size: 14px; line-height: 1.55; }
 #tutbox b { color: #ffd86a; } #tutbox small { color: #cbb894; }
 #tutbox .tb { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }

@@ -168,6 +168,9 @@
     }
     if (r) {
       ring.hidden = false;
+      // 판 안에서 게임 시간을 멈추지 않는 동안(AI 동맹·협동의 팁, hold 없는 단계)은 화면을 어둡게 덮지 않는다(#tutring.nodim)
+      const dim = mode !== 'game' || !!(ctx && ctx.S && ctx.S.tutHold);
+      if (ring.classList.contains('nodim') === dim) ring.classList.toggle('nodim', !dim);
       Object.assign(ring.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' });
       const bh = box.offsetHeight, below = r.bottom + 12 + bh < H - 8;
       let x = Math.min(W - bw - SR, Math.max(SL, r.left + r.width / 2 - bw / 2));

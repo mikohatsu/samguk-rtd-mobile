@@ -10,6 +10,9 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.4', d: '2026-11-23', items: [
+      ['AI 동맹·협동 판에서 안내 말풍선이 떠 있는 동안 화면 전체가 어둡게 덮여 유닛이 흐려 보이던 문제를 고쳤습니다. 이제 안내할 곳만 금빛 테두리로 비춥니다.', 'AI同盟・協力プレイで案内の吹き出しが出ている間、画面全体が暗くなりユニットがぼやけて見えた問題を修正しました。案内する場所だけを金色の枠で示します。', 'Fixed the whole screen being darkened while a tip was shown in AI-ally and co-op games, which made units look blurry. Tips now just highlight the spot with a gold ring.', '修复了在AI同盟和合作模式中显示提示时整个画面变暗、单位看起来模糊的问题。现在只用金色边框标出提示位置。'],
+    ] },
     { v: '0.3.3', d: '2026-11-22', items: [
       ['選択券 창을 연 채로도 다른 탭·버튼·유닛 선택·조이스틱을 쓸 수 있습니다. 창 밖을 누르면 자동으로 닫히고, 선택권은 그대로 남습니다.', '選択券の画面を開いたままでも、ほかのタブ・ボタン・ユニット選択・スティックを操作できるようになりました。画面の外を押すと自動で閉じ、選択券はそのまま残ります。', 'You can now use other tabs, buttons, unit selection and the joystick while the selection-ticket window is open. Tapping outside closes it automatically, and your tickets are kept.', '选择券窗口打开时也可以操作其他标签、按钮、单位选择和摇杆。点击窗口外会自动关闭，选择券会保留。'],
       ['전장 화면에서 간헐적으로 유닛이 흐려지며 잔상이 남을 수 있던 문제를 막도록 그리기 상태를 매 프레임 초기화합니다.', '戦場で時々ユニットがぼやけて残像が出ることがある問題を防ぐため、描画状態を毎フレーム初期化するようにしました。', 'The drawing state is now reset every frame to prevent units occasionally turning blurry with afterimages.', '为防止战场上单位偶尔变模糊并留下残影，现在每帧都会重置绘制状态。'],
