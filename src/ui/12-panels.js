@@ -60,7 +60,20 @@
     const comb = need ? `<div>${I.t('combineNeed', { b: need, r: rankName(d.tier + 1) })}</div>` : '';
     return row + `<div class="bk"><div>${stats}</div>${pass}${sk}${comb}${T.recipes[d.id] ? recipeRow(d.id) : ''}</div>`;
   }
+  // 선택권 창(S.ticket = 고르는 등급)은 모달이 아니다. 서랍이 닫히거나 다른 탭으로 가거나, 판 단계가 바뀌거나(보스전 시작 등),
+  // 라인 화면이 아니거나, 그 등급 선택권이 다 떨어지면 닫는다. 닫아도 선택권은 그대로 남는다(다시 선택권 탭에서 연다).
+  function ticketGuard() {
+    if (S.ticket == null) return;
+    if (g.over || !laneOn() || viewedPeer() || S.drawer !== 'ticket' || S.tab !== 'ticket' || g.phase !== S.ticketPh || !(g.me.tickets[S.ticket] > 0)) S.ticket = null;
+  }
+  // 선택권 창 바깥(서랍 탭·오른쪽 버튼·전장·조이스틱·메뉴 등)을 누르면 창을 닫고 그 누름은 그대로 제 일을 한다.
+  // 창(#pane) 안과 첫 판 안내 말풍선(#tutbox, 선택권 탭 설명이 창 위에 뜬다)은 닫지 않는다.
+  document.addEventListener('pointerdown', (e) => {
+    if (S.ticket == null || (e.target.closest && e.target.closest('#pane, #tutbox'))) return;
+    S.ticket = null; dirty();
+  }, true);
   function renderPane() {
+    if (g) ticketGuard();
     // 서랍이 닫혀 있으면 안 보이는 글자판을 만들지 않는다(서랍을 여는 행동이 dirty()를 불러 그때 한 번 그린다)
     if (!S.drawer) return;
     const p = g.me, tick = Object.values(p.tickets).reduce((a, b) => a + b, 0);
@@ -84,6 +97,10 @@
           : `<button class="btn" data-act="hire" data-arg="${d.id}" type="button" ${full || p.gold < d.cost ? 'disabled' : ''}>${full ? t('full') : fmt(d.cost)}</button>`;
         return `<div class="row sagerow ${has ? 'ok' : ''}"><img class="spor" alt="" src="${Art.portrait(d)}"><div>${esc(d.name)} <span class="bt">${esc(d.build || '')}</span> <small>${esc(d.p.map((x) => x.desc).join(' / '))}</small></div>${btn}</div>`;
       }).join('');
+    } else if (S.tab === 'ticket' && S.ticket != null) {
+      // 선택권으로 고르기: 전투를 가리지 않도록 서랍 안에서 고른다
+      const ids = g.tierIds(S.ticket), left = p.tickets[S.ticket] || 0;
+      h = `<div class="h">${I.t('ticketN', { r: rankName(S.ticket) })} ${I.t('nSheets', { n: left })}</div>` + ids.map((id) => `<div class="row"><img class="tpor" alt="" src="${Art.portrait(defOf[id])}"><div>${esc(defOf[id].name)} <small>${I.t('owned', { n: g.ownedOf(g.me, id).length })}</small></div><button class="btn" data-act="ticketPick" data-arg="${id}" type="button">${I.t('pick')}</button></div>`).join('') + `<button class="btn" data-act="ticketClose" type="button">${I.t('close')}</button>`;
     } else if (S.tab === 'ticket') {
       const ts = Object.keys(p.tickets).filter((t) => p.tickets[t] > 0);
       h = ts.map((t) => `<div class="row"><div>${I.t('ticketN', { r: rankName(+t) })} <small>${I.t('nSheets', { n: p.tickets[t] })}</small></div><button class="btn go" data-act="ticket" data-arg="${t}" type="button">${I.t('use')}</button></div>`).join('');

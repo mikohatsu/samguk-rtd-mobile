@@ -28,6 +28,9 @@
       }
     }
     applyCam();
+    // 그리기 상태를 프레임마다 기본값으로 되돌린다: 어떤 연출이 투명도·합성·필터·번짐을 남기면 다음 프레임 배경이 반투명으로 덮여
+    // 이전 프레임이 비치는 잔상이 되므로, 새는 곳이 생겨도 한 프레임 안에서 끝나게 한다
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none'; ctx.shadowBlur = 0; ctx.shadowColor = 'rgba(0,0,0,0)';
     ctx.setTransform(S.scale, 0, 0, S.scale, S.ox + sx, S.oy + sy);
     // 강타 카메라 펀치: 보스 쪽으로 순간 확대했다 돌아온다
     if (S.punch > 0.02 && g.fight && g.phase === 'boss') { const p = 1 + S.punch * 0.035, fx = g.fight.boss.x, fy = g.fight.boss.y; ctx.translate(fx, fy); ctx.scale(p, p); ctx.translate(-fx, -fy); S.punch *= Math.pow(0.82, S.f60); } else S.punch = 0;

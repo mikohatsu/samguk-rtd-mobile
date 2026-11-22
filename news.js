@@ -10,6 +10,10 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.3', d: '2026-11-22', items: [
+      ['選択券 창을 연 채로도 다른 탭·버튼·유닛 선택·조이스틱을 쓸 수 있습니다. 창 밖을 누르면 자동으로 닫히고, 선택권은 그대로 남습니다.', '選択券の画面を開いたままでも、ほかのタブ・ボタン・ユニット選択・スティックを操作できるようになりました。画面の外を押すと自動で閉じ、選択券はそのまま残ります。', 'You can now use other tabs, buttons, unit selection and the joystick while the selection-ticket window is open. Tapping outside closes it automatically, and your tickets are kept.', '选择券窗口打开时也可以操作其他标签、按钮、单位选择和摇杆。点击窗口外会自动关闭，选择券会保留。'],
+      ['전장 화면에서 간헐적으로 유닛이 흐려지며 잔상이 남을 수 있던 문제를 막도록 그리기 상태를 매 프레임 초기화합니다.', '戦場で時々ユニットがぼやけて残像が出ることがある問題を防ぐため、描画状態を毎フレーム初期化するようにしました。', 'The drawing state is now reset every frame to prevent units occasionally turning blurry with afterimages.', '为防止战场上单位偶尔变模糊并留下残影，现在每帧都会重置绘制状态。'],
+    ] },
     { v: '0.3.2', d: '2026-11-21', items: [
       ['협력 대기방을 새로 꾸몄습니다. 방 코드가 크게 보이고, 참가자 카드에 관직과 레벨, 방장·나 표시가 붙으며, 입장 대기 화면에서 준비한 인원을 한눈에 볼 수 있습니다.', '協力ルームを一新しました。ルームコードが大きく表示され、参加者カードに官職・レベルとホスト・自分の表示が付き、入場待ち画面では準備済みの人数がひと目で分かります。', 'The co-op room has been redesigned: a large room code, player cards with rank, level and host/you tags, and a clear ready count on the waiting screen.', '合作房间全新改版：房间代码更醒目，参与者卡片显示官职、等级以及房主/自己标记，入场等待画面可一眼看出已准备人数。'],
       ['보스 출진 카드가 위쪽으로 정렬되어 이름이 잘리지 않고, 장수를 골라도 목록이 맨 위로 튀지 않습니다.', 'ボス戦の出陣カードを上揃えにし、名前が切れないようにしました。武将を選んでも一覧が先頭に戻らなくなりました。', 'Boss sortie cards are now top-aligned so names are no longer cut off, and the list no longer jumps back to the top when you pick a general.', 'Boss出阵卡片改为顶部对齐，名称不再被截断；选择武将时列表也不会跳回顶部。'],

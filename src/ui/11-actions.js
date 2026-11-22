@@ -54,7 +54,7 @@
     else if (a === 'hire') g.hire(p, arg);
     else if (a === 'fuse') { const n = g.fuseItems(p, S.dropSel); if (n) S.dropSel = n.id; }
     else if (a === 'dismiss') { if (S.dismiss === arg) { g.dismiss(p, arg); S.dismiss = null; } else { S.dismiss = arg; toast(I.t('dismissConfirm', { a: defOf[arg].name }), 'warn'); setTimeout(() => { if (S.dismiss === arg) S.dismiss = null; }, 3000); } }
-    else if (a === 'ticket') { S.ticket = +arg; S.drawer = 'ticket'; S.tab = 'ticket'; }
+    else if (a === 'ticket') { S.ticket = +arg; S.ticketPh = g.phase; S.drawer = 'ticket'; S.tab = 'ticket'; }
     else if (a === 'ticketPick') { g.useTicket(p, S.ticket, arg); if (!(p.tickets[S.ticket] > 0)) S.ticket = null; }
     else if (a === 'ticketClose') S.ticket = null;
     else if (a === 'selDef') setSel(list.filter((x) => x.def.id === arg).map((x) => x.id));

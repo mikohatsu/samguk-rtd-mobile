@@ -115,13 +115,6 @@
         <button class="btn go" data-act="pickGo" type="button" style="padding:9px">${t('deploy')} (${S.pick.length}/${n})</button></div></div>`;
     } else if (g.phase === 'bossPick') {
       h = `<div class="over"><div class="sheet"><h2>${t('waitAllies')}</h2>${vol}</div></div>`; key = 'w' + volKey;
-    } else if (S.ticket != null && laneOn()) {
-      const ids = g.tierIds(S.ticket), left = g.me.tickets[S.ticket] || 0;
-      key = 't' + S.ticket + left;
-      // 전투를 가리지 않도록 패널 안에서 고른다
-      const sh = `<div class="h">${I.t('ticketN', { r: rankName(S.ticket) })} ${I.t('nSheets', { n: left })}</div>` + ids.map((id) => `<div class="row"><img class="tpor" alt="" src="${Art.portrait(defOf[id])}"><div>${esc(defOf[id].name)} <small>${I.t('owned', { n: g.ownedOf(g.me, id).length })}</small></div><button class="btn" data-act="ticketPick" data-arg="${id}" type="button">${I.t('pick')}</button></div>`).join('') + `<button class="btn" data-act="ticketClose" type="button">${I.t('close')}</button>`;
-      const pane = $('pane'); pane.innerHTML = sh; pane.dataset.html = sh;
-      h = ''; key = '';
     } else if (net && net.kicked) {
       key = 'k'; h = `<div class="over"><div class="sheet"><h2>${t('kicked')}</h2><div>${t('kickedHint')}</div><button class="btn go" data-act="restart" type="button" style="padding:9px 20px">${t('toTitle')}</button></div></div>`;
     } else if (net && net.clock.pz && !g.over) {
