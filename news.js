@@ -10,6 +10,10 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.7', d: '2026-11-23', items: [
+      ['함께하는 동료 목록을 「동맹 n명」 버튼 하나로 접었습니다. 누르면 펼쳐지고, 동료 전장을 고르면 그곳으로 이동합니다. 동료 전선이 위험하면 버튼에 붉은 표시가 뜹니다. 덕분에 조이스틱이 왼쪽 아래 끝에 놓입니다.', '仲間の一覧を「同盟 n人」ボタンひとつにまとめました。押すと開き、仲間の戦場を選ぶとそこへ移動します。仲間の戦線が危ないとボタンに赤い印が出ます。そのぶんジョイスティックが左下の端に置かれます。', 'Allies are now folded into one "Allies (n)" button. Tap to open the list and pick an ally to view their lane; a red mark warns when an ally’s front is in danger. The joystick now sits in the bottom-left corner.', '队友列表收进一个「同盟 n人」按钮。点开后选择队友即可查看其战场；队友战线危急时按钮上会出现红色标记。摇杆因此回到左下角。'],
+      ['업적 깃발을 화면 아래쪽에 붙이고, 깃발마다 같은 칸·같은 바닥선에 맞춰 가지런히 세웠습니다.', '実績の旗を画面下側に寄せ、どの旗も同じ枠・同じ高さにそろえて並べました。', 'Achievement flags now sit at the bottom of their area, evenly aligned in a tidy grid.', '成就旗帜靠下排列，并按统一格子和底线对齐。'],
+    ] },
     { v: '0.3.6', d: '2026-11-23', items: [
       ['유닛 정보 창을 새로 꾸몄습니다. 등급 테두리 초상, 핵심 능력치, 속한 인연(n/m), 이름이 붙은 스킬을 한눈에 보고, 합성·해산은 오른쪽 큰 버튼으로 합니다. 「상세」를 누르면 조합식과 스킬 설명 전체가 보입니다.', 'ユニット情報画面を一新しました。等級枠の肖像・主要能力値・所属する縁(n/m)・名前付きのスキルがひと目で分かり、合成・解散は右の大きなボタンで行えます。「詳細」で全レシピとスキル説明を確認できます。', 'Redesigned the unit info panel: a rank-framed portrait, key stats, the bonds it belongs to (n/m) and named skills at a glance, with combine/disband on a big button at the right. Tap "Details" for all recipes and full skill descriptions.', '全新设计了单位信息面板：带等级边框的头像、主要属性、所属羁绊(n/m)和带名称的技能一目了然，合成与解散使用右侧的大按钮。点击「详细」可查看全部配方和技能说明。'],
       ['해산은 받을 금화를 보여 주고 두 번 눌러야 실행됩니다. 스킬 설명은 다른 곳을 누를 때까지 떠 있습니다.', '解散は受け取る金貨を表示し、2回押すと実行されます。スキル説明はほかの場所を押すまで表示されたままになります。', 'Disband now shows the gold you will get and needs two taps. Skill descriptions stay open until you tap elsewhere.', '解散会显示可获得的金币，需要点击两次才会执行。技能说明会一直显示，直到点击其他位置。'],

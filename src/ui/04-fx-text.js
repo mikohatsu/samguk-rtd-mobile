@@ -142,9 +142,10 @@
       for (let cols = 1; cols <= 8; cols++) if ((bot - top - th) / (Math.ceil(n / cols) * FCH) >= FKMIN) { left = Math.max(pad, right - cols * FCW * FKMIN); break; }
       clip(); G = best(right - left);
     }
-    const cw = FCW * G.k, ch = Math.min((bot - top - th) / G.rows, FCH * G.k * 1.25), gw = cw * G.cols, x0 = left + (right - left - gw) / 2;
-    FLAGS.forEach((f, i) => { f.x = x0 + Math.floor(i / G.rows) * cw; f.y = top + th + (i % G.rows) * ch; f.w = cw; f.h = ch; });
-    flagL = { sw: B.sw, sh: B.sh, dpr: B.dpr, l: Math.floor(Math.min(left, x0)), t: Math.floor(top), r: Math.ceil(Math.max(right, x0 + gw)), b: Math.ceil(top + th + G.rows * ch), k: G.k, cols: G.cols, cx: x0 + gw / 2, th };
+    // 격자는 띠 아래쪽에 붙인다(2026-11-23 사용자 요청: 위 배속·메뉴 단추와 멀리). 칸 간격은 늘리지 않고 그림 칸 크기 그대로
+    const cw = FCW * G.k, ch = FCH * G.k, gw = cw * G.cols, x0 = left + (right - left - gw) / 2, y0 = bot - G.rows * ch;
+    FLAGS.forEach((f, i) => { f.x = x0 + Math.floor(i / G.rows) * cw; f.y = y0 + (i % G.rows) * ch; f.w = cw; f.h = ch; });
+    flagL = { sw: B.sw, sh: B.sh, dpr: B.dpr, l: Math.floor(Math.min(left, x0)), t: Math.floor(y0 - th), r: Math.ceil(Math.max(right, x0 + gw)), b: Math.ceil(bot), k: G.k, cols: G.cols, cx: x0 + gw / 2, th };
     flagL.key = [flagL.l, flagL.t, flagL.r, flagL.b, G.k.toFixed(3), G.cols].join();
     flagL.cells = FLAGS.map((f) => [f.x, f.y, f.w, f.h]);
     S.flagL = flagL; // 시험·디버그용(무대 CSS px의 깃발 칸 x·y·w·h)
@@ -211,21 +212,22 @@
       // 인원이 모자라 열리지 않는 협동 업적은 흐리게
       const closed = kind === 'party' && !g.partyAchOpen(f.a.cond);
       c.globalAlpha = done ? 1 : closed ? 0.18 : 0.55;
-      // 칸 왼쪽 아래(깃대 밑동)를 원점으로, 그림 단위(칸 60×72)를 배율 k로 줄여 그린다
-      c.save(); c.translate(f.x + 5 * L.k, f.y + f.h - (f.h - 70 * L.k) / 2); c.scale(L.k, L.k);
+      // 칸 왼쪽 아래를 원점으로, 그림 단위(칸 60×72)를 배율 k로 줄여 그린다
+      c.save(); c.translate(f.x, f.y + f.h - 4 * L.k); c.scale(L.k, L.k);
       const label = achLabel(f.a);
       const sp = achSprite(ACH_PIC[kind], col);
       if (sp) {
-        // 그림 깃발: 높이를 맞춰 세우고 천 가운데에 글자를 쓴다
-        const hh = kind === 'bond' ? 45 : 66, ww = (hh * sp.width) / sp.height, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
-        c.drawImage(sp, kind === 'bond' ? -2 : -4, -hh, ww, hh);
+        // 그림 깃발: 종류마다 그림 비율이 달라 칸(54×62, 성루는 58×62) 안에 맞춰 넣고, 칸 가운데·같은 바닥선에 세운다(칸이 어긋나 보이지 않게)
+        const fk = Math.min((kind === 'bond' ? 58 : 54) / sp.width, 62 / sp.height), ww = sp.width * fk, hh = sp.height * fk, dx = (FCW - ww) / 2, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
+        c.drawImage(sp, dx, -hh, ww, hh);
         // 깃발 글자: 휴대폰에서 깨알이 되지 않게 천 폭에 맞는 한도에서 키우고 굵은 제목 글꼴로
         c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 5; c.font = `400 ${label.length > 2 ? 17 : 21}px "Black Han Sans", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-        const tx = (kind === 'bond' ? -2 : -4) + ww * AT[0], ty = -hh + hh * AT[1];
+        const tx = dx + ww * AT[0], ty = -hh + hh * AT[1];
         c.strokeText(label, tx, ty); c.fillText(label, tx, ty);
-        if (done) { c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 3; c.font = '900 19px "Noto Serif KR", serif'; c.strokeText('★', ww - 4, -hh + 6); c.fillText('★', ww - 4, -hh + 6); }
+        if (done) { const sx = Math.min(FCW - 6, dx + ww - 2); c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 3; c.font = '900 19px "Noto Serif KR", serif'; c.strokeText('★', sx, -hh + 6); c.fillText('★', sx, -hh + 6); }
         c.restore(); c.globalAlpha = 1; continue;
       }
+      c.translate(7, 0); // 그림을 못 불렀을 때의 도형 깃발도 칸 안쪽으로
       if (kind === 'speed' || kind === 'party') {
         // 전광석화는 삼각 깃, 협동은 세로 군기. 테두리 색으로 종류를 한 번 더 구분한다.
         c.strokeStyle = '#2a1c10'; c.lineWidth = 3; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -60); c.stroke();

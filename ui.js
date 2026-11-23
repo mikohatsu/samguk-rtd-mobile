@@ -815,9 +815,10 @@
       for (let cols = 1; cols <= 8; cols++) if ((bot - top - th) / (Math.ceil(n / cols) * FCH) >= FKMIN) { left = Math.max(pad, right - cols * FCW * FKMIN); break; }
       clip(); G = best(right - left);
     }
-    const cw = FCW * G.k, ch = Math.min((bot - top - th) / G.rows, FCH * G.k * 1.25), gw = cw * G.cols, x0 = left + (right - left - gw) / 2;
-    FLAGS.forEach((f, i) => { f.x = x0 + Math.floor(i / G.rows) * cw; f.y = top + th + (i % G.rows) * ch; f.w = cw; f.h = ch; });
-    flagL = { sw: B.sw, sh: B.sh, dpr: B.dpr, l: Math.floor(Math.min(left, x0)), t: Math.floor(top), r: Math.ceil(Math.max(right, x0 + gw)), b: Math.ceil(top + th + G.rows * ch), k: G.k, cols: G.cols, cx: x0 + gw / 2, th };
+    // 격자는 띠 아래쪽에 붙인다(2026-11-23 사용자 요청: 위 배속·메뉴 단추와 멀리). 칸 간격은 늘리지 않고 그림 칸 크기 그대로
+    const cw = FCW * G.k, ch = FCH * G.k, gw = cw * G.cols, x0 = left + (right - left - gw) / 2, y0 = bot - G.rows * ch;
+    FLAGS.forEach((f, i) => { f.x = x0 + Math.floor(i / G.rows) * cw; f.y = y0 + (i % G.rows) * ch; f.w = cw; f.h = ch; });
+    flagL = { sw: B.sw, sh: B.sh, dpr: B.dpr, l: Math.floor(Math.min(left, x0)), t: Math.floor(y0 - th), r: Math.ceil(Math.max(right, x0 + gw)), b: Math.ceil(bot), k: G.k, cols: G.cols, cx: x0 + gw / 2, th };
     flagL.key = [flagL.l, flagL.t, flagL.r, flagL.b, G.k.toFixed(3), G.cols].join();
     flagL.cells = FLAGS.map((f) => [f.x, f.y, f.w, f.h]);
     S.flagL = flagL; // 시험·디버그용(무대 CSS px의 깃발 칸 x·y·w·h)
@@ -884,21 +885,22 @@
       // 인원이 모자라 열리지 않는 협동 업적은 흐리게
       const closed = kind === 'party' && !g.partyAchOpen(f.a.cond);
       c.globalAlpha = done ? 1 : closed ? 0.18 : 0.55;
-      // 칸 왼쪽 아래(깃대 밑동)를 원점으로, 그림 단위(칸 60×72)를 배율 k로 줄여 그린다
-      c.save(); c.translate(f.x + 5 * L.k, f.y + f.h - (f.h - 70 * L.k) / 2); c.scale(L.k, L.k);
+      // 칸 왼쪽 아래를 원점으로, 그림 단위(칸 60×72)를 배율 k로 줄여 그린다
+      c.save(); c.translate(f.x, f.y + f.h - 4 * L.k); c.scale(L.k, L.k);
       const label = achLabel(f.a);
       const sp = achSprite(ACH_PIC[kind], col);
       if (sp) {
-        // 그림 깃발: 높이를 맞춰 세우고 천 가운데에 글자를 쓴다
-        const hh = kind === 'bond' ? 45 : 66, ww = (hh * sp.width) / sp.height, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
-        c.drawImage(sp, kind === 'bond' ? -2 : -4, -hh, ww, hh);
+        // 그림 깃발: 종류마다 그림 비율이 달라 칸(54×62, 성루는 58×62) 안에 맞춰 넣고, 칸 가운데·같은 바닥선에 세운다(칸이 어긋나 보이지 않게)
+        const fk = Math.min((kind === 'bond' ? 58 : 54) / sp.width, 62 / sp.height), ww = sp.width * fk, hh = sp.height * fk, dx = (FCW - ww) / 2, AT = { collect: [0.56, 0.47], speed: [0.56, 0.36], party: [0.52, 0.43], bond: [0.5, 0.66] }[kind];
+        c.drawImage(sp, dx, -hh, ww, hh);
         // 깃발 글자: 휴대폰에서 깨알이 되지 않게 천 폭에 맞는 한도에서 키우고 굵은 제목 글꼴로
         c.fillStyle = '#fff'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 5; c.font = `400 ${label.length > 2 ? 17 : 21}px "Black Han Sans", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-        const tx = (kind === 'bond' ? -2 : -4) + ww * AT[0], ty = -hh + hh * AT[1];
+        const tx = dx + ww * AT[0], ty = -hh + hh * AT[1];
         c.strokeText(label, tx, ty); c.fillText(label, tx, ty);
-        if (done) { c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 3; c.font = '900 19px "Noto Serif KR", serif'; c.strokeText('★', ww - 4, -hh + 6); c.fillText('★', ww - 4, -hh + 6); }
+        if (done) { const sx = Math.min(FCW - 6, dx + ww - 2); c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,14,10,.9)'; c.lineWidth = 3; c.font = '900 19px "Noto Serif KR", serif'; c.strokeText('★', sx, -hh + 6); c.fillText('★', sx, -hh + 6); }
         c.restore(); c.globalAlpha = 1; continue;
       }
+      c.translate(7, 0); // 그림을 못 불렀을 때의 도형 깃발도 칸 안쪽으로
       if (kind === 'speed' || kind === 'party') {
         // 전광석화는 삼각 깃, 협동은 세로 군기. 테두리 색으로 종류를 한 번 더 구분한다.
         c.strokeStyle = '#2a1c10'; c.lineWidth = 3; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -60); c.stroke();
@@ -3348,6 +3350,8 @@
   });
   view.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') $('achpop').hidden = true; });
   // 터치로 띄운 업적 설명은 화면 어디든 다시 누르면 닫힌다(같은 깃발이나 다른 깃발을 누르면 손을 뗄 때 다시 뜬다)
+  // 동료 목록(「同盟 n」)은 바깥을 누르면 닫는다
+  document.addEventListener('pointerdown', (e) => { if (S.allyOpen && !(e.target.closest && e.target.closest('#hud .party.fold'))) S.allyOpen = false; }, true);
   document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' && !$('achpop').hidden && !$('achpop').contains(e.target)) $('achpop').hidden = true; }, true); // 인연 창은 안을 눌러 스크롤할 수 있다
   const endPtr = (e) => {
     ptrs.delete(e.pointerId);
@@ -3437,7 +3441,8 @@
     else if (a === 'speed') { speed = speed === 3 ? 1 : speed + 1; if (net) net.speedWant = speed; }
     else if (a === 'myview') S.view = null;
     else if (a === 'statDet') { S.statDet = !S.statDet; const sb = $('selbar'); if (sb && S.statDet) sb.classList.add('exp'); }
-    else if (a === 'viewPeer') { S.view = arg === 'me' || S.view === arg ? null : arg; setSel([]); S.dropSel = null; }
+    else if (a === 'viewPeer') { S.view = arg === 'me' || S.view === arg ? null : arg; setSel([]); S.dropSel = null; S.allyOpen = false; }
+    else if (a === 'allyList') S.allyOpen = !S.allyOpen;
     else if (a === 'laneView') { if (g.phase === 'boss') { S.laneView = !S.laneView; S.cmdMode = null; S.drag = null; } }
     else if (a === 'auto') g.setAuto(p, arg, !p.auto[arg]);
     else if (a === 'zone') { const [k, z] = arg.split(':'); g.setZone(p, k, z); }
@@ -4667,7 +4672,6 @@
     // 자리 비운 동료(앱을 내림)
     const aw = net && net.awayList ? net.awayList().map((p) => `<span class="nc mid">${esc(p.state.name || '?')} · ${t('away')}</span>`).join('') : '';
     if (chips || aw) h += `<div class="hrow">${chips}${aw}</div>`;
-    let partyOn = false;
     // 파티원(세로, 반투명): 아이콘·닉네임·등급 문양·전선·라이프. 누르면 그 사람 전장을 본다(내 줄은 내 전장으로)
     if (net && net.roster && g.mode === 'multi') {
       const ros = net.roster(), lim = g.limit;
@@ -4679,10 +4683,16 @@
         if (bossV) return `<img class="pf ${en != null && en > lim * 0.75 ? 'alert' : ''} ${st.away ? 'away' : ''}" alt="" title="${esc(st.name || '?')}" src="${Art.portrait(d)}">`;
         return `<button class="pm ${on ? 'on' : ''} ${st.away ? 'away' : ''}" data-act="viewPeer" data-arg="${pp.me ? 'me' : esc(pp.id)}" type="button"><img class="pi" alt="" src="${Art.portrait(d)}"><span class="pn">${rk != null ? `<img class="rkm" alt="" src="gfx/rank_${rk}.png" onerror="this.remove()">` : ''}${esc(st.name || '?')}</span><span class="ps">${t('front')} ${en == null ? '-' : en}/${lim} <span class="lf" aria-label="${esc(t('lives'))}">♥${lv == null ? '-' : lv}</span></span></button>`;
       }).join('');
-      if (ros.length > 1) { h += `<div class="party">${rows}</div>`; partyOn = !bossV; }
+      // 라인 화면에서는 카드 줄을 「同盟 n」 버튼 하나로 접는다(2026-11-23 사용자 요청: 왼쪽 아래를 조이스틱 자리로 비우기).
+      // 누르면 카드 목록이 버튼 오른쪽(전장 위)에 펼쳐지고, 전장을 고르거나 다른 곳을 누르면 닫힌다. 동료 전선이 75%를 넘으면 버튼에 붉은 표시.
+      if (ros.length > 1 && bossV) h += `<div class="party">${rows}</div>`;
+      else if (ros.length > 1) {
+        const others = ros.filter((pp) => !pp.me), alert = others.some((pp) => { const st = pp.state || {}, ln = st.ln, en = ln ? ln.n | 0 : st.enemies == null ? 0 : st.enemies | 0; return en > lim * 0.75; });
+        const vp = S.view ? ros.find((pp) => pp.id === S.view) : null;
+        h += `<div class="party fold"><button class="nc ally ${S.allyOpen ? 'open' : ''} ${vp ? 'on' : ''}" data-act="allyList" type="button">${esc(t('allyBtn', { n: others.length }))}${vp ? `<br><b>${esc((vp.state && vp.state.name) || '?')}</b>` : ''}${alert ? '<span class="dot">!</span>' : ''}</button>${S.allyOpen ? `<div class="allypop">${rows}</div>` : ''}</div>`;
+      }
     }
-    // 동료 카드 줄이 떠 있으면 라인 조이스틱이 카드 오른쪽으로 비켜난다(CSS #stage.lanejoy.hasparty)
-    { const stg = $('stage'); if (stg.classList.contains('hasparty') !== partyOn) stg.classList.toggle('hasparty', partyOn); }
+    if (!(net && net.roster && g.mode === 'multi') || bossV) S.allyOpen = false;
     const box = $('hud');
     // 결과창 위에 겹치지 않게. 보스 등장 연출(bossIntro) 동안에도 숨긴다(위 검은 띠와 화면 왼쪽을 가리지 않게).
     // 보스 처치 뒤 討伐成功 패널이 떠 있는 동안(S.vicUntil)도 숨긴다(라인 HUD가 패널보다 먼저 돌아와 겹치지 않게)

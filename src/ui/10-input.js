@@ -162,6 +162,8 @@
   });
   view.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') $('achpop').hidden = true; });
   // 터치로 띄운 업적 설명은 화면 어디든 다시 누르면 닫힌다(같은 깃발이나 다른 깃발을 누르면 손을 뗄 때 다시 뜬다)
+  // 동료 목록(「同盟 n」)은 바깥을 누르면 닫는다
+  document.addEventListener('pointerdown', (e) => { if (S.allyOpen && !(e.target.closest && e.target.closest('#hud .party.fold'))) S.allyOpen = false; }, true);
   document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' && !$('achpop').hidden && !$('achpop').contains(e.target)) $('achpop').hidden = true; }, true); // 인연 창은 안을 눌러 스크롤할 수 있다
   const endPtr = (e) => {
     ptrs.delete(e.pointerId);

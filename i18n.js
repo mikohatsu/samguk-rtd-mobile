@@ -423,7 +423,7 @@
     e_midMissed: ['{a} 놓침', '{a}を逃した', '{a} escaped', '{a}逃脱'],
     e_defeated: ['{a} 토벌', '{a} 討伐', '{a} defeated', '讨伐{a}'],
     e_fast: [' (빠른 클리어)', '（速攻）', ' (fast clear)', '（速通）'],
-    e_ally: ['동맹 {a}', '同盟 {a}', 'Ally {a}', '盟友 {a}'],
+    e_ally: ['동맹 {a}', '同盟 {a}', 'Ally {a}', '盟友 {a}'], allyBtn: ['동맹 {n}명', '同盟 {n}人', 'Allies ({n})', '同盟 {n}人'],
     e_charm: ['매혹', '魅了', 'Charm', '魅惑'],
     e_breakOk: ['무력화 성공 · 그로기', 'ブレイク成功・ダウン', 'Break! Boss downed', '破防成功·倒地'],
     e_castGo: ['{a} 발동', '{a} 発動', '{a} activated', '{a}发动'],

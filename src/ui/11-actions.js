@@ -45,7 +45,8 @@
     else if (a === 'speed') { speed = speed === 3 ? 1 : speed + 1; if (net) net.speedWant = speed; }
     else if (a === 'myview') S.view = null;
     else if (a === 'statDet') { S.statDet = !S.statDet; const sb = $('selbar'); if (sb && S.statDet) sb.classList.add('exp'); }
-    else if (a === 'viewPeer') { S.view = arg === 'me' || S.view === arg ? null : arg; setSel([]); S.dropSel = null; }
+    else if (a === 'viewPeer') { S.view = arg === 'me' || S.view === arg ? null : arg; setSel([]); S.dropSel = null; S.allyOpen = false; }
+    else if (a === 'allyList') S.allyOpen = !S.allyOpen;
     else if (a === 'laneView') { if (g.phase === 'boss') { S.laneView = !S.laneView; S.cmdMode = null; S.drag = null; } }
     else if (a === 'auto') g.setAuto(p, arg, !p.auto[arg]);
     else if (a === 'zone') { const [k, z] = arg.split(':'); g.setZone(p, k, z); }
