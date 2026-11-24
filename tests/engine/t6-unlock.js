@@ -1,4 +1,4 @@
-// T6 장수 해금: 잠긴 신화·불멸이 나오지 않는지, 불멸이 다 잠겼을 때 신화로 대체되는지, 해금 후 나오는지, 협동에서 각자 목록을 쓰는지.
+// T6 장수 해금: 잠긴 신화·불멸이 조합·선택권·교체권에서 나오지 않는지, 상자는 잠긴 장수 아이템도 주는지(2026-11-24 규칙 변경, 자세한 것은 t9), 해금 후 나오는지, 협동에서 각자 목록을 쓰는지.
 // 유형: Logic/Integration · 위치: tests/engine/ · 게이트: BLOCKING
 'use strict';
 const L = require('./lib');
@@ -23,13 +23,13 @@ try {
   ok(locked.every((id) => UL.price(id) > 0) && UL.price('cav') === null, '잠긴 장수만 가격이 있음');
 } catch (e) { ok(false, '데이터 확인 중 예외 — ' + L.errText(e)); }
 
-// 2) 아무것도 열지 않음: 상자에서 잠긴 장수 아이템이 안 나오고, 불멸 몫은 신화(열린 장수)로 대체
+// 2) 아무것도 열지 않음: 상자는 잠긴 장수 아이템도 준다(2026-11-24 사용자 결정. 예전에는 빼고 불멸 몫을 신화로 대체했다)
 try {
   // 첫 신화 2명(튜토리얼 보상)만 연 상태
   const g = new E.Game(T, { diff: 'easy', mode: 'solo', seed: 61, unlocked: ['join', 'jangbi'] });
   const out = openMany(g, 600), items = Object.keys(out).filter((k) => itemUnit[k]);
-  ok(items.every((it) => !g.isLocked(itemUnit[it])), `잠긴 장수의 조합 아이템이 상자에서 나오지 않음 (${JSON.stringify(out)})`);
-  ok(items.every((it) => tierOfItem(it) === 9), '불멸이 모두 잠기면 불멸 몫이 신화 아이템으로 대체됨');
+  ok(items.some((it) => g.isLocked(itemUnit[it])), `잠긴 장수의 조합 아이템도 상자에서 나옴 (${JSON.stringify(out)})`);
+  ok(items.some((it) => tierOfItem(it) === 10), '불멸이 모두 잠겨도 불멸 아이템이 나옴(신화로 대체하지 않음)');
   ok(!out.rankUp, '열린 신화가 있으면 등급 상승권으로 넘어가지 않음 (확률은 그대로, 종류만 대체)');
   ok(g.tierIds(10).length === 0 && g.tierIds(9).length === 2, `tierIds가 잠긴 장수를 뺌 (불멸 ${g.tierIds(10).length}, 신화 ${g.tierIds(9).length})`);
   // 조합: 재료와 아이템을 다 갖춰도 잠긴 장수는 만들 수 없다
@@ -54,7 +54,7 @@ try {
   const out = openMany(g, 600);
   ok(out.cheongryong > 0 && out.yugye > 0, `연 장수(관우·곽가)의 아이템이 상자에서 나옴 (청룡 ${out.cheongryong || 0}, 유계 ${out.yugye || 0})`);
   const imm = Object.keys(out).filter((k) => itemUnit[k] && tierOfItem(k) === 10);
-  ok(imm.length === 1 && imm[0] === 'cheongryong', '불멸 아이템은 연 장수(관우) 것만 나옴');
+  ok(imm.length > 1 && imm.includes('cheongryong'), `불멸 아이템은 잠긴 장수 것도 함께 나옴 (${imm.length}종)`);
   const r = g.recipeOf('gwanu'); r.parts.forEach((x) => g.spawnUnit(g.me, x)); g.spawnDrop(g.me, 'item', { item: r.item });
   const nu = g.craft(g.me, 'gwanu');
   ok(nu && nu.def.id === 'gwanu', '해금한 관우는 조합됨');
@@ -86,6 +86,7 @@ try {
 } catch (e) { UL.provider = null; ok(false, 'provider 확인 중 예외 — ' + L.errText(e)); }
 
 // 6) 협동: 사람마다 자기 해금 목록으로 뽑는다(라인은 각자 돌림). 섞여도 판이 어긋나지 않는다.
+//    makeParty는 AI 사령관(bot) 판이라 상자는 예전 규칙(열린 것만)이다. 사람 협동 판은 t9에서 본다.
 try {
   const lists = [[], ['gwanu'], UL.lockedIds()];
   let k = 0; UL.provider = () => lists[k++];

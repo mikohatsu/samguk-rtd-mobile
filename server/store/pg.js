@@ -13,6 +13,7 @@ module.exports = function pgStore(pool) {
     finally { c.release(); }
   }
   const ms = (d) => (d ? new Date(d).getTime() : null);
+  const itemList = (x) => { try { const a = JSON.parse(x || '[]'); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; } };
 
   // 계정 한 명을 서버가 쓰는 모양(user view)으로 모은다
   async function hydrate(id, qq = q) {
@@ -142,17 +143,44 @@ module.exports = function pgStore(pool) {
         return { ok: true, left: daily - n - 1 };
       });
     },
-    // 앱스토어 결제(해금 상품): 같은 거래 번호는 한 번만. 표 구조는 그대로(purchases.gems = 0).
-    async grantIap(uid, txId, productId, items, at) {
+    // 앱스토어 결제(해금 상품): 같은 거래 번호는 한 번만. purchases.gems = 0.
+    // 돌려주는 값: 'ok' / 'other'(다른 계정의 거래) / 'refunded'(환불된 거래 — 옛 영수증으로 다시 열지 못한다)
+    // env = 결제 환경(Production / Sandbox / Test). 이 거래로 새로 들어간 열쇠만 items에 적어 둔다(환불 때 그것만 뺀다).
+    async grantIap(uid, txId, productId, items, at, env) {
       return tx(async (qq) => {
-        const ins = await qq('INSERT INTO purchases (transaction_id, account_id, product_id, gems, purchased_at) VALUES ($1, $2, $3, 0, $4) ON CONFLICT DO NOTHING RETURNING transaction_id', [txId, uid, productId, new Date(at || Date.now())]);
-        if (!ins.rows.length) {
-          const own = (await qq('SELECT account_id FROM purchases WHERE transaction_id = $1', [txId])).rows[0];
-          if (!own || own.account_id !== uid) return 'other';
-        }
-        for (const it of items) await qq('INSERT INTO inventory (account_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [uid, it]);
+        await qq('INSERT INTO purchases (transaction_id, account_id, product_id, gems, purchased_at, environment, items) VALUES ($1, $2, $3, 0, $4, $5, $6) ON CONFLICT DO NOTHING', [txId, uid, productId, new Date(at || Date.now()), env || null, '[]']);
+        const row = (await qq('SELECT account_id, status, items FROM purchases WHERE transaction_id = $1 FOR UPDATE', [txId])).rows[0];
+        if (!row || row.account_id !== uid) return 'other';
+        if (row.status === 'refunded') return 'refunded';
+        const added = [];
+        for (const it of items) if ((await qq('INSERT INTO inventory (account_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING item_id', [uid, it])).rows.length) added.push(it);
+        if (added.length) await qq('UPDATE purchases SET items = $2 WHERE transaction_id = $1', [txId, JSON.stringify([...new Set(itemList(row.items).concat(added))])]);
         return 'ok';
       });
+    },
+    // 환불 회수: 거래를 refunded로 바꾸고 그 거래로 들어간 열쇠를 뺀다. 같은 계정의 다른 유효 결제(itemsOf(상품))가 주는 열쇠는 남긴다.
+    // items가 비어 있는 옛 줄(이 기능 전 결제)은 상품의 열쇠 전체에서 동전으로 산 것(장부 reason='buy')을 빼고 회수한다. 재화는 건드리지 않는다.
+    // 돌려주는 값 { result: 'ok' | 'already' | 'unknown', uid, removed }
+    async revokeIap(txId, itemsOf) {
+      return tx(async (qq) => {
+        const row = (await qq('SELECT account_id, product_id, status, items FROM purchases WHERE transaction_id = $1 FOR UPDATE', [txId])).rows[0];
+        if (!row) return { result: 'unknown', removed: [] };
+        if (row.status === 'refunded') return { result: 'already', uid: row.account_id, removed: [] };
+        await qq("UPDATE purchases SET status = 'refunded', refunded_at = now() WHERE transaction_id = $1", [txId]);
+        const uid = row.account_id;
+        if (!uid) return { result: 'ok', uid: null, removed: [] }; // 계정을 지운 뒤의 환불
+        const legacy = row.items == null, keep = new Set();
+        (await qq("SELECT product_id FROM purchases WHERE account_id = $1 AND status = 'granted' AND transaction_id <> $2", [uid, txId])).rows.forEach((o) => (itemsOf(o.product_id) || []).forEach((k) => keep.add(k)));
+        if (legacy) (await qq("SELECT ref FROM currency_ledger WHERE account_id = $1 AND reason = 'buy'", [uid])).rows.forEach((l) => keep.add(l.ref));
+        const removed = (legacy ? (itemsOf(row.product_id) || []) : itemList(row.items)).filter((k) => !keep.has(k));
+        for (const k of removed) await qq('DELETE FROM inventory WHERE account_id = $1 AND item_id = $2', [uid, k]);
+        return { result: 'ok', uid, removed };
+      });
+    },
+    // 결제 기록 한 줄(시험·운영 확인용)
+    async purchase(txId) {
+      const r = (await q('SELECT transaction_id, account_id, product_id, status, environment, items FROM purchases WHERE transaction_id = $1', [txId])).rows[0];
+      return r ? { txId: r.transaction_id, uid: r.account_id, productId: r.product_id, status: r.status, env: r.environment, items: itemList(r.items) } : null;
     },
     async equip(uid, e) {
       if (e.icon) await q('UPDATE accounts SET icon = $2 WHERE id = $1', [uid, e.icon]);
@@ -199,12 +227,14 @@ module.exports = function pgStore(pool) {
     },
     // ---------- 미션(2026-11-18): 일일 미션 진행·받기, 첫 클리어 보상 받기. json.js와 함수 모양이 같다 ----------
     // day = 일본 시간 날짜 글자('2026-11-18'). 지난 날의 줄은 진행을 적을 때 지운다(계정마다 그날 것만 남는다).
+    // ids = 미션 id 목록(각 +1) 또는 { 미션 id: 더할 양 }(2026-11-24)
     async missionProgress(uid, day, ids) {
+      const add = Array.isArray(ids) ? ids.map((id) => [id, 1]) : Object.entries(ids || {});
       await tx(async (qq) => {
         await qq('DELETE FROM mission_daily WHERE account_id = $1 AND day <> $2', [uid, day]);
-        for (const id of ids) {
-          await qq(`INSERT INTO mission_daily (account_id, day, mission_id, n) VALUES ($1, $2, $3, 1)
-                    ON CONFLICT (account_id, day, mission_id) DO UPDATE SET n = mission_daily.n + 1`, [uid, day, id]);
+        for (const [id, n] of add) {
+          await qq(`INSERT INTO mission_daily (account_id, day, mission_id, n) VALUES ($1, $2, $3, $4::int)
+                    ON CONFLICT (account_id, day, mission_id) DO UPDATE SET n = mission_daily.n + EXCLUDED.n`, [uid, day, id, Math.max(0, n | 0)]);
         }
       });
     },
@@ -214,6 +244,7 @@ module.exports = function pgStore(pool) {
       const daily = {}; d.rows.forEach((r) => (daily[r.mission_id] = { n: r.n, claimed: !!r.claimed_at }));
       return { daily, firsts: f.rows.map((r) => r.mission_id) };
     },
+    // m.xp(일일 미션 경험치, 2026-11-24)가 있으면 경험치도 더한다.
     // m = { id, coins, day, need }(일일: 그날 need번 채웠고 아직 안 받았을 때만) 또는 { id, coins }(첫 클리어: 한 번만. 조건은 부르는 쪽이 본다). 'ok' | 'no'
     // 받았다는 표시와 동전 지급·원장 기록을 트랜잭션 하나로 한다(동시에 두 번 와도 한 번만).
     async missionClaim(uid, m) {
@@ -226,10 +257,28 @@ module.exports = function pgStore(pool) {
           const ins = await qq('INSERT INTO mission_claims (account_id, mission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING mission_id', [uid, m.id]);
           if (!ins.rows.length) return 'no';
         }
-        const a = await qq('UPDATE accounts SET coins = coins + $2::int WHERE id = $1 RETURNING coins', [uid, m.coins]);
+        const a = await qq('UPDATE accounts SET coins = coins + $2::int, xp = xp + $3::int WHERE id = $1 RETURNING coins', [uid, m.coins, Math.max(0, m.xp | 0)]);
         await ledger(qq, uid, 'coin', m.coins, a.rows[0].coins, 'mission', m.day ? m.day + ':' + m.id : m.id);
         return 'ok';
       }).catch((e) => { if (e.code === '23505') return 'no'; throw e; });
+    },
+    // 한 번만 주는 보상(관직 승급 'rk_<계급>'·업적 첫 달성 'a_<id>', 2026-11-24). list = [{ id, coins, reason }]. 돌려주는 값: 이번에 준 id 목록.
+    // 받은 표시는 mission_claims(첫 클리어와 같은 표)에 한 줄. 표시·동전·원장을 트랜잭션 하나로(동시에 두 번 와도 한 번만).
+    async grantOnce(uid, list) {
+      return tx(async (qq) => {
+        await qq('SELECT 1 FROM accounts WHERE id = $1 FOR UPDATE', [uid]);
+        const got = [];
+        for (const x of list) {
+          const ins = await qq('INSERT INTO mission_claims (account_id, mission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING mission_id', [uid, x.id]);
+          if (!ins.rows.length) continue;
+          got.push(x.id);
+          if (x.coins > 0) {
+            const a = await qq('UPDATE accounts SET coins = coins + $2::int WHERE id = $1 RETURNING coins', [uid, x.coins]);
+            await ledger(qq, uid, 'coin', x.coins, a.rows[0].coins, x.reason || 'once', x.id);
+          }
+        }
+        return got;
+      }).catch((e) => { if (e.code === '23505') return []; throw e; });
     },
     async deleteUser(uid) { await q('DELETE FROM accounts WHERE id = $1', [uid]); },
     // ---------- Sign in with Apple refresh token(2026-11-20). json.js와 함수 모양이 같다 ----------

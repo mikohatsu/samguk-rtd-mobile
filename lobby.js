@@ -27,9 +27,6 @@
     mission: ['미션', 'ミッション', 'Missions', '任务'],
     msDaily: ['오늘의 미션', '今日のミッション', "Today's missions", '今日任务'], msFirsts: ['도전 과제', 'チャレンジ', 'Challenges', '挑战'],
     msReset: ['초기화까지 {h}시간 {m}분', 'リセットまで{h}時間{m}分', 'Resets in {h}h {m}m', '{h}小时{m}分后重置'],
-    ms_d_play: ['10라운드 이상 간 판을 1번 끝내기', '10ラウンド以上のバトルを1回終える', 'Finish 1 game reaching round 10 or later', '完成1局到达第10回合以上的对局'],
-    ms_d_r30: ['한 판에서 30라운드 도달', '1回のバトルで30ラウンドに到達', 'Reach round 30 in one game', '单局到达第30回合'],
-    ms_d_coop: ['온라인 협동(2인 이상) 판 1번 끝내기', 'オンライン協力（2人以上）のバトルを1回終える', 'Finish 1 online co-op game (2+ players)', '完成1局在线合作（2人以上）'],
     msFirst: ['{a} 첫 클리어', '{a} 初クリア', 'First clear: {a}', '首次通关{a}'], msFirstMut: ['{a} +{n} 첫 클리어', '{a}+{n} 初クリア', 'First clear: {a} +{n}', '首次通关{a}+{n}'],
     msClaim: ['받기', '受け取る', 'Claim', '领取'], msClaimed: ['받음', '受け取り済み', 'Claimed', '已领取'],
     msGot: ['동전 +{n}을 받았습니다.', '銅銭+{n}を受け取りました。', 'Received +{n} coins.', '已领取铜钱+{n}。'],
@@ -39,7 +36,7 @@
     unlockTab: ['장수 해금', '武将解放', 'Unlock generals', '解锁武将'],
     shopLocked: ['쉬움 난이도를 클리어하면 상점이 열립니다', '「かんたん」をクリアするとショップが開きます', 'Clear Easy to open the Shop', '通关“简单”后开放商店'],
     shopLockShort: ['쉬움 클리어로 열림', 'かんたんクリアで開放', 'Clear Easy to open', '通关简单后开放'],
-    unlockHint: ['잠긴 신화·불멸 장수는 조합할 수 없습니다(상자에서는 대신 열린 장수의 아이템이 나옵니다). 한 번 열면 이 계정에서 계속 나옵니다. 플레이로 모은 동전만으로도 모두 열 수 있습니다.', 'ロック中の神話・不滅の武将は合成できません（宝箱からは、解放済みの武将のアイテムが代わりに出ます）。一度解放すると、このアカウントではずっと使えます。プレイで集めた銅銭だけでも全員解放できます。', 'Locked Myth/Immortal generals cannot be crafted (chests give items for unlocked ones instead). Once unlocked they stay on this account. Everything can be unlocked with coins earned by playing.', '未解锁的神话·不灭武将无法合成（宝箱会改为给出已解锁武将的道具）。解锁后在本账号永久有效。只靠游戏获得的铜钱也能全部解锁。'],
+    unlockHint: ['잠긴 신화·불멸 장수는 조합할 수 없습니다(상자에서는 아이템이 나오니, 열면 바로 합성할 수 있습니다). 한 번 열면 이 계정에서 계속 나옵니다. 플레이로 모은 동전만으로도 모두 열 수 있습니다.', 'ロック中の神話・不滅の武将は合成できません（宝箱からアイテムは出るので、解放すればすぐ合成できます）。一度解放すると、このアカウントではずっと使えます。プレイで集めた銅銭だけでも全員解放できます。', 'Locked Myth/Immortal generals cannot be crafted (chests still drop their items, so unlock them to craft). Once unlocked they stay on this account. Everything can be unlocked with coins earned by playing.', '未解锁的神话·不灭武将无法合成（宝箱仍会掉落其道具，解锁后即可合成）。解锁后在本账号永久有效。只靠游戏获得的铜钱也能全部解锁。'],
     unlocked: ['해금됨', '解放済み', 'Unlocked', '已解锁'], unlockBtn: ['해금', '解放', 'Unlock', '解锁'], tMyth: ['신화', '神話', 'Myth', '神话'], tImm: ['불멸', '不滅', 'Immortal', '不灭'],
     adBtn: ['광고 보고 동전 +{n}', '広告を見て銅銭+{n}', 'Watch ad: +{n} coins', '看广告 铜钱+{n}'], adLeft: ['오늘 남은 횟수 {n}', '今日の残り{n}回', '{n} left today', '今日剩余{n}次'],
     adCap: ['오늘은 더 볼 수 없습니다.', '今日はこれ以上見られません。', 'No more ads today.', '今天已达上限。'], adFail: ['광고를 보여 주지 못했습니다.', '広告を表示できませんでした。', 'Could not show the ad.', '无法显示广告。'],
@@ -150,33 +147,42 @@
 
   // ---------- 로비 캐릭터 ----------
   const charImg = new Image(); charImg.src = 'gfx/lobby_char.png?v=1'; // 배경을 지운 그림(밝은 로비 배경 위에 그대로 세운다)
-  let sayT = 0, hop = 0, lineI = 0;
+  let sayT = 0, hop = 0, lineI = 0, charLast = 0;
+  // 높이(0 = 머리, 1 = 발)에서의 좌우 살랑임(px). 위로 갈수록 크게
+  const swayAt = (t, f, dpr) => { const k = 1 - f; return Math.sin(t * 1.1 + f * 4.5) * 5 * dpr * k * k + Math.sin(t * 2.3) * 1.2 * dpr * k; };
   function charLoop(now) {
     requestAnimationFrame(charLoop);
+    if (sayT && now > sayT) { $('lsay').hidden = true; sayT = 0; }
+    // 판 화면이거나 메뉴 창(#lpanel)·시작 단계(#setup)가 덮고 있으면 그리지 않는다(마지막 모습 그대로 둔다)
     const cv = $('lcharcv'); if (!cv || $('title').hidden || !charImg.complete || !charImg.naturalWidth) return;
+    const lp = $('lpanel'), su = $('setup'); if ((lp && !lp.hidden) || (su && !su.hidden)) return;
+    // 초당 약 30번만 그린다(느린 흔들림이라 60번과 차이가 거의 없다. 120Hz 화면에서도 30번)
+    if (now - charLast < 30) return;
+    const dtc = Math.min(0.1, Math.max(0, (now - charLast) / 1000)); charLast = now;
     const box = cv.getBoundingClientRect(), dpr = Math.min(2, root.devicePixelRatio || 1);
     const W = Math.round(box.width * dpr), H = Math.round(box.height * dpr);
     if (!W || !H) return;
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     const x = cv.getContext('2d'), t = now / 1000;
-    x.clearRect(0, 0, W, H);
+    x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, W, H);
     // 그림 맞추기(아래 붙임)
     const ih = charImg.naturalHeight, iw = charImg.naturalWidth, sc = Math.min(H * 0.94 / ih, W * 1.0 / iw), dw = iw * sc, dh = ih * sc, ox = (W - dw) / 2, oy = H - dh;
-    hop = Math.max(0, hop - 1 / 60);
+    hop = Math.max(0, hop - dtc);
     const jump = Math.sin(Math.min(1, hop / 0.45) * Math.PI) * 16 * dpr;
     // 발밑 그림자(배경 위에 떠 보이지 않게)
     { const gx = W / 2, gy = H - dh * 0.035, rw = dw * 0.34, sh2 = x.createRadialGradient(gx, gy, 0, gx, gy, rw); sh2.addColorStop(0, 'rgba(30,12,6,.5)'); sh2.addColorStop(1, 'rgba(30,12,6,0)'); x.save(); x.translate(0, gy); x.scale(1, 0.22); x.translate(0, -gy); x.fillStyle = sh2; x.fillRect(gx - rw, gy - rw, rw * 2, rw * 2); x.restore(); }
-    // 가로 띠로 잘라 위로 갈수록 살랑이게, 가슴 높이는 숨쉬듯 아주 조금 부풀었다 가라앉게
-    const N = 90, sh = ih / N;
+    // 가로 띠로 잘라 위로 갈수록 살랑이게, 가슴 높이는 숨쉬듯 아주 조금 부풀었다 가라앉게.
+    // 띠는 30개. 각 띠를 위·아래 끝의 살랑임 값에 맞춰 기울여(평행사변형) 그리므로 띠 사이 경계가 계단지지 않고 이어진다(예전 평평한 띠 90개보다 매끈하다).
+    const N = 30, sh = ih / N, hd = sh * sc;
     for (let i = 0; i < N; i++) {
-      const sy = i * sh, k = 1 - i / N; // 위쪽이 1
-      const sway = Math.sin(t * 1.1 + i * 0.05) * 5 * dpr * k * k + Math.sin(t * 2.3) * 1.2 * dpr * k;
-      const torso = i / N > 0.22 && i / N < 0.45 ? 1 : 0;
+      const f0 = i / N, s0 = swayAt(t, f0, dpr), s1 = swayAt(t, (i + 1) / N, dpr);
+      const torso = f0 > 0.22 && f0 < 0.45 ? 1 : 0;
       const breathe = 1 + torso * Math.sin(t * 2.1) * 0.012;
-      const yy = oy + sy * sc - jump - (1 - k) * 0;
-      x.drawImage(charImg, 0, sy, iw, sh + 0.6, ox + sway - (breathe - 1) * dw / 2, yy, dw * breathe, sh * sc + 0.6);
+      const yy = oy + i * sh * sc - jump, c = (s1 - s0) / hd;
+      x.setTransform(1, 0, c, 1, -c * yy, 0);
+      x.drawImage(charImg, 0, i * sh, iw, sh + 0.6, ox + s0 - (breathe - 1) * dw / 2, yy, dw * breathe, hd + 0.6);
     }
-    if (sayT && now > sayT) { $('lsay').hidden = true; sayT = 0; }
+    x.setTransform(1, 0, 0, 1, 0, 0);
   }
   function charTap() {
     hop = 0.45; const lines = S.tapLines; lineI = (lineI + 1) % lines.length;
@@ -432,13 +438,32 @@
   // ms = 서버가 준 미션 상태({ daily, firsts, resetAt }). 로비에 들어올 때(로그인 계정이 바뀔 때)와 판 결과를 보낸 뒤 한 번씩 받아 빨간 점을 맞춘다.
   let ms = null, msTok = null, msSeq = 0, msFresh = false;
   const msCount = () => (ms && C.ACC.token ? ms.daily.concat(ms.firsts).filter((x) => x.done && !x.claimed).length : 0);
-  function msDot() { const el = document.querySelector('#lmenu [data-lp="mission"] .dot'); if (el) el.hidden = !msCount(); }
+  function msDot() { const el = document.querySelector('#lmenu [data-lp="mission"] .dot'); if (el) el.hidden = !msCount(); msStrip(); }
+  // 로비의 오늘의 미션 칸(2026-11-24): 미션 3줄과 진행. 다 깬 미션이 있으면 '받기'(다 깬 것을 한꺼번에 받는다). 칸을 누르면 미션 창
+  const msDone = () => (ms && C.ACC.token ? ms.daily.filter((x) => x.done && !x.claimed) : []);
+  function msStrip() {
+    let el = $('lms');
+    if (!ms || !C || !C.ACC.token) { if (el) el.hidden = true; return; }
+    if (!el) { el = document.createElement('div'); el.id = 'lms'; $('title').appendChild(el); }
+    const ready = msDone(), got = ms.daily.filter((x) => x.claimed).length;
+    el.innerHTML = `<button type="button" class="lms-head" data-lp="mission"><b>${C.t('msToday')}</b><small>${got === ms.daily.length ? C.t('msAllDone') : got + '/' + ms.daily.length}</small></button>`
+      + ms.daily.map((x) => `<button type="button" class="lms-row${x.claimed ? ' got' : x.done ? ' done' : ''}" data-lp="mission"><span>${C.t('ms_' + x.id)}</span><small>${x.claimed ? '✓' : x.n + '/' + x.need}</small></button>`).join('')
+      + (ready.length ? `<button type="button" class="btn go lms-claim" data-msall="1">${L('msClaim')}<small>${C.t('msRewardSum', { c: ready.reduce((a, x) => a + x.coins, 0), x: ready.reduce((a, x) => a + (x.xp || 0), 0) })}</small></button>` : '');
+    el.hidden = false;
+  }
+  // 서버가 준 관직 승급 보상 알림(로비에 들어와 미션 상태를 받을 때·미션 경험치로 오를 때)
+  function rankToast(list) {
+    if (!Array.isArray(list) || !list.length) return;
+    const me = C.ACC.me, trk = me && me.track === 'civ' ? 'civ' : 'mil', top = list[list.length - 1], n = list.reduce((a, x) => a + x.coins, 0);
+    toastLobby(C.t('rankUpGot', { a: C.t('rk_' + trk + top.rank), n }));
+  }
   async function msLoad() {
     if (!C || !C.ACC.token) { ms = null; msDot(); return false; }
     const my = ++msSeq, r = await C.api('/api/missions', {});
     if (my !== msSeq) return !!ms;
     const good = r.status === 200 && Array.isArray(r.daily) && Array.isArray(r.firsts);
     if (good) ms = { daily: r.daily, firsts: r.firsts, resetAt: r.resetAt };
+    if (good && r.me && r.rankUp && r.rankUp.length) { C.ACC.me = r.me; C.saveAcc(); renderTop(); rankToast(r.rankUp); }
     msDot(); return good;
   }
   // 받을 수 있는 보상 수를 돌려준다(18-account.js가 판 결과를 보낸 뒤 부른다)
@@ -447,19 +472,34 @@
     const me = C.ACC.me, dn = (id) => esc((C.T.difficulties.find((d) => d.id === id) || {}).name || id);
     const left = Math.max(0, (ms.resetAt || 0) - Date.now()), hh = Math.floor(left / 3600000), mm = Math.floor((left % 3600000) / 60000);
     const fname = (id) => { const m = /^f_nm(\d)$/.exec(id); return m ? L('msFirstMut', { a: dn('nightmare'), n: m[1] }) : L('msFirst', { a: dn(id.slice(2)) }); };
-    const row = (x, name, n, need) => `<div class="ms-row${x.claimed ? ' got' : x.done ? ' done' : ''}"><span class="nm">${name}</span><span class="pg"><i class="ms-bar"><b style="width:${Math.round(Math.min(1, n / Math.max(1, need)) * 100)}%"></b></i>${n}/${need}</span><span class="rw"><i class="ico coin" aria-hidden="true"></i>${x.coins}</span>${x.claimed ? `<span class="ms-got">✓ ${L('msClaimed')}</span>` : x.done ? `<button class="btn go" type="button" data-msclaim="${x.id}">${L('msClaim')}</button>` : '<span class="ms-wait"></span>'}</div>`;
+    const row = (x, name, n, need) => `<div class="ms-row${x.claimed ? ' got' : x.done ? ' done' : ''}"><span class="nm">${name}</span><span class="pg"><i class="ms-bar"><b style="width:${Math.round(Math.min(1, n / Math.max(1, need)) * 100)}%"></b></i>${n}/${need}</span><span class="rw"><i class="ico coin" aria-hidden="true"></i>${x.coins}${x.xp ? `<small class="ms-xp">+${x.xp} XP</small>` : ''}</span>${x.claimed ? `<span class="ms-got">✓ ${L('msClaimed')}</span>` : x.done ? `<button class="btn go" type="button" data-msclaim="${x.id}">${L('msClaim')}</button>` : '<span class="ms-wait"></span>'}</div>`;
     // 받을 수 있는 것 → 진행 중 → 받은 것 순서(같은 무리 안에서는 서버 순서 그대로)
     const ord = (x) => (x.claimed ? 2 : x.done ? 0 : 1), sort = (a) => a.map((x, i) => [x, i]).sort((p, q) => ord(p[0]) - ord(q[0]) || p[1] - q[1]).map((p) => p[0]);
     return `<div class="lp-bal"><i class="ico coin" aria-hidden="true"></i>${L('balance', { n: (me.coins || 0).toLocaleString() })}</div>`
-      + `<div class="ms-head"><b>${L('msDaily')}</b><small>${L('msReset', { h: hh, m: mm })}</small></div>${sort(ms.daily).map((x) => row(x, L('ms_' + x.id), x.n, x.need)).join('')}`
+      + `<div class="ms-head"><b>${L('msDaily')}</b><small>${L('msReset', { h: hh, m: mm })}</small></div>${sort(ms.daily).map((x) => row(x, C.t('ms_' + x.id), x.n, x.need)).join('')}`
       + `<div class="ms-head"><b>${L('msFirsts')}</b></div>${sort(ms.firsts).map((x) => row(x, fname(x.id), x.done ? 1 : 0, 1)).join('')}`;
   }
-  async function msClaim(id) {
+  // quiet = 알림 없이 결과만 돌려준다(한꺼번에 받기). 돌려주는 값: 받았으면 { coins, xp, rankUp }, 아니면 null
+  async function msClaim(id, quiet) {
     const r = await C.api('/api/missions/claim', { id });
     if (r.me && Array.isArray(r.daily)) {
-      C.ACC.me = r.me; C.saveAcc(); ms = { daily: r.daily, firsts: r.firsts, resetAt: r.resetAt }; msFresh = true;
-      renderTop(); renderPanel(); toast(L('msGot', { n: r.coins }));
-    } else { toast(C.errText(r.error)); renderPanel(); }
+      C.ACC.me = r.me; C.saveAcc(); ms = { daily: r.daily, firsts: r.firsts, resetAt: r.resetAt };
+      renderTop(); if (panel === 'mission') { msFresh = true; renderPanel(); } msDot();
+      if (!quiet) { toast(r.xp ? C.t('msGotXp', { n: r.coins, x: r.xp }) : L('msGot', { n: r.coins })); if (r.rankUp && r.rankUp.length) setTimeout(() => rankToast(r.rankUp), 2700); }
+      return { coins: r.coins || 0, xp: r.xp || 0, rankUp: r.rankUp || [] };
+    }
+    if (!quiet) toast(C.errText(r.error));
+    if (panel === 'mission') renderPanel();
+    return null;
+  }
+  // 로비 미션 칸의 '받기': 다 깬 일일 미션을 차례로 받고 알림은 한 번
+  let msAllBusy = false;
+  async function msClaimAll() {
+    if (msAllBusy) return; msAllBusy = true;
+    let c = 0, x = 0; const ups = [];
+    try { for (const m of msDone()) { const r = await msClaim(m.id, true); if (r) { c += r.coins; x += r.xp; ups.push(...r.rankUp); } } } finally { msAllBusy = false; msDot(); }
+    if (c || x) toast(C.t('msGotXp', { n: c, x }));
+    if (ups.length) setTimeout(() => rankToast(ups), 2700);
   }
 
   // ---------- 메뉴 창 ----------
@@ -837,6 +877,7 @@
       const bb = e.target.closest('[data-buy]'); if (bb) { if (!armed(bb)) return; bb.disabled = true; buy(bb.dataset.buy); return; }
       const un = e.target.closest('[data-unl]'); if (un) { if (!armed(un)) return; un.disabled = true; unlockCoins(un.dataset.unl); return; }
       const mc = e.target.closest('[data-msclaim]'); if (mc) { mc.disabled = true; msClaim(mc.dataset.msclaim); return; }
+      const ma = e.target.closest('[data-msall]'); if (ma) { ma.disabled = true; msClaimAll(); return; }
       const ad = e.target.closest('[data-adrw]'); if (ad) { busyBtn(ad, L('adLoading'), watchAd()); return; }
       const ia = e.target.closest('[data-iap]'); if (ia) { busyBtn(ia, L('working'), iapBuy(ia.dataset.iap)); return; }
       const ir = e.target.closest('[data-iaprestore]'); if (ir) { busyBtn(ir, L('working'), iapRestore()); return; }

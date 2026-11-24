@@ -11,7 +11,7 @@
     } catch (e) { return { status: 0, error: 'net' }; }
   }
   const errText = (e) => (e === 'net' ? t('noServer') : t('err_' + e) !== 'err_' + e ? t('err_' + e) : String(e || ''));
-  const xpLv = (lv) => 40 * (lv - 1) * (lv - 1);
+  const xpLv = window.RTD_PROG.xpAt; // 레벨 lv의 누적 경험치(progression.js, 서버와 같은 관직 곡선)
   // 게스트 비밀값(이 기기에만): 토큰이 만료돼도 다시 들어온다
   // GUEST는 늘 같은 객체다(비밀값이 없으면 id가 null). saveGuest가 저장소와 이 객체를 같이 바꾸므로, 같은 실행 안에서 가입·로그아웃을 해도 최신 값을 본다
   const GUEST = Object.assign({ id: null, secret: null }, (() => { try { return JSON.parse(localStorage.getItem('rtd-guest') || 'null'); } catch (e) { return null; } })() || {});
@@ -38,15 +38,17 @@
   // 보상 배율은 서버가 판 표에 적어 둔 판 종류(인원)로 정한다. 오프라인 판은 표가 있을 때만 보낸다(표가 없으면 서버가 받지 않는다)
   // 서버에 닿지 못하면(끊김·5xx) 보낼 내용을 기기에 남겨 두고 다음에 앱을 켤 때·로비로 돌아올 때 다시 보낸다(lobby.js queueSend·flushPending)
   async function reportResult() {
-    S.msClaim = false;
+    S.msClaim = false; S.rwRank = null; S.rwAch = null;
     if (!ACC.token || S.reported || (!S.online && !S.gameTk)) return;
     S.reported = true;
     const path = S.online ? '/api/result' : '/api/history';
-    const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : bots.length ? 'ai' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {} };
+    const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : bots.length ? 'ai' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {}, ach: Object.keys((g.me && g.me.done) || {}).filter((k) => g.me.done[k]) };
     const uid = ACC.me && ACC.me.id, r = await api(path, body);
     if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend(path, body, uid);
     if (r.me) {
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0;
+      // 서버가 준 관직 승급·업적 첫 달성 보상: 결과창 '다음 목표' 칸에 알린다(14-endstats-xp.js goalBox)
+      S.rwRank = Array.isArray(r.rankUp) && r.rankUp.length ? r.rankUp : null; S.rwAch = Array.isArray(r.ach) && r.ach.length ? r.ach : null;
       // 경험치 연출도 패배 연출(S.endHoldUntil)이 끝난 뒤에 띄운다
       if (r.gained > 0) { S.xpPlaying = true; const mine0 = g; setTimeout(() => { if (g !== mine0) return; playXp(r.me.xp - r.gained, r.me.xp, r.coins, () => { S.xpPlaying = false; S.xpDone = true; dirty(); $('overlay').dataset.key = ''; }); }, Math.max(0, (S.endHoldUntil || 0) - performance.now())); }
       dirty(); const box = $('overlay'); box.dataset.key = '';

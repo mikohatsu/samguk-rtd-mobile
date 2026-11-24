@@ -8,6 +8,8 @@
   const CX = (ARENA.x0 + ARENA.x1) / 2, CY = (ARENA.y0 + ARENA.y1) / 2;
   const AW = ARENA.x1 - ARENA.x0, AH = ARENA.y1 - ARENA.y0;
   const r1 = (v) => Math.round(v * 10) / 10, r2 = (v) => Math.round(v * 100) / 100;
+  // 통신으로 받은 값 검사(SEC-104): 유한한 숫자가 아니면 기본값
+  const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
   // 공격할 수 있는 오브젝트(체력이 있는 것)와 분신
   const HITTABLE = { altar: 1, tower: 1, amb: 1 };
   const PASSIVE = { wind: 1, gaze: 1, push: 1, all: 1 };
@@ -141,9 +143,10 @@
   // 방장: 다른 사람이 보낸 피해
   P.remoteDamage = function (d) {
     const f = this.fight, b = f.boss, M = f.mech;
-    b.hp = Math.max(0, b.hp - d.v);
-    if (d.stun) b.stun = Math.max(b.stun, d.stun);
-    if (M.cast) M.cast.got += d.v + (d.sg || 0);
+    const v = Math.max(0, num(d.v, 0)); // 음수(보스 회복)·NaN(체력이 깨져 판이 멈춤)을 막는다
+    b.hp = Math.max(0, b.hp - v);
+    if (d.stun > 0) b.stun = Math.max(b.stun, num(d.stun, 0));
+    if (M.cast) M.cast.got += v + Math.max(0, num(d.sg, 0));
     Object.keys(d.o || {}).forEach((id) => { const o = M.objs.find((x) => x.id === +id); if (o && o.hp > 0) this.damageObj(o, d.o[id]); });
     if (d.ctr && M.ctr > 0) this.addCounter(d.ctr);
     if (d.amp) { if (!(M.ampT > 0) || d.amp[0] >= M.amp) M.amp = d.amp[0]; M.ampT = Math.max(M.ampT || 0, d.amp[1]); }
@@ -563,9 +566,14 @@
   };
   P.raidApply = function (m) {
     const f = this.fight, M = f.mech;
-    if (!m) return;
+    if (!m || typeof m !== 'object') return;
     const x = m.x && typeof m.x === 'object' ? m.x : null; // 옛 버전 방장은 보내지 않는다
-    M.gr = m.g; M.vuln = m.v; M.ctr = m.c; M.face = m.f; M.hide = !!m.h; M.sym = m.y;
+    M.gr = num(m.g, 0); M.vuln = num(m.v, 0); M.ctr = num(m.c, 0); M.face = num(m.f, M.face || 0); M.hide = !!m.h; M.sym = m.y;
+    if (m.cm != null && !Array.isArray(m.cm)) m.cm = null;
+    if (m.a != null && !(Array.isArray(m.a) && isFinite(m.a[0]) && isFinite(m.a[1]))) m.a = null;
+    if (m.s != null && typeof m.s !== 'object') m.s = null;
+    if (m.b != null && !Array.isArray(m.b)) m.b = null;
+    if (x && x.q != null && !Array.isArray(x.q)) x.q = null;
     // 내가 방금 쓴 미인계가 방장에게 닿기 전의 옛 값으로 덮이지 않게 잠깐 지킨다
     if (!(M.charmHold > 0 && !m.cm)) {
       const was = M.charmT > 0;
@@ -584,7 +592,7 @@
       if (cn) { M.cast.fail = cn[1] || undefined; M.cast.lock = !!cn[2]; if (cn[3]) M.cast.ak = cn[3]; }
     } else M.cast = null;
     const old = {}; M.objs.forEach((o) => (old[o.id] = o));
-    M.objs = (m.o || []).map(([id, k, x0, y, r, hp, mhp, s, lit, done, p, cd, life]) => {
+    M.objs = (Array.isArray(m.o) ? m.o : []).slice(0, 60).filter((o) => Array.isArray(o) && typeof o[0] === 'number' && isFinite(o[2]) && isFinite(o[3]) && isFinite(o[5])).map(([id, k, x0, y, r, hp, mhp, s, lit, done, p, cd, life]) => {
       const o = Object.assign(old[id] || { cd: 1 }, { id, k, x: x0, y, r, hp, mhp, s, lit: !!lit, done: !!done, p });
       if (typeof cd === 'number') { o.cd = cd; if (life >= 0) o.life = life; else delete o.life; }
       return o;

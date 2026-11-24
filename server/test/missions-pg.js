@@ -59,6 +59,24 @@ const ok = (c, m) => { console.log((c ? 'OK  ' : 'FAIL') + ' ' + m); if (!c) pro
   const v = await s.getUser(u.id), hs = await s.history(u.id);
   ok(v.xp === 66 && v.coins === 1043 && v.clr === 0 && hs.length === 1 && hs[0].online === false, `오프라인 판: 경험치 ${v.xp}, 동전 ${v.coins}, 전적 ${hs.length}줄(오프라인 표시)`);
 
+  // 2026-11-24: 진행을 양으로 더하기({ id: 양 }), 미션 경험치, 한 번만 주는 보상(관직 승급·업적)
+  const D3 = '2026-11-20';
+  await s.missionProgress(u.id, D3, { d_comb10: 7, d_boss3: 2 });
+  await s.missionProgress(u.id, D3, { d_comb10: 6 });
+  st = await s.missionState(u.id, D3);
+  ok(st.daily.d_comb10.n === 13 && st.daily.d_boss3.n === 2, `양으로 더하기: 합성 ${st.daily.d_comb10.n}, 보스 ${st.daily.d_boss3.n}`);
+  ok((await s.missionClaim(u.id, { id: 'd_comb10', coins: 40, xp: 15, day: D3, need: 10 })) === 'ok', '경험치 있는 일일 미션 받기');
+  let w = await s.getUser(u.id);
+  ok(w.xp === 66 + 15 && w.coins === 1043 + 40, `미션 받기: 경험치 ${w.xp}(+15), 동전 ${w.coins}(+40)`);
+  let g1 = await s.grantOnce(u.id, [{ id: 'rk_1', coins: 100, reason: 'rank' }, { id: 'a_all1', coins: 30, reason: 'ach' }]);
+  const g2 = await s.grantOnce(u.id, [{ id: 'rk_1', coins: 100, reason: 'rank' }, { id: 'rk_2', coins: 150, reason: 'rank' }]);
+  w = await s.getUser(u.id);
+  ok(g1.join() === 'rk_1,a_all1' && g2.join() === 'rk_2' && w.coins === 1043 + 40 + 100 + 30 + 150, `한 번만 주는 보상: 처음 ${g1.join()}, 다음 ${g2.join()}, 동전 ${w.coins}`);
+  const lg2 = (await pool.query("SELECT delta, reason, ref FROM currency_ledger WHERE account_id = $1 AND reason IN ('rank', 'ach') ORDER BY id", [u.id])).rows;
+  ok(lg2.map((x) => x.reason + ':' + x.ref + ':' + x.delta).join() === 'rank:rk_1:100,ach:a_all1:30,rank:rk_2:150', `원장: 관직·업적 보상 (${lg2.map((x) => x.ref).join()})`);
+  g1 = await Promise.all([s.grantOnce(u.id, [{ id: 'rk_3', coins: 200 }]), s.grantOnce(u.id, [{ id: 'rk_3', coins: 200 }])]);
+  ok(g1.flat().length === 1 && (await s.getUser(u.id)).coins === w.coins + 200, '동시에 두 번 와도 한 번만');
+
   // 탈퇴하면 미션 기록도 지워진다
   await s.deleteUser(u.id);
   const left = await pool.query('SELECT (SELECT count(*) FROM mission_daily) AS a, (SELECT count(*) FROM mission_claims) AS b');

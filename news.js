@@ -10,6 +10,12 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.8', d: '2026-11-24', items: [
+      ['오늘의 미션 3개가 생겼습니다(일본 시간 0시에 바뀜). 관직이 오르거나 업적을 처음 달성하면 동전을 받고, 관직 2단계까지 훨씬 빨리 오릅니다.', '今日のミッションが3つ追加されました（日本時間0時に更新）。官職が上がったときや実績を初めて達成したときに銅銭がもらえ、官職2段階目まで早く上がれるようになりました。', 'Added 3 daily missions (reset at midnight JST). Rank-ups and first-time achievements now give coins, and the second rank comes much sooner.', '新增3个每日任务（日本时间0点刷新）。官职晋升和首次达成成就可获得铜钱，官职第2阶也更快达到。'],
+      ['악몽 +N의 변칙 규칙은 이제 판을 시작할 때 정해지고, 하나씩 도장 찍히듯 공개됩니다.', '悪夢+Nの変則ルールはバトル開始時に決まり、ひとつずつ判を押すように発表されます。', 'Nightmare +N rules are now drawn when the battle starts and revealed one by one like stamps.', '噩梦+N的变则规则改为开局时决定，并逐条盖章般揭晓。'],
+      ['보물 상자에서 아직 해금하지 않은 장수의 아이템도 나옵니다. 해금하면 합성할 수 있습니다.', '宝箱から未解放の武将のアイテムも出るようになりました。解放すると合成できます。', 'Chests can now drop items for heroes you have not unlocked yet; unlock them to combine.', '宝箱现在也会掉落尚未解锁武将的道具，解锁后即可合成。'],
+      ['90Hz·144Hz 화면에서도 60프레임으로 매끄럽게 움직이고, 로비에서 발열과 배터리 소모를 줄였습니다. 협동 판의 안정성을 높였습니다.', '90Hz・144Hz画面でも60fpsでなめらかに動き、ロビーでの発熱とバッテリー消費を抑えました。協力プレイの安定性も高めました。', 'Smooth 60 fps on 90 Hz and 144 Hz screens, less heat and battery drain in the lobby, and more stable co-op.', '90Hz和144Hz屏幕也能流畅运行60帧，降低大厅发热和耗电，并提升了合作模式的稳定性。'],
+    ] },
     { v: '0.3.7', d: '2026-11-23', items: [
       ['함께하는 동료 목록을 「동맹 n명」 버튼 하나로 접었습니다. 누르면 펼쳐지고, 동료 전장을 고르면 그곳으로 이동합니다. 동료 전선이 위험하면 버튼에 붉은 표시가 뜹니다. 덕분에 조이스틱이 왼쪽 아래 끝에 놓입니다.', '仲間の一覧を「同盟 n人」ボタンひとつにまとめました。押すと開き、仲間の戦場を選ぶとそこへ移動します。仲間の戦線が危ないとボタンに赤い印が出ます。そのぶんジョイスティックが左下の端に置かれます。', 'Allies are now folded into one "Allies (n)" button. Tap to open the list and pick an ally to view their lane; a red mark warns when an ally’s front is in danger. The joystick now sits in the bottom-left corner.', '队友列表收进一个「同盟 n人」按钮。点开后选择队友即可查看其战场；队友战线危急时按钮上会出现红色标记。摇杆因此回到左下角。'],
       ['업적 깃발을 화면 아래쪽에 붙이고, 깃발마다 같은 칸·같은 바닥선에 맞춰 가지런히 세웠습니다.', '実績の旗を画面下側に寄せ、どの旗も同じ枠・同じ高さにそろえて並べました。', 'Achievement flags now sit at the bottom of their area, evenly aligned in a tidy grid.', '成就旗帜靠下排列，并按统一格子和底线对齐。'],

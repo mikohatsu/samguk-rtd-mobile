@@ -1,3 +1,6 @@
+  // 잠긴 장수의 아이템 표시용 자물쇠(로비·상점과 같은 gfx/ic_lock.png). 못 불러오면 width 0이라 그리지 않는다
+  const LOCK_IM = typeof Image !== 'undefined' ? new Image() : { width: 0 };
+  if (LOCK_IM.src !== undefined) LOCK_IM.src = 'gfx/ic_lock.png';
   function drawLane(t) {
     const c = ctx;
     blitBg(c, mapCv, 'map', mapVer);
@@ -58,11 +61,14 @@
       const bob = Math.sin(t * 3 + d.id) * 2, selected = S.dropSel === d.id;
       if (selected) selMark(c, d.x, d.y + 16, 24, t);
       const dimg = Art.img(d.kind === 'chest' ? 'prop_chest' : d.kind === 'item' ? 'prop_scroll' : 'prop_' + d.kind);
-      if (dimg) { blobShadow(c, d.x, d.y + 16, 40, 0.5); c.drawImage(dimg, d.x - 24, d.y - 26 + bob, 48, 48 * (dimg.height / dimg.width)); continue; }
+      // 잠긴 장수의 아이템은 두루마리 오른쪽 위에 자물쇠 그림(gfx/ic_lock)을 얹는다
+      const dlock = d.kind === 'item' && LOCK_IM.width && !g.itemOpen(d.item);
+      if (dimg) { blobShadow(c, d.x, d.y + 16, 40, 0.5); c.drawImage(dimg, d.x - 24, d.y - 26 + bob, 48, 48 * (dimg.height / dimg.width)); if (dlock) c.drawImage(LOCK_IM, d.x + 6, d.y - 30 + bob, 22, 22); continue; }
       c.fillStyle = d.kind === 'chest' ? '#7a3b1c' : '#2a2140'; c.strokeStyle = '#ffd86a'; c.lineWidth = 2.5;
       c.fillRect(d.x - 17, d.y - 15 + bob, 34, 30); c.strokeRect(d.x - 17, d.y - 15 + bob, 34, 30);
       c.fillStyle = '#ffe9a8'; c.font = '900 21px "Noto Serif KR", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText(d.kind === 'chest' ? T.chestMark : d.kind === 'item' ? T.itemMark : T.consumables[d.kind].mark, d.x, d.y + 1 + bob);
+      if (dlock) c.drawImage(LOCK_IM, d.x + 6, d.y - 30 + bob, 22, 22);
     }
     const sel = new Set(S.sel);
     // 겹쳐 선 유닛은 아래쪽(y가 큰 쪽)을 나중에 그려 앞뒤가 맞게 한다(배치는 그대로, 그리는 순서만)

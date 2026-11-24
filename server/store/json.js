@@ -52,12 +52,29 @@ module.exports = function jsonStore(dir) {
       if (u.ads.n >= daily) return P({ ok: false, left: 0 });
       u.ads.n++; u.coins = (u.coins || 0) + coins; mark(); return P({ ok: true, left: daily - u.ads.n });
     },
-    grantIap: (uid, txId, productId, items, at) => {
+    // 결제·환불 회수: pg.js와 같은 규칙(환불된 거래는 다시 열지 않음, 그 거래로 새로 들어간 열쇠만 회수, 다른 유효 결제의 열쇠는 남김)
+    grantIap: (uid, txId, productId, items, at, env) => {
       db.iap = db.iap || {};
-      const had = db.iap[txId]; if (had && had.uid !== uid) return P('other');
-      if (!had) db.iap[txId] = { uid, productId, at: at || Date.now() };
-      const u = user(uid); u.owned = u.owned || []; items.forEach((it) => { if (!u.owned.includes(it)) u.owned.push(it); }); mark(); return P('ok');
+      let had = db.iap[txId]; if (had && had.uid !== uid) return P('other');
+      if (!had) had = db.iap[txId] = { uid, productId, at: at || Date.now(), env: env || null, status: 'granted', items: [] };
+      if (had.status === 'refunded') return P('refunded');
+      const u = user(uid); u.owned = u.owned || [];
+      items.forEach((it) => { if (!u.owned.includes(it)) { u.owned.push(it); if (had.items && !had.items.includes(it)) had.items.push(it); } });
+      mark(); return P('ok');
     },
+    revokeIap: (txId, itemsOf) => {
+      const row = (db.iap || {})[txId];
+      if (!row) return P({ result: 'unknown', removed: [] });
+      if (row.status === 'refunded') return P({ result: 'already', uid: row.uid, removed: [] });
+      row.status = 'refunded'; row.refundedAt = Date.now(); mark();
+      const u = user(row.uid); if (!u) return P({ result: 'ok', uid: null, removed: [] });
+      const keep = new Set();
+      Object.keys(db.iap).forEach((k) => { const o = db.iap[k]; if (k !== txId && o.uid === row.uid && o.status !== 'refunded') (itemsOf(o.productId) || []).forEach((x) => keep.add(x)); });
+      const removed = (row.items || itemsOf(row.productId) || []).filter((k) => !keep.has(k) && (u.owned || []).includes(k));
+      u.owned = (u.owned || []).filter((k) => !removed.includes(k));
+      return P({ result: 'ok', uid: row.uid, removed });
+    },
+    purchase: (txId) => { const r = (db.iap || {})[txId]; return P(r ? { txId, uid: r.uid, productId: r.productId, status: r.status || 'granted', env: r.env || null, items: r.items || [] } : null); },
     equip: (uid, e) => {
       const u = user(uid);
       if (e.icon) u.icon = e.icon;
@@ -98,7 +115,8 @@ module.exports = function jsonStore(dir) {
     // day = 일본 시간 날짜 글자('2026-11-18'). 계정의 ms = { day, n: { 미션 id: 횟수 }, got: [받은 일일 미션] }(날이 바뀌면 새로), firsts = [받은 첫 클리어 보상]
     missionProgress: (uid, day, ids) => {
       const u = user(uid); if (!u.ms || u.ms.day !== day) u.ms = { day, n: {}, got: [] };
-      ids.forEach((id) => (u.ms.n[id] = (u.ms.n[id] || 0) + 1)); mark(); return P();
+      const add = Array.isArray(ids) ? ids.map((id) => [id, 1]) : Object.entries(ids || {}); // 목록(각 +1) 또는 { id: 양 }
+      add.forEach(([id, n]) => (u.ms.n[id] = (u.ms.n[id] || 0) + Math.max(0, n | 0))); mark(); return P();
     },
     missionState: (uid, day) => {
       const u = user(uid) || {}, m = u.ms && u.ms.day === day ? u.ms : { n: {}, got: [] }, daily = {};
@@ -117,7 +135,14 @@ module.exports = function jsonStore(dir) {
         if (u.firsts.includes(m.id)) return P('no');
         u.firsts.push(m.id);
       }
-      u.coins = (u.coins || 0) + m.coins; mark(); return P('ok');
+      u.coins = (u.coins || 0) + m.coins; u.xp = (u.xp || 0) + Math.max(0, m.xp | 0); mark(); return P('ok');
+    },
+    // 한 번만 주는 보상(관직 승급·업적 첫 달성). 받은 표시는 첫 클리어와 같은 목록(firsts). 돌려주는 값: 이번에 준 id 목록
+    grantOnce: (uid, list) => {
+      const u = user(uid); if (!u) return P([]);
+      u.firsts = u.firsts || []; const got = [];
+      list.forEach((x) => { if (u.firsts.includes(x.id)) return; u.firsts.push(x.id); got.push(x.id); u.coins = (u.coins || 0) + Math.max(0, x.coins | 0); });
+      if (got.length) mark(); return P(got);
     },
     // ---------- Sign in with Apple refresh token(2026-11-20): 계정 삭제 때 Apple에 철회하려고 둔다. pg.js와 함수 모양이 같다 ----------
     // 열쇠는 Apple 이용자 식별자(sub). 계정이 생기기 전에 올 수 있어 계정과 묶지 않는다.

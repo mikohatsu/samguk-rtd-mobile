@@ -28,7 +28,7 @@
     const held = net && (net.clock.pz || net.kicked);
     if (S.freeze > 0) { S.freeze -= dt; acc = 0; }
     else if (S.hitStop > 0) { S.hitStop -= dt; acc = 0; } // 강타 히트스톱(혼자 할 때만)
-    else if (held) acc = 0;
+    else if (held || S.mutHold) acc = 0; // mutHold: 악몽 +N 규칙 등장 연출 중(17b-mutintro). 통신 상태 알림은 아래에서 계속 보낸다
     else {
       // 보스전은 1배속. 협동 배속은 방장이 정한 값(모두 켰을 때만 2배 이상)을 쓴다.
       acc += dt * (g.phase !== 'wave' ? 1 : net ? net.clock.sp : speed);
@@ -43,7 +43,7 @@
     bots.forEach((b) => {
       b.net.speedWant = net.speedWant;
       b.net.tickStatus(dt, b.g);
-      if (!held && !(S.freeze > 0)) b.brain.update(dt);
+      if (!held && !(S.freeze > 0) && !S.mutHold) b.brain.update(dt);
       // AI도 사람처럼 높은 등급 등장을 알린다. 남에게서 받은 알림(remote)을 다시 보내면 AI끼리 끝없이 주고받아 멈추므로 자기 것만 보낸다.
       b.g.events.forEach((e) => { if (e.type === 'pop' && !e.remote) b.net.send('pop', { id: e.def.id, name: b.net.name }); });
       b.g.events.length = 0;
@@ -82,13 +82,19 @@ ${things}
 ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 100) + "%" : ""}${bots.length ? ' · AI ' + bots.length : ''}${net && !bots.length ? ' · NET' : ''}`;
     PF.n = 0; PF.t0 = now; PF.sim = 0; PF.draw = 0; PF.worst = 0; PF.wj = 0;
   }
+  let fBud = 0, fPrev = 0; // 그리기 예산(ms)과 직전 rAF 시각
   function loop(now) {
     requestAnimationFrame(loop);
     if (!g) return;
+    // 화면 주사율과 상관없이 초당 약 60번만 그린다(120Hz에서 두 배로 그려 봐야 발열·끊김만 늘어난다).
+    // 고정 문턱(직전 그림에서 14ms)이면 90Hz는 11ms 프레임을 건너뛰고 22ms마다 그려 45fps에 묶인다(144Hz는 48fps).
+    // 그래서 흐른 시간을 예산으로 모아 16.7ms가 차면 그린다(2ms 여유). 남은 몫은 다음으로 넘겨 90Hz는 11·22ms를 번갈아 평균 60번이 된다.
+    // 남은 몫은 8ms까지만 넘겨 멈칫한 뒤에 몰아 그리지 않는다.
+    fBud += Math.max(0, Math.min(100, now - (fPrev || now - 16.7))); fPrev = now;
     // 30fps 제한: 배터리·발열용. 시뮬레이션은 흐른 시간만큼 따라잡는다.
     if (Q.fps30 && now - lastDraw < 30) return;
-    // 120Hz 화면에서도 60번만 그린다(두 배로 그려 봐야 발열·끊김만 늘어난다)
-    if (now - lastDraw < 14) return;
+    if (fBud < 16.7 - 2) return;
+    fBud = Math.min(fBud - 16.7, 8);
     // 쉬는 화면: 일시정지(창은 DOM이라 캔버스가 멈춰도 보인다), 또는 판이 끝나고 승리·등장 연출과 경험치 연출이 다 끝난 결과 화면.
     // 이때는 초당 5번만 그린다(발열·배터리). 글자판을 고칠 일이 있으면(needs) 바로 돈다. 튜토리얼 설명 중에는 그대로 그린다.
     // 패배 연출 중(performance.now() < S.endHoldUntil)은 쉬는 화면에서 빼서 연출이 끊기지 않게 한다
@@ -170,5 +176,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); }, tick, render, dom: () => { renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
     view.focus({ preventScroll: true });
     last = performance.now();
+    // 악몽 +N: 이번 판 규칙을 도장 찍듯 보여 주는 동안 멈춘다(이어하기는 이미 본 판이라 생략)
+    S.mutHold = false;
+    if (!opt.snap && g.muts && g.muts.length) mutIntro(g);
   }
 

@@ -3,6 +3,9 @@
 // (운영 서버의 열쇠는 서버 안에만 있으므로 밖에서는 이렇게 할 수 없다).
 // 쓰는 법: node tests/server-ticket.js
 'use strict';
+// 관직 승급 보상(2026-11-24, progression.js): 경험치 xp까지 오른 계급의 승급 동전 합
+const PROG = require('../progression.js');
+const rkSum = (xp) => { let n = 0; for (let k = 1; k <= PROG.rankOf(PROG.levelOf(xp)); k++) n += PROG.RANK_COINS[k]; return n; };
 const { spawn } = require('child_process');
 const path = require('path'), fs = require('fs'), os = require('os'), crypto = require('crypto');
 const PORT = 19600 + ((Math.random() * 300) | 0);
@@ -87,7 +90,7 @@ function forge(uid, diff, mut, agoSec, key, k) {
     ok(r.me.prog.clr === 0, '표 없는 전적: 난이도 진행 그대로');
     r = await api('/api/history', { ticket: forge(uid, 'normal', 0, 7200), round: 90, win: true, time: 4100 }, tok);
     // 이 표는 앞선 보상보다 먼저 발급됐다(겹치는 판) → 전적·난이도 진행만 남고 보상은 없다
-    ok(r.me.prog.clr === 1 && r.me.coins === 46 + 2, `표 있는 전적(보통 90R 클리어, 앞선 보상과 겹침): 어려움이 열림, 동전은 그대로 (동전 ${r.me.coins})`);
+    ok(r.me.prog.clr === 1 && r.me.coins === 46 + 2 + rkSum(r.me.xp), `표 있는 전적(보통 90R 클리어, 앞선 보상과 겹침): 어려움이 열림, 동전은 그대로(관직 승급 보상만 더함) (동전 ${r.me.coins})`);
 
     // 최단 클리어 순위는 온라인 협동(2인 이상)과 솔로(오프라인·혼자 시작한 온라인)로 나뉜다
     const s1 = await api('/api/guest/new', { nick: 'solo1', agree: true }), s2 = await api('/api/guest/new', { nick: 'solo2', agree: true });

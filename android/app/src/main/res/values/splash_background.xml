@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 시작 화면 바탕색. capacitor.config.json의 backgroundColor(#1a120c)·splash.png 바탕과 같은 색 -->
+    <color name="splash_background">#1A120C</color>
+</resources>

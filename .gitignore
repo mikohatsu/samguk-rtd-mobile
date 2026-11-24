@@ -32,3 +32,6 @@ art_src/fonts_src/
 
 # 스토어 등록물(영상·소개 사진) — 앱·저장소에 넣지 않는다
 store/
+
+# 서버 실행 데이터(판 표 서명 키 ticket.key, JSON 저장소 등). 비밀값이라 저장소에 넣지 않는다(SEC-103). 운영은 DATA_DIR=/var/lib/rtd-online
+server/data/

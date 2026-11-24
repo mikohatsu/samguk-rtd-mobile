@@ -53,19 +53,30 @@
       return buf;
     }));
   }
+  // 같은 소리의 동시 재생 상한. 유닛이 많으면 같은 무기 소리가 수십 개 겹쳐 오디오 노드만 늘고 귀로는 구분되지 않는다.
+  // 같은 이름의 소리가 VOICE_MAX개 울리는 중이면 새 소리는 건너뛴다(다른 소리는 영향 없음). 끝나는 시각으로 세므로 콜백이 필요 없다.
+  const VOICE_MAX = 4, voices = {};
+  function voiceFull(key, end) {
+    const now = ac.currentTime, v = (voices[key] || (voices[key] = [])).filter((e) => e > now);
+    voices[key] = v;
+    if (v.length >= VOICE_MAX) return true;
+    v.push(end); return false;
+  }
   function sample(name, vol, opt) {
     const list = buffers(name);
     if (!list || !list.length) return false;
     opt = opt || {};
-    const t = ac.currentTime + (opt.at || 0), s = ac.createBufferSource(), g = ac.createGain();
-    s.buffer = list[(Math.random() * list.length) | 0];
-    s.playbackRate.value = (opt.rate || 1) * (0.93 + Math.random() * 0.14);
+    const t = ac.currentTime + (opt.at || 0), buf = list[(Math.random() * list.length) | 0], rate = (opt.rate || 1) * (0.93 + Math.random() * 0.14);
+    if (voiceFull(name, t + buf.duration / rate)) return true; // 건너뛰어도 true: 대신 합성음을 내지 않게
+    const s = ac.createBufferSource(), g = ac.createGain();
+    s.buffer = buf;
+    s.playbackRate.value = rate;
     g.gain.value = vol;
     s.connect(g); g.connect(sfxBus); s.start(t);
     return true;
   }
-  // 묵직함을 더하는 낮은 '쿵'(큰 무기·타격에 겹친다)
-  const thump = (f, vol, at) => tone(f, 0.12, 'sine', vol, { to: f * 0.45, at: at || 0 });
+  // 묵직함을 더하는 낮은 '쿵'(큰 무기·타격에 겹친다). 이것도 같은 상한을 둔다
+  const thump = (f, vol, at) => { if (ac && voiceFull('thump', ac.currentTime + (at || 0) + 0.14)) return; tone(f, 0.12, 'sine', vol, { to: f * 0.45, at: at || 0 }); };
   // 점점 커지는 소리(연출의 '뜸'): 음량이 0에서 vol까지 올라가다 끝에서 끊긴다
   function swell(dur, f0, f1, vol, kind) {
     if (!ac) return;

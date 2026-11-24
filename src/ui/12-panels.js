@@ -379,7 +379,10 @@
   function dropInfo(d) {
     if (d.kind === 'item') {
       const tier = T.items.find((i) => i.id === d.item).tier;
-      return `<h3>${esc(g.dropName(d))}</h3><div class="sub">${I.t('itemSub', { r: rankName(tier) })}</div>`;
+      // 잠긴 장수의 아이템(상자에서 나옴, 2026-11-24): 이름 옆 자물쇠(gfx/ic_lock) + 해금 안내. 신화 아이템 4개 합치기 재료로는 그대로 쓴다.
+      const lu = g.itemOpen && !g.itemOpen(d.item) ? g.itemUnit[d.item] : null;
+      const lock = lu ? `<small class="lockn"><i class="ico lock"></i> ${esc(I.t('itemLocked', { a: defOf[lu].name }))}</small>` : '';
+      return `<h3>${lu ? '<i class="ico lock"></i> ' : ''}${esc(g.dropName(d))}</h3><div class="sub">${I.t('itemSub', { r: rankName(tier) })}</div>${lock}`;
     }
     return `<h3>${esc(g.dropName(d))}</h3><div>${esc(T.consumables[d.kind].desc)}</div><div class="sub">${I.t('useHint')}</div>`;
   }

@@ -41,6 +41,9 @@ const guest = async (nick) => { const r = await api('/api/guest/new', { nick, ag
 const dailyOf = (r, id) => (r.daily || []).find((x) => x.id === id) || {};
 const firstOf = (r, id) => (r.firsts || []).find((x) => x.id === id) || {};
 const socks = [];
+// 관직 승급 보상(progression.js): 경험치 xp까지 오른 계급의 승급 동전 합
+const PROG = require('../progression.js');
+const rkSum = (xp) => { let n = 0; for (let k = 1; k <= PROG.rankOf(PROG.levelOf(xp)); k++) n += PROG.RANK_COINS[k]; return n; };
 (async () => {
   try {
     await waitUp();
@@ -82,7 +85,7 @@ const socks = [];
       const u = (acc[k] = await guest('ms_k' + k));
       // 오프라인(k=0)은 전적 보고(/api/history), 나머지는 결과 보고(/api/result)
       r = await api(k ? '/api/result' : '/api/history', { ticket: forge(u.id, 'easy', 0, 3600, k), round: 70, win: true, time: 3200, party: 'p-' + k }, u.tok);
-      ok(r.gained === want[k][0] && r.coins === want[k][1] && r.me.xp === want[k][0] && r.me.coins === want[k][1] && r.me.prog.clr === 0, `쉬움 70R 클리어, 판 인원 ${k}: 경험치 ${want[k][0]}·동전 ${want[k][1]} (받은 값 ${r.gained}/${r.coins})`);
+      ok(r.gained === want[k][0] && r.coins === want[k][1] && r.me.xp === want[k][0] && r.me.coins === want[k][1] + rkSum(want[k][0]) && r.me.prog.clr === 0, `쉬움 70R 클리어, 판 인원 ${k}: 경험치 ${want[k][0]}·동전 ${want[k][1]} + 관직 승급 ${rkSum(want[k][0])} (받은 값 ${r.gained}/${r.coins}, 보유 ${r.me.coins})`);
     }
     const D = acc[0], E = acc[5];
     // 옛 표(k 없음)는 오프라인으로 친다
@@ -119,42 +122,88 @@ const socks = [];
     const fresh = await guest('ms_new');
     r = await api('/api/missions', {}, fresh.tok);
     ok(r.status === 200 && r.daily.length === 3 && r.firsts.length === 8 && r.daily.every((x) => x.n === 0 && !x.done && !x.claimed) && r.firsts.every((x) => !x.done && !x.claimed), '새 계정: 일일 미션 3개·첫 클리어 8개, 모두 진행 0');
-    ok(dailyOf(r, 'd_play').coins === 60 && dailyOf(r, 'd_r30').coins === 40 && dailyOf(r, 'd_coop').coins === 80 && firstOf(r, 'f_normal').coins === 700 && firstOf(r, 'f_hard').coins === 700 && firstOf(r, 'f_nightmare').coins === 700 && [1, 2, 3, 4, 5].every((n) => firstOf(r, 'f_nm' + n).coins === 200), '보상 수치: 일일 60·40·80, 첫 클리어 700×3·200×5');
+    ok(dailyOf(r, 'd_play2').coins === 60 && dailyOf(r, 'd_play2').xp === 30 && dailyOf(r, 'd_play2').need === 2
+      && dailyOf(r, 'd_comb10').coins === 40 && dailyOf(r, 'd_comb10').xp === 15 && dailyOf(r, 'd_comb10').need === 10
+      && dailyOf(r, 'd_boss3').coins === 50 && dailyOf(r, 'd_boss3').xp === 25 && dailyOf(r, 'd_boss3').need === 3
+      && firstOf(r, 'f_normal').coins === 700 && firstOf(r, 'f_hard').coins === 700 && firstOf(r, 'f_nightmare').coins === 700 && [1, 2, 3, 4, 5].every((n) => firstOf(r, 'f_nm' + n).coins === 200), '보상 수치: 일일(판 2번 60+30XP·합성 10번 40+15XP·보스 3마리 50+25XP), 첫 클리어 700×3·200×5');
     ok(r.resetAt > Date.now() && r.resetAt - Date.now() <= 86400000 && new Date(r.resetAt + 9 * 3600000).getUTCHours() === 0, '초기화 시각 = 다음 일본 시간 0시');
-    // 오프라인 70R(D): d_play·d_r30 완료, d_coop은 아님
+    // 판 통계 없이 오프라인 70R 1판(D): 판 2번은 1/2, 합성·보스는 0
     r = await api('/api/missions', {}, D.tok);
-    ok(dailyOf(r, 'd_play').done && dailyOf(r, 'd_r30').done && !dailyOf(r, 'd_coop').done && dailyOf(r, 'd_play').n === 1, '오프라인 70R 판: 판 끝내기·30라운드 완료, 협동은 미완료');
-    // 5인 판(E): 셋 다 완료. 1인 판(k=1): 협동 미완료
-    r = await api('/api/missions', {}, E.tok);
-    ok(dailyOf(r, 'd_play').done && dailyOf(r, 'd_r30').done && dailyOf(r, 'd_coop').done, '온라인 5인 70R 판: 셋 다 완료');
-    r = await api('/api/missions', {}, acc[1].tok);
-    ok(!dailyOf(r, 'd_coop').done, '온라인 1인 판은 협동 미션으로 치지 않음');
-    // 1라운드에서 끝난 판(B: 2인 표, C·old: 오프라인): 10라운드 미만이라 진행 없음
+    ok(dailyOf(r, 'd_play2').n === 1 && !dailyOf(r, 'd_play2').done && dailyOf(r, 'd_comb10').n === 0 && dailyOf(r, 'd_boss3').n === 0, '통계 없는 70R 판 1번: 판 2번 1/2, 합성·보스 0');
+    // 1라운드에서 끝난 판(B): 10라운드 미만이라 판 수로 치지 않음
     r = await api('/api/missions', {}, B.tok);
-    ok(!dailyOf(r, 'd_play').done && !dailyOf(r, 'd_coop').done, '10라운드 미만으로 끝난 판은 세지 않음(2인 판이어도)');
-    // 10라운드에서 진 2인 판: 판 끝내기·협동 완료, 30라운드는 아님
-    const G = await guest('ms_g');
-    r = await api('/api/result', { ticket: forge(G.id, 'easy', 0, 600, 2), round: 10, win: false, time: 400 }, G.tok);
-    r = await api('/api/missions', {}, G.tok);
-    ok(dailyOf(r, 'd_play').done && dailyOf(r, 'd_coop').done && !dailyOf(r, 'd_r30').done, '10라운드에서 진 2인 판(승패 무관): 판 끝내기·협동 완료, 30라운드는 미완료');
+    ok(dailyOf(r, 'd_play2').n === 0, '10라운드 미만으로 끝난 판은 판 수로 세지 않음');
+    // 통계를 부풀린 판: 합성은 라운드당 4번, 보스는 도달 라운드까지 나온 보스 수를 넘지 못한다
+    const N = await guest('ms_n');
+    await api('/api/history', { ticket: forge(N.id, 'easy', 0, 600, 0), round: 2, win: false, time: 60, st: { combines: 500, bossWins: 9 } }, N.tok);
+    r = await api('/api/missions', {}, N.tok);
+    ok(dailyOf(r, 'd_comb10').n === 8 && dailyOf(r, 'd_boss3').n === 0 && dailyOf(r, 'd_play2').n === 0, `2라운드 판에 합성 500·보스 9를 적어 보냄: 합성 8(라운드×4), 보스 0 (${dailyOf(r, 'd_comb10').n}, ${dailyOf(r, 'd_boss3').n})`);
+    await api('/api/history', { ticket: forge(N.id, 'easy', 0, 600, 0), round: 30, win: false, time: 1200, st: { combines: 5, bossWins: 9 } }, N.tok);
+    r = await api('/api/missions', {}, N.tok);
+    ok(dailyOf(r, 'd_boss3').n === 2, `30라운드 판에 보스 9를 적어 보냄: 보스 2(R10·R25) (${dailyOf(r, 'd_boss3').n})`);
+    // 셋 다 채우기(M): 70R 클리어(합성 30·보스 5) + 1R 패배(판 수 아님) + 10R 패배
+    const M = await guest('ms_m');
+    r = await api('/api/history', { ticket: forge(M.id, 'easy', 0, 7200, 0), round: 70, win: true, time: 3200, st: { combines: 30, bossWins: 5 } }, M.tok);
+    await wait(20);
+    await api('/api/history', { ticket: forge(M.id, 'easy', 0, 0.01, 0), round: 1, win: false, time: 20 }, M.tok);
+    r = await api('/api/missions', {}, M.tok);
+    ok(dailyOf(r, 'd_play2').n === 1 && dailyOf(r, 'd_comb10').done && dailyOf(r, 'd_boss3').done && dailyOf(r, 'd_comb10').n === 10 && dailyOf(r, 'd_boss3').n === 3, '70R 판(합성 30·보스 5): 합성·보스 미션 완료(진행은 need까지), 1R 판은 판 수로 안 셈');
+    await api('/api/history', { ticket: forge(M.id, 'easy', 0, 600, 0), round: 10, win: false, time: 400 }, M.tok);
+    r = await api('/api/missions', {}, M.tok);
+    ok(dailyOf(r, 'd_play2').done && dailyOf(r, 'd_play2').n === 2, '10라운드 이상 판 2번: 판 2번 하기 완료');
     // 표 없는 보고로는 진행이 오르지 않는다
-    r = await api('/api/history', { round: 70, win: true, time: 3200, diff: 'easy' }, fresh.tok);
+    r = await api('/api/history', { round: 70, win: true, time: 3200, diff: 'easy', st: { combines: 99, bossWins: 5 } }, fresh.tok);
     r = await api('/api/missions', {}, fresh.tok);
-    ok(r.daily.every((x) => !x.done), '표 없는 보고로는 미션 진행이 오르지 않음');
+    ok(r.daily.every((x) => x.n === 0), '표 없는 보고로는 미션 진행이 오르지 않음');
 
-    // 받기
-    r = await api('/api/missions/claim', { id: 'd_play' }, D.tok);
-    ok(r.status === 200 && r.me.coins === 23 + 60 && r.coins === 60 && dailyOf(r, 'd_play').claimed && !dailyOf(r, 'd_r30').claimed, `일일 미션 받기: 동전 +60 (지금 ${r.me && r.me.coins})`);
-    r = await api('/api/missions/claim', { id: 'd_play' }, D.tok);
+    // 받기: 동전과 경험치
+    const c0 = (await api('/api/hist', {}, M.tok)) && (await api('/api/missions/claim', { id: 'd_boss3' }, M.tok));
+    r = c0;
+    const xp1 = r.me && r.me.xp;
+    ok(r.status === 200 && r.coins === 50 && r.xp === 25 && dailyOf(r, 'd_boss3').claimed && !dailyOf(r, 'd_comb10').claimed, `일일 미션 받기: 동전 +50·경험치 +25 (응답 ${r.coins}/${r.xp})`);
+    r = await api('/api/missions/claim', { id: 'd_boss3' }, M.tok);
     ok(r.status === 409 && r.error === 'no_claim', '같은 일일 미션은 하루에 한 번만');
-    r = await api('/api/missions/claim', { id: 'd_coop' }, D.tok);
+    r = await api('/api/missions/claim', { id: 'd_play2' }, D.tok);
     ok(r.status === 409 && r.error === 'no_claim', '완료하지 않은 일일 미션은 받을 수 없음');
     r = await api('/api/missions/claim', { id: 'zzz' }, D.tok);
     ok(r.status === 400 && r.error === 'bad_item', '없는 미션 id 거절');
-    r = await api('/api/missions/claim', { id: 'd_play' });
+    r = await api('/api/missions/claim', { id: 'd_play2' });
     ok(r.status === 401, '로그인 없이 받을 수 없음');
-    r = await api('/api/missions/claim', { id: 'd_r30' }, D.tok);
-    ok(r.status === 200 && r.me.coins === 23 + 60 + 40, `두 번째 일일 미션 받기: 동전 +40 (지금 ${r.me && r.me.coins})`);
+    r = await api('/api/missions/claim', { id: 'd_play2' }, M.tok);
+    // M: 70R 클리어 66 + 1R 패배 8 = 74(10R 판은 앞 보상과 겹친 표라 0) → 미션 +25 = 99 → +30 = 129. 9품(100)은 두 번째 받기에서 오르고, 그때 승급 보상도 준다
+    ok(r.status === 200 && r.me.xp === xp1 + 30 && r.rankUp.length === 1 && r.rankUp[0].rank === 1 && r.rankUp[0].coins === 100, `두 번째 일일 미션 받기: 경험치 +30, 미션 경험치로 9품 도달 → 승급 보상 +100 (${xp1} → ${r.me && r.me.xp}, ${JSON.stringify(r.rankUp)})`);
+
+    // ---------- 4b. 관직 승급 보상(자동, 계급마다 한 번) ----------
+    const R = await guest('ms_r');
+    r = await api('/api/result', { ticket: forge(R.id, 'easy', 0, 7200, 5), round: 70, win: true, time: 3200 }, R.tok);
+    ok(r.me.rank === 1 && Array.isArray(r.rankUp) && r.rankUp.length === 1 && r.rankUp[0].rank === 1 && r.rankUp[0].coins === 100 && r.me.coins === 78 + 100, `5인 쉬움 클리어(223XP): 9품 승급 보상 +100 (rankUp ${JSON.stringify(r.rankUp)}, 동전 ${r.me.coins})`);
+    await wait(20);
+    r = await api('/api/result', { ticket: forge(R.id, 'easy', 0, 0.01, 5), round: 1, win: false, time: 20 }, R.tok);
+    ok(Array.isArray(r.rankUp) && r.rankUp.length === 0, '계급이 그대로면 승급 보상 없음');
+    await wait(20);
+    // 판 경험치만으로는 한 판에 두 계급을 못 넘으니, 미션 경험치로 8품(270)을 넘긴다: 223 + 27(5인 1R) = 250 → 보스 미션은 진행이 없으니 판 하나 더 대신 확인만
+    ok(r.me.xp === 223 + 27 && r.me.rank === 1, `5인 1R 패배 뒤 경험치 ${r.me.xp}, 아직 9품`);
+    r = await api('/api/missions', {}, R.tok);
+    ok(Array.isArray(r.rankUp) && r.rankUp.length === 0, '이미 받은 승급 보상은 미션 창을 열어도 다시 주지 않음');
+    const R3 = await guest('ms_r3');
+    r = await api('/api/result', { ticket: forge(R3.id, 'easy', 0, 7200, 5), round: 70, win: true, time: 3200, st: { combines: 40, bossWins: 5 } }, R3.tok);
+    await wait(20);
+    r = await api('/api/result', { ticket: forge(R3.id, 'easy', 0, 0.01, 5), round: 1, win: false, time: 20 }, R3.tok);
+    await api('/api/missions/claim', { id: 'd_comb10' }, R3.tok);
+    r = await api('/api/missions/claim', { id: 'd_boss3' }, R3.tok);
+    ok(r.me.xp === 223 + 27 + 15 + 25 && r.me.rank === 2 && r.rankUp.length === 1 && r.rankUp[0].rank === 2 && r.rankUp[0].coins === 150, `경험치 ${r.me.xp}(≥270): 8품 승급 보상 +150 (${JSON.stringify(r.rankUp)})`);
+
+    // ---------- 4c. 업적 첫 달성 보상 ----------
+    const Q = await guest('ms_q');
+    r = await api('/api/result', { ticket: forge(Q.id, 'easy', 0, 600, 2), round: 10, win: false, time: 400, ach: ['all1', 'm_two', 'm_diverse', 'zzz', 'all1'] }, Q.tok);
+    let got = (r.ach || []).map((x) => x.id + ':' + x.coins).sort().join(',');
+    ok(got === 'all1:30,m_two:50' && r.me.coins === r.coins + 80 + rkSum(r.me.xp), `2인 10R 판 업적: 아는 업적만, 중복은 한 번, m_diverse(25R 필요)는 제외 (${got}, 동전 ${r.me.coins})`);
+    await wait(20);
+    r = await api('/api/history', { ticket: forge(Q.id, 'easy', 0, 0.01, 0), round: 1, win: false, time: 20, ach: ['all1', 'e_first2', 'flash70', 'm_two'] }, Q.tok);
+    got = (r.ach || []).map((x) => x.id + ':' + x.coins).sort().join(',');
+    ok(got === 'e_first2:30,flash70:100', `오프라인 판: 이미 받은 all1·m_two는 다시 안 줌(협동 업적은 오프라인 판으로 인정 안 함), 새 업적만 (${got})`);
+    r = await api('/api/history', { ach: ['all2'], round: 70, win: true, time: 3200, diff: 'easy' }, Q.tok);
+    ok(!r.ach || r.ach.length === 0, '표 없는 보고의 업적은 받지 않음');
 
     // ---------- 5. 첫 클리어 보상 ----------
     r = await api('/api/missions/claim', { id: 'f_normal' }, D.tok);
@@ -163,15 +212,15 @@ const socks = [];
     for (const [diff, mut, rounds] of [['normal', 0, 90], ['hard', 0, 100], ['nightmare', 0, 120], ['nightmare', 1, 120]]) {
       r = await api('/api/history', { ticket: forge(D.id, diff, mut, 20000, 0), round: rounds, win: true, time: rounds * 45 }, D.tok);
     }
-    ok(r.me.prog.clr === 3 && r.me.prog.nmx === 1 && r.me.coins === 123, `보통~악몽+1 클리어 기록(겹친 표라 판 보상은 0): clr ${r.me.prog.clr}, nmx ${r.me.prog.nmx}, 동전 ${r.me.coins}`);
+    ok(r.me.prog.clr === 3 && r.me.prog.nmx === 1 && r.me.coins === 23, `보통~악몽+1 클리어 기록(겹친 표라 판 보상은 0): clr ${r.me.prog.clr}, nmx ${r.me.prog.nmx}, 동전 ${r.me.coins}`);
     r = await api('/api/missions', {}, D.tok);
     ok(['f_normal', 'f_hard', 'f_nightmare', 'f_nm1'].every((id) => firstOf(r, id).done && !firstOf(r, id).claimed) && ['f_nm2', 'f_nm3', 'f_nm4', 'f_nm5'].every((id) => !firstOf(r, id).done), '첫 클리어: 보통·어려움·악몽·악몽+1 완료(미수령), +2~+5는 미완료');
     r = await api('/api/missions/claim', { id: 'f_normal' }, D.tok);
-    ok(r.status === 200 && r.me.coins === 123 + 700 && firstOf(r, 'f_normal').claimed, `보통 첫 클리어 받기: 동전 +700 (지금 ${r.me && r.me.coins})`);
+    ok(r.status === 200 && r.me.coins === 23 + 700 && firstOf(r, 'f_normal').claimed, `보통 첫 클리어 받기: 동전 +700 (지금 ${r.me && r.me.coins})`);
     r = await api('/api/missions/claim', { id: 'f_normal' }, D.tok);
     ok(r.status === 409 && r.error === 'no_claim', '첫 클리어 보상은 한 번만');
     r = await api('/api/missions/claim', { id: 'f_nm1' }, D.tok);
-    ok(r.status === 200 && r.me.coins === 123 + 700 + 200, `악몽 +1 첫 클리어 받기: 동전 +200 (지금 ${r.me && r.me.coins})`);
+    ok(r.status === 200 && r.me.coins === 23 + 700 + 200, `악몽 +1 첫 클리어 받기: 동전 +200 (지금 ${r.me && r.me.coins})`);
     r = await api('/api/missions/claim', { id: 'f_nm2' }, D.tok);
     ok(r.status === 409, '악몽 +2는 아직 받을 수 없음');
     // 쉬움만 깬 계정(E)은 첫 클리어 보상 없음

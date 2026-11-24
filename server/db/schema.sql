@@ -94,6 +94,11 @@ CREATE TABLE IF NOT EXISTS purchases (
   purchased_at   timestamptz NOT NULL,
   created_at     timestamptz NOT NULL DEFAULT now()
 );
+-- 2026-11-24(SEC-101·105): 결제 환경(Production / Sandbox / Test), 이 거래로 새로 넣은 열쇠(JSON 배열, 환불 때 이것만 뺀다), 환불 처리 시각
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS environment text;
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS items text;
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS refunded_at timestamptz;
+CREATE INDEX IF NOT EXISTS purchases_account_idx ON purchases (account_id);
 
 -- 판 기록(전적). 온라인 판은 result_key로 한 번만 받는다.
 CREATE TABLE IF NOT EXISTS games (

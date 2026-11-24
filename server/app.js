@@ -50,13 +50,11 @@ function ipOf(req) {
   return viaProxy ? (String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || ra) : ra;
 }
 const termsOf = (b) => Math.min(1000000, Math.max(1, b.termsVer | 0)) || 1;
-// 등급: 경험치로 레벨, 레벨 구간으로 계급
-// 레벨은 51(군주)에서 멈춘다. 경험치 10만(대략 1000판)이면 군주.
-const MAX_LV = 51;
-const levelOf = (xp) => Math.min(MAX_LV, Math.floor(Math.sqrt(xp / 40)) + 1);
+// 등급: 경험치로 레벨, 레벨 구간으로 계급. 곡선은 progression.js(앱과 같이 쓴다, 2026-11-24 관직 곡선 수정)
+// 레벨은 51(군주)에서 멈춘다. 경험치 10만이면 군주. 저장된 경험치는 그대로 두고 단계만 새 곡선으로 계산한다(옛 곡선보다 늘 같거나 높은 단계).
 // 계급: 0 신병, 1~9 = 9품~1품, 10 군주. 문관(civ)·무관(mil) 중 고른 쪽 칭호로 보인다(화면에서 rk_<갈래><단계>로 번역).
-const RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, MAX_LV];
-const rankOf = (lv) => RANK_LV.reduce((k, min, i) => (lv >= min ? i : k), 0);
+const PROG = require('../progression.js');
+const levelOf = PROG.levelOf, rankOf = PROG.rankOf;
 const trackOf = (u) => (u.track === 'civ' ? 'civ' : 'mil');
 const gradeOf = (u) => 'rk_' + trackOf(u) + rankOf(levelOf(u.xp));
 const iconOf = (u) => u.icon || 'cav';
@@ -153,24 +151,10 @@ function iapItems(pid) {
 }
 // 광고 하루 = 일본 시간(UTC+9) 0시부터
 const jstDayStart = (now = Date.now()) => { const d = new Date(now + 9 * 3600000); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - 9 * 3600000; };
-// App Store 서명 거래(StoreKit 2 JWS) 검증. APPLE_IAP_ROOT_CA(애플 루트 인증서 G3 파일 경로)가 없으면 결제는 꺼져 있다(503).
-const IAP = { root: process.env.APPLE_IAP_ROOT_CA || '', bundle: (process.env.APPLE_BUNDLE || 'com.hongsungjae.sangokurtd') };
-const iapOn = () => !!IAP.root && fs.existsSync(IAP.root);
-function verifySignedTx(jws) {
-  const bad = () => new Error('bad_receipt'), parts = String(jws || '').split('.');
-  if (parts.length !== 3 || jws.length > 20000) throw bad();
-  let head, body; try { head = JSON.parse(b64(parts[0]).toString('utf8')); body = JSON.parse(b64(parts[1]).toString('utf8')); } catch (e) { throw bad(); }
-  if (head.alg !== 'ES256' || !Array.isArray(head.x5c) || head.x5c.length < 2 || head.x5c.length > 4) throw bad();
-  const certs = head.x5c.map((c) => new crypto.X509Certificate(Buffer.from(String(c), 'base64'))), root = new crypto.X509Certificate(fs.readFileSync(IAP.root));
-  const now = Date.now(), live = (c) => Date.parse(c.validFrom) <= now && now <= Date.parse(c.validTo);
-  for (let i = 0; i < certs.length - 1; i++) if (!live(certs[i]) || !certs[i].verify(certs[i + 1].publicKey)) throw bad();
-  const last = certs[certs.length - 1];
-  if (!(last.fingerprint256 === root.fingerprint256 || last.verify(root.publicKey))) throw bad();
-  // [확인 필요] 애플 권장: 잎 인증서 OID 1.2.840.113635.100.6.11.1, 중간 1.2.840.113635.100.6.2.1 확인. 지금은 체인·서명·번들만 본다.
-  if (!crypto.verify('sha256', Buffer.from(parts[0] + '.' + parts[1]), { key: certs[0].publicKey, dsaEncoding: 'ieee-p1363' }, b64(parts[2]))) throw bad();
-  if (body.bundleId !== IAP.bundle || body.revocationDate || !body.productId || !body.transactionId) throw bad();
-  return body;
-}
+// App Store 서명 거래(StoreKit 2 JWS)·서버 알림 검증은 iap.js(사슬·OID·번들·환경, 키가 있으면 App Store Server API 재조회).
+// APPLE_IAP_ROOT_CA(애플 루트 인증서 G3 파일 경로)가 없으면 결제는 꺼져 있다(503).
+const AIAP = require('./iap').makeAppleIap();
+const iapOn = () => AIAP.on();
 
 // 구글 플레이 결제 검증: 구매 토큰을 Google Play Developer API(purchases.products.get)로 확인한다.
 // GOOGLE_PLAY_SA = 서비스 계정 키(JSON) 파일 경로. 플레이 콘솔 '사용자 및 권한'에서 이 서비스 계정에 '재무 데이터 보기' 권한을 줘야 한다. 없으면 503.
@@ -188,7 +172,8 @@ async function gplayToken() {
   GPLAY.tok = { v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
   return GPLAY.tok.v;
 }
-// 돌려주는 값: { productId, txId, at } (구매 완료 상태일 때만). 아니면 bad_receipt
+// 돌려주는 값: { productId, txId, at, env } (구매 완료 상태일 때만). 아니면 bad_receipt
+const gplayTxId = (orderId) => 'g:' + String(orderId).slice(0, 60);
 async function verifyGooglePurchase(productId, token) {
   const bad = () => new Error('bad_receipt'), pid = String(productId || ''), t = String(token || '');
   if (!/^[a-z0-9_.]{1,100}$/.test(pid) || !/^[A-Za-z0-9._-]{10,1000}$/.test(t)) throw bad();
@@ -198,7 +183,26 @@ async function verifyGooglePurchase(productId, token) {
   const p = await r.json();
   // purchaseState: 0 구매 완료, 1 취소(환불), 2 대기
   if (p.purchaseState !== 0 || !p.orderId) throw bad();
-  return { productId: pid, txId: 'g:' + String(p.orderId).slice(0, 60), at: +p.purchaseTimeMillis || Date.now() };
+  // purchaseType: 0 = 라이선스 테스터의 시험 구매(받아 주되 기록에 Test로 남긴다), 없으면 실제 결제
+  return { productId: pid, txId: gplayTxId(p.orderId), at: +p.purchaseTimeMillis || Date.now(), env: p.purchaseType === 0 ? 'Test' : 'Production' };
+}
+
+// ---------- 환불 회수(SEC-105) ----------
+// 거래 하나를 환불됨으로 표시하고, 그 거래로 새로 들어간 해금 열쇠만 뺀다(같은 계정의 다른 유효 결제가 주는 열쇠는 남긴다).
+// 동전·보석·경험치 등 이미 쓴 것은 건드리지 않는다. 같은 거래를 두 번 회수해도 한 번만 처리된다.
+async function revokePurchase(txId, why) {
+  const r = await store.revokeIap(txId, (pid) => iapItems(pid) || []);
+  if (r.result === 'ok') console.log(`[iap] 환불 회수 ${why} tx=${txId} uid=${r.uid || '-'} 뺀 열쇠=${(r.removed || []).join(',') || '없음'}`);
+  return r;
+}
+// 구글 플레이: Voided Purchases API를 GOOGLE_VOID_POLL_MS(기본 6시간)마다 읽어 최근 30일의 환불·취소 구매를 회수한다.
+const GVOID_MS = Math.max(1000, +process.env.GOOGLE_VOID_POLL_MS || 6 * 3600000), GVOID_WINDOW = 30 * 24 * 3600000 - 60000;
+async function pollGoogleVoided() {
+  if (!gplayOn() || !store) return 0;
+  const ids = await require('./iap').googleVoided({ api: GPLAY.api, pkg: GPLAY.pkg, token: gplayToken, since: Date.now() - GVOID_WINDOW });
+  let n = 0;
+  for (const id of ids) if ((await revokePurchase(gplayTxId(id), 'google:voided')).result === 'ok') n++;
+  return n;
 }
 
 // 판 보고를 검사해 전적 한 줄로 만든다(숫자만, 크기 제한). 저장은 store가 한다.
@@ -342,15 +346,23 @@ function rewardOf(b, seats) {
   return { xp: Math.round(xp * mul), coins: Math.round((Math.round(xp / 5) + (b.win ? 20 : 0)) * mul) };
 }
 
-// ---------- 미션: 일일 미션 + 난이도 첫 클리어 보상 (spec-rewards-missions.md 2·3절) ----------
-// 일일 미션은 일본 시간 0시에 초기화. 진행은 표로 검증된 판 보고(settle)에서만 센다. 보상은 미션 창에서 '받기'를 눌러야 들어온다.
+// ---------- 미션: 일일 미션 + 난이도 첫 클리어 보상 (spec-rewards-missions.md 2·3절, 일일 미션 목록은 2026-11-24 fix-progression.md) ----------
+// 일일 미션은 일본 시간 0시에 초기화. 진행은 표로 검증된 판 보고(settle)에서만 센다. 보상(동전·경험치)은 '받기'를 눌러야 들어온다.
+// 목록·수치는 progression.js DAILY. 한 판이 채우는 양(gain)은 서버가 정한다:
+// - games: 10라운드 이상 간 판 1
+// - combines: 판 보고의 합성 수. 라운드당 COMB_PER_ROUND를 넘을 수 없고, 한 판이 미션 하나의 need를 넘겨 채우지 않는다
+// - bossWins: 판 보고의 보스 처치 수. 표로 확인한 도달 라운드까지 나온 보스 수를 넘을 수 없다
 // 첫 클리어는 서버 기록(clears·clr·nmx)으로 판단한다(이미 깬 계정도 아직 안 받았으면 받을 수 있다).
+const COMB_PER_ROUND = 4;
+const BOSS_ROUNDS = (THEME.bosses || []).map((x) => x.round).filter((r) => r > 0);
+const stNum = (b, k) => { const v = b && b.st && typeof b.st === 'object' ? +b.st[k] : 0; return isFinite(v) ? Math.max(0, Math.floor(v)) : 0; };
+const DAILY_GAIN = {
+  games: (j) => (j.round >= 10 ? 1 : 0),
+  combines: (j, b) => Math.min(stNum(b, 'combines'), j.round * COMB_PER_ROUND),
+  bossWins: (j, b) => Math.min(stNum(b, 'bossWins'), BOSS_ROUNDS.filter((r) => r <= j.round).length),
+};
 const MISSIONS = {
-  daily: [
-    { id: 'd_play', need: 1, coins: 60, hit: (j) => j.round >= 10 },                  // 판 1번 끝내기(10라운드 이상)
-    { id: 'd_r30', need: 1, coins: 40, hit: (j) => j.round >= 30 },                   // 한 판에서 30라운드 이상
-    { id: 'd_coop', need: 1, coins: 80, hit: (j) => j.seats >= 2 && j.round >= 10 },  // 온라인 협동(2인 이상) 판 1번 끝내기
-  ],
+  daily: PROG.DAILY.map((m) => Object.assign({}, m, { gain: (j, b) => Math.min(m.need, DAILY_GAIN[m.stat](j, b)) })),
   firsts: [
     { id: 'f_normal', coins: 700, diff: 'normal' }, { id: 'f_hard', coins: 700, diff: 'hard' }, { id: 'f_nightmare', coins: 700, diff: 'nightmare' },
     { id: 'f_nm1', coins: 200, mut: 1 }, { id: 'f_nm2', coins: 200, mut: 2 }, { id: 'f_nm3', coins: 200, mut: 3 }, { id: 'f_nm4', coins: 200, mut: 4 }, { id: 'f_nm5', coins: 200, mut: 5 },
@@ -363,10 +375,37 @@ const firstDone = (u, f) => { const pg = progOf(u); return f.mut ? pg.nmx >= f.m
 async function missionView(u) {
   const st = await store.missionState(u.id, jstDayKey());
   return {
-    daily: MISSIONS.daily.map((m) => { const s = st.daily[m.id] || { n: 0, claimed: false }, n = Math.min(m.need, s.n | 0); return { id: m.id, n, need: m.need, coins: m.coins, done: n >= m.need, claimed: !!s.claimed }; }),
+    daily: MISSIONS.daily.map((m) => { const s = st.daily[m.id] || { n: 0, claimed: false }, n = Math.min(m.need, s.n | 0); return { id: m.id, n, need: m.need, coins: m.coins, xp: m.xp, done: n >= m.need, claimed: !!s.claimed }; }),
     firsts: MISSIONS.firsts.map((f) => ({ id: f.id, coins: f.coins, done: firstDone(u, f), claimed: st.firsts.includes(f.id) })),
     resetAt: jstDayStart() + DAY_MS,
   };
+}
+
+// ---------- 관직 승급 보상·업적 첫 달성 보상 (2026-11-24 fix-progression.md 2절) ----------
+// 둘 다 서버가 판단해 자동으로 준다(받은 표시는 mission_claims에 'rk_<계급>'·'a_<업적 id>', 계정마다 한 번). 수치는 progression.js.
+// 관직: 지금 경험치로 오른 계급까지 아직 안 받은 것을 모두 준다(곡선을 바꾼 뒤 처음 판을 마친 기존 계정도 오른 단계만큼 받는다).
+async function grantRanks(u) {
+  const r = rankOf(levelOf(u.xp || 0)), list = [];
+  for (let k = 1; k <= r; k++) if (PROG.RANK_COINS[k] > 0) list.push({ id: 'rk_' + k, coins: PROG.RANK_COINS[k], reason: 'rank' });
+  if (!list.length) return [];
+  const got = await store.grantOnce(u.id, list);
+  return list.filter((x) => got.includes(x.id)).map((x) => ({ rank: +x.id.slice(3), coins: x.coins }));
+}
+// 업적: 판 보고에 적힌 업적 id(ach) 가운데 이 판에서 가능했던 것만 받는다. 업적 달성 판정은 판 안(기기)에서 하므로 서버는 아래만 본다:
+// 표로 검증된 판일 것, 아는 업적 id일 것, 협동 업적은 표의 판 인원 2인 이상이고 그 라운드에 닿았을 것. 동전 액수는 서버 표로만 정한다.
+const ACHS = new Map((THEME.achievements || []).map((a) => [a.id, a]));
+function achOk(id, j) {
+  const a = ACHS.get(id); if (!a) return false;
+  const c = a.cond || {};
+  if (c.type === 'party') return j.seats >= 2 && j.round >= (c.round | 0);
+  return j.round >= 1;
+}
+async function grantAchs(u, b, j) {
+  const ids = Array.isArray(b.ach) ? [...new Set(b.ach.slice(0, 60).map(String))].filter((id) => achOk(id, j)) : [];
+  if (!ids.length) return [];
+  const list = ids.map((id) => ({ id: 'a_' + id, coins: PROG.achCoins(id), reason: 'ach' }));
+  const got = await store.grantOnce(u.id, list);
+  return list.filter((x) => got.includes(x.id)).map((x) => ({ id: x.id.slice(2), coins: x.coins }));
 }
 
 // 판 보고 받기: 온라인 결과(/api/result)와 오프라인 전적(/api/history)이 같이 쓴다. 돌려주는 값: null(받지 않음) 또는 { gained, coins }
@@ -393,15 +432,18 @@ async function settle(u, b, online) {
   const done = await store.recordResult(u.id, { key, xp: rw.xp, coins, win: !!b.win, round: j.round, hist: histOf(b, online), imm, clear });
   if (!done) return null;
   if (!overlap) { lastReward.set(u.id, Date.now()); dayCoins.set(u.id, { day, n: had + coins }); }
-  // 일일 미션 진행(승패 무관)
-  const hits = MISSIONS.daily.filter((m) => m.hit(j)).map((m) => m.id);
-  if (hits.length) await store.missionProgress(u.id, jstDayKey(), hits);
-  return { gained: rw.xp, coins };
+  // 일일 미션 진행(승패 무관). { 미션 id: 채운 양 }
+  const add = {}; MISSIONS.daily.forEach((m) => { const n = m.gain(j, b); if (n > 0) add[m.id] = n; });
+  if (Object.keys(add).length) await store.missionProgress(u.id, jstDayKey(), add);
+  // 업적 첫 달성·관직 승급 보상(겹친 판은 보상 없음)
+  const ach = overlap ? [] : await grantAchs(u, b, j);
+  const rankUp = await grantRanks(await store.getUser(u.id));
+  return { gained: rw.xp, coins, ach, rankUp };
 }
 
-function readBody(req, cb) {
+function readBody(req, cb, max = 8192) {
   let n = 0; const parts = [];
-  req.on('data', (c) => { n += c.length; if (n > 8192) { req.destroy(); return; } parts.push(c); });
+  req.on('data', (c) => { n += c.length; if (n > max) { req.destroy(); return; } parts.push(c); });
   req.on('end', () => { try { cb(JSON.parse(Buffer.concat(parts).toString('utf8') || '{}')); } catch (e) { cb(null); } });
 }
 // 모든 응답에 붙이는 보안 헤더: HTTPS만 쓰게(HSTS), 내용 종류를 추측하지 않게, 다른 사이트로 나갈 때 주소 전체를 넘기지 않게
@@ -485,6 +527,16 @@ async function handle(req, res, url, query) {
     return u ? json(res, 200, { me: profile(u) }) : json(res, 401, { error: 'auth' });
   }
   if (req.method !== 'POST') return json(res, 404, { error: 'not_found' });
+  // App Store Server Notifications V2(Apple이 부른다, 로그인 없음). 서명 검증 뒤 환불·회수면 그 거래의 해금을 뺀다.
+  // 본문에 인증서 사슬이 두 벌 들어 있어 8KB를 넘으므로 64KB까지 받는다. 200이 아니면 Apple이 다시 보낸다.
+  if (url === '/api/iap/apple-notify') {
+    if (limited(ip, 'anotify', 600, 600000)) return json(res, 429, { error: 'slow_down' });
+    if (!iapOn()) return json(res, 503, { error: 'not_configured' });
+    const nb = await new Promise((r) => readBody(req, r, 65536));
+    let n; try { n = AIAP.verifyNotification(nb && nb.signedPayload); } catch (e) { warnSome('apple_notify_bad', 20, 'signedPayload 검증 실패'); return json(res, 400, { error: 'bad_payload' }); }
+    if ((n.type === 'REFUND' || n.type === 'REVOKE') && n.tx) await revokePurchase(n.tx.txId, 'apple:' + n.type + ':' + n.env);
+    return json(res, 200, { ok: true });
+  }
   let b = await new Promise((r) => readBody(req, r));
   if (!b) return json(res, 400, { error: 'bad_body' });
   // 게스트: 기기에만 보관하는 비밀값으로 다시 들어온다(비밀값은 서버에 해시로만 둔다)
@@ -577,7 +629,7 @@ async function handle(req, res, url, query) {
     if (limited(ip + u.id, 'hist', 20, 600000)) return json(res, 429, { error: 'slow_down' });
     const r = await settle(u, b, false);
     if (!r) return json(res, 200, { me: profile(u), gained: 0 });
-    return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins });
+    return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins, rankUp: r.rankUp, ach: r.ach });
   }
   if (url === '/api/hist') return json(res, 200, { hist: await store.history(u.id), prog: progOf(u) });
   // 판 시작: 표를 내준다(계정당 10분에 20장)
@@ -590,7 +642,9 @@ async function handle(req, res, url, query) {
   // 미션 상태(일일 미션 3개 + 첫 클리어 8개)
   if (url === '/api/missions') {
     if (limited('u:' + u.id, 'ms', 60, 60000)) return json(res, 429, { error: 'slow_down' });
-    return json(res, 200, await missionView(u));
+    // 아직 안 받은 관직 승급 보상이 있으면 여기서도 준다(곡선을 바꾼 뒤 로비에 처음 들어온 기존 계정). 줬으면 바뀐 계정(me)도 같이
+    const rankUp = await grantRanks(u), nu = rankUp.length ? await store.getUser(u.id) : u;
+    return json(res, 200, Object.assign(rankUp.length ? { me: profile(nu), rankUp } : { rankUp }, await missionView(nu)));
   }
   // 미션 보상 받기: 조건을 확인하고 한 번만 동전을 준다
   if (url === '/api/missions/claim') {
@@ -598,10 +652,11 @@ async function handle(req, res, url, query) {
     const id = String(b.id || ''), dm = MISSIONS.daily.find((m) => m.id === id), fm = MISSIONS.firsts.find((f) => f.id === id);
     if (!dm && !fm) return json(res, 400, { error: 'bad_item' });
     if (fm && !firstDone(u, fm)) return json(res, 409, { error: 'no_claim' });
-    const got = await store.missionClaim(u.id, dm ? { id, coins: dm.coins, day: jstDayKey(), need: dm.need } : { id, coins: fm.coins });
+    const got = await store.missionClaim(u.id, dm ? { id, coins: dm.coins, xp: dm.xp || 0, day: jstDayKey(), need: dm.need } : { id, coins: fm.coins });
     if (got !== 'ok') return json(res, 409, { error: 'no_claim' });
+    const rankUp = dm && dm.xp ? await grantRanks(await store.getUser(u.id)) : []; // 미션 경험치로 관직이 오르면 승급 보상도 같이
     const nu = await store.getUser(u.id);
-    return json(res, 200, Object.assign({ me: profile(nu), coins: (dm || fm).coins }, await missionView(nu)));
+    return json(res, 200, Object.assign({ me: profile(nu), coins: (dm || fm).coins, xp: dm ? dm.xp || 0 : 0, rankUp }, await missionView(nu)));
   }
   // 빠른 대전 주소는 계정당 분당 90번까지(기기는 2초마다 확인한다 = 분당 30번)
   if (url.startsWith('/api/match/') && limited('u:' + u.id, 'match', 90, 60000)) return json(res, 429, { error: 'slow_down' });
@@ -678,13 +733,14 @@ async function handle(req, res, url, query) {
       try { tx = await verifyGooglePurchase(b.productId, b.token); } catch (e) { return json(res, 400, { error: 'bad_receipt' }); }
     } else {
       if (!iapOn()) return json(res, 503, { error: 'not_configured' });
-      let t; try { t = verifySignedTx(b.signed); } catch (e) { return json(res, 400, { error: 'bad_receipt' }); }
-      tx = { productId: String(t.productId), txId: String(t.originalTransactionId || t.transactionId).slice(0, 64), at: +t.purchaseDate || Date.now() };
+      try { tx = await AIAP.verifyPurchase(b.signed); } catch (e) { return json(res, 400, { error: 'bad_receipt' }); }
     }
     const pid = tx.productId, items = iapItems(pid);
     if (!items || !items.length) return json(res, 400, { error: 'bad_item' });
-    const r = await store.grantIap(u.id, tx.txId, pid, items, tx.at);
+    const r = await store.grantIap(u.id, tx.txId, pid, items, tx.at, tx.env);
     if (r === 'other') return json(res, 409, { error: 'other_account' });
+    if (r === 'refunded') return json(res, 409, { error: 'refunded' }); // 환불된 거래의 옛 영수증으로 다시 열지 못한다
+    if (tx.env !== 'Production') console.log(`[iap] 시험 환경 결제 env=${tx.env} uid=${u.id} product=${pid}`);
     return json(res, 200, { me: profile(await store.getUser(u.id)) });
   }
   if (url === '/api/equip') {
@@ -725,7 +781,7 @@ async function handle(req, res, url, query) {
     // 표가 없거나 맞지 않으면 아무것도 주지 않는다(settle)
     const r = await settle(u, b, true);
     if (!r) return json(res, 200, { me: profile(u), gained: 0 });
-    return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins });
+    return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins, rankUp: r.rankUp, ach: r.ach });
   }
   if (url === '/api/delete') {
     // 탈퇴: 비밀번호 계정은 비밀번호를, Apple·Google·게스트는 '삭제' 확인 문자를 받고 계정·연결·토큰·기록을 모두 지운다
@@ -818,6 +874,8 @@ function bucketOf() {
 // 방장 전용 신호. 서버가 보는 방장 = 연결이 살아 있는 사람 가운데 자리 번호가 가장 앞인 사람.
 // 지금은 방장이 아닌 사람이 보내도 막지 않고 기록만 한다(기기가 보는 방장과 잠깐 어긋날 수 있어, 기록을 보고 나서 막는다).
 const HOST_ONLY = new Set(['phase', 'clk', 'bs', 'hz', 'start', 'pattern', 'go']);
+// 중계하는 신호 종류(net.js TOPICS에서 chat·chatno를 뺀 것). chat은 아래에서 따로 거르고, chatno는 서버만 보낸다(흉내 금지). 그 밖의 종류는 버린다.
+const RELAY_TOPICS = new Set(['phase', 'hz', 'pattern', 'bs', 'dmg', 'wiped', 'start', 'pop', 'clk', 'sup', 'vol', 'go']);
 const seatNo = (pid) => +String(pid).slice(1);
 function hostOf(room) { let h = null; room.forEach((p, pid) => { if (p.ws && p.ws.readyState === 1 && (h === null || seatNo(pid) < seatNo(h))) h = pid; }); return h; }
 // 계정당 방 자리 하나.
@@ -923,6 +981,7 @@ function joinRoom(ws, q, u, early) {
       const out = { k: 'msg', from: id, t: 'chat', d: { x: c.text, n: shownNick(u.nick) } };
       broadcast(room, id, out); send(ws, Object.assign({}, out, { self: 1 }));
     } else if (m.k === 'msg' && typeof m.t === 'string') {
+      if (!RELAY_TOPICS.has(m.t)) { warnSome('ws_topic', 20, `room=${code} t=${m.t.slice(0, 24)} from=${id} uid=${u.id}`); return; }
       if (HOST_ONLY.has(m.t)) { const h = hostOf(room); if (h !== id) warnSome('not_host', 30, `room=${code} t=${m.t} from=${id} host=${h} uid=${u.id}`); } // 기록만, 중계는 그대로
       broadcast(room, id, { k: 'msg', from: id, t: m.t.slice(0, 24), d: cleanRelay(m.d, 0) });
     }
@@ -1014,6 +1073,7 @@ async function start(opts = {}) {
   store = await openStore({ dataDir: DATA, databaseUrl: process.env.DATABASE_URL, pool: opts.pool });
   await refreshSanctions(); // 운영 제재 목록(못 읽으면 서버를 띄우지 않는다)
   const modT = setInterval(() => refreshSanctions().catch((e) => console.error('[mod] 제재 목록을 읽지 못함(앞선 목록 유지):', e && e.message)), MOD_REFRESH_MS); if (modT.unref) modT.unref();
+  if (gplayOn()) { const gv = () => pollGoogleVoided().catch((e) => console.error('[iap] 구글 환불 목록 조회 실패:', e && e.message)); gv(); const gvT = setInterval(gv, GVOID_MS); if (gvT.unref) gvT.unref(); }
   const appleT = setInterval(() => sweepAppleTokens().catch((e) => console.error('[apple] 남은 토큰 정리 실패:', e && e.message)), 3600000); if (appleT.unref) appleT.unref();
   await new Promise((r) => server.listen(opts.port != null ? opts.port : PORT, r));
   console.log(`삼국 랜덤 디펜스 온라인 서버(${store.kind}): http://localhost:${server.address().port}`);

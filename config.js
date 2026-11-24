@@ -4,4 +4,6 @@
   const same = /^https?:$/.test(location.protocol) && (location.port === '8300' || /sslip\.io$/.test(location.hostname));
   window.RTD_API = window.RTD_API || (same ? location.origin : SERVER);
   window.RTD_SERVER = window.RTD_API.replace(/^http/, 'ws');
+  // 스토어 주소(앱 강제 업데이트 화면의 '스토어로 가기' 버튼). 비어 있으면 버튼을 숨긴다. 출시해서 주소가 생기면 여기만 채운다
+  window.RTD_STORE = { ios: '', android: '' };
 })();

@@ -18,5 +18,7 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <!-- 안드로이드 12 이상의 시스템 시작 화면 바탕(지정하지 않으면 밝은 기본 바탕이 잠깐 보인 뒤 어두운 splash로 바뀐다) -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
     </style>
 </resources>

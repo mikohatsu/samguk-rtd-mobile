@@ -85,6 +85,7 @@
 - 워터마크: 원본 3장의 네 모서리와 전체를 확인했고 보이는 워터마크는 없다(2026-11-12). 게임 안 크레딧의 그림 항목에 도구 이름(Canva AI · Higgsfield)을 표기했다.
 - 사용자 결정(2026-11-12): 무료 요금제 생성물을 크레딧에 표기하고 쓴다.
 - 상업 이용: 개발자가 확인(2026-11-17) — Higgsfield는 워터마크가 없는 생성물이면 상업 이용이 가능하고, 지금은 유료 요금제를 쓴다. 위 그림에는 보이는 워터마크가 없다(로비 배경 다시 확인, 2026-11-17). 앞으로 만드는 그림은 유료 요금제로 생성한다.
+- 워터마크 전수 확인(2026-11-24): 앱에 들어가는 gfx/ 476장 전부에서 워터마크 없음. Higgsfield 그림 62장(vs_ 26, map_ 21, ach_ 4, 아이콘 8, lobby_bg·ui_paper·ui_ink)은 한 장씩 열어 네 모서리와 가운데 아래를 확인. 판정표 production/team/2026-11-24/watermark-audit.csv(로컬 작업 기록).
 
 ## 스토어 이미지(앱에는 포함 안 됨)
 - 2026-11-20 App Store·Google Play 소개 사진(store/screenshots/)의 배경 2장: Canva AI(generate-image)로 생성 — 노을 전장(media MAHbdehmOVc, 디자인 DAHbdrlOz8M), 불타는 밤 전장(media MAHbdjJ5dHE, 디자인 DAHbdigRhkc). separate-image-layers → export-design으로 원본 해상도(2868×1434)를 받음. 불 배경은 Canva가 위 테두리 장식에 "20" 글자를 넣어서 아래 테두리를 뒤집어 덮음. 워터마크 없음 확인(2026-11-20). 원본 F:\samguk-media\storei\.
@@ -93,4 +94,4 @@
 
 ## 아직 남은 것 (출시 전)
 - (완료 2026-11-11) 앱 아이콘·시작 화면: Canva AI로 만든 art_src/app_icon.png에서 scripts/build-icons.py로 안드로이드·iOS용을 만든다.
-- 일본 스토어 문구에서 "三国志"는 설명·키워드에만 쓰고, 앱 이름에는 쓰지 않는다(코에이테크모의 등록 상표 "三國志"와 혼동을 피하기 위해. 현재 이름 "三国ランダムディフェンス"는 해당 없음).
+- 일본 스토어 문구에서 "三国志"는 설명·키워드에만 쓰고, 앱 이름에는 쓰지 않는다(코에이테크모의 등록 상표 "三國志"와 혼동을 피하기 위해. 현재 이름 "三国ランダムディフェンス"는 해당 없음).- 2026-11-24 그림 속 엉터리 한자 고침(Canva AI generate-image, 기존 그림을 참고 그림으로 올려 글자만 바꿈): gfx/vs_ambush.png(깃발 「伏」, media MAHb0bp858Y), gfx/vs_talisman.png(부적 「令」, media MAHb0R-GVwA), gfx/vs_altar.png(부적 글자 없앰, media MAHb0fZW_Xw — 내보내기 때 Canva가 영문 글자층을 넣어 미리보기 원본을 키워 씀). 흰 배경은 코드로 지움. 원본 art_src/vs_*_v2_canva*.png. 워터마크 없음 확인(2026-11-24).

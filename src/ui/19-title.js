@@ -1,5 +1,5 @@
   // ---- 시작 화면 ----
-  const cfg = { diff: 'easy', mode: 'solo', ai: '2', mutLv: '0', muts: [], play: 'offline', accTab: 'login', showRank: false };
+  const cfg = { diff: 'easy', mode: 'solo', ai: '2', mutLv: '0', play: 'offline', accTab: 'login', showRank: false };
   try { const p = localStorage.getItem('rtd-play'); if (p === 'online' || p === 'offline') cfg.play = p; } catch (e) { /* 저장 불가 */ }
   // 마지막에 시작한 설정('rtd-last': 온라인/싱글·모드·난이도·AI 수·악몽 단계)을 기억해, 다음에 전투 시작 창을 열면 그 선택이 되어 있게 한다(lobby.js openWizard)
   try {
@@ -14,10 +14,11 @@
   } catch (e) { /* 저장 불가 */ }
   const saveLast = () => { try { localStorage.setItem('rtd-last', JSON.stringify({ play: cfg.play, mode: cfg.mode, diff: cfg.diff, ai: cfg.ai, mutLv: String(cfg.mutLv) })); } catch (e) { /* 저장 불가 */ } };
   const savedGame = () => { try { const sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); return sv && sv.v === 1 ? sv : null; } catch (e) { return null; } };
-  // 악몽 +N: 규칙 N개를 겹치지 않게 무작위로 고른다
-  const rollMuts = () => { const pool = (T.mutators || []).map((m) => m.id); cfg.muts = []; for (let i = 0; i < +cfg.mutLv && pool.length; i++) cfg.muts.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]); };
+  // 악몽 +N: 규칙 N개를 겹치지 않게 무작위로 고른다. 시작 버튼을 누를 때(방은 방장이 시작할 때) 한 번만 뽑는다 — 미리 보거나 다시 뽑을 수 없다.
+  // 뽑힌 규칙은 판이 시작될 때 연출로 보여 준다(17b-mutintro). 방 협동은 방장이 뽑아 시작 신호(net.start)에 실어 모두가 같은 규칙으로 돈다.
+  const rollMuts = (n) => { const pool = (T.mutators || []).map((m) => m.id), out = []; for (let i = 0; i < n && pool.length; i++) out.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]); return out; };
+  const mutPick = () => (cfg.diff === 'nightmare' ? { muts: rollMuts(+cfg.mutLv), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 });
   const mutCard = (id, i) => { const m = T.mutators.find((x) => x.id === id); return m ? `<div class="mut"><span class="n">${i + 1}</span><b>${esc(m.name)}</b><div class="gb"><span class="g">＋ ${esc(m.good)}</span><span class="bd">－ ${esc(m.bad)}</span></div></div>` : ''; };
-  if (+cfg.mutLv) rollMuts(); // 기억해 둔 악몽 +N이면 규칙을 새로 뽑아 둔다
   const DIFF_COL = { easy: '#7fd08a', normal: '#6fb7ff', hard: '#ffb347', nightmare: '#ff5a5a' };
   const myName = () => (ACC.me ? ACC.me.nick : t('me'));
   function setupTitle() {
@@ -75,8 +76,7 @@
       const nm = cfg.diff === 'nightmare' && ready;
       $('mutbox').hidden = !nm;
       if (nm) {
-        $('mutlv').innerHTML = [0, 1, 2, 3, 4, 5].map((n) => `<button class="${+cfg.mutLv === n ? 'on' : ''}" data-cfg="mutLv" data-v="${n}" type="button">${n ? '+' + n : t('base')}</button>`).join('') + (+cfg.mutLv ? `<button class="btn reroll" id="mutroll" type="button">${t('reroll')}</button>` : '');
-        $('mutrules').innerHTML = cfg.muts.map(mutCard).join('');
+        $('mutlv').innerHTML = [0, 1, 2, 3, 4, 5].map((n) => `<button class="${+cfg.mutLv === n ? 'on' : ''}" data-cfg="mutLv" data-v="${n}" type="button">${n ? '+' + n : t('base')}</button>`).join('');
       }
       // 오프라인: 단독·AI 동맹 / 온라인: 단독(기록)·방 협동
       const modes = on ? [['quick', t('lb_quick'), t('lb_quickSub')], ['create', t('lb_create'), t('lb_createSub')], ['join', t('lb_join'), t('lb_joinSub')]] : [['solo', t('solo'), t('soloSub')], ['ai', t('aiAlly'), t('aiAllySub')]];
@@ -98,7 +98,7 @@
       $('startbtn').textContent = isRoom ? (!lobby ? t('joinFirst') : host ? t('startHost') : t('waitHost')) : ovArm ? t('overwriteSave') : t('start');
       $('startbtn').disabled = (isRoom && (!lobby || !host)) || (!pk('diff') && !hostPick) || (window.RTD_LOBBY && !window.RTD_LOBBY.diffOpen(cfg.diff, +cfg.mutLv));
       if (lobby && host) {
-        const c = { diff: cfg.diff, mutLv: +cfg.mutLv, muts: cfg.muts }, k = JSON.stringify(c);
+        const c = { diff: cfg.diff, mutLv: +cfg.mutLv }, k = JSON.stringify(c);
         if (lobby.sentCfg !== k) { lobby.sentCfg = k; lobby.t.presence({ cfg: c }); }
       }
       renderLobby();
@@ -131,9 +131,9 @@
         if (c) sl.replaceChild(el, c); else sl.appendChild(el);
       });
       while (sl.children.length > 5) sl.lastChild.remove();
-      const hc = lobby.isHost() ? { diff: cfg.diff, mutLv: +cfg.mutLv, muts: cfg.muts } : hostCfg;
+      const hc = lobby.isHost() ? { diff: cfg.diff, mutLv: +cfg.mutLv } : hostCfg;
       const dn = hc ? (T.difficulties.find((d) => d.id === hc.diff) || {}).name : '';
-      const ch = hc ? `<span class="lb-cl">${t('hostCfg')}</span><b class="lb-dn" style="color:${DIFF_COL[hc.diff] || '#ffd86a'}">${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>${!lobby.isHost() && (hc.muts || []).length ? `<div class="lb-muts">${hc.muts.map(mutCard).join('')}</div>` : ''}` : '';
+      const ch = hc ? `<span class="lb-cl">${t('hostCfg')}</span><b class="lb-dn" style="color:${DIFF_COL[hc.diff] || '#ffd86a'}">${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>` : '';
       if ($('lbcfg').dataset.h !== ch) { $('lbcfg').dataset.h = ch; $('lbcfg').innerHTML = ch; }
     };
     // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 레벨·누적 경험치와 무관·문관 칭호. 서버(app.js)의 RANK_LV, 경험치 식(40·(레벨-1)²)과 같다
@@ -289,8 +289,10 @@
       return new Promise((done) => {
         const B = $('boot'), card = $('bootcard'), app = !!(window.RTD_NATIVE && window.RTD_NATIVE.on);
         B.classList.add('form'); $('bootload').hidden = true; card.hidden = false;
-        card.innerHTML = `<p>${t(app ? 'updateNeed' : 'updateWeb')}</p>${app ? '' : `<button class="btn go" id="boot-reload" type="button">${t('updateReload')}</button><button class="btn sub" id="boot-skip" type="button">${t('updateSkip')}</button>`}`;
-        if (app) return; // 앱에서는 여기서 멈춘다
+        // 앱: 스토어 주소(config.js RTD_STORE)가 있으면 스토어로 가는 버튼을 둔다. 비어 있으면 안내만
+        const N = window.RTD_NATIVE, store = app ? ((window.RTD_STORE || {})[N.droid ? 'android' : 'ios'] || '') : '';
+        card.innerHTML = `<p>${t(app ? 'updateNeed' : 'updateWeb')}</p>${app ? (store ? `<button class="btn go" id="boot-store" type="button">${t('updateStore')}</button>` : '') : `<button class="btn go" id="boot-reload" type="button">${t('updateReload')}</button><button class="btn sub" id="boot-skip" type="button">${t('updateSkip')}</button>`}`;
+        if (app) { if (store) $('boot-store').onclick = () => { if (!N.openUrl(store)) window.open(store, '_blank'); }; return; } // 앱에서는 여기서 멈춘다
         $('boot-reload').onclick = () => location.reload();
         $('boot-skip').onclick = () => { card.hidden = true; card.innerHTML = ''; B.classList.remove('form'); $('bootload').hidden = false; done(); };
       });
@@ -352,14 +354,12 @@
     }
     document.addEventListener('click', (e) => {
       if (!$('title') || $('title').hidden) return;
-      if (e.target.id === 'mutroll') { rollMuts(); dr(); return; }
       if (e.target.id === 'lbcopy' && lobby) { try { navigator.clipboard.writeText(lobby.code); e.target.textContent = t('copied'); } catch (er) { /* 복사 불가 환경 */ } return; }
       const b = e.target.closest('[data-cfg]');
       if (b) {
         cfg[b.dataset.cfg] = b.dataset.v;
         if (b.dataset.cfg === 'play') { try { localStorage.setItem('rtd-play', b.dataset.v); } catch (er) { /* 저장 불가 */ } if (lobby && b.dataset.v === 'offline') { lobby.leave(); lobby = null; } }
         if (b.dataset.cfg === 'diff' && b.dataset.v !== 'nightmare') cfg.mutLv = '0';
-        if (b.dataset.cfg === 'mutLv' || b.dataset.cfg === 'diff') rollMuts();
         if (b.dataset.cfg === 'accTab') $('accbox').dataset.html = '';
         dr();
         if (window.RTD_LOBBY) window.RTD_LOBBY.onCfg(b.dataset.cfg);
@@ -391,7 +391,7 @@
     document.addEventListener('pointerdown', () => { if (g) Snd.init(); });
     $('jn').onclick = () => { const c = $('code').value.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); if (c) join(c); };
     $('startbtn').onclick = () => {
-      const mm = cfg.diff === 'nightmare' ? { muts: cfg.muts.slice(), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 };
+      const mm = mutPick();
       const online = cfg.play === 'online';
       if (cfg.mode === 'multi' || cfg.mode === 'create' || cfg.mode === 'join') { if (lobby && lobby.isHost()) { saveLast(); lobby.start(cfg.diff, mm); } return; }
       // 싱글 단독 새 판은 이어하기 기록을 덮어쓴다: 기록이 있으면 버튼 글을 바꾸고 3초 안에 한 번 더 눌러야 시작한다
@@ -425,8 +425,7 @@
       const online = cfg.play === 'online';
       if (online && !(ACC.token && ACC.me)) return false;
       if (window.RTD_LOBBY && !window.RTD_LOBBY.diffOpen(cfg.diff, +cfg.mutLv)) return false;
-      if (cfg.diff === 'nightmare' && +cfg.mutLv) rollMuts();
-      const mm = cfg.diff === 'nightmare' ? { muts: cfg.muts.slice(), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 };
+      const mm = mutPick();
       if (!online && cfg.mode === 'ai') { begin(Object.assign({ diff: cfg.diff, ai: +cfg.ai }, mm)); return true; }
       if (cfg.mode === 'solo') { begin(Object.assign({ diff: cfg.diff, mode: 'solo', online, key: online ? 's-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : null }, mm)); return true; }
       return false;

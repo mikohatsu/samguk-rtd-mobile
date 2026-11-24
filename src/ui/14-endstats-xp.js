@@ -24,6 +24,9 @@
       if (pb.clr < 0) lines.push(I.t('goalShop'));
     }
     const me = ACC.token && ACC.me;
+    // 이 판으로 서버가 준 관직 승급·업적 첫 달성 보상(18-account.js reportResult가 S.rwRank·S.rwAch에 둔다)
+    if (me && S.rwRank && S.rwRank.length) { const top = S.rwRank[S.rwRank.length - 1], trk = me.track === 'civ' ? 'civ' : 'mil'; lines.push(I.t('goalRankUp', { a: esc(t('rk_' + trk + top.rank)), n: num(S.rwRank.reduce((a, x) => a + x.coins, 0)) })); }
+    if (me && S.rwAch && S.rwAch.length) lines.push(I.t('goalAchFirst', { k: S.rwAch.length, n: num(S.rwAch.reduce((a, x) => a + x.coins, 0)) }));
     if (me && S.msClaim) lines.push(I.t('goalMission'));
     if (me) {
       const trk = me.track === 'civ' ? 'civ' : 'mil';
@@ -82,10 +85,11 @@
   }
   // ---- 판 끝 경험치 연출: 화면을 어둡게 흐리고, 지금 계급 문양 ─ 경험치 막대 ─ 다음 계급 문양.
   // +경험치가 뜬 뒤 막대가 그만큼 차오르고(계급이 오르면 문양이 바뀜), 잠시 뒤 사라지며 결과창이 나온다.
-  const RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];
-  const lvOfXp = (xp) => Math.min(51, Math.floor(Math.sqrt(xp / 40)) + 1);
-  const rkOfLv = (lv) => RANK_LV.reduce((k, m, i) => (lv >= m ? i : k), 0);
-  const xpAt = (lv) => 40 * (lv - 1) * (lv - 1);
+  // 관직 곡선은 progression.js(서버와 같은 표, 2026-11-24)
+  const RANK_LV = window.RTD_PROG.RANK_LV;
+  const lvOfXp = window.RTD_PROG.levelOf;
+  const rkOfLv = window.RTD_PROG.rankOf;
+  const xpAt = window.RTD_PROG.xpAt;
   const rankSpan = (r) => [xpAt(RANK_LV[r]), r < 10 ? xpAt(RANK_LV[r + 1]) : xpAt(RANK_LV[r]) + 1];
   const rankMark = (r) => `<span class="xpm"><img alt="" src="gfx/rank_${r}.png" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${r}'}))"></span>`;
   function playXp(from, to, coins, done) {

@@ -14,7 +14,27 @@
     resumeGapMs: 2000, // 계산이 이만큼 멈췄다 돌아오면(앱을 내렸다 켬) 다른 사람의 소식 시각을 새로 잡는다
     syncMaxMs: 20000,  // 다시 붙은 사람이 방장 자격을 보류하는 최대 시간
   };
-  const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  // 받는 메시지 검사 수치(SEC-104). 정상 플레이 최댓값(theme-samguk.js 스킬 표·synergy.js)에 여유를 둔 값이다.
+  // 시간은 방장 게임 시간(g.time) 기준: 배속·시험(빠른 계산)에서도 정상 신호를 깎지 않는다.
+  const GUARD = {
+    // 한 사람이 게임 1초에 보낼 수 있는 수와 몰아 보낼 수 있는 수 [초당, 몰아서](정상: dmg 4/초, 나머지 드묾)
+    // popHi: 신화·불멸 등장 알림은 받는 화면의 시간을 6~7초 멈추므로(16-hud.js S.freeze) 한 사람당 8초에 한 번만 받는다
+    rate: { dmg: [12, 12], sup: [24, 24], pop: [6, 12], popHi: [1 / 8, 1], vol: [4, 4], wiped: [4, 4] },
+    dmgPerSec: 1, dmgBurst: 1, // 한 사람의 보스 피해 상한: 보스 최대 체력 × 이 비율 / 초(쌓아 둘 수 있는 양도 같은 비율). 정상 판의 센 손님을 깎지 않게 넉넉히
+    stunMax: 3, ampMax: 0.5, adMax: 0.5, effDurMax: 10, gapMax: 6, ctrMax: 40, objMax: 32,
+    charmDurMax: 5, charmCdMin: 10, charmCdMax: 60, // 미인계 재사용이 0이면 무한 매혹이 되므로 하한을 둔다(정상 최소 30×0.4=12)
+    sup: { heal: 1, healLow: 1, hot: 0.2, rally: 1.5, guard: 0.8, haste: 1, pshield: 0 }, // 지원 종류별 값 상한(정상 최대 0.6·0.6·0.03·0.8·0.3·0.45)
+    hzBatch: 40, hzTotal: 400, depMax: 25, drMax: 8,
+    overLivesMax: 5, // 손님의 패배 신호는 그 사람이 마지막으로 알린 라이프가 이 이하일 때만 받는다(라이프는 초당 최대 2 남짓 준다)
+    logGapMs: 10000, // 같은 종류의 이상 신호 기록은 이 간격에 한 번
+  };
+  const fin = (v) => typeof v === 'number' && isFinite(v);
+  const obj = (d) => !!d && typeof d === 'object' && !Array.isArray(d);
+  const clampN = (v, lo, hi) => (fin(v) ? Math.min(hi, Math.max(lo, v)) : lo);
+  const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+  const pair = (a, vMax, dMax) => (Array.isArray(a) && fin(a[0]) && fin(a[1]) && a[0] > 0 ? [Math.min(vMax, a[0]), clampN(a[1], 0, dMax)] : null);
+  const PHASES = { round: 1, pick: 1, fight: 1, bossEnd: 1, over: 1 };
+  const nowMs =() => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
   async function roomTransport(code) {
     if (!root.claude || !root.claude.use) return null;
@@ -158,6 +178,18 @@
     return o;
   };
 
+  // 방장이 보낸 보스 기술 하나를 packHazard가 보내는 칸만 남겨 다시 만든다(숫자가 아니거나 무한이면 버린다)
+  const HZ_NUM = ['delay', 'dmg', 'x', 'y', 'a', 'len', 'w', 'r', 'arc', 'r0', 'r1', 'v', 'rw', 'rh', 'y0', 'y1', 'dur', 'tick', 'need', 'vx', 'vy', 'pw', 'kill', 'frac', 'raid', 'hide'];
+  const cleanHazard = (h) => {
+    if (!h || typeof h !== 'object' || Array.isArray(h) || typeof h.k !== 'string') return null;
+    const o = { k: h.k.slice(0, 12) };
+    for (const f of HZ_NUM) { if (h[f] != null) { if (!fin(h[f])) return null; o[f] = h[f]; } }
+    if (!fin(o.x) || !fin(o.y)) return null;
+    if (h.spots != null) { if (!Array.isArray(h.spots)) return null; o.spots = h.spots.slice(0, 16).filter((s) => Array.isArray(s) && s.length <= 4 && s.every(fin)); }
+    if (typeof h.fx === 'string') o.fx = h.fx.slice(0, 12);
+    return o;
+  };
+
   class Net {
     constructor(transport, name) {
       this.t = transport; this.name = name; this.game = null; this.started = false;
@@ -173,13 +205,31 @@
       this.t.onPeers(() => this.onLobby && this.onLobby());
       if (this.t.presHook) this.t.onPres = (id, p, now, full) => this.pushGhost(id, p, now, full);
       if ('onRejoin' in this.t) this.t.onRejoin = () => this.rejoined();
-      const obj = (d) => d && typeof d === 'object' && !Array.isArray(d);
+      this.bucket = {}; this.badAt = {}; this.badN = {};
       // 방장 전용 신호(phase, clk, bs, hz, start, pattern)는 지금 방장(막 바뀌었으면 앞 방장도)에게서 온 것만 받는다
-      this.t.on('start', (d, peer, self) => { if (obj(d) && !this.started && this.fromHost(peer, self)) { this.started = true; this.diff = d.diff; this.clock.last = Date.now(); this.onStart && this.onStart(d); } });
-      // 라이프가 다한 패배는 손님도 알린다(engine.js loseLife). 나머지 단계 신호는 방장 것만 받는다.
-      this.t.on('phase', (d, peer, self) => { if (!self && this.game && obj(d) && (this.fromHost(peer, self) || (d.p === 'over' && d.win === false))) this.applyPhase(d); });
+      this.t.on('start', (d, peer, self) => {
+        if (!obj(d) || this.started || !this.fromHost(peer, self)) return;
+        if (typeof d.diff !== 'string' || !fin(d.seed)) return this.bad('start', peer);
+        const s = { diff: d.diff.slice(0, 16), seed: d.seed | 0, mutLv: clampN(d.mutLv, 0, 99) | 0, muts: Array.isArray(d.muts) ? d.muts.filter((x) => typeof x === 'string').slice(0, 20).map((x) => x.slice(0, 24)) : [] };
+        Object.keys(d).forEach((k) => { if (!(k in s) && (fin(d[k]) || typeof d[k] === 'boolean')) s[k] = d[k]; });
+        this.started = true; this.diff = s.diff; this.clock.last = Date.now(); this.onStart && this.onStart(s);
+      });
+      // 단계 신호는 방장 것만 받는다. 손님의 라이프가 다한 패배(engine.js loseLife)는 방장만 받아 확인한 뒤 방장이 다시 알린다.
+      this.t.on('phase', (d, peer, self) => {
+        const g = this.game;
+        if (self || !g || !obj(d)) return;
+        if (!PHASES[d.p]) return this.bad('phase', peer);
+        if (this.fromHost(peer, self)) { const c = this.cleanPhase(d); if (c) this.applyPhase(c); else this.bad('phase', peer); return; }
+        if (d.p !== 'over' || d.win !== false || !this.isHost() || g.over) return; // 방장이 아닌 사람의 판 전체 신호는 버린다
+        const p = this.roster().find((x) => x.id === peer), ln = p && p.state.ln;
+        if (!p || !ln || !fin(ln.l) || ln.l > GUARD.overLivesMax) return this.bad('over', peer);
+        g.finish(false);
+        this.send('phase', { p: 'over', win: false });
+      });
       this.t.on('clk', (d, peer, self) => {
         if (self || !obj(d) || !this.fromHost(peer, self)) return;
+        if (!fin(d.r) || !fin(d.t)) return this.bad('clk', peer);
+        d = { r: d.r | 0, t: d.t, ph: str(d.ph, 12), sp: clampN(d.sp, 1, 3), pz: d.pz ? str(String(d.pz), 24) || null : null, dr: Array.isArray(d.dr) ? d.dr.slice(0, GUARD.drMax) : null };
         const strict = peer === this.hostId();
         this.syncClock(d, strict);
         // 다시 붙은 사람: 지금 방장의 시계를 받아 라운드를 따라잡았으면(보스전이면 보스 상태도 받았으면) 보류를 푼다
@@ -192,17 +242,25 @@
       this.t.on('hz', (d, peer, self) => {
         const g = this.game;
         if (self || !g || !g.fight || !Array.isArray(d) || !this.fromHost(peer, self)) return;
-        d.forEach((h) => { if (obj(h)) g.fight.hazards.push(Object.assign({ c: g.fight.def.fx, t: 0 }, h)); });
+        if (d.length > GUARD.hzBatch) this.bad('hz', peer);
+        d.slice(0, GUARD.hzBatch).forEach((h) => {
+          const c = cleanHazard(h);
+          if (!c) return this.bad('hz', peer);
+          if (g.fight.hazards.length < GUARD.hzTotal) g.fight.hazards.push(Object.assign({ c: g.fight.def.fx, t: 0 }, c));
+        });
       });
       // 일기토 출전 신청: 신청한 사람의 외침을 모두에게 띄운다(외침은 번호로 보내 각자 언어로 보여 준다)
-      this.t.on('vol', (d) => { if (this.game && d && d.r === this.game.round) { const L = root.RTD_I18N; const line = L ? L.t('volLine' + ((d.i | 0) % 3)) : ''; this.game.log('toast', { text: `${String(d.n).slice(0, 12)}: "${line}"`, tone: 'good' }); } });
+      this.t.on('vol', (d, peer, self) => { if (this.game && obj(d) && d.r === this.game.round && (self || this.allow('vol', peer))) { const L = root.RTD_I18N; const line = L ? L.t('volLine' + clampN(d.i | 0, 0, 2)) : ''; this.game.log('toast', { text: `${str(d.n, 12)}: "${line}"`, tone: 'good' }); } });
       // 방 채팅: 서버가 거른 글만 보인다(내가 보낸 글도 서버를 거쳐 돌아온 것을 쓴다)
-      this.t.on('chat', (d, peer, self) => { if (!self && d && this.onChat) this.onChat(d, peer); });
-      this.t.on('chatno', (d) => { if (d && this.onChatNo) this.onChatNo(d); }); // 내 채팅이 막혔을 때(도배·광고) 서버가 나에게만 보낸다
-      this.t.on('pattern', (d, peer, self) => { if (!self && this.game && obj(d) && this.fromHost(peer, self)) { this.game.log('pattern', { name: d.n }); this.game.log('sfx', { s: 'warn' }); if (this.game.synEvent) this.game.synEvent('pattern', {}); } });
+      this.t.on('chat', (d, peer, self) => { if (!self && obj(d) && this.onChat) this.onChat({ x: str(d.x, 80), n: str(d.n, 24) }, peer); });
+      // 내 채팅이 막혔을 때(도배·광고) 서버가 나에게만 보낸다: 서버가 내 자리 id로 보낸 것만 받는다(남이 흉내 낸 것은 버린다)
+      this.t.on('chatno', (d, peer) => { const me = this.me(); if (obj(d) && this.onChatNo && this.t.kind === 'ws' && me && peer === me.id) this.onChatNo({ why: str(d.why, 12), s: clampN(d.s, 0, 1e9) }); });
+      this.t.on('pattern', (d, peer, self) => { if (!self && this.game && obj(d) && this.fromHost(peer, self)) { this.game.log('pattern', { name: str(d.n, 24) }); this.game.log('sfx', { s: 'warn' }); if (this.game.synEvent) this.game.synEvent('pattern', {}); } });
       this.t.on('pop', (d, peer, self) => {
         const g = this.game;
-        if (!self && g && g.defs[d.id]) g.log('pop', { def: g.defs[d.id], who: d.name, remote: true });
+        if (self || !g || !obj(d) || typeof d.id !== 'string' || !Object.prototype.hasOwnProperty.call(g.defs, d.id) || !this.allow('pop', peer)) return;
+        if (g.defs[d.id].tier >= 9 && !this.allow('popHi', peer)) return;
+        g.log('pop', { def: g.defs[d.id], who: str(d.name, 24), remote: true });
       });
       this.t.on('bs', (d, peer, self) => {
         const g = this.game;
@@ -211,27 +269,78 @@
         if (num(d.x) && num(d.y)) { b.x = d.x; b.y = d.y; }
         if (num(d.hp)) b.hp = Math.min(b.hp, d.hp);
         if (num(d.t)) g.fight.t = d.t;
-        g.raidApply(d.m);
+        if (obj(d.m)) g.raidApply(d.m);
         if (this.sync && peer === this.hostId()) { this.sync.bs = true; this.sync.sig = Date.now(); }
       });
       this.t.on('dmg', (d, peer, self) => {
         const g = this.game;
-        if (self || !g || !g.fight || !this.isHost()) return;
-        g.remoteDamage(d);
+        if (self || !g || !g.fight || !this.isHost() || !obj(d)) return;
+        if (!this.inRoster(peer) || !this.allow('dmg', peer)) return this.bad('dmg', peer);
+        const c = this.cleanDamage(d, peer);
+        if (c) g.remoteDamage(c);
       });
       // 다른 사령관의 힐러·버퍼가 보낸 치료와 호령
-      this.t.on('sup', (d, peer, self) => { if (!self && this.game && d && typeof d.v === 'number') this.game.applySupport(d); });
-      this.t.on('wiped', (d, peer) => {
+      this.t.on('sup', (d, peer, self) => {
+        if (self || !this.game || !obj(d)) return;
+        const cap = typeof d.k === 'string' && Object.prototype.hasOwnProperty.call(GUARD.sup, d.k) ? GUARD.sup[d.k] : null;
+        if (cap == null || !fin(d.v) || !this.inRoster(peer) || !this.allow('sup', peer)) return this.bad('sup', peer);
+        this.game.applySupport({ k: d.k, v: clampN(d.v, 0, cap), dur: clampN(d.dur, 0, GUARD.effDurMax) });
+      });
+      this.t.on('wiped', (d, peer, self) => {
         const g = this.game;
-        if (!g || !g.fight || !this.isHost()) return;
+        if (!g || !g.fight || !this.isHost() || !(self || (this.inRoster(peer) && this.allow('wiped', peer)))) return;
         // 쓰러진 사람 목록은 보스전(라운드)마다 따로 센다. 앞 보스전에서 쓰러진 사람이 남아 있으면 다음 보스전이 잘못 전멸 처리된다
         if (d && d.r != null && d.r !== g.round) return;
         if (!this.wiped || this.wiped.r !== g.round) this.wiped = { r: g.round, who: {} };
         this.wiped.who[peer] = true;
-        if (Object.keys(this.wiped.who).length >= this.partySize()) { this.wiped = null; g.endFight(false); }
+        if (this.roster().filter((p) => this.wiped.who[p.id]).length >= this.partySize()) { this.wiped = null; g.endFight(false); }
       });
     }
     me() { return this.t.peers().find((p) => p.me); }
+    inRoster(peer) { return this.roster().some((p) => p.id === peer); }
+    // 걸러 낸 신호 기록(종류마다 GUARD.logGapMs에 한 번, 그사이 개수를 함께 적는다)
+    bad(kind, peer) {
+      const now = Date.now(); this.badN[kind] = (this.badN[kind] || 0) + 1;
+      if (now - (this.badAt[kind] || 0) < GUARD.logGapMs) return;
+      this.badAt[kind] = now;
+      if (typeof console !== 'undefined') console.warn(`[net] 버린 신호 ${kind} from=${String(peer).slice(0, 16)} 누계=${this.badN[kind]}`);
+    }
+    // 사람·종류별 보낼 수 있는 횟수(GUARD.rate: 게임 1초에 몇 개, 몰아서 몇 개)
+    allow(kind, peer) {
+      const g = this.game, now = g ? g.time : Date.now() / 1000, [r, cap] = GUARD.rate[kind] || [10, 10], key = kind + '|' + peer;
+      let b = this.bucket[key];
+      if (!b || now < b.at) b = this.bucket[key] = { tok: cap, at: now };
+      b.tok = Math.min(cap, b.tok + (now - b.at) * r); b.at = now;
+      if (b.tok < 1) { this.bad(kind + '_rate', peer); return false; }
+      b.tok -= 1; return true;
+    }
+    // 손님이 보낸 보스 피해를 정리한다. 피해는 사람마다 보스 최대 체력의 비율로 예산을 두고 넘친 몫은 버린다.
+    cleanDamage(d, peer) {
+      const g = this.game, f = g.fight, mhp = f.boss.mhp > 0 ? f.boss.mhp : 1, now = g.time, key = 'dmgHp|' + peer, G = GUARD;
+      if (d.v != null && !fin(d.v)) { this.bad('dmg', peer); return null; }
+      let b = this.bucket[key];
+      if (!b || now < b.at) b = this.bucket[key] = { tok: G.dmgBurst, at: now };
+      b.tok = Math.min(G.dmgBurst, b.tok + (now - b.at) * G.dmgPerSec); b.at = now;
+      const want = Math.max(0, d.v || 0), v = Math.min(want, b.tok * mhp);
+      if (v < want) this.bad('dmg_cap', peer);
+      b.tok -= v / mhp;
+      const o = {};
+      if (obj(d.o)) Object.keys(d.o).slice(0, G.objMax).forEach((id) => { if (/^\d{1,9}$/.test(id) && fin(d.o[id]) && d.o[id] > 0) o[id] = Math.min(d.o[id], mhp); });
+      const cm = Array.isArray(d.cm) && fin(d.cm[0]) && fin(d.cm[2]) ? [clampN(d.cm[0], 0, G.charmDurMax), clampN(d.cm[1], 0, G.ampMax), clampN(d.cm[2], G.charmCdMin, G.charmCdMax)] : null;
+      return {
+        v, stun: clampN(d.stun, 0, G.stunMax), o, ctr: clampN(d.ctr, 0, G.ctrMax) | 0, sg: clampN(d.sg, 0, 3 * v),
+        amp: pair(d.amp, G.ampMax, G.effDurMax), ad: pair(d.ad, G.adMax, G.effDurMax), sa: pair(d.sa, 0.5, 10), cm: cm && cm[0] > 0 ? cm : null, gp: clampN(d.gp, 0, G.gapMax),
+      };
+    }
+    // 방장의 단계 신호 형식 검사(잘못된 값이면 null)
+    cleanPhase(d) {
+      const g = this.game;
+      if (d.p === 'round') { const max = g.diff && fin(g.diff.rounds) ? g.diff.rounds : 999; return fin(d.r) && d.r >= 1 && d.r <= max ? { p: 'round', r: d.r | 0 } : null; }
+      if (d.p === 'fight') return { p: 'fight', dep: Array.isArray(d.dep) ? d.dep.filter((x) => typeof x === 'string' || fin(x)).slice(0, GUARD.depMax) : null };
+      if (d.p === 'bossEnd') return typeof d.win === 'boolean' ? { p: 'bossEnd', win: d.win, remain: clampN(d.remain, 0, 1) } : null;
+      if (d.p === 'over') return typeof d.win === 'boolean' ? { p: 'over', win: d.win } : null;
+      return { p: d.p };
+    }
     roster() { return this.t.peers().filter((p) => p.state && p.state.name && !this.dropped.has(p.id) && (p.me || !p.state.away)).sort((a, b) => (a.id < b.id ? -1 : 1)); }
     // 자리 비운 사람(앱을 내림): 60초 안에 돌아오면 다시 명단에 들어간다
     awayList() { return this.t.peers().filter((p) => !p.me && p.state && p.state.away && !this.dropped.has(p.id)); }
@@ -283,7 +392,7 @@
     syncClock(d, strict) {
       const g = this.game;
       this.clock = { sp: d.sp || 1, pz: d.pz || null, last: Date.now() };
-      if (strict && Array.isArray(d.dr)) d.dr.forEach((id) => { if (typeof id === 'string') this.dropped.add(id); });
+      if (strict && Array.isArray(d.dr)) d.dr.forEach((id) => { if (typeof id === 'string' && id.length <= 24) this.dropped.add(id); });
       const me = this.me();
       if (me && this.dropped.has(me.id)) this.kicked = true;
       if (!g || g.over || this.kicked) return;
@@ -473,7 +582,7 @@
       if (this.isHost()) {
         if (this.clkT <= 0) {
           this.clkT = 0.5;
-          const sp = this.roster().reduce((m, p) => Math.min(m, p.me ? this.speedWant : p.state.sp || 1), 3);
+          const sp = this.roster().reduce((m, p) => Math.min(m, clampN(p.me ? this.speedWant : p.state.sp || 1, 1, 3)), 3);
           this.clock = { sp, pz: null, last: now };
           this.send('clk', { r: g.round, t: round1(g.roundT), ph: g.phase, sp, pz: this.clock.pz, dr: [...this.dropped] });
         }

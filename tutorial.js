@@ -224,7 +224,8 @@
       if (cur) { cur = null; hide(); }
       // 팁: 안내 단계가 보이지 않을 때만, 판 안에서
       // 보스전(라운드 진행 중이 아닐 때)에는 팁을 띄우지 않는다: 경기장 가운데를 가린다
-      if (mode === 'game' && !ctx.g.over && ctx.g.phase === 'wave' && !((ctx.S.vicUntil || 0) > performance.now())) tip = TIPS.find((x) => get(x.key) !== '1' && x.when(ctx)) || null;
+      // 악몽 +N 규칙 등장 연출(S.mutHold, 17b-mutintro) 중에도 띄우지 않는다: 연출 막 위로 올라온다
+      if (mode === 'game' && !ctx.g.over && ctx.g.phase === 'wave' && !ctx.S.mutHold && !((ctx.S.vicUntil || 0) > performance.now())) tip = TIPS.find((x) => get(x.key) !== '1' && x.when(ctx)) || null;
     }
     if (tip && tip.tab && mode === 'game' && !tip.when(ctx)) { set(tip.key, '1'); tip = null; hide(); return; }
     // 떠 있던 팁도 보스전에 들어가면 접어 둔다(본 것으로 치지 않으므로 라운드로 돌아오면 다시 뜬다)

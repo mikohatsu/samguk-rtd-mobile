@@ -996,6 +996,9 @@
     c.fillStyle = `rgba(6,8,22,${alpha})`;
     c.fillRect(-W, -H, W * 3, H); c.fillRect(-W, H, W * 3, H); c.fillRect(-W, 0, W, H); c.fillRect(W, 0, W, H);
   }
+  // 잠긴 장수의 아이템 표시용 자물쇠(로비·상점과 같은 gfx/ic_lock.png). 못 불러오면 width 0이라 그리지 않는다
+  const LOCK_IM = typeof Image !== 'undefined' ? new Image() : { width: 0 };
+  if (LOCK_IM.src !== undefined) LOCK_IM.src = 'gfx/ic_lock.png';
   function drawLane(t) {
     const c = ctx;
     blitBg(c, mapCv, 'map', mapVer);
@@ -1056,11 +1059,14 @@
       const bob = Math.sin(t * 3 + d.id) * 2, selected = S.dropSel === d.id;
       if (selected) selMark(c, d.x, d.y + 16, 24, t);
       const dimg = Art.img(d.kind === 'chest' ? 'prop_chest' : d.kind === 'item' ? 'prop_scroll' : 'prop_' + d.kind);
-      if (dimg) { blobShadow(c, d.x, d.y + 16, 40, 0.5); c.drawImage(dimg, d.x - 24, d.y - 26 + bob, 48, 48 * (dimg.height / dimg.width)); continue; }
+      // 잠긴 장수의 아이템은 두루마리 오른쪽 위에 자물쇠 그림(gfx/ic_lock)을 얹는다
+      const dlock = d.kind === 'item' && LOCK_IM.width && !g.itemOpen(d.item);
+      if (dimg) { blobShadow(c, d.x, d.y + 16, 40, 0.5); c.drawImage(dimg, d.x - 24, d.y - 26 + bob, 48, 48 * (dimg.height / dimg.width)); if (dlock) c.drawImage(LOCK_IM, d.x + 6, d.y - 30 + bob, 22, 22); continue; }
       c.fillStyle = d.kind === 'chest' ? '#7a3b1c' : '#2a2140'; c.strokeStyle = '#ffd86a'; c.lineWidth = 2.5;
       c.fillRect(d.x - 17, d.y - 15 + bob, 34, 30); c.strokeRect(d.x - 17, d.y - 15 + bob, 34, 30);
       c.fillStyle = '#ffe9a8'; c.font = '900 21px "Noto Serif KR", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText(d.kind === 'chest' ? T.chestMark : d.kind === 'item' ? T.itemMark : T.consumables[d.kind].mark, d.x, d.y + 1 + bob);
+      if (dlock) c.drawImage(LOCK_IM, d.x + 6, d.y - 30 + bob, 22, 22);
     }
     const sel = new Set(S.sel);
     // 겹쳐 선 유닛은 아래쪽(y가 큰 쪽)을 나중에 그려 앞뒤가 맞게 한다(배치는 그대로, 그리는 순서만)
@@ -3899,7 +3905,10 @@
   function dropInfo(d) {
     if (d.kind === 'item') {
       const tier = T.items.find((i) => i.id === d.item).tier;
-      return `<h3>${esc(g.dropName(d))}</h3><div class="sub">${I.t('itemSub', { r: rankName(tier) })}</div>`;
+      // 잠긴 장수의 아이템(상자에서 나옴, 2026-11-24): 이름 옆 자물쇠(gfx/ic_lock) + 해금 안내. 신화 아이템 4개 합치기 재료로는 그대로 쓴다.
+      const lu = g.itemOpen && !g.itemOpen(d.item) ? g.itemUnit[d.item] : null;
+      const lock = lu ? `<small class="lockn"><i class="ico lock"></i> ${esc(I.t('itemLocked', { a: defOf[lu].name }))}</small>` : '';
+      return `<h3>${lu ? '<i class="ico lock"></i> ' : ''}${esc(g.dropName(d))}</h3><div class="sub">${I.t('itemSub', { r: rankName(tier) })}</div>${lock}`;
     }
     return `<h3>${esc(g.dropName(d))}</h3><div>${esc(T.consumables[d.kind].desc)}</div><div class="sub">${I.t('useHint')}</div>`;
   }
@@ -4305,6 +4314,9 @@
       if (pb.clr < 0) lines.push(I.t('goalShop'));
     }
     const me = ACC.token && ACC.me;
+    // 이 판으로 서버가 준 관직 승급·업적 첫 달성 보상(18-account.js reportResult가 S.rwRank·S.rwAch에 둔다)
+    if (me && S.rwRank && S.rwRank.length) { const top = S.rwRank[S.rwRank.length - 1], trk = me.track === 'civ' ? 'civ' : 'mil'; lines.push(I.t('goalRankUp', { a: esc(t('rk_' + trk + top.rank)), n: num(S.rwRank.reduce((a, x) => a + x.coins, 0)) })); }
+    if (me && S.rwAch && S.rwAch.length) lines.push(I.t('goalAchFirst', { k: S.rwAch.length, n: num(S.rwAch.reduce((a, x) => a + x.coins, 0)) }));
     if (me && S.msClaim) lines.push(I.t('goalMission'));
     if (me) {
       const trk = me.track === 'civ' ? 'civ' : 'mil';
@@ -4363,10 +4375,11 @@
   }
   // ---- 판 끝 경험치 연출: 화면을 어둡게 흐리고, 지금 계급 문양 ─ 경험치 막대 ─ 다음 계급 문양.
   // +경험치가 뜬 뒤 막대가 그만큼 차오르고(계급이 오르면 문양이 바뀜), 잠시 뒤 사라지며 결과창이 나온다.
-  const RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];
-  const lvOfXp = (xp) => Math.min(51, Math.floor(Math.sqrt(xp / 40)) + 1);
-  const rkOfLv = (lv) => RANK_LV.reduce((k, m, i) => (lv >= m ? i : k), 0);
-  const xpAt = (lv) => 40 * (lv - 1) * (lv - 1);
+  // 관직 곡선은 progression.js(서버와 같은 표, 2026-11-24)
+  const RANK_LV = window.RTD_PROG.RANK_LV;
+  const lvOfXp = window.RTD_PROG.levelOf;
+  const rkOfLv = window.RTD_PROG.rankOf;
+  const xpAt = window.RTD_PROG.xpAt;
   const rankSpan = (r) => [xpAt(RANK_LV[r]), r < 10 ? xpAt(RANK_LV[r + 1]) : xpAt(RANK_LV[r]) + 1];
   const rankMark = (r) => `<span class="xpm"><img alt="" src="gfx/rank_${r}.png" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${r}'}))"></span>`;
   function playXp(from, to, coins, done) {
@@ -4892,7 +4905,7 @@
     const held = net && (net.clock.pz || net.kicked);
     if (S.freeze > 0) { S.freeze -= dt; acc = 0; }
     else if (S.hitStop > 0) { S.hitStop -= dt; acc = 0; } // 강타 히트스톱(혼자 할 때만)
-    else if (held) acc = 0;
+    else if (held || S.mutHold) acc = 0; // mutHold: 악몽 +N 규칙 등장 연출 중(17b-mutintro). 통신 상태 알림은 아래에서 계속 보낸다
     else {
       // 보스전은 1배속. 협동 배속은 방장이 정한 값(모두 켰을 때만 2배 이상)을 쓴다.
       acc += dt * (g.phase !== 'wave' ? 1 : net ? net.clock.sp : speed);
@@ -4907,7 +4920,7 @@
     bots.forEach((b) => {
       b.net.speedWant = net.speedWant;
       b.net.tickStatus(dt, b.g);
-      if (!held && !(S.freeze > 0)) b.brain.update(dt);
+      if (!held && !(S.freeze > 0) && !S.mutHold) b.brain.update(dt);
       // AI도 사람처럼 높은 등급 등장을 알린다. 남에게서 받은 알림(remote)을 다시 보내면 AI끼리 끝없이 주고받아 멈추므로 자기 것만 보낸다.
       b.g.events.forEach((e) => { if (e.type === 'pop' && !e.remote) b.net.send('pop', { id: e.def.id, name: b.net.name }); });
       b.g.events.length = 0;
@@ -4946,13 +4959,19 @@ ${things}
 ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 100) + "%" : ""}${bots.length ? ' · AI ' + bots.length : ''}${net && !bots.length ? ' · NET' : ''}`;
     PF.n = 0; PF.t0 = now; PF.sim = 0; PF.draw = 0; PF.worst = 0; PF.wj = 0;
   }
+  let fBud = 0, fPrev = 0; // 그리기 예산(ms)과 직전 rAF 시각
   function loop(now) {
     requestAnimationFrame(loop);
     if (!g) return;
+    // 화면 주사율과 상관없이 초당 약 60번만 그린다(120Hz에서 두 배로 그려 봐야 발열·끊김만 늘어난다).
+    // 고정 문턱(직전 그림에서 14ms)이면 90Hz는 11ms 프레임을 건너뛰고 22ms마다 그려 45fps에 묶인다(144Hz는 48fps).
+    // 그래서 흐른 시간을 예산으로 모아 16.7ms가 차면 그린다(2ms 여유). 남은 몫은 다음으로 넘겨 90Hz는 11·22ms를 번갈아 평균 60번이 된다.
+    // 남은 몫은 8ms까지만 넘겨 멈칫한 뒤에 몰아 그리지 않는다.
+    fBud += Math.max(0, Math.min(100, now - (fPrev || now - 16.7))); fPrev = now;
     // 30fps 제한: 배터리·발열용. 시뮬레이션은 흐른 시간만큼 따라잡는다.
     if (Q.fps30 && now - lastDraw < 30) return;
-    // 120Hz 화면에서도 60번만 그린다(두 배로 그려 봐야 발열·끊김만 늘어난다)
-    if (now - lastDraw < 14) return;
+    if (fBud < 16.7 - 2) return;
+    fBud = Math.min(fBud - 16.7, 8);
     // 쉬는 화면: 일시정지(창은 DOM이라 캔버스가 멈춰도 보인다), 또는 판이 끝나고 승리·등장 연출과 경험치 연출이 다 끝난 결과 화면.
     // 이때는 초당 5번만 그린다(발열·배터리). 글자판을 고칠 일이 있으면(needs) 바로 돈다. 튜토리얼 설명 중에는 그대로 그린다.
     // 패배 연출 중(performance.now() < S.endHoldUntil)은 쉬는 화면에서 빼서 연출이 끊기지 않게 한다
@@ -5034,8 +5053,63 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); }, tick, render, dom: () => { renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
     view.focus({ preventScroll: true });
     last = performance.now();
+    // 악몽 +N: 이번 판 규칙을 도장 찍듯 보여 주는 동안 멈춘다(이어하기는 이미 본 판이라 생략)
+    S.mutHold = false;
+    if (!opt.snap && g.muts && g.muts.length) mutIntro(g);
   }
 
+  // ---- 악몽 +N 변형 규칙 등장 연출 ----
+  // 판이 시작될 때 이번 판의 규칙을 검은 반투명 막 위에 하나씩 도장 찍듯 보여 준다(규칙은 시작 버튼을 누를 때 정해진다. 19-title rollMuts).
+  // 연출 동안 S.mutHold로 계산을 멈춘다(협동 통신 tickStatus는 계속 돈다 — 17-loop tick). 화면을 누르거나 키를 누르면 건너뛴다.
+  // 그림: 판 틀 gfx/ui_c_tablet.png, 제목 붓자국 gfx/ui_ink.png(기존 UI 그림). 쾅 소리는 audio.js의 둔기 타격음 'mace'.
+  // 시간(초): 막이 깔리고 첫 도장까지, 도장 간격, 찍힘이 닿는 순간(애니메이션 길이 .34초의 70%), 다 찍힌 뒤 머무름, 걷힘
+  const MI = { first: 0.65, gap: 0.55, hit: 0.24, hold: 1.4, out: 0.4, skipOut: 0.18 };
+  let miRun = null;
+  function mutIntro(game) {
+    if (miRun) miRun.end(true);
+    const muts = (game && game.muts) || [];
+    if (!muts.length) return;
+    const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    let el = $('mutintro');
+    if (!el) { el = document.createElement('div'); el.id = 'mutintro'; el.setAttribute('role', 'dialog'); document.body.appendChild(el); }
+    el.className = muts.length > 2 ? 'two' : '';
+    el.innerHTML = `<div class="mi-box"><div class="mi-head"><b>${esc(I.t('mutHead', { n: game.mutLv || muts.length }))}</b></div>`
+      + `<div class="mi-list">${muts.map((m, i) => `<div class="mi-card"><span class="n">${i + 1}</span><b>${esc(m.name)}</b><div class="gb"><span class="g">＋ ${esc(m.good)}</span><span class="bd">－ ${esc(m.bad)}</span></div></div>`).join('')}</div></div>`
+      + `<div class="mi-skip">${esc(I.t('mutSkip'))}</div>`;
+    el.hidden = false; el.classList.remove('out');
+    S.mutHold = true;
+    // '같은 설정으로 다시'는 로딩 화면(#boot)이 걷히는 동안(.45초) 판이 시작되므로, 첫 도장을 그만큼 늦춘다
+    const B = $('boot'), d0 = B && !B.hidden ? 0.45 : 0;
+    const cards = el.querySelectorAll('.mi-card'), timers = [];
+    const later = (sec, fn) => timers.push(setTimeout(fn, sec * 1000));
+    const run = {
+      end(now) {
+        if (miRun !== run) return;
+        miRun = null; timers.forEach(clearTimeout);
+        window.removeEventListener('keydown', onKey, true); el.removeEventListener('pointerdown', onTap);
+        S.mutHold = false; last = performance.now(); acc = 0; // 멈춘 시간을 한꺼번에 따라잡지 않게
+        $('app').classList.remove('mi-shake');
+        el.classList.add('out');
+        setTimeout(() => { if (!miRun) { el.hidden = true; el.innerHTML = ''; } }, (now ? MI.skipOut : MI.out) * 1000);
+        dirty();
+      },
+    };
+    const onTap = (e) => { e.preventDefault(); e.stopPropagation(); run.end(true); };
+    const onKey = (e) => { e.preventDefault(); e.stopPropagation(); run.end(true); };
+    el.addEventListener('pointerdown', onTap);
+    window.addEventListener('keydown', onKey, true);
+    miRun = run;
+    cards.forEach((c, i) => {
+      const at = d0 + MI.first + i * MI.gap;
+      later(at, () => { c.classList.add('on'); });
+      later(at + (reduce ? 0 : MI.hit), () => {
+        Snd.play('mace', 0);
+        if (reduce) return;
+        const a = $('app'); a.classList.remove('mi-shake'); void a.offsetWidth; a.classList.add('mi-shake');
+      });
+    });
+    later(d0 + MI.first + (cards.length - 1) * MI.gap + MI.hit + MI.hold, () => run.end(false));
+  }
   // ---- 계정(온라인) ----
   const API = window.RTD_API || '';
   const ACC = (() => { try { return JSON.parse(localStorage.getItem('rtd-acc') || 'null'); } catch (e) { return null; } })() || { token: null, me: null };
@@ -5049,7 +5123,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     } catch (e) { return { status: 0, error: 'net' }; }
   }
   const errText = (e) => (e === 'net' ? t('noServer') : t('err_' + e) !== 'err_' + e ? t('err_' + e) : String(e || ''));
-  const xpLv = (lv) => 40 * (lv - 1) * (lv - 1);
+  const xpLv = window.RTD_PROG.xpAt; // 레벨 lv의 누적 경험치(progression.js, 서버와 같은 관직 곡선)
   // 게스트 비밀값(이 기기에만): 토큰이 만료돼도 다시 들어온다
   // GUEST는 늘 같은 객체다(비밀값이 없으면 id가 null). saveGuest가 저장소와 이 객체를 같이 바꾸므로, 같은 실행 안에서 가입·로그아웃을 해도 최신 값을 본다
   const GUEST = Object.assign({ id: null, secret: null }, (() => { try { return JSON.parse(localStorage.getItem('rtd-guest') || 'null'); } catch (e) { return null; } })() || {});
@@ -5076,15 +5150,17 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   // 보상 배율은 서버가 판 표에 적어 둔 판 종류(인원)로 정한다. 오프라인 판은 표가 있을 때만 보낸다(표가 없으면 서버가 받지 않는다)
   // 서버에 닿지 못하면(끊김·5xx) 보낼 내용을 기기에 남겨 두고 다음에 앱을 켤 때·로비로 돌아올 때 다시 보낸다(lobby.js queueSend·flushPending)
   async function reportResult() {
-    S.msClaim = false;
+    S.msClaim = false; S.rwRank = null; S.rwAch = null;
     if (!ACC.token || S.reported || (!S.online && !S.gameTk)) return;
     S.reported = true;
     const path = S.online ? '/api/result' : '/api/history';
-    const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : bots.length ? 'ai' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {} };
+    const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : bots.length ? 'ai' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {}, ach: Object.keys((g.me && g.me.done) || {}).filter((k) => g.me.done[k]) };
     const uid = ACC.me && ACC.me.id, r = await api(path, body);
     if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend(path, body, uid);
     if (r.me) {
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0;
+      // 서버가 준 관직 승급·업적 첫 달성 보상: 결과창 '다음 목표' 칸에 알린다(14-endstats-xp.js goalBox)
+      S.rwRank = Array.isArray(r.rankUp) && r.rankUp.length ? r.rankUp : null; S.rwAch = Array.isArray(r.ach) && r.ach.length ? r.ach : null;
       // 경험치 연출도 패배 연출(S.endHoldUntil)이 끝난 뒤에 띄운다
       if (r.gained > 0) { S.xpPlaying = true; const mine0 = g; setTimeout(() => { if (g !== mine0) return; playXp(r.me.xp - r.gained, r.me.xp, r.coins, () => { S.xpPlaying = false; S.xpDone = true; dirty(); $('overlay').dataset.key = ''; }); }, Math.max(0, (S.endHoldUntil || 0) - performance.now())); }
       dirty(); const box = $('overlay'); box.dataset.key = '';
@@ -5258,7 +5334,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     return true;
   };
   // ---- 시작 화면 ----
-  const cfg = { diff: 'easy', mode: 'solo', ai: '2', mutLv: '0', muts: [], play: 'offline', accTab: 'login', showRank: false };
+  const cfg = { diff: 'easy', mode: 'solo', ai: '2', mutLv: '0', play: 'offline', accTab: 'login', showRank: false };
   try { const p = localStorage.getItem('rtd-play'); if (p === 'online' || p === 'offline') cfg.play = p; } catch (e) { /* 저장 불가 */ }
   // 마지막에 시작한 설정('rtd-last': 온라인/싱글·모드·난이도·AI 수·악몽 단계)을 기억해, 다음에 전투 시작 창을 열면 그 선택이 되어 있게 한다(lobby.js openWizard)
   try {
@@ -5273,10 +5349,11 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   } catch (e) { /* 저장 불가 */ }
   const saveLast = () => { try { localStorage.setItem('rtd-last', JSON.stringify({ play: cfg.play, mode: cfg.mode, diff: cfg.diff, ai: cfg.ai, mutLv: String(cfg.mutLv) })); } catch (e) { /* 저장 불가 */ } };
   const savedGame = () => { try { const sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); return sv && sv.v === 1 ? sv : null; } catch (e) { return null; } };
-  // 악몽 +N: 규칙 N개를 겹치지 않게 무작위로 고른다
-  const rollMuts = () => { const pool = (T.mutators || []).map((m) => m.id); cfg.muts = []; for (let i = 0; i < +cfg.mutLv && pool.length; i++) cfg.muts.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]); };
+  // 악몽 +N: 규칙 N개를 겹치지 않게 무작위로 고른다. 시작 버튼을 누를 때(방은 방장이 시작할 때) 한 번만 뽑는다 — 미리 보거나 다시 뽑을 수 없다.
+  // 뽑힌 규칙은 판이 시작될 때 연출로 보여 준다(17b-mutintro). 방 협동은 방장이 뽑아 시작 신호(net.start)에 실어 모두가 같은 규칙으로 돈다.
+  const rollMuts = (n) => { const pool = (T.mutators || []).map((m) => m.id), out = []; for (let i = 0; i < n && pool.length; i++) out.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]); return out; };
+  const mutPick = () => (cfg.diff === 'nightmare' ? { muts: rollMuts(+cfg.mutLv), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 });
   const mutCard = (id, i) => { const m = T.mutators.find((x) => x.id === id); return m ? `<div class="mut"><span class="n">${i + 1}</span><b>${esc(m.name)}</b><div class="gb"><span class="g">＋ ${esc(m.good)}</span><span class="bd">－ ${esc(m.bad)}</span></div></div>` : ''; };
-  if (+cfg.mutLv) rollMuts(); // 기억해 둔 악몽 +N이면 규칙을 새로 뽑아 둔다
   const DIFF_COL = { easy: '#7fd08a', normal: '#6fb7ff', hard: '#ffb347', nightmare: '#ff5a5a' };
   const myName = () => (ACC.me ? ACC.me.nick : t('me'));
   function setupTitle() {
@@ -5334,8 +5411,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const nm = cfg.diff === 'nightmare' && ready;
       $('mutbox').hidden = !nm;
       if (nm) {
-        $('mutlv').innerHTML = [0, 1, 2, 3, 4, 5].map((n) => `<button class="${+cfg.mutLv === n ? 'on' : ''}" data-cfg="mutLv" data-v="${n}" type="button">${n ? '+' + n : t('base')}</button>`).join('') + (+cfg.mutLv ? `<button class="btn reroll" id="mutroll" type="button">${t('reroll')}</button>` : '');
-        $('mutrules').innerHTML = cfg.muts.map(mutCard).join('');
+        $('mutlv').innerHTML = [0, 1, 2, 3, 4, 5].map((n) => `<button class="${+cfg.mutLv === n ? 'on' : ''}" data-cfg="mutLv" data-v="${n}" type="button">${n ? '+' + n : t('base')}</button>`).join('');
       }
       // 오프라인: 단독·AI 동맹 / 온라인: 단독(기록)·방 협동
       const modes = on ? [['quick', t('lb_quick'), t('lb_quickSub')], ['create', t('lb_create'), t('lb_createSub')], ['join', t('lb_join'), t('lb_joinSub')]] : [['solo', t('solo'), t('soloSub')], ['ai', t('aiAlly'), t('aiAllySub')]];
@@ -5357,7 +5433,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       $('startbtn').textContent = isRoom ? (!lobby ? t('joinFirst') : host ? t('startHost') : t('waitHost')) : ovArm ? t('overwriteSave') : t('start');
       $('startbtn').disabled = (isRoom && (!lobby || !host)) || (!pk('diff') && !hostPick) || (window.RTD_LOBBY && !window.RTD_LOBBY.diffOpen(cfg.diff, +cfg.mutLv));
       if (lobby && host) {
-        const c = { diff: cfg.diff, mutLv: +cfg.mutLv, muts: cfg.muts }, k = JSON.stringify(c);
+        const c = { diff: cfg.diff, mutLv: +cfg.mutLv }, k = JSON.stringify(c);
         if (lobby.sentCfg !== k) { lobby.sentCfg = k; lobby.t.presence({ cfg: c }); }
       }
       renderLobby();
@@ -5390,9 +5466,9 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
         if (c) sl.replaceChild(el, c); else sl.appendChild(el);
       });
       while (sl.children.length > 5) sl.lastChild.remove();
-      const hc = lobby.isHost() ? { diff: cfg.diff, mutLv: +cfg.mutLv, muts: cfg.muts } : hostCfg;
+      const hc = lobby.isHost() ? { diff: cfg.diff, mutLv: +cfg.mutLv } : hostCfg;
       const dn = hc ? (T.difficulties.find((d) => d.id === hc.diff) || {}).name : '';
-      const ch = hc ? `<span class="lb-cl">${t('hostCfg')}</span><b class="lb-dn" style="color:${DIFF_COL[hc.diff] || '#ffd86a'}">${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>${!lobby.isHost() && (hc.muts || []).length ? `<div class="lb-muts">${hc.muts.map(mutCard).join('')}</div>` : ''}` : '';
+      const ch = hc ? `<span class="lb-cl">${t('hostCfg')}</span><b class="lb-dn" style="color:${DIFF_COL[hc.diff] || '#ffd86a'}">${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>` : '';
       if ($('lbcfg').dataset.h !== ch) { $('lbcfg').dataset.h = ch; $('lbcfg').innerHTML = ch; }
     };
     // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 레벨·누적 경험치와 무관·문관 칭호. 서버(app.js)의 RANK_LV, 경험치 식(40·(레벨-1)²)과 같다
@@ -5548,8 +5624,10 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       return new Promise((done) => {
         const B = $('boot'), card = $('bootcard'), app = !!(window.RTD_NATIVE && window.RTD_NATIVE.on);
         B.classList.add('form'); $('bootload').hidden = true; card.hidden = false;
-        card.innerHTML = `<p>${t(app ? 'updateNeed' : 'updateWeb')}</p>${app ? '' : `<button class="btn go" id="boot-reload" type="button">${t('updateReload')}</button><button class="btn sub" id="boot-skip" type="button">${t('updateSkip')}</button>`}`;
-        if (app) return; // 앱에서는 여기서 멈춘다
+        // 앱: 스토어 주소(config.js RTD_STORE)가 있으면 스토어로 가는 버튼을 둔다. 비어 있으면 안내만
+        const N = window.RTD_NATIVE, store = app ? ((window.RTD_STORE || {})[N.droid ? 'android' : 'ios'] || '') : '';
+        card.innerHTML = `<p>${t(app ? 'updateNeed' : 'updateWeb')}</p>${app ? (store ? `<button class="btn go" id="boot-store" type="button">${t('updateStore')}</button>` : '') : `<button class="btn go" id="boot-reload" type="button">${t('updateReload')}</button><button class="btn sub" id="boot-skip" type="button">${t('updateSkip')}</button>`}`;
+        if (app) { if (store) $('boot-store').onclick = () => { if (!N.openUrl(store)) window.open(store, '_blank'); }; return; } // 앱에서는 여기서 멈춘다
         $('boot-reload').onclick = () => location.reload();
         $('boot-skip').onclick = () => { card.hidden = true; card.innerHTML = ''; B.classList.remove('form'); $('bootload').hidden = false; done(); };
       });
@@ -5611,14 +5689,12 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     }
     document.addEventListener('click', (e) => {
       if (!$('title') || $('title').hidden) return;
-      if (e.target.id === 'mutroll') { rollMuts(); dr(); return; }
       if (e.target.id === 'lbcopy' && lobby) { try { navigator.clipboard.writeText(lobby.code); e.target.textContent = t('copied'); } catch (er) { /* 복사 불가 환경 */ } return; }
       const b = e.target.closest('[data-cfg]');
       if (b) {
         cfg[b.dataset.cfg] = b.dataset.v;
         if (b.dataset.cfg === 'play') { try { localStorage.setItem('rtd-play', b.dataset.v); } catch (er) { /* 저장 불가 */ } if (lobby && b.dataset.v === 'offline') { lobby.leave(); lobby = null; } }
         if (b.dataset.cfg === 'diff' && b.dataset.v !== 'nightmare') cfg.mutLv = '0';
-        if (b.dataset.cfg === 'mutLv' || b.dataset.cfg === 'diff') rollMuts();
         if (b.dataset.cfg === 'accTab') $('accbox').dataset.html = '';
         dr();
         if (window.RTD_LOBBY) window.RTD_LOBBY.onCfg(b.dataset.cfg);
@@ -5650,7 +5726,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     document.addEventListener('pointerdown', () => { if (g) Snd.init(); });
     $('jn').onclick = () => { const c = $('code').value.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); if (c) join(c); };
     $('startbtn').onclick = () => {
-      const mm = cfg.diff === 'nightmare' ? { muts: cfg.muts.slice(), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 };
+      const mm = mutPick();
       const online = cfg.play === 'online';
       if (cfg.mode === 'multi' || cfg.mode === 'create' || cfg.mode === 'join') { if (lobby && lobby.isHost()) { saveLast(); lobby.start(cfg.diff, mm); } return; }
       // 싱글 단독 새 판은 이어하기 기록을 덮어쓴다: 기록이 있으면 버튼 글을 바꾸고 3초 안에 한 번 더 눌러야 시작한다
@@ -5684,8 +5760,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const online = cfg.play === 'online';
       if (online && !(ACC.token && ACC.me)) return false;
       if (window.RTD_LOBBY && !window.RTD_LOBBY.diffOpen(cfg.diff, +cfg.mutLv)) return false;
-      if (cfg.diff === 'nightmare' && +cfg.mutLv) rollMuts();
-      const mm = cfg.diff === 'nightmare' ? { muts: cfg.muts.slice(), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 };
+      const mm = mutPick();
       if (!online && cfg.mode === 'ai') { begin(Object.assign({ diff: cfg.diff, ai: +cfg.ai }, mm)); return true; }
       if (cfg.mode === 'solo') { begin(Object.assign({ diff: cfg.diff, mode: 'solo', online, key: online ? 's-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : null }, mm)); return true; }
       return false;

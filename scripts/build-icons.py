@@ -1,6 +1,7 @@
 """앱 아이콘·시작 화면을 art_src/app_icon.png(정사각형 원본, Canva AI 생성) 하나에서 만든다.
 사용: python scripts/build-icons.py   (Pillow 필요)
-만드는 것: 안드로이드 mipmap-*/ic_launcher*.png, drawable*/splash.png, iOS AppIcon·Splash."""
+만드는 것: 안드로이드 mipmap-*/ic_launcher*.png, drawable*/splash.png, iOS AppIcon·Splash,
+구글 플레이 고해상도 아이콘 store/googleplay-icon-512.png."""
 import os, glob
 from PIL import Image, ImageDraw
 root = os.path.join(os.path.dirname(__file__), '..')
@@ -30,4 +31,7 @@ ios = os.path.join(root, 'ios', 'App', 'App', 'Assets.xcassets')
 fit(1024).save(os.path.join(ios, 'AppIcon.appiconset', 'AppIcon-512@2x.png'))  # iOS 아이콘은 투명·둥근 모서리 없이
 for p in glob.glob(os.path.join(ios, 'Splash.imageset', '*.png')):
     w, h = Image.open(p).size; im = Image.new('RGB', (w, h), BG); n = int(min(w, h) * 0.2); ic = rounded(fit(n), n // 6); im.paste(ic, ((w - n) // 2, (h - n) // 2), ic); im.save(p)
+# 구글 플레이 고해상도 아이콘: 512×512, 32비트 PNG(알파 포함), 1MB 이하. 모서리·그림자는 플레이가 씌우므로 사각 그대로 둔다.
+store = os.path.join(root, 'store'); os.makedirs(store, exist_ok=True)
+fit(512).convert('RGBA').save(os.path.join(store, 'googleplay-icon-512.png'), optimize=True)
 print('아이콘·시작 화면 생성 완료')

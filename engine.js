@@ -43,7 +43,7 @@
       this.net = opt.net || null;
       this.defs = {}; theme.units.forEach((d) => (this.defs[d.id] = d));
       // 장수 해금(theme.unlock): opt.unlocked = 이 사람이 연 잠금 장수 id 목록. 없으면 화면이 넣은 provider, 그것도 없으면(시험·시뮬레이터) 전부 열림.
-      // 잠긴 장수는 조합·교체권·선택권·상자에서 나오지 않는다(확률은 그대로, 종류만 대신한다).
+      // 잠긴 장수는 조합·교체권·선택권에서 나오지 않는다. 상자는 잠긴 장수의 조합 아이템도 같은 가중치로 준다(해금 유도, 2026-11-24 사용자 결정. AI 사령관 판은 예전처럼 뺀다).
       const UL = theme.unlock, ul = opt.unlocked !== undefined ? opt.unlocked : (UL && UL.provider ? UL.provider() : null);
       this.unlocked = Array.isArray(ul) ? ul.filter((x) => typeof x === 'string').slice(0, 64) : null;
       this.lockedSet = new Set(this.unlocked && UL ? UL.lockedIds().filter((id) => !this.unlocked.includes(id)) : []);
@@ -504,8 +504,10 @@
       // 신화·불멸 조합 아이템은 같은 것을 한 번에 하나만 갖는다: 이미 들고 있는 것은 빼고 뽑고,
       // 그 등급을 다 들고 있으면 다른 등급, 그것도 없으면 등급 상승권을 준다
       const held = (i) => this.itemDone(p, i.id); // 들고 있거나 이미 조합에 쓴 것은 빼고 뽑는다
-      // 잠긴 장수 전용 아이템도 뺀다. 그 등급에 열린 것이 없으면 한 등급 아래(불멸 → 신화), 그래도 없으면 남은 열린 아이템 아무거나
-      const open = row.kind === 'item' ? this.T.items.filter((i) => !held(i) && this.itemOpen(i.id)) : [];
+      // 잠긴 장수 전용 아이템도 같은 가중치로 후보에 넣는다(2026-11-24 사용자 결정: 해금하면 합성할 수 있다는 것을 보여 줘 해금을 권한다).
+      // 단 AI 사령관(bot)은 해금 화면이 없으니 예전처럼 열린 것만(쓸 수 없는 아이템으로 AI 동맹이 약해지지 않게). 해금 정보가 없으면 전부 열림이라 차이 없음.
+      // 그 등급에 남은 것이 없으면 한 등급 아래(불멸 → 신화), 그래도 없으면 남은 아무거나
+      const open = row.kind === 'item' ? this.T.items.filter((i) => !held(i) && (!this.bot || this.itemOpen(i.id))) : [];
       const pool = open.filter((i) => i.tier === row.tier), down = pool.length ? pool : open.filter((i) => i.tier < row.tier);
       const any = down.length ? down : open;
       const out = row.kind !== 'item' ? this.spawnDrop(p, row.kind, {}, d.x, d.y)
