@@ -9,6 +9,11 @@ const muts = T.mutators || [];
 // 규칙을 못 찾으면 0판을 돌리고 통과해 버린다. 그건 실패다.
 if (!ok(muts.length > 0, `변형 규칙 ${muts.length}개를 찾음`)) { L.done('t3-mutators'); return; }
 
+// 서로 배제(excl): 배수진+군웅할거는 R15~23 라인에서 거의 무조건 진다(production/team/2026-11-24/sim-difficulty.md 2-6). 뽑기(19-title rollMuts)가 excl을 본다.
+const byId = (id) => muts.find((m) => m.id === id);
+ok(muts.every((m) => (m.excl || []).every((x) => byId(x) && x !== m.id)), '변형 배제 목록(excl)이 있는 규칙만 가리킴');
+ok(((byId('laststand') || {}).excl || []).includes('warlords') || ((byId('warlords') || {}).excl || []).includes('laststand'), '배수진과 군웅할거는 서로 배제');
+
 const base = JSON.stringify(new E.Game(T, { diff: 'nightmare', mode: 'solo', seed: 1 }).mut);
 let ran = 0;
 const noBoss = [], stopped = [];

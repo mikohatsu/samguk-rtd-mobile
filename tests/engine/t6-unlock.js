@@ -23,14 +23,14 @@ try {
   ok(locked.every((id) => UL.price(id) > 0) && UL.price('cav') === null, '잠긴 장수만 가격이 있음');
 } catch (e) { ok(false, '데이터 확인 중 예외 — ' + L.errText(e)); }
 
-// 2) 아무것도 열지 않음: 상자는 잠긴 장수 아이템도 준다(2026-11-24 사용자 결정. 예전에는 빼고 불멸 몫을 신화로 대체했다)
+// 2) 첫 신화 2명만 엶: 상자는 잠긴 장수 아이템도 30% 몫으로 준다(2026-11-24 사용자 결정. 분포는 t9)
 try {
   // 첫 신화 2명(튜토리얼 보상)만 연 상태
   const g = new E.Game(T, { diff: 'easy', mode: 'solo', seed: 61, unlocked: ['join', 'jangbi'] });
   const out = openMany(g, 600), items = Object.keys(out).filter((k) => itemUnit[k]);
   ok(items.some((it) => g.isLocked(itemUnit[it])), `잠긴 장수의 조합 아이템도 상자에서 나옴 (${JSON.stringify(out)})`);
-  ok(items.some((it) => tierOfItem(it) === 10), '불멸이 모두 잠겨도 불멸 아이템이 나옴(신화로 대체하지 않음)');
-  ok(!out.rankUp, '열린 신화가 있으면 등급 상승권으로 넘어가지 않음 (확률은 그대로, 종류만 대체)');
+  ok(items.some((it) => tierOfItem(it) === 10), '불멸이 모두 잠겨도 불멸 아이템이 나옴(잠긴 몫 30%)');
+  ok(!out.rankUp, '열린 신화가 있으면 등급 상승권으로 넘어가지 않음 (불멸의 해금 몫 70%는 열린 신화 아이템으로)');
   ok(g.tierIds(10).length === 0 && g.tierIds(9).length === 2, `tierIds가 잠긴 장수를 뺌 (불멸 ${g.tierIds(10).length}, 신화 ${g.tierIds(9).length})`);
   // 조합: 재료와 아이템을 다 갖춰도 잠긴 장수는 만들 수 없다
   const r = g.recipeOf('gwanu'); r.parts.forEach((x) => g.spawnUnit(g.me, x)); g.spawnDrop(g.me, 'item', { item: r.item });

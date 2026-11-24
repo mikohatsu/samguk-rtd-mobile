@@ -318,7 +318,7 @@
   ];
 
   // ---- 장수 해금(2026-11-17 사용자 결정: 불멸 전부 잠금, 신화 일부 잠금) ----
-  // 확률은 그대로 두고 종류만 막는다. 잠긴 장수의 조합 아이템이 뽑히면 같은 등급의 열린 장수 아이템으로, 그 등급이 다 잠겼으면 한 등급 아래로 대신한다.
+  // 잠긴 장수는 조합·선택권·교체권에서 막는다. 상자는 등급 확률을 그대로 두고, 그 등급 안에서 해금한 장수 아이템 chestOpenShare · 잠긴 장수 아이템 나머지로 준다(2026-11-24).
   // 처음부터 열린 신화: 세력마다 한 명 이상, 조합 재료가 쉬운(7성 1~2기, 전설 불필요) 상징적인 장수.
   //   조인(위, 7성 1기) · 장비·조운(촉, 일본에서 가장 이름난 둘) · 육손(오, 전설 불필요) · 초선(그 외, 7성 1기)
   // 잠긴 신화: 곽가·순욱(7성 2기), 손책(전설 손견 필요), 동탁(7성 2기)
@@ -335,6 +335,8 @@
     noAdsKey: 'noads', // 광고 제거: 판 끝 전면 광고를 없애고, 동전 광고는 보지 않고 바로 받는다(하루 횟수 상한은 같음)
     key: (id) => 'unl_' + id,
     provider: null, // 화면(lobby.js)이 지금 이용자의 열린 목록을 돌려주는 함수를 넣는다. 엔진은 opt.unlocked가 없을 때 이것을 쓴다.
+    // 상자(2026-11-24 사용자 결정): 등급을 정한 뒤 이 몫은 해금한 장수의 아이템, 나머지는 잠긴 장수의 아이템(engine.js openChest).
+    chestOpenShare: 0.7,
   };
   unlock.lockedIds = () => units.filter((d) => unlock.tiers.includes(d.tier) && !unlock.freeMyth.includes(d.id)).map((d) => d.id);
   unlock.price = (id) => { const d = units.find((x) => x.id === id); return d && unlock.lockedIds().includes(id) ? unlock.coins[d.tier] : null; };
@@ -866,22 +868,24 @@
       tiers: [{ n: 3, g: 1, lane: { upMax: 5 } }] },
   ];
   // 판 변형 규칙(악몽 +1 ~ +5): 이득과 손해가 한 묶음. 단계마다 하나씩 무작위로 붙는다. 수치만이 아니라 판의 성격이 바뀌는 것으로(2026-11-07 교체).
+  // 2026-11-24: +N이 높을수록 쉬워지던 역전을 고침 — 이득은 그대로 두고 손해만 키움(production/team/2026-11-24/fix-mutators.md).
+  // excl: 같은 판에 함께 뽑지 않는 규칙(19-title rollMuts). 배수진+군웅할거는 R15~23 라인에서 거의 무조건 짐(sim-difficulty.md 2-6).
   const mutators = [
-    { id: 'laststand', name: '배수진', good: '라이프가 1 이하면 모든 유닛 공격력 +50%', bad: '전선 한도 60 → 30', eff: { lowLifeAtk: 0.5, limit: 30 } },
-    { id: 'general', name: '명장의 귀순', good: '무작위 4성 1기로 시작', bad: '라이프 1로 시작', eff: { startTier: 4, lives: 1 } },
-    { id: 'single', name: '일기토', good: '보스전 출전 장수 공격력·체력 +60%', bad: '보스전에서 팀 전체가 한 명씩 순서대로 싸움(출전 전에 선봉 신청, 쓰러지면 다음 장수, 대체 출전 없음)', eff: { champAtk: 1.6, champHp: 1.6, relay: 1 } },
-    { id: 'swift', name: '속전속결', good: '남은 시간 20%만 남겨도 빠른 클리어(원래 35%)', bad: '보스전 제한 시간 -20%', eff: { fastNeed: 0.2, bossTime: 0.8 } },
-    { id: 'wrath', name: '하늘의 분노', good: '보스전 스킬 재사용 대기 -25%', bad: '모든 보스가 「천벌 낙뢰」를 추가로 씀', eff: { bossCdr: 0.25, extraPat: { n: '천벌 낙뢰', gen: 'rain', vis: 'bolt', p: { n: 6, r: 90 } } } },
+    { id: 'laststand', name: '배수진', good: '라이프가 1 이하면 모든 유닛 공격력 +50%', bad: '전선 한도 60 → 30', excl: ['warlords'], eff: { lowLifeAtk: 0.5, limit: 30 } },
+    { id: 'general', name: '명장의 귀순', good: '무작위 4성 1기로 시작', bad: '라이프 1로 시작, 보스 공격력 +35%', eff: { startTier: 4, lives: 1, bossAtk: 1.35 } },
+    { id: 'single', name: '일기토', good: '보스전 출전 장수 공격력·체력 +60%', bad: '보스전에서 팀 전체가 한 명씩 순서대로 싸움(출전 전에 선봉 신청, 쓰러지면 다음 장수, 대체 출전 없음), 보스 공격력 +50%', eff: { champAtk: 1.6, champHp: 1.6, relay: 1, bossAtk: 1.5 } },
+    { id: 'swift', name: '속전속결', good: '남은 시간 20%만 남겨도 빠른 클리어(원래 35%)', bad: '보스전 제한 시간 -30%', eff: { fastNeed: 0.2, bossTime: 0.7 } },
+    { id: 'wrath', name: '하늘의 분노', good: '보스전 스킬 재사용 대기 -25%', bad: '모든 보스가 「천벌 낙뢰」를 추가로 씀, 보스 기술 피해 +60%', eff: { bossCdr: 0.25, hazDmg: 1.6, extraPat: { n: '천벌 낙뢰', gen: 'rain', vis: 'bolt', p: { n: 10, r: 110 } } } },
     { id: 'horde', name: '대군 쇄도', good: '전선의 적 10마리마다 모든 유닛 공격력 +5%', bad: '라운드당 적 수 +30%', eff: { hordeAtk: 0.05, spawn: 1.3 } },
     { id: 'isolated', name: '고립무원', good: '모든 유닛 공격력 +15%', bad: '명사를 영입할 수 없음', eff: { atk: 0.15, noSage: 1 } },
-    { id: 'heroes', name: '영웅의 시대', good: '보스 토벌마다 랜덤 등급 상승권 1장', bad: '보스 체력 +20%', eff: { bossRankUp: 1, bossHp: 1.2 } },
-    { id: 'treasure', name: '보물 사냥', good: '보스 토벌마다 상자 +1', bad: '보스 공격력 +30%', eff: { bossChest: 1, bossAtk: 1.3 } },
-    { id: 'hwata', name: '명의의 동행', good: '화타를 영입한 채 시작', bad: '보스 공격력 +25%', eff: { startHire: 'hwata', bossAtk: 1.25 } },
-    { id: 'siege', name: '포위망', good: '보스전 제한 시간 +15%', bad: '모든 보스가 「사방 포위」를 추가로 씀', eff: { bossTime: 1.15, extraPat: { n: '사방 포위', gen: 'rings', vis: 'army', p: { n: 4 } } } },
-    { id: 'storm', name: '폭풍 전야', good: '보스 토벌 금화 +50%', bad: '보스 패턴 간격 20% 단축', eff: { bossGold: 1.5, bossGap: 0.8 } },
-    { id: 'famine', name: '군량 부족', good: '시작 금화 +800', bad: '라인 몹 체력 +15%', eff: { startGold: 800, laneHp: 1.15 } },
-    { id: 'firerain', name: '화공 경보', good: '상자에서 불멸 아이템이 2배로 잘 나옴', bad: '모든 보스가 「화염 낙하」를 추가로 씀', eff: { itemLuck: 2, extraPat: { n: '화염 낙하', gen: 'rain', vis: 'flame', p: { n: 8, r: 100 } } } },
-    { id: 'warlords', name: '군웅할거', good: '정예 적을 잡을 때마다 금화 15', bad: '라운드마다 체력이 매우 높은 금빛 정예 적 1기가 섞여 나와, 잡을 때까지 라인을 계속 돈다', eff: { elite: 1 } },
+    { id: 'heroes', name: '영웅의 시대', good: '보스 토벌마다 랜덤 등급 상승권 1장', bad: '보스 체력 +50%', eff: { bossRankUp: 1, bossHp: 1.5 } },
+    { id: 'treasure', name: '보물 사냥', good: '보스 토벌마다 상자 +1', bad: '보스 공격력 +50%', eff: { bossChest: 1, bossAtk: 1.5 } },
+    { id: 'hwata', name: '명의의 동행', good: '화타를 영입한 채 시작', bad: '보스 공격력 +40%', eff: { startHire: 'hwata', bossAtk: 1.4 } },
+    { id: 'siege', name: '포위망', good: '보스전 제한 시간 +15%', bad: '모든 보스가 「사방 포위」를 추가로 씀, 보스 기술 피해 +25%', eff: { bossTime: 1.15, hazDmg: 1.25, extraPat: { n: '사방 포위', gen: 'rings', vis: 'army', p: { n: 6 } } } },
+    { id: 'storm', name: '폭풍 전야', good: '보스 토벌 금화 +50%', bad: '보스 패턴 간격 30% 단축', eff: { bossGold: 1.5, bossGap: 0.7 } },
+    { id: 'famine', name: '군량 부족', good: '시작 금화 +800', bad: '라인 몹 체력 +35%', eff: { startGold: 800, laneHp: 1.35 } },
+    { id: 'firerain', name: '화공 경보', good: '상자에서 불멸 아이템이 2배로 잘 나옴', bad: '모든 보스가 「화염 낙하」를 추가로 씀, 보스 기술 피해 +40%', eff: { itemLuck: 2, hazDmg: 1.4, extraPat: { n: '화염 낙하', gen: 'rain', vis: 'flame', p: { n: 12, r: 110 } } } },
+    { id: 'warlords', name: '군웅할거', good: '정예 적을 잡을 때마다 금화 15', bad: '라운드마다 체력이 매우 높은 금빛 정예 적 1기가 섞여 나와, 잡을 때까지 라인을 계속 돈다', excl: ['laststand'], eff: { elite: 1 } },
     { id: 'night', name: '야습', good: '중간보스 보상 2배', bad: '밤이라 내 유닛 주변만 보이고 나머지는 어둡다(보스전도 내 장수·보스 둘레만 밝다)', eff: { night: 1, midDouble: 1 } },
   ];
   const allOf = (t) => units.filter((d) => d.tier === t).map((d) => d.id);

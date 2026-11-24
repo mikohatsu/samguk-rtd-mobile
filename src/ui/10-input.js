@@ -14,6 +14,8 @@
   // 보스전 중에도 Tab으로 내 라인 화면에 와서 선택권·조합·강화를 할 수 있다. 그동안 결투 시간은 그대로 흐른다.
   const inBoss = () => g && g.phase === 'boss' && !S.laneView;
   const laneOn = () => g && (g.phase === 'wave' || (g.phase === 'boss' && !!S.laneView));
+  // 협동에서 라이프가 다해 탈락한 뒤(관전): 동료 전장 보기·화면 끌기만 되고 내 라인·장수 조작은 막는다(engine.js eliminate)
+  const spect = () => !!(g && g.out && !g.over);
   view.addEventListener('contextmenu', (e) => e.preventDefault());
   // 게임 중에는 화면 어디서든(패널·버튼·스킬 막대·팝업) 브라우저 우클릭 메뉴를 막는다. 글자 입력칸은 그대로 둔다.
   window.addEventListener('contextmenu', (e) => { if (g && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) e.preventDefault(); });
@@ -48,6 +50,7 @@
       S.rsel = best ? { peer: vp.id, id: best.id, d: best.d, atk: best.atk } : null;
       dirty(); return;
     }
+    if (spect()) return;
     if (S.cmdMode === 'use') {
       const d = g.drops.find((x) => x.id === S.dropSel), u = unitAt(m.x, m.y);
       const n = g.useDrop(g.me, d, u);
@@ -116,7 +119,7 @@
     if (e.pointerType === 'touch') {
       touch = { id: e.pointerId, x: e.clientX, y: e.clientY, m, mode: null, cx: S.cam.x, cy: S.cam.y };
       // 꾹 누르고 있으면 범위 선택으로 바뀐다
-      if (laneOn() && !viewedPeer() && !S.cmdMode) touch.lp = setTimeout(() => {
+      if (laneOn() && !viewedPeer() && !spect() && !S.cmdMode) touch.lp = setTimeout(() => {
         if (touch && !touch.mode) { touch.mode = 'box'; S.drag = { x0: m.x, y0: m.y, x1: m.x, y1: m.y, moved: true, add: false }; if (navigator.vibrate) navigator.vibrate(12); }
       }, 380);
       return;
@@ -135,6 +138,7 @@
     }
     if (!laneOn()) return;
     if (viewedPeer()) { if (e.button === 0) tapAt(m, e); return; }
+    if (spect()) return;
     if (e.button === 2) { rightClick(m); return; }
     if (S.cmdMode) { tapAt(m, e); return; }
     S.drag = { x0: m.x, y0: m.y, x1: m.x, y1: m.y, moved: false, add: e.shiftKey };
@@ -197,6 +201,7 @@
   view.addEventListener('pointerup', endPtr);
   view.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); pinch = null; cancelTouch(); S.drag = null; S.pan = null; });
   function rightClick(m, mode) {
+    if (spect()) return;
     // 상자·아이템을 고른 상태면 그것을 옮긴다
     const drop = !S.sel.length && S.dropSel && g.drops.find((d) => d.id === S.dropSel);
     if (drop) { g.moveDrop(g.me, drop, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); return; }

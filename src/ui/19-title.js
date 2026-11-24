@@ -16,7 +16,13 @@
   const savedGame = () => { try { const sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); return sv && sv.v === 1 ? sv : null; } catch (e) { return null; } };
   // 악몽 +N: 규칙 N개를 겹치지 않게 무작위로 고른다. 시작 버튼을 누를 때(방은 방장이 시작할 때) 한 번만 뽑는다 — 미리 보거나 다시 뽑을 수 없다.
   // 뽑힌 규칙은 판이 시작될 때 연출로 보여 준다(17b-mutintro). 방 협동은 방장이 뽑아 시작 신호(net.start)에 실어 모두가 같은 규칙으로 돈다.
-  const rollMuts = (n) => { const pool = (T.mutators || []).map((m) => m.id), out = []; for (let i = 0; i < n && pool.length; i++) out.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]); return out; };
+  // excl(theme 변형 규칙): 서로 배제하는 규칙은 하나가 뽑히면 남은 후보에서 뺀다(배수진↔군웅할거, 2026-11-24).
+  const rollMuts = (n) => {
+    const ms = T.mutators || [], ex = (a, b) => { const m = ms.find((x) => x.id === a); return !!(m && m.excl && m.excl.includes(b)); };
+    let pool = ms.map((m) => m.id); const out = [];
+    for (let i = 0; i < n && pool.length; i++) { const id = pool.splice((Math.random() * pool.length) | 0, 1)[0]; out.push(id); pool = pool.filter((x) => !ex(id, x) && !ex(x, id)); }
+    return out;
+  };
   const mutPick = () => (cfg.diff === 'nightmare' ? { muts: rollMuts(+cfg.mutLv), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 });
   const mutCard = (id, i) => { const m = T.mutators.find((x) => x.id === id); return m ? `<div class="mut"><span class="n">${i + 1}</span><b>${esc(m.name)}</b><div class="gb"><span class="g">＋ ${esc(m.good)}</span><span class="bd">－ ${esc(m.bad)}</span></div></div>` : ''; };
   const DIFF_COL = { easy: '#7fd08a', normal: '#6fb7ff', hard: '#ffb347', nightmare: '#ff5a5a' };

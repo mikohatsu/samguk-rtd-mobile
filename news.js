@@ -10,6 +10,11 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.3.9', d: '2026-11-24', items: [
+      ['보물 상자에서 이미 해금한 장수의 아이템이 훨씬 잘 나옵니다(해금한 장수가 없으면 등급 상승권).', '宝箱から解放済みの武将のアイテムがずっと出やすくなりました（解放済みがない場合は昇格券）。', 'Chests now favor items for heroes you have unlocked (or give an upgrade ticket if none).', '宝箱现在更容易掉落已解锁武将的道具（若没有则给晋级券）。'],
+      ['협동에서 라이프가 다한 사람만 탈락하고, 남은 사람은 계속 싸웁니다. 탈락한 사람은 관전합니다.', '協力プレイでライフが尽きた人だけが脱落し、残りの仲間は戦い続けます。脱落した人は観戦できます。', 'In co-op, only players who run out of lives are eliminated; the rest fight on while the eliminated watch.', '合作模式中只有生命耗尽的玩家会出局，其他人继续战斗，出局者可观战。'],
+      ['악몽 +N의 변칙 규칙은 불리한 효과가 커져서, 단계가 높을수록 더 어려워집니다. 「배수진」과 「군웅할거」는 함께 나오지 않습니다.', '悪夢+Nの変則ルールは不利な効果が大きくなり、段階が上がるほど難しくなりました。「背水の陣」と「群雄割拠」は同時に出ません。', 'Nightmare +N rules now carry heavier drawbacks, so higher levels are harder. Last Stand and Warlords Rise no longer appear together.', '噩梦+N变则规则的不利效果加强，等级越高越难。「背水阵」与「群雄割据」不会同时出现。'],
+    ] },
     { v: '0.3.8', d: '2026-11-24', items: [
       ['오늘의 미션 3개가 생겼습니다(일본 시간 0시에 바뀜). 관직이 오르거나 업적을 처음 달성하면 동전을 받고, 관직 2단계까지 훨씬 빨리 오릅니다.', '今日のミッションが3つ追加されました（日本時間0時に更新）。官職が上がったときや実績を初めて達成したときに銅銭がもらえ、官職2段階目まで早く上がれるようになりました。', 'Added 3 daily missions (reset at midnight JST). Rank-ups and first-time achievements now give coins, and the second rank comes much sooner.', '新增3个每日任务（日本时间0点刷新）。官职晋升和首次达成成就可获得铜钱，官职第2阶也更快达到。'],
       ['악몽 +N의 변칙 규칙은 이제 판을 시작할 때 정해지고, 하나씩 도장 찍히듯 공개됩니다.', '悪夢+Nの変則ルールはバトル開始時に決まり、ひとつずつ判を押すように発表されます。', 'Nightmare +N rules are now drawn when the battle starts and revealed one by one like stamps.', '噩梦+N的变则规则改为开局时决定，并逐条盖章般揭晓。'],

@@ -25,7 +25,6 @@
     charmDurMax: 5, charmCdMin: 10, charmCdMax: 60, // 미인계 재사용이 0이면 무한 매혹이 되므로 하한을 둔다(정상 최소 30×0.4=12)
     sup: { heal: 1, healLow: 1, hot: 0.2, rally: 1.5, guard: 0.8, haste: 1, pshield: 0 }, // 지원 종류별 값 상한(정상 최대 0.6·0.6·0.03·0.8·0.3·0.45)
     hzBatch: 40, hzTotal: 400, depMax: 25, drMax: 8,
-    overLivesMax: 5, // 손님의 패배 신호는 그 사람이 마지막으로 알린 라이프가 이 이하일 때만 받는다(라이프는 초당 최대 2 남짓 준다)
     logGapMs: 10000, // 같은 종류의 이상 신호 기록은 이 간격에 한 번
   };
   const fin = (v) => typeof v === 'number' && isFinite(v);
@@ -214,17 +213,16 @@
         Object.keys(d).forEach((k) => { if (!(k in s) && (fin(d[k]) || typeof d[k] === 'boolean')) s[k] = d[k]; });
         this.started = true; this.diff = s.diff; this.clock.last = Date.now(); this.onStart && this.onStart(s);
       });
-      // 단계 신호는 방장 것만 받는다. 손님의 라이프가 다한 패배(engine.js loseLife)는 방장만 받아 확인한 뒤 방장이 다시 알린다.
+      // 단계 신호는 방장 것만 받는다. 라이프가 다하면 그 사람만 탈락(presence out)하고, 판 전체 패배는 남은 사람이 모두 탈락했을 때
+      // 방장이 명단을 보고 정한다(checkAllOut). 손님이 보낸 패배 신호는 그 확인을 앞당기는 계기로만 쓴다(값은 믿지 않는다).
       this.t.on('phase', (d, peer, self) => {
         const g = this.game;
         if (self || !g || !obj(d)) return;
         if (!PHASES[d.p]) return this.bad('phase', peer);
         if (this.fromHost(peer, self)) { const c = this.cleanPhase(d); if (c) this.applyPhase(c); else this.bad('phase', peer); return; }
         if (d.p !== 'over' || d.win !== false || !this.isHost() || g.over) return; // 방장이 아닌 사람의 판 전체 신호는 버린다
-        const p = this.roster().find((x) => x.id === peer), ln = p && p.state.ln;
-        if (!p || !ln || !fin(ln.l) || ln.l > GUARD.overLivesMax) return this.bad('over', peer);
-        g.finish(false);
-        this.send('phase', { p: 'over', win: false });
+        if (!this.inRoster(peer)) return this.bad('over', peer);
+        this.checkAllOut();
       });
       this.t.on('clk', (d, peer, self) => {
         if (self || !obj(d) || !this.fromHost(peer, self)) return;
@@ -293,10 +291,27 @@
         if (d && d.r != null && d.r !== g.round) return;
         if (!this.wiped || this.wiped.r !== g.round) this.wiped = { r: g.round, who: {} };
         this.wiped.who[peer] = true;
-        if (this.roster().filter((p) => this.wiped.who[p.id]).length >= this.partySize()) { this.wiped = null; g.endFight(false); }
+        // 탈락한 사람은 출전하지 않으므로 '다 쓰러짐'을 보내지 않는다: 아직 싸우는 사람이 모두 쓰러졌을 때 진다
+        const alive = this.alive();
+        if (alive.length && alive.every((p) => this.wiped.who[p.id])) { this.wiped = null; g.endFight(false); }
       });
     }
     me() { return this.t.peers().find((p) => p.me); }
+    // ---- 탈락(관전) ----
+    // 탈락은 각자 자기 라이프로만 정하고 presence의 out(탈락 라운드)으로 알린다. 남이 내 탈락을 정할 수 없다(presence는 자리마다 따로다).
+    // 거짓 out은 보낸 사람만 빠질 뿐이다(남을 탈락시키거나 판을 끝내지 못한다).
+    isOut(p) { return p.me ? !!(this.game && this.game.out) : !!(p.state && p.state.out); }
+    alive() { return this.roster().filter((p) => !this.isOut(p)); }
+    aliveOthers() { return this.alive().filter((p) => !p.me).length; }
+    partyLive() { return Math.min(5, this.alive().length); }
+    markOut() { const g = this.game; this.t.presence({ out: (g && (g.out || g.round)) || 1 }); }
+    // 방장: 명단의 모두가 탈락했으면 판 전체 패배를 알린다
+    checkAllOut() {
+      const g = this.game, r = this.roster();
+      if (!g || g.over || !r.length || !r.every((p) => this.isOut(p) || (p.me && g.lives <= 0))) return;
+      g.finish(false);
+      this.send('phase', { p: 'over', win: false });
+    }
     inRoster(peer) { return this.roster().some((p) => p.id === peer); }
     // 걸러 낸 신호 기록(종류마다 GUARD.logGapMs에 한 번, 그사이 개수를 함께 적는다)
     bad(kind, peer) {
@@ -344,12 +359,18 @@
     roster() { return this.t.peers().filter((p) => p.state && p.state.name && !this.dropped.has(p.id) && (p.me || !p.state.away)).sort((a, b) => (a.id < b.id ? -1 : 1)); }
     // 자리 비운 사람(앱을 내림): 60초 안에 돌아오면 다시 명단에 들어간다
     awayList() { return this.t.peers().filter((p) => !p.me && p.state && p.state.away && !this.dropped.has(p.id)); }
-    partySize() { return Math.min(5, this.roster().length); }
+    // 난이도용 인원: 명단 + 탈락한 뒤 나간 사람(탈락자가 나가도 보스 체력 배율 등은 처음 인원 그대로. 2026-11-24 사용자 결정)
+    partySize() {
+      const r = this.roster(), ids = new Set(r.map((p) => p.id));
+      let gone = 0; if (this.outIds) this.outIds.forEach((id) => { if (!ids.has(id)) gone++; });
+      return Math.min(5, r.length + gone);
+    }
     // 방장 = 명단에서 id가 가장 앞인 사람. 다만 다시 붙어 따라잡는 중인 사람(sy)은 건너뛴다(낡은 상태로 방장을 되찾지 않게).
+    // 탈락한 사람도 건너뛴다(보스는 방장 게임이 계산하므로 출전하는 사람이 맡는다. 모두 탈락이면 예전 규칙대로).
     // 내 따라잡기 보류는 내 화면에서 바로 적용한다(서버에 sy가 닿기 전에도).
     hostPeer() {
-      const r = this.roster();
-      return r.find((p) => !(p.me ? this.sync : p.state.sy)) || r[0] || null;
+      const r = this.roster(), ok = (p) => !(p.me ? this.sync : p.state.sy);
+      return r.find((p) => ok(p) && !this.isOut(p)) || r.find(ok) || r[0] || null;
     }
     hostId() { const h = this.hostPeer(); return h ? h.id : null; }
     isHost() { const h = this.hostPeer(); return !h || h.me; }
@@ -429,7 +450,7 @@
     relayOrder() {
       const g = this.game, r = g.round;
       if (this.relayOrd && this.relayOrd.r === r) return this.relayOrd.list;
-      const ros = this.roster(), vols = this.volunteers();
+      const ros = this.alive(), vols = this.volunteers().filter((p) => !this.isOut(p));
       let list = ros;
       if (vols.length) {
         let h = r * 31; vols.map((p) => p.id).sort().join('|').split('').forEach((ch) => (h = (h * 33 + ch.charCodeAt(0)) >>> 0));
@@ -447,7 +468,7 @@
     relayMine() { const r = this.game.round; for (const p of this.relayOrder()) { if (p.me) return true; if (p.state.rd !== r) return false; } return true; }
     chat(text) { this.send('chat', { x: String(text).slice(0, 80) }); }
     relayDone() { this.t.presence({ rd: this.game.round }); }
-    allPicked() { const r = this.game.round; return this.roster().every((p) => p.me ? this.game.fight.picked : p.state.picked === r); }
+    allPicked() { const r = this.game.round; return this.roster().every((p) => this.isOut(p) || (p.me ? this.game.fight.picked : p.state.picked === r)); }
     startFight() {
       const g = this.game;
       if (g.phase === 'boss') return;
@@ -488,7 +509,7 @@
       const tn = nowMs();
       this.roster().forEach((p) => {
         // 판정용 좌표는 마지막으로 받은 값 그대로(방장의 표적 선택·사기 합산). 그림은 07-arena가 ghostAt으로 이어 그린다
-        if (!p.me && p.state.ch && p.state.cx != null) f.ghosts[p.id] = { id: p.id, x: p.state.cx, y: p.state.cy, alive: true, ghost: true, def: g.defs[p.state.ch], hpf: p.state.hpf, name: p.state.name };
+        if (!p.me && !this.isOut(p) && p.state.ch && p.state.cx != null) f.ghosts[p.id] = { id: p.id, x: p.state.cx, y: p.state.cy, alive: true, ghost: true, def: g.defs[p.state.ch], hpf: p.state.hpf, name: p.state.name };
         if (!p.me && Array.isArray(p.state.sv) && g.synRemote) g.synRemote(p.id, p.state.name, p.state.sv);
         // 도착 갈고리가 없는 전송(Claude room·가상 방): 값이 바뀌었을 때 여기서 기록한다
         if (!p.me && !this.t.presHook) {
@@ -579,10 +600,21 @@
       // 오래 반응이 없는 사람은 모두가 같은 규칙으로 제외한다. 내가 서버와 끊겨 있는 동안에는 판단하지 않는다(남의 소식이 안 오는 건 내 탓)
       const linked = !this.t.linked || this.t.linked();
       if (linked) this.roster().forEach((p) => { if (!p.me && now - this.seenAt(p, now) > DROP_MS) this.dropped.add(p.id); });
+      // 새로 탈락한 동료를 알리고, 나가도 난이도 인원에 남도록 기억한다(partySize)
+      this.roster().forEach((p) => {
+        if (p.me || !p.state.out) return;
+        if (!this.outIds) this.outIds = new Set();
+        if (this.outIds.has(p.id)) return;
+        this.outIds.add(p.id);
+        const L = root.RTD_I18N, a = str(p.state.name, 24) || '?';
+        if (!g.over) g.log('toast', { text: L ? L.t('elimPeer', { a }) : a + ' 탈락', tone: 'warn' });
+      });
       if (this.isHost()) {
+        this.checkAllOut();
         if (this.clkT <= 0) {
           this.clkT = 0.5;
-          const sp = this.roster().reduce((m, p) => Math.min(m, clampN(p.me ? this.speedWant : p.state.sp || 1, 1, 3)), 3);
+          // 탈락한 사람의 배속 투표는 세지 않는다(관전자가 남은 사람의 배속을 묶지 않게)
+          const sp = this.roster().filter((p) => !this.isOut(p)).reduce((m, p) => Math.min(m, clampN(p.me ? this.speedWant : p.state.sp || 1, 1, 3)), 3);
           this.clock = { sp, pz: null, last: now };
           this.send('clk', { r: g.round, t: round1(g.roundT), ph: g.phase, sp, pz: this.clock.pz, dr: [...this.dropped] });
         }

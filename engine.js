@@ -43,7 +43,7 @@
       this.net = opt.net || null;
       this.defs = {}; theme.units.forEach((d) => (this.defs[d.id] = d));
       // 장수 해금(theme.unlock): opt.unlocked = 이 사람이 연 잠금 장수 id 목록. 없으면 화면이 넣은 provider, 그것도 없으면(시험·시뮬레이터) 전부 열림.
-      // 잠긴 장수는 조합·교체권·선택권에서 나오지 않는다. 상자는 잠긴 장수의 조합 아이템도 같은 가중치로 준다(해금 유도, 2026-11-24 사용자 결정. AI 사령관 판은 예전처럼 뺀다).
+      // 잠긴 장수는 조합·교체권·선택권에서 나오지 않는다. 상자는 잠긴 장수의 조합 아이템도 준다(등급 안에서 30%, unlock.chestOpenShare. 해금 유도, 2026-11-24 사용자 결정. AI 사령관 판은 예전처럼 뺀다).
       const UL = theme.unlock, ul = opt.unlocked !== undefined ? opt.unlocked : (UL && UL.provider ? UL.provider() : null);
       this.unlocked = Array.isArray(ul) ? ul.filter((x) => typeof x === 'string').slice(0, 64) : null;
       this.lockedSet = new Set(this.unlocked && UL ? UL.lockedIds().filter((id) => !this.unlocked.includes(id)) : []);
@@ -82,7 +82,12 @@
     }
 
     get limit() { return Math.min(this.R.enemyLimit, this.mut.limit || 1e9); }
+    // party: 난이도용 인원(보스 체력 배율 등). 탈락한 사람도 계속 센다(나가도 센다) — 2026-11-24 사용자 결정 "난이도는 처음 인원 그대로"
     get party() { return this.mode === 'solo' ? 1 : Math.max(1, this.net ? this.net.partySize() : 1); }
+    // partyLive: 아직 싸우는 사람 수(협동 업적의 필요 인원). 탈락자는 출전하지 않으므로 빼야 업적이 막히지 않는다
+    get partyLive() { return this.mode === 'solo' ? 1 : Math.max(1, this.net && this.net.partyLive ? this.net.partyLive() : this.party); }
+    // 결과로 보고할 도달 라운드: 탈락한 사람은 나갈 때든 판이 끝날 때든 탈락한 라운드(관전으로 경험치를 받지 않게, 2026-11-24 코디네이터 결정)
+    get resultRound() { return this.out || this.round; }
     get isAuthority() { return !this.net || this.net.isHost(); }
 
     newPlayer(idx) {
@@ -504,12 +509,20 @@
       // 신화·불멸 조합 아이템은 같은 것을 한 번에 하나만 갖는다: 이미 들고 있는 것은 빼고 뽑고,
       // 그 등급을 다 들고 있으면 다른 등급, 그것도 없으면 등급 상승권을 준다
       const held = (i) => this.itemDone(p, i.id); // 들고 있거나 이미 조합에 쓴 것은 빼고 뽑는다
-      // 잠긴 장수 전용 아이템도 같은 가중치로 후보에 넣는다(2026-11-24 사용자 결정: 해금하면 합성할 수 있다는 것을 보여 줘 해금을 권한다).
-      // 단 AI 사령관(bot)은 해금 화면이 없으니 예전처럼 열린 것만(쓸 수 없는 아이템으로 AI 동맹이 약해지지 않게). 해금 정보가 없으면 전부 열림이라 차이 없음.
-      // 그 등급에 남은 것이 없으면 한 등급 아래(불멸 → 신화), 그래도 없으면 남은 아무거나
-      const open = row.kind === 'item' ? this.T.items.filter((i) => !held(i) && (!this.bot || this.itemOpen(i.id))) : [];
-      const pool = open.filter((i) => i.tier === row.tier), down = pool.length ? pool : open.filter((i) => i.tier < row.tier);
-      const any = down.length ? down : open;
+      // 잠긴 장수 아이템(2026-11-24 사용자 결정 2차: 가진 장수의 아이템 비중을 늘린다): 등급을 정한 뒤
+      //   chestOpenShare(70%)는 해금한 장수 몫 = v0.3.7 규칙(그 등급의 열린 것 → 한 등급 아래 열린 것 → 열린 아무거나 → 등급 상승권),
+      //   나머지(30%)는 그 등급의 잠긴 장수 아이템. 그 등급에 남은 잠긴 아이템이 없으면 100% 해금한 장수 몫.
+      // AI 사령관(bot)과 해금 정보가 없는 판(lockedSet 비어 있음)은 난수 소비까지 예전과 같다(열린 것만).
+      let any = [];
+      if (row.kind === 'item') {
+        const free = this.T.items.filter((i) => !held(i)), open = free.filter((i) => this.itemOpen(i.id));
+        const lockT = this.bot || !this.lockedSet.size ? [] : free.filter((i) => i.tier === row.tier && !this.itemOpen(i.id));
+        if (lockT.length && this.rand() >= this.T.unlock.chestOpenShare) any = lockT;
+        else {
+          const pool = open.filter((i) => i.tier === row.tier), down = pool.length ? pool : open.filter((i) => i.tier < row.tier);
+          any = down.length ? down : open;
+        }
+      }
       const out = row.kind !== 'item' ? this.spawnDrop(p, row.kind, {}, d.x, d.y)
         : any.length ? this.spawnDrop(p, 'item', { item: this.pick(any).id }, d.x, d.y)
         : this.spawnDrop(p, 'rankUp', {}, d.x, d.y);
@@ -632,7 +645,7 @@
       if (this.bossByRound[r]) { this.startBoss(this.bossByRound[r]); return; }
       this.phase = 'wave';
       const m = this.midByRound[r];
-      if (m) this.spawnMid(m);
+      if (m && !this.out) this.spawnMid(m);
       this.log('round', { round: r });
     }
     spawnMid(m) {
@@ -652,7 +665,27 @@
       this.lives = Math.max(0, this.lives - n);
       this.log('toast', { text: this.L('e_lifeLost', { n, why }, `라이프 -${n}: ${why}`), tone: 'warn' });
       this.log('sfx', { s: 'life' });
-      if (this.lives <= 0) { this.finish(false); if (this.net) this.net.send('phase', { p: 'over', win: false }); }
+      if (this.lives <= 0) {
+        // 협동: 라이프가 다한 사람만 탈락(관전)하고 나머지는 계속한다. 판정은 내 라이프로만 한다(2026-11-24 사용자 결정).
+        // 남은 사람이 없으면(내가 마지막) 판 전체 패배. AI 동맹 판의 사람(나)은 예전처럼 바로 패배한다(AI만 남은 판은 관전하지 않는다).
+        if (this.canSpectate()) { this.eliminate(); return; }
+        this.finish(false);
+        if (this.net) { if (this.net.markOut) this.net.markOut(); this.net.send('phase', { p: 'over', win: false }); }
+      }
+    }
+    canSpectate() {
+      const n = this.net;
+      return this.mode === 'multi' && !!n && !!n.aliveOthers && (this.bot || !n.t || n.t.kind !== 'hub') && n.aliveOthers() > 0;
+    }
+    // 탈락: 내 라인의 적 생성·진행을 멈추고(적은 치운다) 방장의 시계만 따라간다. 보스전에는 출전하지 않는다.
+    // this.out = 탈락한 라운드. 판 결과는 팀 결과를 기다리되 내 기록은 패배다(finish).
+    eliminate() {
+      if (this.out || this.over) return;
+      this.out = this.round || 1;
+      this.enemies = []; this.mids = {}; this.toSpawn = this.spawned;
+      if (this.net && this.net.markOut) this.net.markOut();
+      this.log('elim', { round: this.out });
+      this.log('sfx', { s: 'lose' });
     }
     spawnEnemy(w, hp, def, speed, mid) {
       const e = { id: this.nextId++, w, x: PATH[0][0] - 10, y: PATH[0][1], seg: 0, hp, mhp: hp, def, speed, mid: !!mid, slow: 0, slowT: 0, burn: 0, burnT: 0, stun: 0, r: mid ? 24 : 13 };
@@ -677,6 +710,7 @@
     }
     endRound() {
       this.endedRound = this.round;
+      if (this.out) return; // 탈락한 사람은 라운드 보상(유닛·금화)을 받지 않는다
       this.players.forEach((p) => {
         for (let i = 0; i < (this.mut.roundT1 || 2) + this.sageVal(p, 'roundT1', 'n'); i++) {
           if (p.auto.sell) { const v = this.disbandValue(); p.gold += v; if (p === this.me) this.stats.goldIn += v; }
@@ -690,8 +724,11 @@
     }
     finish(win) {
       if (this.over) return;
+      // 탈락한 사람은 팀이 이겨도 패배로 기록한다(도달 라운드는 판이 끝난 라운드). teamOver = 팀 결과
+      this.teamOver = win ? 'win' : 'lose';
+      if (this.out) win = false;
       this.over = win ? 'win' : 'lose'; this.phase = 'over';
-      this.log('over', { win });
+      this.log('over', { win, team: this.teamOver, out: this.out || 0 });
     }
 
     step(dt) {
@@ -707,6 +744,11 @@
     }
     stepWave(dt) {
       this.roundT += dt;
+      // 탈락한 사람: 적·유닛은 움직이지 않고 라운드 시간만 흐른다(다음 라운드는 방장의 신호로)
+      if (this.out) {
+        if (this.roundT >= this.R.roundTime) { if (this.isAuthority) { this.endRound(); this.nextRound(); } else this.roundT = this.R.roundTime; }
+        return;
+      }
       this.spawnWave(dt);
       Object.keys(this.mids).forEach((r) => {
         const s = this.mids[r];
@@ -949,10 +991,11 @@
       this.grant(p, a.reward, null);
     }
     // 협동 업적: 인원이 min보다 적으면 열리지 않는다. 필요 인원은 지금 인원에 맞춘다.
-    partyAchOpen(c) { return this.mode === 'multi' && this.party >= c.min; }
-    partyAchNeed(c) { const n = this.party; return c.anyOf ? Math.min(c.anyOf.length, Math.max(2, Math.ceil(n / 2))) : n; }
+    // 인원은 아직 싸우는 사람 수(partyLive)로 센다: 탈락자는 출전하지 않으므로 '모두' 조건을 막지 않게
+    partyAchOpen(c) { return this.mode === 'multi' && this.partyLive >= c.min; }
+    partyAchNeed(c) { const n = this.partyLive; return c.anyOf ? Math.min(c.anyOf.length, Math.max(2, Math.ceil(n / 2))) : n; }
     checkPartyAchievements(deployed) {
-      if (this.mode !== 'multi') return;
+      if (this.mode !== 'multi' || this.out) return;
       for (const a of this.T.achievements) {
         const c = a.cond;
         if (c.type !== 'party' || this.me.done[a.id] || c.round !== this.round || !this.partyAchOpen(c)) continue;
@@ -1002,6 +1045,7 @@
       const f = this.fight;
       if (!f || f.picked) return;
       f.picked = true;
+      if (this.out) return; // 탈락한 사람은 보스전에 출전하지 않는다
       let list = ids.map((id) => this.units.find((u) => u.id === id)).filter(Boolean);
       const fallback = this.pickChoices();
       while (list.length < this.slotCount() && fallback.length) { const c = fallback.shift(); if (!list.includes(c)) list.push(c); }
@@ -1320,7 +1364,7 @@
     }
     replaceChamp(id) {
       const f = this.fight, u = this.units.find((x) => x.id === id);
-      if (!f || !u || f.used[id] || this.phase !== 'boss' || this.mut.relay) return; // 일기토는 대체 출전 없음
+      if (!f || !u || f.used[id] || this.phase !== 'boss' || this.mut.relay || this.out) return; // 일기토는 대체 출전 없음
       const l = this.localChamps(), dead = l.find((c) => c.dead);
       if (!dead) return;
       const c = this.deploy(u, dead.slot);
@@ -1400,6 +1444,7 @@
     applyPick() {
       if (!this.fight) return; // 보스 시작 신호보다 먼저 도착한 경우
       this.phase = 'bossPick';
+      if (this.out) this.fight.picked = true; // 탈락한 사람은 출전을 고르지 않는다(출전 창을 띄우지 않는다)
       this.log('bossPick', {});
       if (this.mode !== 'multi' && !this.pickChoices().length) this.finish(false);
     }
@@ -1675,7 +1720,8 @@
       if (!f) return;
       // 판 끝 통계: 보스전 기록(걸린 시간·빠른 클리어·출전 장수·피해 순위)
       const fastNow = win && remain >= this.fastNeed();
-      this.stats.bosses.push({ name: f.def.name, title: f.def.title, round: f.def.round, win, time: Math.round(f.limit * (1 - remain)), limit: f.limit, fast: fastNow, champs: this.localChamps().map((c) => c.def.name), dealt: Object.assign({}, f.dealt), total: f.total });
+      // 탈락한 사람은 보스전에 나가지 않았으므로 내 보스전 기록(전적·일일 미션 '보스 처치')에 넣지 않는다
+      if (!this.out) this.stats.bosses.push({ name: f.def.name, title: f.def.title, round: f.def.round, win, time: Math.round(f.limit * (1 - remain)), limit: f.limit, fast: fastNow, champs: this.localChamps().map((c) => c.def.name), dealt: Object.assign({}, f.dealt), total: f.total });
       if (!win) { this.log('bossFail', {}); this.finish(false); return; }
       const round = f.def.round, rw = this.T.bossRewards[round] || {}, fast = remain >= this.fastNeed();
       this.players.forEach((p) => {

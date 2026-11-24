@@ -218,7 +218,7 @@
   }
   // 판이 끝날 때: 기기에 남기고, 로그인한 오프라인 판은 서버에도(온라인 판은 결과 보고에 같이 간다)
   function recordGame(g, online, mode, ticket) {
-    const rec = { at: Date.now(), diff: g.diff.id, mut: g.mutLv || 0, mutLv: g.mutLv || 0, round: g.round, win: g.over === 'win', time: Math.round(g.time), online: !!online, mode, myth: (g.stats && g.stats.myth) || {}, st: statsOf(g) };
+    const rec = { at: Date.now(), diff: g.diff.id, mut: g.mutLv || 0, mutLv: g.mutLv || 0, round: g.resultRound || g.round, win: g.over === 'win', time: Math.round(g.time), online: !!online, mode, myth: (g.stats && g.stats.myth) || {}, st: statsOf(g) };
     const h = loadJ('rtd-hist', []); h.unshift(rec); saveJ('rtd-hist', h.slice(0, 20));
     const p = loadJ('rtd-prog', { clr: -1, nmx: -1, plays: {}, clears: {} });
     p.plays = p.plays || {}; p.clears = p.clears || {};

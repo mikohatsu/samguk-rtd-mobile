@@ -430,19 +430,19 @@
 `;
   const MUT = `
 배수진|背水の陣|Last Stand|背水阵||ライフ1以下で全ユニットの攻撃力+50%|All units +50% ATK at 1 life or less|生命≤1时全体单位攻击+50%||戦線上限 60 → 30|Front limit 60 → 30|战线上限 60 → 30
-명장의 귀순|名将の帰順|A General Defects|名将归顺||ランダムな★4を1体持って開始|Start with a random ★4|开局获得随机4星1个||ライフ1で開始|Start with 1 life|以1条生命开局
-일기토|一騎討ち|Single Combat|单挑||ボス戦の出陣武将の攻撃力・体力+60%|Boss champions +60% ATK and HP|首领战出战武将攻击·生命+60%||ボス戦はチーム全体で1人ずつ順番に戦う（出陣前に先鋒を志願、倒れたら次、交代出陣なし）|In boss fights the whole team fights one champion at a time (volunteer for vanguard before deploying, next one when a champion falls, no substitutes)|首领战全队按顺序一次只上一名武将（出战前可自荐先锋，倒下后换下一名，不可替补）
-속전속결|速戦即決|Swift Victory|速战速决||残り時間20%で速攻扱い（通常35%）|Fast clear with only 20% time left (normally 35%)|剩余20%时间即算速通（原35%）||ボス戦の制限時間-20%|Boss time limit -20%|首领战时限-20%
-하늘의 분노|天の怒り|Wrath of Heaven|天之怒||ボス戦のスキル再使用-25%|Boss-fight skill cooldowns -25%|首领战技能冷却-25%||全ボスが「天罰の落雷」を追加で使う|Every boss also casts Heaven's Wrath|所有首领追加使用「天罚落雷」
+명장의 귀순|名将の帰順|A General Defects|名将归顺||ランダムな★4を1体持って開始|Start with a random ★4|开局获得随机4星1个||ライフ1で開始、ボスの攻撃力+35%|Start with 1 life; boss ATK +35%|以1条生命开局，首领攻击+35%
+일기토|一騎討ち|Single Combat|单挑||ボス戦の出陣武将の攻撃力・体力+60%|Boss champions +60% ATK and HP|首领战出战武将攻击·生命+60%||ボス戦はチーム全体で1人ずつ順番に戦う（出陣前に先鋒を志願、倒れたら次、交代出陣なし）、ボスの攻撃力+50%|In boss fights the whole team fights one champion at a time (volunteer for vanguard before deploying, next one when a champion falls, no substitutes); boss ATK +50%|首领战全队按顺序一次只上一名武将（出战前可自荐先锋，倒下后换下一名，不可替补），首领攻击+50%
+속전속결|速戦即決|Swift Victory|速战速决||残り時間20%で速攻扱い（通常35%）|Fast clear with only 20% time left (normally 35%)|剩余20%时间即算速通（原35%）||ボス戦の制限時間-30%|Boss time limit -30%|首领战时限-30%
+하늘의 분노|天の怒り|Wrath of Heaven|天之怒||ボス戦のスキル再使用-25%|Boss-fight skill cooldowns -25%|首领战技能冷却-25%||全ボスが「天罰の落雷」を追加で使い、ボスの技のダメージ+60%|Every boss also casts Heaven's Wrath; boss attack damage +60%|所有首领追加使用「天罚落雷」，首领招式伤害+60%
 대군 쇄도|大軍殺到|Endless Horde|大军涌来||戦線の敵10体ごとに全ユニットの攻撃力+5%|+5% ATK for all units per 10 enemies on the front|战线上每10个敌人全体攻击+5%||1ラウンドの敵の数+30%|+30% enemies per round|每回合敌人数量+30%
 고립무원|孤立無援|Isolated|孤立无援||全ユニットの攻撃力+15%|All units ATK +15%|全体单位攻击+15%||名士を招聘できない|Can't hire sages|无法招募名士
-영웅의 시대|英雄の時代|Age of Heroes|英雄时代||ボス討伐ごとにランダム昇格券1枚|A rank-up ticket per boss defeated|每次讨伐首领获得随机升级券1张||ボスの体力+20%|Boss HP +20%|首领生命+20%
-보물 사냥|宝探し|Treasure Hunt|寻宝||ボス討伐ごとに宝箱+1|+1 chest per boss|每次讨伐首领宝箱+1||ボスの攻撃力+30%|Boss ATK +30%|首领攻击+30%
-명의의 동행|名医の同行|Physician Joins|名医同行||華佗を招聘した状態で開始|Start with Hua Tuo hired|开局已招募华佗||ボスの攻撃力+25%|Boss ATK +25%|首领攻击+25%
-포위망|包囲網|Encirclement|包围网||ボス戦の制限時間+15%|Boss time limit +15%|首领战时限+15%||全ボスが「四方包囲」を追加で使う|Every boss also casts Total Encirclement|所有首领追加使用「四面包围」
-폭풍 전야|嵐の前夜|Calm Before the Storm|暴风前夜||ボス討伐の金貨+50%|Boss gold +50%|首领奖励金币+50%||ボスの技の間隔20%短縮|Boss attacks 20% more often|首领招式间隔缩短20%
-군량 부족|兵糧不足|Short on Rations|军粮不足||開始時の金貨+800|+800 starting gold|初始金币+800||ラインの敵の体力+15%|Lane enemy HP +15%|防线敌人生命+15%
-화공 경보|火攻警報|Fire Alert|火攻警报||宝箱から不滅アイテムが2倍出やすい|Immortal items drop twice as often from chests|宝箱中不灭道具概率加倍||全ボスが「火炎落下」を追加で使う|Every boss also casts Falling Flames|所有首领追加使用「火焰坠落」
+영웅의 시대|英雄の時代|Age of Heroes|英雄时代||ボス討伐ごとにランダム昇格券1枚|A rank-up ticket per boss defeated|每次讨伐首领获得随机升级券1张||ボスの体力+50%|Boss HP +50%|首领生命+50%
+보물 사냥|宝探し|Treasure Hunt|寻宝||ボス討伐ごとに宝箱+1|+1 chest per boss|每次讨伐首领宝箱+1||ボスの攻撃力+50%|Boss ATK +50%|首领攻击+50%
+명의의 동행|名医の同行|Physician Joins|名医同行||華佗を招聘した状態で開始|Start with Hua Tuo hired|开局已招募华佗||ボスの攻撃力+40%|Boss ATK +40%|首领攻击+40%
+포위망|包囲網|Encirclement|包围网||ボス戦の制限時間+15%|Boss time limit +15%|首领战时限+15%||全ボスが「四方包囲」を追加で使い、ボスの技のダメージ+25%|Every boss also casts Total Encirclement; boss attack damage +25%|所有首领追加使用「四面包围」，首领招式伤害+25%
+폭풍 전야|嵐の前夜|Calm Before the Storm|暴风前夜||ボス討伐の金貨+50%|Boss gold +50%|首领奖励金币+50%||ボスの技の間隔30%短縮|Boss attack intervals 30% shorter|首领招式间隔缩短30%
+군량 부족|兵糧不足|Short on Rations|军粮不足||開始時の金貨+800|+800 starting gold|初始金币+800||ラインの敵の体力+35%|Lane enemy HP +35%|防线敌人生命+35%
+화공 경보|火攻警報|Fire Alert|火攻警报||宝箱から不滅アイテムが2倍出やすい|Immortal items drop twice as often from chests|宝箱中不灭道具概率加倍||全ボスが「火炎落下」を追加で使い、ボスの技のダメージ+40%|Every boss also casts Falling Flames; boss attack damage +40%|所有首领追加使用「火焰坠落」，首领招式伤害+40%
 군웅할거|群雄割拠|Warlords Rise|群雄割据||精鋭の敵を倒すたびに金貨15|15 gold for each elite enemy defeated|每击败一个精锐敌人获得金币15||毎ラウンド体力の高い金色の精鋭が1体混じり、倒すまでラインを回り続ける|Each round a gold elite with huge HP joins the wave and keeps circling until defeated|每回合混入1个高生命的金色精锐，被击败前一直绕线移动
 야습|夜襲|Night Raid|夜袭||中ボスの報酬2倍|Double mid-boss rewards|中首领奖励翻倍||夜で自分のユニットの周りしか見えない（ボス戦も自分の武将とボスの周りだけ明るい）|It's night: you can only see around your units (in boss fights, only around your champion and the boss)|夜晚只能看到己方单位周围（首领战也只照亮己方武将与首领周围）
 `;

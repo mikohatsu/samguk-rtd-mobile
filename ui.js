@@ -946,7 +946,7 @@
     }).join('');
     // 협동 업적: 지금 인원에서 필요한 수, 인원이 모자라면 비활성 안내
     const partyLine = c.type !== 'party' ? '' : g.partyAchOpen(c)
-      ? `<div style="margin-top:4px">${I.t('partyNow', { n: g.party, need: I.t(c.anyOf ? 'needAtLeast' : 'needAll', { n: g.partyAchNeed(c) }) })}</div>`
+      ? `<div style="margin-top:4px">${I.t('partyNow', { n: g.partyLive, need: I.t(c.anyOf ? 'needAtLeast' : 'needAll', { n: g.partyAchNeed(c) }) })}</div>`
       : `<div style="margin-top:4px;color:#ff7a60">${I.t('partyLack', { n: c.min })}</div>`;
     // 등급 단위 조건은 진행도를 한 줄로 보여 준다
     const tids = c.tier ? T.units.filter((d) => d.tier === c.tier).map((d) => d.id) : [];
@@ -3208,6 +3208,8 @@
   // 보스전 중에도 Tab으로 내 라인 화면에 와서 선택권·조합·강화를 할 수 있다. 그동안 결투 시간은 그대로 흐른다.
   const inBoss = () => g && g.phase === 'boss' && !S.laneView;
   const laneOn = () => g && (g.phase === 'wave' || (g.phase === 'boss' && !!S.laneView));
+  // 협동에서 라이프가 다해 탈락한 뒤(관전): 동료 전장 보기·화면 끌기만 되고 내 라인·장수 조작은 막는다(engine.js eliminate)
+  const spect = () => !!(g && g.out && !g.over);
   view.addEventListener('contextmenu', (e) => e.preventDefault());
   // 게임 중에는 화면 어디서든(패널·버튼·스킬 막대·팝업) 브라우저 우클릭 메뉴를 막는다. 글자 입력칸은 그대로 둔다.
   window.addEventListener('contextmenu', (e) => { if (g && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) e.preventDefault(); });
@@ -3242,6 +3244,7 @@
       S.rsel = best ? { peer: vp.id, id: best.id, d: best.d, atk: best.atk } : null;
       dirty(); return;
     }
+    if (spect()) return;
     if (S.cmdMode === 'use') {
       const d = g.drops.find((x) => x.id === S.dropSel), u = unitAt(m.x, m.y);
       const n = g.useDrop(g.me, d, u);
@@ -3310,7 +3313,7 @@
     if (e.pointerType === 'touch') {
       touch = { id: e.pointerId, x: e.clientX, y: e.clientY, m, mode: null, cx: S.cam.x, cy: S.cam.y };
       // 꾹 누르고 있으면 범위 선택으로 바뀐다
-      if (laneOn() && !viewedPeer() && !S.cmdMode) touch.lp = setTimeout(() => {
+      if (laneOn() && !viewedPeer() && !spect() && !S.cmdMode) touch.lp = setTimeout(() => {
         if (touch && !touch.mode) { touch.mode = 'box'; S.drag = { x0: m.x, y0: m.y, x1: m.x, y1: m.y, moved: true, add: false }; if (navigator.vibrate) navigator.vibrate(12); }
       }, 380);
       return;
@@ -3329,6 +3332,7 @@
     }
     if (!laneOn()) return;
     if (viewedPeer()) { if (e.button === 0) tapAt(m, e); return; }
+    if (spect()) return;
     if (e.button === 2) { rightClick(m); return; }
     if (S.cmdMode) { tapAt(m, e); return; }
     S.drag = { x0: m.x, y0: m.y, x1: m.x, y1: m.y, moved: false, add: e.shiftKey };
@@ -3391,6 +3395,7 @@
   view.addEventListener('pointerup', endPtr);
   view.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); pinch = null; cancelTouch(); S.drag = null; S.pan = null; });
   function rightClick(m, mode) {
+    if (spect()) return;
     // 상자·아이템을 고른 상태면 그것을 옮긴다
     const drop = !S.sel.length && S.dropSel && g.drops.find((d) => d.id === S.dropSel);
     if (drop) { g.moveDrop(g.me, drop, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); return; }
@@ -3410,8 +3415,11 @@
     S.drawer = null;
     return true;
   }
+  // 탈락(관전) 중에 되는 행동: 보기·설정·나가기만. 내 라인·장수를 바꾸는 행동은 막는다(10-input spect)
+  const SPECT_OK = new Set(['tab', 'drawer', 'drawerClose', 'selExp', 'langSet', 'gfx', 'fps30', 'keepSyn', 'perf', 'credits', 'desel', 'esc', 'ucard', 'statDet', 'viewPeer', 'allyList', 'laneView', 'vol', 'book', 'timer', 'quit', 'restart', 'again', 'resume', 'tutReset', 'lang', 'ticketClose', 'combineNo', 'speed']);
   // ---- 행동: DOM 갱신 중에도 놓치지 않게 pointerdown 위임으로 받는다 ----
   function doAct(a, arg) {
+    if (spect() && (!SPECT_OK.has(a) || (a === 'viewPeer' && arg === 'me'))) return;
     Snd.play('click', 40);
     const p = g && g.me, list = g ? selUnits() : [], u = list[0];
     if (a === 'tab') { S.tab = arg; S.drawer = arg; }
@@ -3483,11 +3491,15 @@
     else if (a === 'again') { try { sessionStorage.setItem('rtd-again', '1'); } catch (e) { /* 저장 불가 */ } adThen(() => location.reload()); }
     // 판 도중 나가기(설정 탭): 두 번 눌러 확인. 혼자 하는 오프라인 판은 저장해 두고(이어하기) 멈춘다.
     // 협동 방은 오래 자리를 비웠을 때와 같은 길(kicked + leave)로 방에서 나간다. 그 뒤는 결과창의 restart와 같다.
+    // 탈락(관전) 중에 나가면 지금 라운드로 패배 결과를 남긴다: 판을 끝내 결과 보고(reportResult)·전적을 처리하고, 보고가 끝나거나 3초 뒤 나간다.
     else if (a === 'quit') {
       if (S.quitArm) {
         S.quitArm = false; saveGame();
+        let rep = null;
+        if (!lifeOffline() && spect()) { g.finish(false); drainEvents(); rep = S.repP; }
         if (lifeOffline()) S.paused = true; else { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
-        adThen(() => location.reload());
+        const go = () => adThen(() => location.reload());
+        if (rep) Promise.race([rep.catch(() => {}), new Promise((r) => setTimeout(r, 3000))]).then(go); else go();
       } else { S.quitArm = true; toast(t('quitConfirm'), 'warn'); setTimeout(() => { if (S.quitArm) { S.quitArm = false; dirty(); } }, 3000); }
     }
     else if (a === 'resume') { S.paused = false; last = performance.now(); }
@@ -3639,7 +3651,7 @@
       const az = (k, l) => tg(k, l) + `<div class="row zrow"><div><small>${I.t('sortPos')}</small></div>${zones(k)}</div>`;
       const ql = [['high', t('high')], ['mid', t('mid')], ['low', t('low')]];
       // 판 도중 나가기(맨 위): 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 나간다(11-actions의 quit)
-      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : 'quitHintRoom';
+      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : spect() ? 'quitHintElim' : 'quitHintRoom';
       h = `<div class="h">${I.t('quitGame')}</div><div class="row"><div><small>${I.t(qh)}</small></div><button class="toggle ${S.quitArm ? 'on' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitBtn')}</button></div>`;
       // 언어는 이 판에는 적용되지 않는다(로비로 돌아가면 바뀜)
       h += `<div class="h">${t('language')} <small>${t('langLater')}</small></div><div class="row"><div class="zones">${I.LANGS.map(([k, n]) => `<button class="zb ${I.lang === k ? 'on' : ''}" data-act="langSet" data-arg="${k}" type="button">${n}</button>`).join('')}</div></div>`;
@@ -4335,8 +4347,10 @@
     const card = (l, v, sub, cls) => `<div class="es-card ${cls || ''}"><small>${l}</small><b>${v}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
     // 받은 경험치·동전: 통계 카드 맨 앞에(로그인한 판만)
     const reward = S.xpGained != null && ACC.me ? card(I.t('rewardHead'), `+${fmt(S.xpGained)} XP`, (S.coinGained ? `<i class="ico coin" aria-hidden="true"></i>+${fmt(S.coinGained)} · ` : '') + `${esc(t(ACC.me.grade))} ${t('level', { n: ACC.me.level })}`, 'es-rw') : '';
-    const cards = reward + [
-      card(I.t('reachRound'), `${g.round} / ${g.diff.rounds}`), card(I.t('playTime'), `${mm}:${String(ss).padStart(2, '0')}`),
+    // 탈락한 사람: 내 기록은 패배(도달 라운드는 판이 끝난 라운드)이고 팀 결과를 따로 알린다
+    const elim = g.out ? `<div class="es-card"><small>${esc(t('elimTitle'))}</small><b>${esc(t(g.teamOver === 'win' ? 'elimTeamWin' : 'elimTeamLose'))}</b><i>${esc(t('elimAt', { n: g.out }))}</i></div>` : '';
+    const cards = reward + elim + [
+      card(I.t('reachRound'), `${g.resultRound} / ${g.diff.rounds}`), card(I.t('playTime'), `${mm}:${String(ss).padStart(2, '0')}`),
       card(I.t('kills'), fmt(s.kills)), card(I.t('midboss'), I.t('midKills', { n: s.midKill }), s.midMiss ? I.t('midMiss', { n: s.midMiss }) : I.t('noMiss')),
       card(I.t('lifeLost'), `${s.lifeLost}`, I.t('livesLeft', { n: g.lives })), card(I.t('bestTier'), s.bestName ? `${esc(s.bestName)}` : '-', s.best ? rankName(s.best) : ''),
       card(I.t('goldEarned'), fmt(s.goldIn), I.t('upHire', { a: fmt(s.goldUp), b: fmt(s.goldHire) })), card(I.t('combCraft'), `${s.combines} · ${s.crafts.length}`, I.t('tixChest', { a: s.tickets, b: s.chests })),
@@ -4679,6 +4693,8 @@
     const bossV = g.phase === 'boss' && !S.laneView;
     let h = bossV ? `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}</div>`
       : `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${g.phase === 'boss' ? '' : cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '')}</div>`; // 병력 칸은 뺐다(2026-11-21 사용자 요청)
+    // 탈락(관전) 중 표시: 위 정보 줄에 늘 보인다
+    if (spect()) h += `<div class="hrow"><span class="nc mid">${esc(t('elimHud', { n: g.out }))}</span></div>`;
     const hd = S.hudNext || {};
     // 보스전 동안 '다음 보스' 칸은 지금 싸우는 보스와 그 남은 시간이라 뺀다. 중간 보스 칸은 라인 화면에서만.
     const chips = bossV ? '' : (hd.mids || []).map((m) => `<span class="nc mid" data-act="drawer" data-arg="war">${Array.isArray(m) ? `<span class="nw">${esc(m[0])}</span> <span class="nw">${esc(m[1])}</span>` : esc(m)}</span>`).join('') + (hd.boss && g.phase !== 'boss' ? `<span class="nc boss" data-act="drawer" data-arg="war">${t('nextBoss')}<br><b>${esc(hd.boss)}</b></span>` : '');
@@ -4808,7 +4824,8 @@
     if (key[0] === 'p' && g.fight) { const el = box.querySelector('.pkT'), v = String(Math.max(0, Math.ceil(g.fight.pickT))); if (el && el.textContent !== v) el.textContent = v; }
     // 기다림 창이 떠 있는 동안에는 오른쪽 위 메뉴 버튼이 창 위로 올라온다(CSS #stage.pz). 창이 사라지면 기다린 시간도 지운다.
     { const pz = key[0] === 'z', stg = $('stage'); if (!pz) S.pzAt = 0; if (stg.classList.contains('pz') !== pz) stg.classList.toggle('pz', pz); }
-    $('backbtn').hidden = !viewedPeer();
+    if (spect()) spectView();
+    $('backbtn').hidden = !viewedPeer() || spect(); // 탈락하면 내 전장으로 돌아가는 버튼은 숨긴다
     renderHud();
     const sbar = $('selbar'), boss = inBoss() && g.phase === 'boss' && !!g.fight;
     // 보스전에서 내 장수가 1명이고 쓰러지지 않았으면 장수 전환 카드를 숨긴다(왼쪽 아래 보스를 가리고 조이스틱 영역을 막아서). 2명 이상·쓰러짐(교체 출진 안내)이면 보인다.
@@ -4825,6 +4842,12 @@
     const bb = $('bossbtn'), bt = g.phase === 'boss' ? (S.laneView ? `${t('backToBoss')} · ${clock(Math.max(0, g.fight.limit - g.fight.t))}` : t('toLane')) : '';
     if (bb.dataset.t !== bt) { bb.textContent = bt; bb.dataset.t = bt; bb.hidden = !bt; bb.classList.toggle('go', !!S.laneView); }
   }
+  // 관전: 라인 단계에서 동료 전장을 보고 있지 않으면 아직 싸우는 동료(없으면 아무 동료)의 전장으로 바꾼다
+  function spectView() {
+    if (!net || g.phase !== 'wave' || viewedPeer()) return;
+    const ros = net.roster().filter((p) => !p.me && p.state.ln), p = ros.find((x) => !x.state.out) || ros[0];
+    if (p) S.view = p.id;
+  }
   const CANVAS_ONLY = { dmgtext: 1, proc: 1, shake: 1, pattern: 1, banner: 1 };
   function drainEvents() {
     for (const e of g.events) {
@@ -4833,8 +4856,10 @@
       else if (e.type === 'pop') { queuePop(e.def, e.who || (net ? net.name : null)); if (e.def.tier >= 9 && g.phase !== 'boss') S.freeze = (S.freeze || 0) + POP_DUR[e.def.tier]; if (net && !e.remote) net.send('pop', { id: e.def.id, name: net.name }); }
       else if (e.type === 'round') { Snd.play('round'); saveGame(); }
       else if (e.type === 'bossIntro') { Snd.play('gong'); Snd.setBoss(true); }
-      else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); S.tkMiss = !!(S.tkWant && !S.gameTk); reportResult(); if (window.RTD_LOBBY) { S.progBefore = window.RTD_LOBBY.progNow(); window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.gameTk); } if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
+      else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); S.tkMiss = !!(S.tkWant && !S.gameTk); S.repP = reportResult(); if (window.RTD_LOBBY) { S.progBefore = window.RTD_LOBBY.progNow(); window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.gameTk); } if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
       else if (e.type === 'banner') S.banner = { text: e.text, sub: e.sub, t: 3 };
+      // 협동에서 내 라이프가 다해 탈락: 알리고 동료 전장 보기로 바꾼다(관전). 조작은 10-input·11-actions의 spect가 막는다
+      else if (e.type === 'elim') { S.banner = { text: t('elimTitle'), sub: t('elimSub'), t: 4 }; toast(t('elimSub'), 'warn'); setSel([]); S.dropSel = null; S.drawer = null; S.ticket = null; S.combineAsk = null; spectView(); }
       else if (e.type === 'dmgtext') {
         // 숫자가 같은 자리에 겹쳐 안 읽히지 않게 조금씩 흩어 놓는다
         if (S.dmg.length < 40) S.dmg.push({ x: e.x + (typeof e.v === 'number' && g.phase === 'boss' ? (Math.random() - 0.5) * 90 : 0), y: e.y - (typeof e.v === 'number' && g.phase === 'boss' ? Math.random() * 30 : 0), v: e.v, big: e.big != null ? e.big : g.phase === 'boss', t: 0 });
@@ -5154,7 +5179,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     if (!ACC.token || S.reported || (!S.online && !S.gameTk)) return;
     S.reported = true;
     const path = S.online ? '/api/result' : '/api/history';
-    const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : bots.length ? 'ai' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.round, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {}, ach: Object.keys((g.me && g.me.done) || {}).filter((k) => g.me.done[k]) };
+    const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : bots.length ? 'ai' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.resultRound, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {}, ach: Object.keys((g.me && g.me.done) || {}).filter((k) => g.me.done[k]) };
     const uid = ACC.me && ACC.me.id, r = await api(path, body);
     if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend(path, body, uid);
     if (r.me) {
@@ -5351,7 +5376,13 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   const savedGame = () => { try { const sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); return sv && sv.v === 1 ? sv : null; } catch (e) { return null; } };
   // 악몽 +N: 규칙 N개를 겹치지 않게 무작위로 고른다. 시작 버튼을 누를 때(방은 방장이 시작할 때) 한 번만 뽑는다 — 미리 보거나 다시 뽑을 수 없다.
   // 뽑힌 규칙은 판이 시작될 때 연출로 보여 준다(17b-mutintro). 방 협동은 방장이 뽑아 시작 신호(net.start)에 실어 모두가 같은 규칙으로 돈다.
-  const rollMuts = (n) => { const pool = (T.mutators || []).map((m) => m.id), out = []; for (let i = 0; i < n && pool.length; i++) out.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]); return out; };
+  // excl(theme 변형 규칙): 서로 배제하는 규칙은 하나가 뽑히면 남은 후보에서 뺀다(배수진↔군웅할거, 2026-11-24).
+  const rollMuts = (n) => {
+    const ms = T.mutators || [], ex = (a, b) => { const m = ms.find((x) => x.id === a); return !!(m && m.excl && m.excl.includes(b)); };
+    let pool = ms.map((m) => m.id); const out = [];
+    for (let i = 0; i < n && pool.length; i++) { const id = pool.splice((Math.random() * pool.length) | 0, 1)[0]; out.push(id); pool = pool.filter((x) => !ex(id, x) && !ex(x, id)); }
+    return out;
+  };
   const mutPick = () => (cfg.diff === 'nightmare' ? { muts: rollMuts(+cfg.mutLv), mutLv: +cfg.mutLv } : { muts: [], mutLv: 0 });
   const mutCard = (id, i) => { const m = T.mutators.find((x) => x.id === id); return m ? `<div class="mut"><span class="n">${i + 1}</span><b>${esc(m.name)}</b><div class="gb"><span class="g">＋ ${esc(m.good)}</span><span class="bd">－ ${esc(m.bad)}</span></div></div>` : ''; };
   const DIFF_COL = { easy: '#7fd08a', normal: '#6fb7ff', hard: '#ffb347', nightmare: '#ff5a5a' };

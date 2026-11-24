@@ -8,8 +8,11 @@
     S.drawer = null;
     return true;
   }
+  // 탈락(관전) 중에 되는 행동: 보기·설정·나가기만. 내 라인·장수를 바꾸는 행동은 막는다(10-input spect)
+  const SPECT_OK = new Set(['tab', 'drawer', 'drawerClose', 'selExp', 'langSet', 'gfx', 'fps30', 'keepSyn', 'perf', 'credits', 'desel', 'esc', 'ucard', 'statDet', 'viewPeer', 'allyList', 'laneView', 'vol', 'book', 'timer', 'quit', 'restart', 'again', 'resume', 'tutReset', 'lang', 'ticketClose', 'combineNo', 'speed']);
   // ---- 행동: DOM 갱신 중에도 놓치지 않게 pointerdown 위임으로 받는다 ----
   function doAct(a, arg) {
+    if (spect() && (!SPECT_OK.has(a) || (a === 'viewPeer' && arg === 'me'))) return;
     Snd.play('click', 40);
     const p = g && g.me, list = g ? selUnits() : [], u = list[0];
     if (a === 'tab') { S.tab = arg; S.drawer = arg; }
@@ -81,11 +84,15 @@
     else if (a === 'again') { try { sessionStorage.setItem('rtd-again', '1'); } catch (e) { /* 저장 불가 */ } adThen(() => location.reload()); }
     // 판 도중 나가기(설정 탭): 두 번 눌러 확인. 혼자 하는 오프라인 판은 저장해 두고(이어하기) 멈춘다.
     // 협동 방은 오래 자리를 비웠을 때와 같은 길(kicked + leave)로 방에서 나간다. 그 뒤는 결과창의 restart와 같다.
+    // 탈락(관전) 중에 나가면 지금 라운드로 패배 결과를 남긴다: 판을 끝내 결과 보고(reportResult)·전적을 처리하고, 보고가 끝나거나 3초 뒤 나간다.
     else if (a === 'quit') {
       if (S.quitArm) {
         S.quitArm = false; saveGame();
+        let rep = null;
+        if (!lifeOffline() && spect()) { g.finish(false); drainEvents(); rep = S.repP; }
         if (lifeOffline()) S.paused = true; else { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
-        adThen(() => location.reload());
+        const go = () => adThen(() => location.reload());
+        if (rep) Promise.race([rep.catch(() => {}), new Promise((r) => setTimeout(r, 3000))]).then(go); else go();
       } else { S.quitArm = true; toast(t('quitConfirm'), 'warn'); setTimeout(() => { if (S.quitArm) { S.quitArm = false; dirty(); } }, 3000); }
     }
     else if (a === 'resume') { S.paused = false; last = performance.now(); }

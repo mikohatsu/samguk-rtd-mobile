@@ -18,7 +18,8 @@ CASES.forEach((c) => {
   const gs = r.P.members.map((m) => m.g);
   ok(gs.every((g) => g.party === c.n), `${tag}: 모두 인원을 ${c.n}명으로 봄 (${gs.map((g) => g.party).join(',')})`);
   ok(gs.every((g) => g.over) && !r.capped, `${tag}: 모두 끝남 over=[${gs.map((g) => g.over).join(',')}] ${r.steps}걸음 ${r.ms}ms`);
-  ok(new Set(gs.map((g) => g.over)).size === 1, `${tag}: 모두 같은 결과`);
+  // 팀 결과(teamOver)로 비교한다: 라이프가 다해 탈락한 AI는 팀이 이겨도 자기 기록은 패배다(2026-11-24 탈락 규칙, t10)
+  ok(new Set(gs.map((g) => g.teamOver || g.over)).size === 1, `${tag}: 모두 같은 팀 결과 [${gs.map((g) => (g.out ? `탈락R${g.out}/` : '') + (g.teamOver || g.over)).join(',')}]`);
   ok(new Set(gs.map((g) => g.round)).size === 1, `${tag}: 끝났을 때 라운드가 같음 [${gs.map((g) => g.round).join(',')}]`);
   ok(r.maxGap <= 1, `${tag}: 도중 라운드 차이 최대 ${r.maxGap} (1 이하)`);
   ok(!r.stalled, `${tag}: 120초 멈춤 없음`);

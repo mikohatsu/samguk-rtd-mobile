@@ -1,5 +1,5 @@
-// T9 상자 잠긴 장수 아이템(2026-11-24 사용자 결정): 상자는 아직 해금하지 않은 장수의 조합 아이템도 같은 가중치로 준다.
-// 보는 것: 잠긴 아이템이 나옴, 같은 등급 아이템끼리 가중치가 같음, 등급 확률은 그대로, 해금 정보가 없으면 예전과 똑같음,
+// T9 상자 잠긴 장수 아이템(2026-11-24 사용자 결정, 같은 날 2차: 가진 장수의 아이템 비중을 늘림): 등급을 정한 뒤 70%는 해금한 장수 몫, 30%는 잠긴 장수 아이템.
+// 보는 것: 해금 0명·첫 신화 2명·전부 해금의 분포, 해금 정보가 없으면 예전과 똑같음,
 // AI 사령관(bot) 판은 예전 규칙(열린 것만), 잠긴 아이템이 다른 아이템·조합을 막지 않음, 합치기 재료로는 쓰임, 저장·사람 협동.
 // 유형: Logic/Integration · 위치: tests/engine/ · 게이트: BLOCKING
 'use strict';
@@ -20,26 +20,41 @@ function openMany(g, n, seq) {
   return out;
 }
 
-// 1) 첫 신화 2명만: 잠긴 장수 아이템이 나오고, 같은 등급 안에서 열린·잠긴 아이템의 몫이 같다
+// 1) 분포(2026-11-24 2차 결정): 등급을 정한 뒤 70%는 해금한 장수 몫(v0.3.7 규칙: 그 등급 → 한 등급 아래 → 아무거나 → 등급 상승권), 30%는 잠긴 장수 아이템
+const SH = UL.chestOpenShare;
+function dist(unlocked, seed, N) {
+  const g = new E.Game(T, { diff: 'easy', mode: 'solo', seed, unlocked }), out = openMany(g, N), r = { open9: 0, open10: 0, lock9: 0, lock10: 0, rankUp: 0, other: 0 };
+  Object.keys(out).forEach((k) => {
+    if (k === 'rankUp') r.rankUp += out[k];
+    else if (itemUnit[k]) r[(g.itemOpen(k) ? 'open' : 'lock') + tierOfItem(k)] += out[k];
+    else r.other += out[k];
+  });
+  Object.keys(r).forEach((k) => (r[k] /= N));
+  r.text = ['open9', 'open10', 'lock9', 'lock10', 'rankUp'].map((k) => `${k} ${(r[k] * 100).toFixed(1)}%`).join(', ');
+  return { g, out, r };
+}
+const near = (a, b) => Math.abs(a - b) < 0.02; // N=12000에서 표준오차 약 0.4%p
 try {
-  const N = 12000, g = new E.Game(T, { diff: 'easy', mode: 'solo', seed: 91, unlocked: STARTER });
-  const out = openMany(g, N);
-  const myth = T.items.filter((i) => i.tier === 9 && itemUnit[i.id]).map((i) => i.id), imm = T.items.filter((i) => i.tier === 10 && itemUnit[i.id]).map((i) => i.id);
-  const openMyth = myth.filter((it) => g.itemOpen(it)), lockMyth = myth.filter((it) => !g.itemOpen(it));
-  ok(openMyth.length === 2 && lockMyth.length === myth.length - 2, `신화 아이템 열린 ${openMyth.length} / 잠긴 ${lockMyth.length}`);
-  ok(lockMyth.every((it) => out[it] > 0) && imm.every((it) => out[it] > 0), '잠긴 신화·불멸 장수의 아이템이 모두 상자에서 나옴');
-  const avg = (a) => a.reduce((s, it) => s + (out[it] || 0), 0) / a.length;
-  const ratio = avg(lockMyth) / avg(openMyth);
-  ok(ratio > 0.85 && ratio < 1.15, `같은 등급 안에서 잠긴 아이템 하나의 몫 = 열린 아이템 하나의 몫 (잠긴/열린 ${ratio.toFixed(2)})`);
-  const cnt = imm.map((it) => out[it]), mn = Math.min(...cnt), mx = Math.max(...cnt);
-  ok(mx / mn < 1.4, `불멸 아이템(전부 잠김)끼리도 고르게 나옴 (최소 ${mn}, 최대 ${mx})`);
-  // 등급 확률은 그대로(전부 연 판과 같은 비율)
-  const immShare = imm.reduce((s, it) => s + out[it], 0) / N;
-  const gAll = new E.Game(T, { diff: 'easy', mode: 'solo', seed: 92, unlocked: UL.lockedIds() }), oAll = openMany(gAll, N);
-  const immAll = imm.reduce((s, it) => s + (oAll[it] || 0), 0) / N;
-  ok(Math.abs(immShare - immAll) < 0.03, `불멸 아이템 비율이 해금 수와 무관 (첫 신화만 ${(immShare * 100).toFixed(1)}%, 전부 ${(immAll * 100).toFixed(1)}%)`);
-  ok(!out.rankUp, '아이템 줄에서 등급 상승권으로 새지 않음');
-} catch (e) { ok(false, '가중치 확인 중 예외 — ' + L.errText(e)); }
+  ok(SH === 0.7, `해금 몫 상수 theme.unlock.chestOpenShare = ${SH}`);
+  const N = 12000;
+  // 해금 0명: 70% 몫은 등급 상승권(첫 판 보호), 30%는 잠긴 아이템(신화 21.9% · 불멸 8.1%)
+  const z = dist([], 91, N).r;
+  ok(near(z.rankUp, SH) && near(z.lock9, 0.73 * (1 - SH)) && near(z.lock10, 0.27 * (1 - SH)) && z.open9 + z.open10 === 0, `해금 0명: ${z.text}`);
+  // 첫 신화 2명: 신화 몫 70%는 그 2명 아이템, 불멸 몫 70%는 한 등급 아래(열린 신화)로 → 쓸 수 있는 아이템 70%
+  const s = dist(STARTER, 92, N), sr = s.r;
+  ok(near(sr.open9, SH) && sr.open10 === 0 && near(sr.lock9, 0.73 * (1 - SH)) && near(sr.lock10, 0.27 * (1 - SH)) && sr.rankUp === 0, `첫 신화 2명: ${sr.text}`);
+  const myth = T.items.filter((i) => i.tier === 9).map((i) => i.id), imm = T.items.filter((i) => i.tier === 10).map((i) => i.id);
+  const lockMyth = myth.filter((it) => !s.g.itemOpen(it));
+  ok(lockMyth.every((it) => s.out[it] > 0) && imm.every((it) => s.out[it] > 0), '잠긴 신화·불멸 장수의 아이템도 모두 나옴(비중만 줄어듦)');
+  const cnt = imm.map((it) => s.out[it]), mn = Math.min(...cnt), mx = Math.max(...cnt);
+  ok(mx / mn < 1.6, `잠긴 불멸 아이템끼리는 고르게 나옴 (최소 ${mn}, 최대 ${mx})`);
+  // 첫 신화 2 + 불멸 1(관우): 불멸 몫 70%는 청룡
+  const g1 = dist(STARTER.concat(['gwanu']), 93, N).r;
+  ok(near(g1.open10, 0.27 * SH) && near(g1.open9, 0.73 * SH) && g1.rankUp === 0, `첫 신화 2 + 관우: ${g1.text}`);
+  // 전부 해금: 잠긴 것이 없으니 100% 해금한 장수 아이템, 등급 확률 73/27 그대로
+  const a = dist(UL.lockedIds(), 94, N).r;
+  ok(near(a.open9, 0.73) && near(a.open10, 0.27) && a.lock9 + a.lock10 + a.rankUp === 0, `전부 해금: ${a.text}`);
+} catch (e) { ok(false, '분포 확인 중 예외 — ' + L.errText(e)); }
 
 // 2) 해금 정보가 없으면(시험·시뮬레이터·옛 저장) 예전과 똑같다: 전부 연 판과 같은 씨앗이면 같은 순서로 나온다
 try {

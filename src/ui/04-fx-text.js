@@ -273,7 +273,7 @@
     }).join('');
     // 협동 업적: 지금 인원에서 필요한 수, 인원이 모자라면 비활성 안내
     const partyLine = c.type !== 'party' ? '' : g.partyAchOpen(c)
-      ? `<div style="margin-top:4px">${I.t('partyNow', { n: g.party, need: I.t(c.anyOf ? 'needAtLeast' : 'needAll', { n: g.partyAchNeed(c) }) })}</div>`
+      ? `<div style="margin-top:4px">${I.t('partyNow', { n: g.partyLive, need: I.t(c.anyOf ? 'needAtLeast' : 'needAll', { n: g.partyAchNeed(c) }) })}</div>`
       : `<div style="margin-top:4px;color:#ff7a60">${I.t('partyLack', { n: c.min })}</div>`;
     // 등급 단위 조건은 진행도를 한 줄로 보여 준다
     const tids = c.tier ? T.units.filter((d) => d.tier === c.tier).map((d) => d.id) : [];

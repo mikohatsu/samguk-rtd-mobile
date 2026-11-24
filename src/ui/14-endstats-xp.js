@@ -45,8 +45,10 @@
     const card = (l, v, sub, cls) => `<div class="es-card ${cls || ''}"><small>${l}</small><b>${v}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
     // 받은 경험치·동전: 통계 카드 맨 앞에(로그인한 판만)
     const reward = S.xpGained != null && ACC.me ? card(I.t('rewardHead'), `+${fmt(S.xpGained)} XP`, (S.coinGained ? `<i class="ico coin" aria-hidden="true"></i>+${fmt(S.coinGained)} · ` : '') + `${esc(t(ACC.me.grade))} ${t('level', { n: ACC.me.level })}`, 'es-rw') : '';
-    const cards = reward + [
-      card(I.t('reachRound'), `${g.round} / ${g.diff.rounds}`), card(I.t('playTime'), `${mm}:${String(ss).padStart(2, '0')}`),
+    // 탈락한 사람: 내 기록은 패배(도달 라운드는 판이 끝난 라운드)이고 팀 결과를 따로 알린다
+    const elim = g.out ? `<div class="es-card"><small>${esc(t('elimTitle'))}</small><b>${esc(t(g.teamOver === 'win' ? 'elimTeamWin' : 'elimTeamLose'))}</b><i>${esc(t('elimAt', { n: g.out }))}</i></div>` : '';
+    const cards = reward + elim + [
+      card(I.t('reachRound'), `${g.resultRound} / ${g.diff.rounds}`), card(I.t('playTime'), `${mm}:${String(ss).padStart(2, '0')}`),
       card(I.t('kills'), fmt(s.kills)), card(I.t('midboss'), I.t('midKills', { n: s.midKill }), s.midMiss ? I.t('midMiss', { n: s.midMiss }) : I.t('noMiss')),
       card(I.t('lifeLost'), `${s.lifeLost}`, I.t('livesLeft', { n: g.lives })), card(I.t('bestTier'), s.bestName ? `${esc(s.bestName)}` : '-', s.best ? rankName(s.best) : ''),
       card(I.t('goldEarned'), fmt(s.goldIn), I.t('upHire', { a: fmt(s.goldUp), b: fmt(s.goldHire) })), card(I.t('combCraft'), `${s.combines} · ${s.crafts.length}`, I.t('tixChest', { a: s.tickets, b: s.chests })),
