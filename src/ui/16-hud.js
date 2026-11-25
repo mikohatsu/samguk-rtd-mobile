@@ -19,7 +19,8 @@
     // 보스전 중 라인 보기에서도 결투 시간 칸은 뺀다(같은 시간이 'ボス戦に戻る' 버튼에 있다).
     // 보스 처치 연출(S.kill) 동안도 보스전 모양을 유지한다(라인 정보 줄이 연출 위로 먼저 돌아오지 않게)
     const bossV = (g.phase === 'boss' && !S.laneView) || !!S.kill;
-    let h = bossV ? `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}</div>`
+    // 체험: 라운드가 없으므로 정보 줄을 비운다(피해 계기는 07-arena drawBossHud가 위 가운데에 그린다)
+    let h = g.trial ? '' : bossV ? `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}</div>`
       : `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${g.phase === 'boss' ? '' : cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '')}</div>`; // 병력 칸은 뺐다(2026-11-21 사용자 요청)
     // 탈락(관전) 중 표시: 위 정보 줄에 늘 보인다
     if (spect()) h += `<div class="hrow"><span class="nc mid">${esc(t('elimHud', { n: g.out }))}</span></div>`;
@@ -140,6 +141,10 @@
       const late = performance.now() - S.pzAt > 10000;
       key = 'z' + net.clock.pz + (late ? 'L' : '') + (S.quitArm ? 'A' : '');
       h = `<div class="over pzwait"><div class="sheet"><h2>${I.t('waitTitle')}</h2><div>${I.t('waitPz', { a: esc(net.clock.pz) })}</div>${late ? `<div class="warnline">${I.t('waitSelf')}</div>` : ''}<div class="dim">${I.t('quitHintRoom')}</div><button class="btn ${S.quitArm ? 'warn' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitGame')}</button></div></div>`;
+    } else if (g.over === 'trial' && !(performance.now() < (S.endHoldUntil || 0) || killOn())) {
+      // 체험 결과 카드(일반 결과창·게임에 남기 대신). 처치 연출(S.kill)이 끝난 뒤에 띄운다
+      if (S.drawer) { S.drawer = null; $('drawer').hidden = true; }
+      key = 'trial'; h = trialCard();
     } else if (g.over && (performance.now() < (S.endHoldUntil || 0) || S.kill)) {
       // 마지막 보스 처치 연출(S.kill)도 끝날 때까지 미룬다(07-arena가 S.endHoldUntil을 실제 시간 4.3초로 두지만 느린 기기에서는 연출이 더 길다)
       // 패배 연출(09-render-camera가 S.endHoldUntil = 패배 순간 + 1.6초로 둔다)이 끝날 때까지 결과 창을 미룬다
@@ -176,7 +181,7 @@
     const sb = $('speedbtn'), st = g.over || g.phase !== 'wave' || S.kill ? '' : `${t('speed', { n: speed })}${net && net.clock.sp !== speed ? ` (×${net.clock.sp})` : ''}`;
     if (sb.dataset.t !== st) { sb.textContent = st; sb.dataset.t = st; sb.hidden = !st; sb.title = net ? I.t('speedTip') : ''; }
     if (g.phase !== 'boss') { S.laneView = false; S.meterOpen = false; }
-    const bb = $('bossbtn'), bt = g.phase === 'boss' && !S.stay ? (S.laneView ? `${t('backToBoss')} · ${clock(Math.max(0, g.fight.limit - g.fight.t))}` : t('toLane')) : '';
+    const bb = $('bossbtn'), bt = g.phase === 'boss' && !S.stay && !g.trial ? (S.laneView ? `${t('backToBoss')} · ${clock(Math.max(0, g.fight.limit - g.fight.t))}` : t('toLane')) : '';
     if (bb.dataset.t !== bt) { bb.textContent = bt; bb.dataset.t = bt; bb.hidden = !bt; bb.classList.toggle('go', !!S.laneView); }
   }
   // 관전: 라인 단계에서 동료 전장을 보고 있지 않으면 아직 싸우는 동료(없으면 아무 동료)의 전장으로 바꾼다
@@ -195,6 +200,9 @@
       else if (e.type === 'pop') { queuePop(e.def, e.who || (net ? net.name : null)); if (e.def.tier >= 9 && g.phase !== 'boss') S.freeze = (S.freeze || 0) + POP_DUR[e.def.tier]; if (net && !e.remote) net.send('pop', { id: e.def.id, name: net.name }); }
       else if (e.type === 'round') { Snd.play('round'); saveGame(); }
       else if (e.type === 'bossIntro') { Snd.play('gong'); Snd.setBoss(true); }
+      // 체험 끝: 보고·전적·저장 삭제 없이 결과 카드만(over 이벤트는 엔진이 내지 않는다. 혹시 와도 아래 over 처리에서 건너뛴다)
+      else if (e.type === 'trialEnd') { Snd.setBoss(false); Snd.play(e.win ? 'win' : 'round'); S.trialRes = e; }
+      else if (e.type === 'over' && g.trial) continue;
       else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); S.tkMiss = !!(S.tkWant && !S.gameTk); S.repP = reportResult(); if (window.RTD_LOBBY) { S.progBefore = window.RTD_LOBBY.progNow(); window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.gameTk); } if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
       else if (e.type === 'banner') S.banner = { text: e.text, sub: e.sub, t: 3 };
       // 협동에서 내 라이프가 다해 탈락: 알리고 동료 전장 보기로 바꾼다(관전). 조작은 10-input·11-actions의 spect가 막는다

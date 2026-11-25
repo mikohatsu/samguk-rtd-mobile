@@ -41,6 +41,10 @@
     b_samaui: { kind: 'staff', views: {
       f: { w: 115, h: 186, hip: [60, 150], parts: [{ id: 'weapon', role: 'weapon', pivot: [20, 103], z: 3 }] },
       s: { w: 109, h: 184, hip: [60, 150], parts: [{ id: 'weapon', role: 'weapon', pivot: [32, 104], z: 3 }] } } },
+    // 체험 보스 마속(art_src/build-masok.py, 2026-11-25): 앞 = 죽간 든 손(weapon)·위를 가리키는 팔(off), 옆 = 죽간 든 앞손
+    b_masok: { kind: 'staff', views: {
+      f: { w: 124, h: 184, hip: [64, 146], parts: [{ id: 'off', role: 'off', pivot: [89, 80], z: 2 }, { id: 'weapon', role: 'weapon', pivot: [26, 110], z: 3 }] },
+      s: { w: 123, h: 184, hip: [66, 147], parts: [{ id: 'weapon', role: 'weapon', pivot: [98, 106], z: 3 }] } } },
     // 장수(옆모습 그림이 있는 장수). 보스와 같은 그림을 쓰는 장수(조조·여포 등)는 아래 res()가 보스 조각을 그대로 쓴다.
     seohwang: { kind: 'heavy', views: { s: { w: 131, h: 161, hip: [55, 130], parts: [{ id: 'weapon', role: 'weapon', pivot: [90, 96], z: 3 }] } } },
     seoseo: { kind: 'heavy', views: { s: { w: 119, h: 182, hip: [70, 150], parts: [{ id: 'weapon', role: 'weapon', pivot: [48, 128], z: 3, dir: -1 }] } } },

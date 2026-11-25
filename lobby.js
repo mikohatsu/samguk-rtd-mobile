@@ -218,6 +218,7 @@
   }
   // 판이 끝날 때: 기기에 남기고, 로그인한 오프라인 판은 서버에도(온라인 판은 결과 보고에 같이 간다)
   function recordGame(g, online, mode, ticket) {
+    if (g.trial) return; // 체험은 전적을 남기지 않는다(rtd-hist의 myth는 로그인 안 한 기기의 해금 근거라 체험 장수가 열려 버린다)
     const rec = { at: Date.now(), diff: g.diff.id, mut: g.mutLv || 0, mutLv: g.mutLv || 0, round: g.resultRound || g.round, win: g.over === 'win', time: Math.round(g.time), online: !!online, mode, myth: (g.stats && g.stats.myth) || {}, st: statsOf(g) };
     const h = loadJ('rtd-hist', []); h.unshift(rec); saveJ('rtd-hist', h.slice(0, 20));
     const p = loadJ('rtd-prog', { clr: -1, nmx: -1, plays: {}, clears: {} });
@@ -408,7 +409,9 @@
       const d = unitOf(id), own = owns(id), cost = U.coins[d.tier], ip = U.iap[d.tier];
       const buy = own ? `<span class="pr">${L('unlocked')}</span>`
         : `<button class="btn go" type="button" data-unl="${id}" ${me.coins < cost ? 'disabled' : ''}>${L('unlockBtn')} · <i class="ico coin" aria-hidden="true"></i>${cost}</button>${me.coins < cost ? `<span class="short">${L('short', { n: cost - me.coins })}</span>` : ''}` + (iap && ip ? `<button class="btn" type="button" data-iap="${ip[0] + id}">${L('iapBtn', { y: ip[1].toLocaleString('en-US') })}</button>` : '');
-      return `<div class="lp-card ${own ? 'on' : 'lock'}"><img alt="" src="${Art.portrait(d)}"><span class="nm">${esc(d.name || id)}</span><span class="rk">${L(d.tier === 10 ? 'tImm' : 'tMyth')}</span>${buy}</div>`;
+      // 체험(2026-11-25): 잠긴 카드마다. 무료·무제한, 확인 창 없음(잃는 것이 없다)
+      const tr = own ? '' : `<button class="btn trial" type="button" data-trial="${id}">${esc(C.t('trialBtn'))}</button>`;
+      return `<div class="lp-card ${own ? 'on' : 'lock'}" data-card="${id}"><img alt="" src="${Art.portrait(d)}"><span class="nm">${esc(d.name || id)}</span><span class="rk">${L(d.tier === 10 ? 'tImm' : 'tMyth')}</span>${buy}${tr}</div>`;
     }).join('')}</div>`;
     // 결제 버튼이 보일 때만: 특정상거래법 표시·이용약관
     if (iap) h += `<div class="lp-note">${legalLink('tokushoho', L('tokusho'))} · ${legalLink('terms', C.t('terms'))}</div>`;
@@ -875,6 +878,7 @@
       if (e.target.id === 'malone') { stopMatch(true); closeWizard(); C.begin({ diff: C.cfg.diff, mode: 'solo', online: true, muts: [], mutLv: 0, key: 's-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }); return; }
       // 동전 구매·해금은 되돌릴 수 없으므로 같은 버튼을 한 번 더 눌러야 확정한다(armed: 신고·차단과 같은 방식)
       const bb = e.target.closest('[data-buy]'); if (bb) { if (!armed(bb)) return; bb.disabled = true; buy(bb.dataset.buy); return; }
+      const tb = e.target.closest('[data-trial]'); if (tb) { if (!shopOpen()) return; C.begin({ diff: 'easy', mode: 'solo', trial: { unit: tb.dataset.trial } }); return; }
       const un = e.target.closest('[data-unl]'); if (un) { if (!armed(un)) return; un.disabled = true; unlockCoins(un.dataset.unl); return; }
       const mc = e.target.closest('[data-msclaim]'); if (mc) { mc.disabled = true; msClaim(mc.dataset.msclaim); return; }
       const ma = e.target.closest('[data-msall]'); if (ma) { ma.disabled = true; msClaimAll(); return; }
@@ -917,9 +921,25 @@
     if (wizBack && panel === 'account' && C.ACC.token && C.ACC.me) { closePanel(); openWizard(); picked.play = true; showStep(); return; }
     if (panel === 'account') { C.refreshAcc(); renderPanel(); }
   }
+  // 체험에서 돌아옴(11-actions trialLeave가 sessionStorage 'rtd-trial-back'에 { id, cta }를 남기고 다시 불러온다):
+  // 상점 해금 탭을 열고 그 장수 카드로 스크롤해 테두리를 1.5초 반짝인다. cta(「이 장수 해금하기」)면 카드의 해금 버튼도 강조한다. 돌아온 경우 true
+  function trialBack() {
+    let o = null; try { o = JSON.parse(sessionStorage.getItem('rtd-trial-back') || 'null'); sessionStorage.removeItem('rtd-trial-back'); } catch (e) { o = null; }
+    if (!o || !C || typeof o.id !== 'string' || !shopOpen()) return false;
+    openPanel('shop'); ptab = 'unlock'; renderPanel();
+    const go = (n) => {
+      const card = $('lpbody').querySelector(`[data-card="${o.id.replace(/[^a-z0-9_]/gi, '')}"]`);
+      if (!card) { if (n > 0) setTimeout(() => go(n - 1), 150); return; }
+      card.scrollIntoView({ block: 'center' });
+      card.classList.add('trflash'); setTimeout(() => card.classList.remove('trflash'), 1500);
+      if (o.cta) { const b = card.querySelector('[data-unl], [data-iap]'); if (b) b.classList.add('trcta'); }
+    };
+    go(10);
+    return true;
+  }
   // 지금 장착한 지도가 그림 스킨이면 그 테마 이름(아니면 null)
   const mapTheme = () => { const me = C && C.ACC.me, p = me && me.mapSkin && SHOP.MAP_SKINS[me.mapSkin]; return p && p.theme ? p.theme : null; };
   // 테마 그림이 뒤늦게 도착하면 상점의 지도 미리보기를 다시 그린다
   if (typeof window !== 'undefined') window.addEventListener('rtd-maptheme', () => { if (panel === 'shop' && ptab === 'maps') renderPanel(); });
-  root.RTD_LOBBY = { shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, missions: () => ms, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), close: () => { closeWizard(true); closePanel(); } };
+  root.RTD_LOBBY = { trialBack, shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, missions: () => ms, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), close: () => { closeWizard(true); closePanel(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

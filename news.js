@@ -10,6 +10,9 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.4.1', d: '2026-11-25', items: [
+      ['상점의 잠긴 신화·불멸 장수 카드에 「체험」이 생겼습니다. 강화 10단계로 허수아비 보스 「마속」과 60초 동안 싸워 보고, 마음에 들면 바로 해금할 수 있습니다(무료, 횟수 제한 없음).', 'ショップの未解放の神話・不滅武将カードに「体験」が追加されました。強化10段階で練習用ボス「馬謖」と60秒戦い、気に入ったらそのまま解放できます（無料・回数無制限）。', 'Locked mythic and immortal heroes in the shop now have a "Try" button: fight the practice boss Ma Su for 60 seconds at upgrade level 10, then unlock the hero right away if you like it (free, unlimited).', '商店中未解锁的神话·不灭武将卡新增「体验」：以强化10级与陪练首领「马谡」战斗60秒，喜欢就能直接解锁（免费，次数不限）。'],
+    ] },
     { v: '0.4.0', d: '2026-11-25', items: [
       ['보스전 타격감을 새로 만들었습니다. 때리면 보스가 번쩍이고 화면이 흔들리며, 내 장수가 맞으면 붉게 번쩍이고 화면 가장자리가 붉어집니다.', 'ボス戦の打撃感を一新しました。攻撃するとボスが光って画面が揺れ、自分の武将が攻撃を受けると赤く光り、画面の端が赤くなります。', 'Boss fights now hit harder: bosses flash and the screen shakes on hits, and your hero flashes red with a red screen edge when struck.', '重做了首领战打击感：命中时首领闪光、画面震动；武将受击时会泛红，屏幕边缘也会变红。'],
       ['보스를 쓰러뜨리면 약 4초 동안 처치 연출이 나온 뒤 다음 화면으로 넘어갑니다. 보스 그림이 더 선명해지고 그림 가장자리의 흰 선이 사라졌습니다.', 'ボスを倒すと約4秒の撃破演出のあとで次の画面に進みます。ボスの絵がより鮮明になり、絵のふちの白い線がなくなりました。', 'Defeating a boss now plays a roughly 4-second finishing sequence before moving on. Boss art is sharper and the white outlines around sprites are gone.', '击败首领后会播放约4秒的击破演出再进入下一画面。首领图像更清晰，角色边缘的白线也已消除。'],

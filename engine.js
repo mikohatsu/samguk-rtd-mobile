@@ -44,7 +44,10 @@
       this.defs = {}; theme.units.forEach((d) => (this.defs[d.id] = d));
       // 장수 해금(theme.unlock): opt.unlocked = 이 사람이 연 잠금 장수 id 목록. 없으면 화면이 넣은 provider, 그것도 없으면(시험·시뮬레이터) 전부 열림.
       // 잠긴 장수는 조합·교체권·선택권에서 나오지 않는다. 상자는 잠긴 장수의 조합 아이템도 준다(등급 안에서 30%, unlock.chestOpenShare. 해금 유도, 2026-11-24 사용자 결정. AI 사령관 판은 예전처럼 뺀다).
-      const UL = theme.unlock, ul = opt.unlocked !== undefined ? opt.unlocked : (UL && UL.provider ? UL.provider() : null);
+      // 신화·불멸 체험(opt.trial = { unit }, theme.trial·trialBoss): 라운드·라인 없이 그 장수 1명과 더미 보스 한 판. 잠금은 걸지 않는다(잠긴 장수를 써 보는 판).
+      // 보상·전적·업적·경험치는 남기지 않고(grant·stats.bosses·checkAchievements 없음), 끝나면 'over' 대신 'trialEnd'만 낸다(로그인 안 한 기기의 rtd-hist 해금 새는 것 방지).
+      this.trial = opt.trial && theme.trialBoss && this.T.units.some((d) => d.id === opt.trial.unit) ? { unit: opt.trial.unit } : null;
+      const UL = theme.unlock, ul = this.trial ? null : opt.unlocked !== undefined ? opt.unlocked : (UL && UL.provider ? UL.provider() : null);
       this.unlocked = Array.isArray(ul) ? ul.filter((x) => typeof x === 'string').slice(0, 64) : null;
       this.lockedSet = new Set(this.unlocked && UL ? UL.lockedIds().filter((id) => !this.unlocked.includes(id)) : []);
       this.itemUnit = {}; Object.keys(theme.recipes).forEach((id) => { const r = theme.recipes[id]; if (!Array.isArray(r) && r.item) this.itemUnit[r.item] = id; });
@@ -72,6 +75,7 @@
       // 판 끝 통계(내 것만 센다)
       this.stats = { kills: 0, midKill: 0, midMiss: 0, lifeLost: 0, goldIn: 0, goldUp: 0, goldHire: 0, combines: 0, crafts: [], chests: 0, tickets: 0, best: 0, bestName: '', dmgUnit: {}, bosses: [] };
       this.auraT = 0; this.achDirty = true; this.fight = null; this.speed = 1;
+      if (this.trial) { this.startTrial(); return; }
       this.players.forEach((p) => {
         p.gold = this.R.startGold + (this.mut.startGold || 0);
         for (let i = 0; i < this.diff.startUnits; i++) this.spawnUnit(p, this.pick(this.tierIds(1)));
@@ -724,6 +728,7 @@
     }
     finish(win) {
       if (this.over) return;
+      if (this.trial) { this.trialEnd(!!win); return; } // 체험은 'over'(전적·결과 보고)를 내지 않는다
       // 탈락한 사람은 팀이 이겨도 패배로 기록한다(도달 라운드는 판이 끝난 라운드). teamOver = 팀 결과
       this.teamOver = win ? 'win' : 'lose';
       if (this.out) win = false;
@@ -740,7 +745,7 @@
       this.stepDrops(dt);
       if (this.phase === 'wave') this.stepWave(dt);
       else if (this.fight) this.stepFight(dt);
-      if (this.achDirty) { this.achDirty = false; this.checkAchievements(); }
+      if (this.achDirty) { this.achDirty = false; if (!this.trial) this.checkAchievements(); } // 체험은 업적 없음
     }
     stepWave(dt) {
       this.roundT += dt;
@@ -1009,7 +1014,7 @@
     }
 
     // ---- 보스전 ----
-    slotCount() { return Math.max(1, (this.mode === 'solo' ? 2 : 1) - (this.mut.slotLess || 0)); }
+    slotCount() { if (this.trial) return 1; return Math.max(1, (this.mode === 'solo' ? 2 : 1) - (this.mut.slotLess || 0)); }
     bossStats(b) {
       const m = this.diff.mult, scale = this.R.partyBossScale[Math.min(4, this.party - 1)];
       // 이동 중엔 공격하지 못하므로 실제 딜 시간 비율을 넣는다. hpx는 강화까지 고려해 보스별로 맞춘 체력 배율이다.
@@ -1033,6 +1038,36 @@
       };
       this.raidInit(this.fight);
       this.log('bossIntro', { boss: b });
+    }
+    // ---- 체험(trial-mode.md 2절) ----
+    startTrial() {
+      const T = this.T, cfg = T.trial || {}, p = this.me, d = this.defs[this.trial.unit];
+      const u = this.spawnUnit(p, d.id, 0, 0, true);
+      this.events = this.events.filter((e) => e.type !== 'pop'); // 체험 장수 등장 연출(신화·불멸 컷신)은 띄우지 않는다
+      this.stats.myth = {}; this.stats.imm = {}; this.stats.best = 0; this.stats.bestName = ''; // 소환 기록을 남기지 않는다(전적 rtd-hist의 myth가 로그인 안 한 기기의 해금 근거라)
+      const ug = this.upgradeGroup(d), L = cfg.upLv != null ? cfg.upLv : 10;
+      if (ug) p.upgrades[ug.id] = Math.max(0, Math.min(L, ug.max));
+      this.trial.uid = u.id; this.trial.upLv = L;
+      const b = Object.assign({}, T.trialBoss, { time: cfg.limit || T.trialBoss.time || 60 });
+      this.startBoss(b);
+      // 마속 체력: 등급 공격력(초당) × 강화 배율 × (1 + 보스 피해 특성) × 실제로 때리는 시간 비율 × 목표 처치 시간
+      const f = this.fight, rk = this.rankOf[d.tier], up = (this.diff.upPct || 0.2) * this.upgradeLevel(p, d);
+      const bossPct = this.passives(d, 'bossPct').reduce((a, x) => a + (x.pct || 0), 0);
+      // hpx: 장수별 보정(theme.trial.hpx, tests/balance/trial-calib.js로 측정). 공식은 평타만 셈해서 스킬 배율(4~9배)·치명타·공격 속도 특성이 센 장수는
+      // 첫 스킬 한 바퀴에 거의 끝났다(보정 없이 2~15초, 설계 목표 20~45초). 없는 장수는 1.
+      const hp = rk.atk * (1 + up) * (1 + bossPct) * (cfg.uptime || 0.6) * (cfg.killT || 30) * ((cfg.hpx || {})[d.id] || 1);
+      Object.assign(f.boss, { hp, mhp: hp, def: b.def || 0, hit: rk.hp * (cfg.hitPct != null ? cfg.hitPct : 0.03) });
+      f.trialLines = (b.lines || []).map((x) => Object.assign({ done: false }, x));
+    }
+    // 체험 끝(보스 체력 0 = 승, 시간 끝 = 시간 종료, 장수 전멸·기타 = 시간 종료와 같은 카드). 보상·기록 없이 결과만 남긴다.
+    trialEnd(win) {
+      if (this.over) return;
+      const f = this.fight;
+      const t = f ? Math.min(f.limit, f.t) : 0;
+      this.trialRes = { win: !!win, time: Math.round(t), t, total: f ? f.total : 0, best: f ? f.best || 0 : 0, dps: f ? f.total / Math.max(1, t) : 0, unit: this.trial.unit, limit: f ? f.limit : 0, upLv: this.trial.upLv };
+      if (win) this.fight = null; // 처치 연출(07-arena watchKill)이 끝난 보스전을 알아보게(일반 판 승리와 같은 상태)
+      this.over = 'trial'; this.phase = 'over';
+      this.log('trialEnd', this.trialRes);
     }
     pickChoices() {
       const f = this.fight;
@@ -1320,6 +1355,7 @@
       const d = opt && opt.cap != null ? Math.max(0, Math.min(d0, opt.cap)) : d0; // 원군 피해 예산(synergy.js synHit)
       if (c && c.syP) { if (opt && opt.syn) c.syAllyD = (c.syAllyD || 0) + d; else c.syOwnD = (c.syOwnD || 0) + d; } // 주장 자신의 피해·원군 피해 누계
       b.hp = Math.max(0, b.hp - d); b.flash = 0.1;
+      if (c && c.owner === this.me.idx && d > (f.best || 0)) f.best = d; // 내 장수 최대 한 방(체험 결과 카드)
       this.raidOnBossDmg(d, c);
       this.addDealt(c, d, opt && opt.syn);
       if (this.net) { f.pending += d; if (opt && opt.stun) f.pendStun = opt.stun; }
@@ -1337,6 +1373,7 @@
       if (c.syShd > 0) { const ab = Math.min(c.syShd, dmg); c.syShd -= ab; dmg -= ab; } // 인연 보호막이 먼저 받는다
       const before = c.hp;
       c.hp -= dmg; c.hurt = 0.2;
+      if (this.trial && c.hp < 1) c.hp = 1; // 체험 장수는 쓰러지지 않는다
       this.synHurt(c, dmg); // 인연 hurt 트리거(오왕의 수성·번성 사수 등)
       if (c.hp <= 0 && !c.lastUsed && this.passives(c.def, 'lastStand').length) { c.hp = 1; c.lastUsed = true; c.inv = 1; this.log('proc', { x: c.x, y: c.y, tx: c.x, ty: c.y, names: [this.passives(c.def, 'lastStand')[0].name || '칠종칠금'], c: '#ff9a5a' }); }
       // 인연 버팀·부활(패시브 버팀 다음 순서), 아니면 체력 조건 트리거
@@ -1432,6 +1469,8 @@
       });
       if (b.burnT > 0) { b.burnT -= dt; const d = b.burn * dt; b.hp = Math.max(0, b.hp - d); this.addDealt(b.burnC, d); if (b.burnC && b.burnC.syP) b.burnC.syOwnD = (b.burnC.syOwnD || 0) + d; if (this.net) f.pending += d; }
       if (this.net) this.net.tickFight(dt, this);
+      // 체험 보스 대사: 체력 문턱에서 배너 한 번씩(기믹 아님)
+      if (f.trialLines) f.trialLines.forEach((x) => { if (!x.done && b.hp > 0 && b.hp <= b.mhp * x.at) { x.done = true; this.log('banner', { text: f.def.name, sub: this.L(x.k, null, x.k), trial: true }); } });
       if (this.isAuthority) {
         if (b.hp <= 0) this.endFight(true);
         else if (f.t >= f.limit) this.endFight(false);
@@ -1443,6 +1482,7 @@
     }
     applyPick() {
       if (!this.fight) return; // 보스 시작 신호보다 먼저 도착한 경우
+      if (this.trial) { this.phase = 'bossPick'; this.confirmPick([this.trial.uid]); return; } // 체험: 출전 선택 창 없이 그 장수 1명
       this.phase = 'bossPick';
       if (this.out) this.fight.picked = true; // 탈락한 사람은 출전을 고르지 않는다(출전 창을 띄우지 않는다)
       this.log('bossPick', {});
@@ -1508,7 +1548,7 @@
       if (tuned.n && pat.gen !== 'safe') tuned.n += lv + (this.party >= 3 ? 1 : 0);
       // 기술마다 장판·투사체 연출 이름(vis → 장판의 fx)을 붙인다
       f.vis = pat.vis || null;
-      this.patternGen[pat.gen].call(this, f, b, t, tuned, Math.max(0.55, 1.05 - lv * 0.08), this.allTargets());
+      this.patternGen[pat.gen].call(this, f, b, t, tuned, Math.max(0.55, 1.05 - lv * 0.08) * (f.def.pace || 1), this.allTargets());
       f.vis = null;
       b.cast = 0.6;
       this.log('pattern', { name: pat.n });
@@ -1718,6 +1758,7 @@
     applyBossEnd(win, remain) {
       const f = this.fight;
       if (!f) return;
+      if (this.trial) { this.trialEnd(win); return; } // 체험: stats.bosses·보상·라운드 진행 없음
       // 판 끝 통계: 보스전 기록(걸린 시간·빠른 클리어·출전 장수·피해 순위)
       const fastNow = win && remain >= this.fastNeed();
       // 탈락한 사람은 보스전에 나가지 않았으므로 내 보스전 기록(전적·일일 미션 '보스 처치')에 넣지 않는다

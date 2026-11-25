@@ -214,3 +214,24 @@
       const step = (now) => { if (fin) return; const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3); draw(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); else setTimeout(end, 1600); };
       requestAnimationFrame(step); }, 700);
   }
+  // ---- 신화·불멸 체험 결과 카드(trial-mode.md 4-3): 장수 얼굴·이름·등급·칭호, 큰 숫자 3개(총 피해·초당 피해·최대 한 방),
+  // 걸린 시간과 「강화 10단계 기준」, 마속의 한 줄, 특성 목록, 「이 장수 해금하기」(동전 안내)·「상점으로 돌아가기」. 두 버튼 모두 로비 상점 해금 탭의 그 장수 카드로(11-actions trialLeave).
+  // 보상·경험치·전적은 없다(결과 보고를 하지 않는다).
+  function trialCard() {
+    const R = g.trialRes || {}, d = defOf[g.trial.unit], bossName = (T.trialBoss && T.trialBoss.name) || '';
+    if (!d) return '';
+    const me = ACC.me, U = T.unlock, cost = U && U.coins ? U.coins[d.tier] : null;
+    const owned = me && U && (me.owned || []).includes(U.key(d.id));
+    let coin = '';
+    if (me && ACC.token && cost && !owned) coin = (me.coins || 0) >= cost ? I.t('trCanBuy', { n: cost }) : I.t('trShort', { n: cost - (me.coins || 0) });
+    const num = (k, v) => `<div class="tr-num"><small>${esc(I.t(k))}</small><b>${esc(fmt(v || 0))}</b></div>`;
+    const traits = (d.p || []).map((x) => `<li><b>${esc(x.name)}</b> ${esc(x.desc || '')}</li>`).join('');
+    return `<div class="over"><div class="sheet trialc" id="trialc">
+      <div class="tr-head"><img class="tr-por" alt="" src="${Art.portrait(d)}"><div class="tr-nm"><small>${esc(I.t('trHead'))}</small><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong><span>${esc(rankName(d.tier))}${d.title ? ' · ' + esc(d.title) : ''}</span></div></div>
+      <div class="tr-line">${esc(I.t(R.win ? 'tb_down' : 'tb_timeup'))}</div>
+      <div class="tr-nums">${num('trTotal', R.total)}${num('trDps', R.dps)}${num('trBest', R.best)}</div>
+      <div class="tr-sub">${esc(R.win ? I.t('trWin', { a: bossName, n: R.time }) : I.t('trTimeUp'))} · ${esc(I.t('trBasis', { n: R.upLv != null ? R.upLv : g.trial.upLv }))}</div>
+      ${traits ? `<div class="tr-traits"><small>${esc(I.t('trTraits'))}</small><ul>${traits}</ul></div>` : ''}
+      <div class="tr-btns"><button class="btn go tr-cta" data-act="trialUnlock" type="button">${esc(I.t('trUnlock'))}${coin ? `<small>${esc(coin)}</small>` : ''}</button><button class="btn" data-act="trialBack" type="button">${esc(I.t('trBack'))}</button></div>
+    </div></div>`;
+  }

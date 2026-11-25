@@ -508,6 +508,24 @@
     cardRecipe: ['조합식', 'レシピ', 'Recipes', '配方'],
     cardStats: ['능력치', 'ステータス', 'Stats', '属性'],
     cardSkills: ['스킬·패시브', 'スキル・パッシブ', 'Skills & passives', '技能・被动'],
+    // 신화·불멸 체험(2026-11-25, production/team/2026-11-25/trial-mode.md): 상점 해금 카드의 체험 버튼, 체험 보스 마속, 피해 계기, 결과 카드
+    trialBtn: ['체험', '体験', 'Try', '体验'],
+    tb_name: ['마속', '馬謖', 'Ma Su', '马谡'], tb_title: ['산정의 병법가', '山頂の兵法家', 'Mountaintop Tactician', '山顶的兵法家'], tb_place: ['가정', '街亭', 'Jieting', '街亭'],
+    tb_line: ['병법에 이르길, 높은 곳에 오르면 반드시 이긴다 하였소!', '兵法に曰く、高きに拠れば必ず勝つ！', 'The Art of War says: take the high ground and victory is certain!', '兵法云：凭高视下，势如劈竹！'],
+    tb_pat1: ['고지 선점', '高地先取', 'Seize the Heights', '抢占高地'], tb_pat2: ['병법서 낭독', '兵法書朗読', 'Reading the Manual', '诵读兵书'],
+    tb_l70: ['…물이 없군. 괜찮소, 병법서에 다 있으니.', '…水がない。だが兵法書に全部書いてある。', '…No water. Fine, it’s all in the book.', '……没有水。无妨，兵书上都写着。'],
+    tb_l30: ['승상, 소인은 병법서대로 했을 뿐이옵니다!', '丞相、私は兵法書の通りにしただけです！', 'Chancellor, I only followed the book!', '丞相，末将只是照兵书行事！'],
+    tb_down: ['마속은 울며 산을 내려갔다.', '馬謖は泣きながら山を下りた。', 'Ma Su walked down the mountain in tears.', '马谡哭着下山去了。'],
+    tb_timeup: ['마속: "역시 산 위가 정답이었소!"', '馬謖「やはり山の上が正解でしたな！」', 'Ma Su: "The mountaintop was the right call after all!"', '马谡：“果然山上才是正解！”'],
+    trPlace: ['체험 · {p}', '体験・{p}', 'Trial · {p}', '体验 · {p}'],
+    trMeter: ['총 피해 {a} · 초당 {b}', '総ダメージ {a}・毎秒 {b}', 'Total {a} · DPS {b}', '总伤害 {a} · 每秒 {b}'],
+    trBasis: ['강화 {n}단계 기준', '強化{n}段階基準', 'At upgrade level {n}', '以强化{n}级计算'],
+    trHead: ['체험 결과', '体験結果', 'Trial result', '体验结果'],
+    trTotal: ['총 피해', '総ダメージ', 'Total damage', '总伤害'], trDps: ['초당 피해', '毎秒ダメージ', 'Damage/sec', '每秒伤害'], trBest: ['최대 한 방', '最大の一撃', 'Biggest hit', '最高单击'],
+    trWin: ['{a} 격파 {n}초', '{a}撃破 {n}秒', 'Defeated {a} in {n}s', '{n}秒击败{a}'], trTimeUp: ['시간 종료', '時間切れ', 'Time up', '时间到'],
+    trTraits: ['특성', '特性', 'Traits', '特性'],
+    trUnlock: ['이 장수 해금하기', 'この武将を解放する', 'Unlock this general', '解锁这名武将'], trBack: ['상점으로 돌아가기', 'ショップに戻る', 'Back to shop', '返回商店'],
+    trCanBuy: ['동전 {n}으로 바로 해금할 수 있어요', '銅銭{n}ですぐ解放できます', 'You can unlock it now for {n} coins', '可用{n}铜钱立即解锁'], trShort: ['동전 {n} 부족', '銅銭が{n}足りません', '{n} coins short', '还差{n}铜钱'],
   };
   const idx = { ko: 0, ja: 1, en: 2, zh: 3 }[lang];
   function t(key, vars) {
@@ -669,6 +687,8 @@
   function localizeTheme(T) {
     T.title = t('title');
     T.L = t; // 엔진 알림 문구
+    // 체험 보스 마속: 문구표(tb_*)에서 4개 언어로(한국어도 같은 길)
+    if (T.trialBoss) { const b = T.trialBoss; b.name = t('tb_name'); b.title = t('tb_title'); b.place = t('tb_place'); b.line = t('tb_line'); b.patterns.forEach((p, i) => (p.n = t('tb_pat' + (i + 1)))); }
     if (lang === 'ko') return;
     const names = parse(N[lang]), mids = parse(MID[lang]);
     T.units.forEach((d) => { if (names[d.id]) d.name = names[d.id]; });

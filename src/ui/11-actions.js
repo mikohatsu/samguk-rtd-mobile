@@ -54,7 +54,7 @@
     else if (a === 'statDet') { S.statDet = !S.statDet; const sb = $('selbar'); if (sb && S.statDet) sb.classList.add('exp'); }
     else if (a === 'viewPeer') { S.view = arg === 'me' || S.view === arg ? null : arg; setSel([]); S.dropSel = null; S.allyOpen = false; }
     else if (a === 'allyList') S.allyOpen = !S.allyOpen;
-    else if (a === 'laneView') { if (g.phase === 'boss') { S.laneView = !S.laneView; S.cmdMode = null; S.drag = null; } }
+    else if (a === 'laneView') { if (g.phase === 'boss' && !g.trial) { S.laneView = !S.laneView; S.cmdMode = null; S.drag = null; } }
     else if (a === 'auto') g.setAuto(p, arg, !p.auto[arg]);
     else if (a === 'zone') { const [k, z] = arg.split(':'); g.setZone(p, k, z); }
     else if (a === 'vol') {
@@ -84,6 +84,9 @@
     else if (a === 'dash') { g.dash(g.active(), S.mouse.x, S.mouse.y); }
     else if (a === 'champ') g.selectChamp(+arg);
     else if (a === 'restart') adThen(() => location.reload());
+    // 체험 결과 카드: 로비로 돌아가 상점 해금 탭의 그 장수 카드를 연다(lobby.js trialBack). 광고(adThen)를 거치지 않는다.
+    // trialUnlock은 카드의 해금 버튼을 강조한다(해금 자체는 카드의 기존 버튼을 눌러야 한다)
+    else if (a === 'trialUnlock' || a === 'trialBack') trialLeave(a === 'trialUnlock');
     // 결과창 '게임에 남기': 결과창을 닫고 끝난 판의 전장에 남는다(17-loop). 결과창 버튼이 열린 뒤에만
     else if (a === 'stay') stayEnter();
     else if (a === 'stayView') stayView();
@@ -94,7 +97,9 @@
     // 탈락(관전) 중에 나가면 지금 라운드로 패배 결과를 남긴다: 판을 끝내 결과 보고(reportResult)·전적을 처리하고, 보고가 끝나거나 3초 뒤 나간다.
     else if (a === 'quit') {
       if (S.quitArm) {
-        S.quitArm = false; saveGame();
+        S.quitArm = false;
+        if (g.trial) { S.paused = true; trialLeave(false, true); return; } // 체험 중 나가기: 저장·광고 없이 로비로
+        saveGame();
         let rep = null;
         if (!lifeOffline() && spect()) { g.finish(false); drainEvents(); rep = S.repP; }
         if (lifeOffline()) S.paused = true; else { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
@@ -107,6 +112,11 @@
     else if (a === 'tutReset') { if (window.RTD_TUT) window.RTD_TUT.reset(); toast(I.t('tutReplayHint'), 'good'); }
     else if (a === 'lang') { I.setLang(arg); }
     dirty();
+  }
+  // 체험 판을 떠나 로비로: 상점 해금 탭의 그 장수 카드로 돌아갈 곳을 sessionStorage에 남긴다(나가기는 상점으로 데려가지 않는다)
+  function trialLeave(cta, plain) {
+    if (!plain) { try { sessionStorage.setItem('rtd-trial-back', JSON.stringify({ id: g.trial.unit, cta: !!cta })); } catch (e) { /* 저장 불가 */ } }
+    location.reload();
   }
   // 터치로 서랍(전황·인연 시너지 등) 안을 누르면 바로 실행하지 않고, 손가락을 거의 움직이지 않고 뗐을 때만 실행한다.
   // 누르자마자 실행하면 목록을 스크롤하려는 손가락이 타이머 줄을 펼쳤다 접었다 해서 스크롤이 안 된다.

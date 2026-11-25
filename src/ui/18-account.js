@@ -39,6 +39,7 @@
   // 서버에 닿지 못하면(끊김·5xx) 보낼 내용을 기기에 남겨 두고 다음에 앱을 켤 때·로비로 돌아올 때 다시 보낸다(lobby.js queueSend·flushPending)
   async function reportResult() {
     S.msClaim = false; S.rwRank = null; S.rwAch = null;
+    if (g.trial) return; // 체험은 결과를 보내지 않는다(이중 안전장치: 체험은 'over'를 내지 않는다)
     if (!ACC.token || S.reported || (!S.online && !S.gameTk)) return;
     S.reported = true;
     const path = S.online ? '/api/result' : '/api/history';

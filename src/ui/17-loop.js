@@ -99,7 +99,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 쉬는 화면: 일시정지(창은 DOM이라 캔버스가 멈춰도 보인다), 또는 판이 끝나고 승리·등장 연출과 경험치 연출이 다 끝난 결과 화면.
     // 이때는 초당 5번만 그린다(발열·배터리). 글자판을 고칠 일이 있으면(needs) 바로 돈다. 튜토리얼 설명 중에는 그대로 그린다.
     // 패배 연출 중(performance.now() < S.endHoldUntil)은 쉬는 화면에서 빼서 연출이 끊기지 않게 한다
-    const idle = !S.tutHold && ((S.paused && !g.over) || (g.over && !S.stay && !S.pop && !popQ.length && !S.xpPlaying && now >= (S.endHoldUntil || 0) && !S.kill));
+    const idle = !S.tutHold && ((S.paused && !g.over) || (g.over && !S.stay && !S.pop && !popQ.length && !S.xpPlaying && now >= (S.endHoldUntil || 0) && !(S.kill && killOn())));
     if (idle && !needs && now - lastDraw < 200) return;
     lastDraw = now;
     const p0 = Q.perf ? performance.now() : 0;
@@ -204,14 +204,16 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     g = opt.snap ? E.Game.restore(T, opt.snap) : new E.Game(T, opt);
     // 설정 「인연 유지」(기본 켬): 자동 조합이 켜진 인연 단계의 마지막 한 기를 남긴다. 기기 설정 'rtd-keepsyn' = '0'이면 끔
     try { g.keepSyn = localStorage.getItem('rtd-keepsyn') !== '0'; } catch (e) { g.keepSyn = true; }
-    // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기)
-    S.saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo'; S.saveT = 0;
+    // 신화·불멸 체험(opt.trial, trial-mode.md): 저장·판 표·결과 보고·전적·튜토리얼·광고 없음. S.trial = { unit }
+    S.trial = g.trial ? opt.trial : null; S.trialFx = null;
+    // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기). 체험은 저장하지 않는다(rtd-save에 있던 일반 판 이어하기도 그대로 남는다)
+    S.saveOn = !S.trial && !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo'; S.saveT = 0;
     // 판 표: 로그인해 있으면 서버에서 받아 둔다(결과·전적은 이 표가 있어야 서버가 받는다). 이어하기는 저장해 둔 표를 다시 쓴다.
     // 판 표는 S.gameTk에 둔다(S.ticket은 선택권 창이 쓰는 값이라 같이 쓰면 선택권을 쓸 때 판 표가 지워진다).
     // 표를 못 받으면(끊김·서버 오류) 3·6·12·24초 뒤에 다시 받는다. 판이 끝났거나 다른 판이 시작됐으면 멈춘다.
     // 끝까지 못 받은 채 판이 끝나면 결과 화면에서 알린다(S.tkWant = 이 판은 표를 받아야 하는 판, S.tkMiss = 못 받고 끝남).
     S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false;
-    if (ACC.token) {
+    if (ACC.token && !S.trial) { // 체험은 서버에 판 표를 받지 않는다(서버 통신 0회)
       if (opt.snap) { try { S.gameTk = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
       else {
         const saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo';
@@ -241,7 +243,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     let autoPref = false; try { autoPref = localStorage.getItem('rtd-auto') === '1'; } catch (e) { /* 저장 불가 */ }
     // 팁(명사·시너지)은 모든 판에서 보고, 단계 안내는 혼자 하는 오프라인 새 판에서만(tutorial)
     const tutOn = !!(window.RTD_TUT && window.RTD_TUT.maybeStart({ get g() { return g; }, S, T, t: I.t, dirty, tutorial: S.saveOn && !opt.snap, onSkip: () => { if (autoPref) autoOnAll(); dirty(); } }));
-    if (!opt.snap && !tutOn && autoPref) autoOnAll();
+    if (!opt.snap && !tutOn && autoPref && !S.trial) autoOnAll();
     window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); }, tick, render, dom: () => { renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
     view.focus({ preventScroll: true });
     last = performance.now();

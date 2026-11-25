@@ -1,6 +1,6 @@
 {
   "name": "sangoku-random-defense",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Sangoku Random Defense mobile app (Capacitor)",
   "scripts": {

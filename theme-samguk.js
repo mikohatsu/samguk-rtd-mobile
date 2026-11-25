@@ -471,7 +471,20 @@
     mijuk: ['scroll', 'scholar', 'short'], jingung: ['sword', 'scholar', 'long'], ugil: ['staff', 'hood', 'white', null, W], gyeonhui: ['ribbon', 'bun', null, 'p', '#1c1410', 1], daegyo: ['fan', 'bun', null, 'p', '#2a1c14', 1], sogyo: ['lute', 'bun', null, 'p', '#2a1c14', 1],
   };
   const midLooks = { 정원지: 'janggak', 장량: 'janggak', 안량: 'anryang', 문추: 'munchu', 하후돈: 'hadon', 하후연: 'hayeon', 맹획: 'maenghoek', 방덕: 'macho', 종회: 'deungae', 왕쌍: 'hwawoong', 채모: 'hwanggae', 이각: 'hwawoong', 곽사: 'anryang', 서영: 'hadon', 장양: 'sunuk' };
-  const bossLooks = { b_janggak: 'janggak', b_hwawoong: 'hwawoong', b_dongtak: 'dongtak', b_wonso: 'wonso', b_yeopo: 'yeopo', b_jojo: 'jojo', b_yukson: 'yukson', b_jegal: 'jegal', b_deungae: 'deungae', b_samaui: 'samaui' };
+  // ---- 신화·불멸 체험(2026-11-25 사용자 결정, production/team/2026-11-25/trial-mode.md) ----
+  // 상점 > 장수 해금의 잠긴 장수 카드 「체험」: 그 장수 1명이 더미 보스 마속과 60초 보스전. 보상·기록·서버 통신 없음. 횟수 무제한·광고 없음.
+  // upLv: 체험 장수 강화 단계(화면에 「강화 10단계 기준」으로 적는다), killT·uptime: 마속 체력 공식(체력 = 등급 공격력 × 강화 배율 × (1+보스 피해 특성) × uptime × killT),
+  // hitPct: 마속 공격력 = 그 장수 등급 체력 × hitPct, limit: 보스전 시간(초)
+  // hpx: 장수별 마속 체력 보정(tests/balance/trial-calib.js, 자동 조작 처치 약 24초에 맞춤. 사람은 더 느리므로 60초 안에 여유). 공식은 평타 기준이라 스킬 배율이 큰 장수는 보정 없이 2~15초에 끝났다.
+  const trial = { upLv: 10, killT: 30, uptime: 0.6, hitPct: 0.03, limit: 60,
+    hpx: { gwakga: 3.4, join: 1.5, sunuk: 3.2, jangbi: 1.7, joun: 4, macho: 5.3, sonchaek: 3.2, yukson: 4.2, dongtak: 3.3, choseon: 1.6, jojo: 3.4, samaui: 3.9, yubi: 2.9, gwanu: 6, jegal: 6.5, songwon: 2.5, juyu: 7.5, taesaja: 6.2, janggak: 2.8, yeopo: 6.3 } };
+  // 체험 보스(bosses 배열에 넣지 않는다: 넣으면 bossByRound에 잡혀 일반 판에 나온다). 기믹(phases) 없음, 아주 느림, 기존 장판 그림만.
+  // pace: 장판 예고 시간 배율(1보다 크면 길게). lines: 체력 문턱에서 배너 한 줄(at = 남은 체력 비율). 문구는 i18n.js tb_* 열쇠로 4개 언어.
+  const trialBoss = { round: 0, id: 'b_masok', name: '마속', mark: '謖', title: '산정의 병법가', place: '가정', fx: '#c8a86a', reqDps: 1, hitTier: 9, time: 60, def: 0, speed: 60, pace: 1.5,
+    arena: { sky: '#8a9ab0', ground: '#9a8460', motif: 'cliff' }, line: '병법에 이르길, 높은 곳에 오르면 반드시 이긴다 하였소!',
+    patterns: [{ n: '고지 선점', gen: 'rain', vis: 'rock', p: { n: 3, r: 90 } }, { n: '병법서 낭독', gen: 'fan', vis: 'talisman', p: { n: 3 } }],
+    lines: [{ at: 0.7, k: 'tb_l70' }, { at: 0.3, k: 'tb_l30' }] };
+  const bossLooks = { b_masok: 'masok', b_janggak: 'janggak', b_hwawoong: 'hwawoong', b_dongtak: 'dongtak', b_wonso: 'wonso', b_yeopo: 'yeopo', b_jojo: 'jojo', b_yukson: 'yukson', b_jegal: 'jegal', b_deungae: 'deungae', b_samaui: 'samaui' };
 
   // 인연 시너지 v0.3(2026-11-19, production/team/2026-11-19/synergy-v03-design.md): 단계형. 판 위의 서로 다른 구성원 수(명사 포함)로 단계를 센다.
   // tiers[]: n 필요 인원, g 등급(1 하·2 중·3 상·4 극), lane 라인 효과(구성원 유닛에. only가 있으면 그 장수만, per는 장수별 추가),
@@ -938,7 +951,7 @@
     // 등장 연출용 고해상도 일러스트가 있는 장수(gfx/il_<id>.jpg). 값은 그림 버전(바꾸면 브라우저가 새로 받는다).
     illusts: { jojo: 3, gwanu: 1, yeopo: 1, jegal: 1, yubi: 1, samaui: 1, juyu: 1, songwon: 1, taesaja: 1, janggak: 1, jangbi: 1, joun: 1, choseon: 1, gwakga: 1, join: 1, sunuk: 1, sonchaek: 1, yukson: 1, dongtak: 1 },
     factions, ranks, combineNeed, units, sageMax, roles, synergies, mutators, recipes, items, consumables, chestMark, itemMark, chestTable, unlock, difficulties, upgrades,
-    waves, bosses, midbosses, bossRewards, fastClearRemain, achievements,
+    waves, bosses, midbosses, bossRewards, fastClearRemain, achievements, trial, trialBoss,
     rules: {
       // 라인 몹 체력(쉬움 기준). 초반은 높게 시작해 완만하게, 이후 성장 속도에 맞춰 오른다. 15라운드부터는 제대로 뽑지 않으면 밀리게 1.2배.
       laneHp: [[1, 18], [5, 35], [10, 70], [15, 168], [20, 312], [25, 504], [30, 840], [35, 1260], [40, 1800], [45, 2520], [50, 3480], [55, 4680], [60, 6720], [65, 9360], [70, 12600], [80, 25200], [90, 46200], [100, 75600], [110, 109200], [120, 151200]],

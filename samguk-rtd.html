@@ -248,6 +248,23 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 .keys { color: var(--dim); font-size: 12px; line-height: 1.7; }
 .keys kbd { font: 700 11px var(--ui); color: var(--brass); }
 #end .sheet { align-items: center; text-align: center; width: min(460px, 100%); }
+/* 체험 결과 카드(14-endstats-xp trialCard) */
+.sheet.trialc { width: min(480px, 100%); align-items: stretch; text-align: center; overflow-y: auto; gap: 6px; }
+.trialc .tr-head { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.trialc .tr-por { width: 64px; height: 64px; object-fit: cover; object-position: top; border-radius: 10px; background: #1c140e; border: 1px solid #a8742a; flex: none; }
+.trialc .tr-nm { display: flex; flex-direction: column; align-items: flex-start; text-align: left; min-width: 0; }
+.trialc .tr-nm small { color: #c9a98f; font-size: 12px; } .trialc .tr-nm strong { font: 400 24px "Black Han Sans", sans-serif; } .trialc .tr-nm span { font-size: 12px; color: #d8c8a8; }
+.trialc .tr-line { font: 700 14px "Gowun Batang", serif; color: #e8dcc0; }
+.trialc .tr-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.trialc .tr-num { display: flex; flex-direction: column; padding: 6px 4px; border: 1px solid #a8742a; border-radius: 8px; background: linear-gradient(180deg, #3a1d18 0%, #22100d 100%); min-width: 0; }
+.trialc .tr-num small { color: #c9a98f; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .trialc .tr-num b { color: #ffd77a; font: 400 22px "Black Han Sans", sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trialc .tr-sub { font-size: 12px; color: #d8c8a8; }
+.trialc .tr-traits { text-align: left; font-size: 12px; color: #e8dcc0; border-top: 1px solid rgba(201,164,92,.3); padding-top: 4px; }
+.trialc .tr-traits small { color: #c9a98f; } .trialc .tr-traits ul { margin: 2px 0 0; padding-left: 16px; } .trialc .tr-traits li { margin: 1px 0; } .trialc .tr-traits b { color: #ffd86a; }
+.trialc .tr-btns { display: flex; gap: 8px; position: sticky; bottom: 0; }
+.trialc .tr-btns .btn { flex: 1; padding: 8px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.trialc .tr-cta { font-size: 16px; } .trialc .tr-cta small { font-size: 11px; opacity: .85; font-weight: 400; }
+@media (max-height: 520px) { .trialc .tr-por { width: 48px; height: 48px; } .trialc .tr-nm strong { font-size: 20px; } .trialc .tr-num b { font-size: 18px; } .trialc .tr-traits { font-size: 11px; } }
 /* 판 끝 통계 */
 #end .sheet.es { width: min(980px, 100%); align-items: stretch; text-align: left; overflow-y: auto; }
 #end .es h2 { text-align: center; font-size: 34px; }
@@ -729,6 +746,12 @@ html:not([lang=ko]) .rkf { font: 900 22px/1 "Hiragino Mincho ProN", "Yu Mincho",
 .lp-card .pr { color: #ffd86a; font-size: 12px; }
 .lp-card.lock img { filter: grayscale(1) brightness(.55); }
 .lp-card .rk { font-size: 11px; opacity: .8; }
+/* 신화·불멸 체험(2026-11-25): 해금 카드의 체험 버튼, 체험에서 돌아왔을 때 카드 반짝임·해금 버튼 강조 */
+.lp-card .btn.trial { border-color: #c8a86a; color: #ffe2a8; }
+.lp-card.trflash { animation: trflash .5s ease-in-out 3; }
+@keyframes trflash { 0%, 100% { box-shadow: 0 0 0 rgba(255,216,106,0); border-color: rgba(201,164,92,.35); } 50% { box-shadow: 0 0 16px rgba(255,216,106,.9); border-color: #ffd86a; } }
+.lp-card .btn.trcta { box-shadow: 0 0 0 2px #ffd86a, 0 0 12px rgba(255,216,106,.7); }
+@media (prefers-reduced-motion: reduce) { .lp-card.trflash { animation: none; border-color: #ffd86a; } }
 .lp-unlbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
 .lp-unlbar .btn { min-height: 30px; padding: 3px 12px; font-size: 12px; }
 .lp-sw { width: 72px; height: 48px; border-radius: 8px; }

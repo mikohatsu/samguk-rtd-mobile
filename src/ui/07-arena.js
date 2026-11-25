@@ -489,7 +489,13 @@
     const pat = S.pattern && S.pattern.t > 0, live = !g.over, clone = live && M.objs.some((o) => o.k === 'clone'), cast = live && M.cast;
     // 알림 띠가 비켜야 할 아래 끝(화면 고정 좌표). 띠·안내가 없으면 0(알림 띠는 제자리)
     S.hudBottom = cast ? top + 224 * us : clone ? top + 200 * us : pat ? top + 156 * us : 0;
-    if (live && !pat && !cast && !clone) { c.font = '500 13px "IBM Plex Sans KR", sans-serif'; txt(I.t(fast ? 'fastOk' : 'fastNo'), W / 2, 66, fast ? '#ffd86a' : '#a8987f'); }
+    if (g.trial) {
+      // 체험 피해 계기(trial-mode.md 4-2): 속공 문구 자리에 「총 피해 · 초당」(0.5초마다 갱신), 그 아래 「강화 10단계 기준」. 기술 이름 띠(104~)보다 위라 늘 보인다
+      const R = g.trialRes, now = performance.now();
+      if (!S.trialFx || now - S.trialFx.at > 500 || R) { const tot = R ? R.total : f.total, sec = R ? R.t : f.t; S.trialFx = { at: now, s: I.t('trMeter', { a: fmt(tot), b: fmt(tot / Math.max(1, sec)) }) }; }
+      c.font = '700 16px "IBM Plex Sans KR", sans-serif'; txt(S.trialFx.s, W / 2, 68, '#ffd86a');
+      c.font = '500 12px "IBM Plex Sans KR", sans-serif'; txt(I.t('trBasis', { n: g.trial.upLv }), W / 2, 88, '#d8c8a8');
+    } else if (live && !pat && !cast && !clone) { c.font = '500 13px "IBM Plex Sans KR", sans-serif'; txt(I.t(fast ? 'fastOk' : 'fastNo'), W / 2, 66, fast ? '#ffd86a' : '#a8987f'); }
     if (pat) {
       S.pattern.t -= S.fdt;
       // 기술 이름: 어두운 금속 판 그림(gfx/ui_title) 위에. 나타날 때는 위아래로 펼쳐지고 사라질 때는 접힌다(투명하게 흐려지며 뒤 그림과 섞이지 않게).
@@ -583,7 +589,8 @@
     S.lastFight = null;
     if (g.fight === f) return; // 실패로 판이 끝난 경우(보스전이 그대로 남는다)
     const bs = g.stats && g.stats.bosses, lb = bs && bs[bs.length - 1];
-    if (!lb || !lb.win || lb.round !== f.def.round) return;
+    // 체험은 보스 기록을 남기지 않으므로 체험 결과(g.trialRes)로 처치를 안다
+    if (g.trial ? !(g.trialRes && g.trialRes.win) : !lb || !lb.win || lb.round !== f.def.round) return;
     const ac = f.champs.find((u) => !u.dead && !u.bench);
     S.pattern = null; // 처치 연출에는 기술 이름 띠를 남기지 않는다(다음 보스전에 묵은 띠가 뜨지 않게)
     S.bhits = []; S.phit = null;
@@ -605,7 +612,7 @@
     Object.values(f.ghosts || {}).forEach((o) => { if (o.def) piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf({ face: Math.atan2(b.y - o.y, b.x - o.x), def: o.def, id: 1 }, t, CHAMP_R) }); });
     const by = b.y - 56 * (BOSS_S - 1), sc = 200 * BOSS_S, RG = window.RTD_RIG;
     const rv = RG && (RG.has(f.def.id, 'f') ? 'f' : RG.has(f.def.id, 's') ? 's' : null);
-    const brk = Math.max(0, (k - 1) / 1.2), fade = 1 - Math.max(0, (k - 2.2) / (KILL_LEN - 2.2));
+    const brk = Math.max(0, (k - 1) / 1.2), fade = Math.max(0, 1 - Math.max(0, (k - 2.2) / (KILL_LEN - 2.2)));
     if (SK && k < 1) SK.spr(c, 'light_01', f.def.fx, b.x, b.y - 40, 560, 560, k, (1 - k) * 0.9);
     blobShadow(c, b.x, b.y + 62, 124 * BOSS_S, 0.7 * (1 - Math.min(1, brk)));
     // 연쇄 폭발이 터질 때마다 흰 번쩍임이 되살아난다
@@ -645,7 +652,7 @@
     // 처음 0.12초 흰 섬광(화면 덮개)
     if (k < 0.12) { c.save(); c.globalAlpha = 0.5 * (1 - k / 0.12); c.fillStyle = '#fff'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); c.restore(); }
     // 「撃破!」: 화면 고정 좌표(카메라를 풀고). 09-render-camera가 다음에 변환을 다시 세운다
-    if (k >= 1) {
+    if (k >= 1 && fade > 0.01) {
       const q = Math.min(1, (k - 1) / 0.15), s0 = 1.7 - 0.7 * outCubic(q), a = Math.min(1, q * 1.5) * fade, us = hudS(), y = hudTop() + 190 * us, txt = I.t('bossDown');
       hudCam(c, 0, 0);
       c.save(); c.globalAlpha = 1;
@@ -672,7 +679,7 @@
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
     // 0.3초: 장소(위 레터박스)
     const aPlace = clamp01((e - 0.3) / 0.35) * fo;
-    if (aPlace > 0) { c.globalAlpha = aPlace; c.fillStyle = '#e8dcc0'; c.font = `700 ${Math.round(26 * cs)}px "Gowun Batang", serif`; c.fillText(I.t('roundPlace', { r: f.def.round, p: f.def.place }), W / 2, bh / 2); }
+    if (aPlace > 0) { c.globalAlpha = aPlace; c.fillStyle = '#e8dcc0'; c.font = `700 ${Math.round(26 * cs)}px "Gowun Batang", serif`; c.fillText(g.trial ? I.t('trPlace', { p: f.def.place }) : I.t('roundPlace', { r: f.def.round, p: f.def.place }), W / 2, bh / 2); }
     const TY = H - 275, NY = H - 196;
     // 1.85초: 이름 뒤 먹 띠(신화 등장과 같은 띠)
     const aBand = clamp01((e - 1.85) / 0.25) * fo;

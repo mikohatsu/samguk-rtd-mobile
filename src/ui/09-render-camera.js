@@ -10,7 +10,8 @@
     const sx = (Math.random() - 0.5) * shk, sy = (Math.random() - 0.5) * shk;
     // 보스 처치 순간(S.kill)은 판이 이미 라인으로 넘어간 뒤에도 경기장을 붙잡아 그리므로, 그동안은 보스전 카메라를 그대로 둔다
     watchKill();
-    if (S.kill && !killOn()) S.kill = null;
+    // 체험 처치는 연출이 끝나도 마지막 장면(보스가 사라진 결투장)을 결과 카드 뒤에 남긴다(라인 화면이 없는 판이라)
+    if (S.kill && !killOn() && !(g.trial && g.over)) S.kill = null;
     const arenaV = !!S.kill || !!(g.fight && g.phase !== 'wave' && !laneOn());
     const ph = S.kill ? S.camPh : g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');
     S.camArena = arenaV;
