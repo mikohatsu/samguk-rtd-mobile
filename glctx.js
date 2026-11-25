@@ -165,9 +165,13 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
     const vbuf = new ArrayBuffer(MAXQ * 4 * STRIDE), vf = new Float32Array(vbuf), vu = new Uint32Array(vbuf);
     const idx = new Uint16Array(MAXQ * 6);
     for (let i = 0; i < MAXQ; i++) { const v = i * 4, o = i * 6; idx[o] = v; idx[o + 1] = v + 1; idx[o + 2] = v + 2; idx[o + 3] = v; idx[o + 4] = v + 2; idx[o + 5] = v + 3; }
+    // 정점 버퍼: flush마다 그 데이터 크기로 bufferData(새 저장소, 앞 그리기를 기다리지 않음).
+    // 실기기에서 확인한 것: ① bufferData(전체 1.2MB 크기)는 WebGL이 0으로 채워 flush가 많은 프레임(스텐실 자르기 40~56번)에 수십 MB를 지웠고,
+    // ② 같은 버퍼에 bufferSubData로 이어 쓰면 앞 그리기가 아직 GPU에 있을 때 드라이버가 기다려 보스전이 60↔24fps로 흔들렸다.
     const vb = gl.createBuffer(), ib = gl.createBuffer();
+    let boundVB = null;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, vbuf.byteLength, gl.STREAM_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vb); boundVB = vb;
     for (let i = 0; i < 5; i++) gl.enableVertexAttribArray(i);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, STRIDE, 0);
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, STRIDE, 8);
@@ -182,8 +186,8 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
     let st = newState();
     const stack = [], pool = [];
     let W = view.width, H = view.height, inFrame = false, frame = 0, gen = 1, lost = false, fb = null;
-    const stats = { frames: 0, quads: 0, draws: 0, flushes: 0, up: 0, upPx: 0, rHit: 0, rFam: 0, rMiss: 0, rPx: 0, resets: 0, masks: 0 };
-    const S1 = { quads: 0, draws: 0, flushes: 0, up: 0, upPx: 0, rHit: 0, rFam: 0, rMiss: 0, rPx: 0, resets: 0, masks: 0 };
+    const stats = { frames: 0, quads: 0, draws: 0, flushes: 0, up: 0, upPx: 0, rHit: 0, rFam: 0, rMiss: 0, rPx: 0, resets: 0, masks: 0, tUp: 0, tRas: 0, tFl: 0, upN: 0 };
+    const S1 = { quads: 0, draws: 0, flushes: 0, up: 0, upPx: 0, rHit: 0, rFam: 0, rMiss: 0, rPx: 0, resets: 0, masks: 0, tUp: 0, tRas: 0, tFl: 0, upN: 0 };
 
     // ---- 텍스처 ----
     const texMap = new WeakMap(), texAll = new Set();
@@ -207,12 +211,13 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
       if (!r) { r = { tex: newTex(false), ref: WR(src), w: 0, h: 0, ver: null, used: 0, gen: 0, nr: false, bytes: 0, cv: !img }; texMap.set(src, r); texAll.add(r); }
       if (r.gen === gen) flush(); // 이번에 쌓인 사각형이 옛 내용을 쓰고 있다
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, r.tex); bound0 = r;
+      const tq = performance.now();
       try {
         if (r.w === w && r.h === h) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
         else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
       } catch (e) { unsupported.add('upload:' + (e && e.name)); return null; }
       texBytes += w * h * 4 - r.bytes; r.bytes = w * h * 4; r.w = w; r.h = h; r.ver = ver; r.used = frame;
-      S1.up++; S1.upPx += w * h;
+      S1.up++; S1.upN++; S1.upPx += w * h; S1.tUp += performance.now() - tq;
       return r;
     }
     function dropTex(r) { gl.deleteTexture(r.tex); texAll.delete(r); texBytes -= r.bytes; const s = r.ref.deref(); if (s) texMap.delete(s); if (bound0 === r) bound0 = null; }
@@ -258,7 +263,7 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
     // 새로 그려 올린다. key가 있으면 exact에 둔다. paint(x)는 영역 왼쪽 위가 (0,0). 돌려주는 것: { tr, x, y, w, h, ep }(부른 쪽이 keep으로 s0·rx·ry를 적는다)
     function raster(key, w, h, paint) {
       if (w > 4096 || h > 4096) { unsupported.add('raster>4096'); return null; }
-      S1.rMiss++; S1.rPx += w * h;
+      S1.rMiss++; S1.rPx += w * h; const tq = performance.now();
       if (dbg) dbg.push([key === null ? null : key.slice(0, 80), w, h]);
       const x = scratch(w, h);
       x.save(); paint(x); x.restore();
@@ -283,7 +288,7 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
         e = { tr: atlas, x: p[0], y: p[1], w, h, ep: repoch };
         if (key !== null) exact.set(key, e);
       }
-      S1.up++; S1.upPx += w * h;
+      S1.up++; S1.upPx += w * h; S1.tRas += performance.now() - tq;
       return e;
     }
     const valid = (e) => !!e && (e.tr === atlas ? e.ep === repoch : e.tr.owner === e);
@@ -448,7 +453,7 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
       if (bound0 !== atlas) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, atlas.tex); bound0 = atlas; }
       if (bound1 !== atlas) { gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, atlas.tex); gl.activeTexture(gl.TEXTURE0); bound1 = atlas; }
       gl.drawArrays(gl.TRIANGLES, 0, n);
-      gl.bindBuffer(gl.ARRAY_BUFFER, vb); pointers();
+      boundVB = null; // 다음 flush가 정점 버퍼를 다시 묶는다
       S1.draws++;
     }
     const rectTris = (r) => [r[0], r[1], r[2], r[1], r[2], r[3], r[0], r[1], r[2], r[3], r[0], r[3]];
@@ -479,6 +484,10 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
       gl.colorMask(true, true, true, true); gl.stencilMask(0xff); gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
       sBB[n + 1] = r;
       st.sd = n + 1; sdLeft = true;
+      // 시저도 자르기 범위로 좁힌다: 스텐실만 믿으면 자르기 안에 그리는 큰 그림(06-boss-vfx area: 장판의 7배 크기 빛 그림)의 화소를 GPU가 전부 훑는다.
+      // 2D(Skia)는 자르기 범위 안만 칠하므로 같은 결과. 범위 밖 그리기는 CPU에서 먼저 빠진다(vis).
+      const sc = st.sc;
+      st.sc = sc ? [Math.max(sc[0], r[0]), Math.max(sc[1], r[1]), Math.max(Math.max(sc[0], r[0]), Math.min(sc[2], r[2])), Math.max(Math.max(sc[1], r[1]), Math.min(sc[3], r[3]))] : r;
     }
     // 깊이를 to로 되돌린다(그 위 깊이들이 칠한 범위만)
     function stencilPop(from, to) {
@@ -540,9 +549,9 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
     let glBl = -1, glSc = undefined, bound1 = null, glSd = -1;
     function flush() {
       if (!nq) { nb = 0; cb = null; return; }
-      gl.bindBuffer(gl.ARRAY_BUFFER, vb);
-      gl.bufferData(gl.ARRAY_BUFFER, vbuf.byteLength, gl.STREAM_DRAW); // 버리고 새로(앞 그리기와 기다림 없이)
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, vf.subarray(0, nq * FPQ));
+      const tq = performance.now();
+      if (boundVB !== vb) { gl.bindBuffer(gl.ARRAY_BUFFER, vb); pointers(); boundVB = vb; }
+      gl.bufferData(gl.ARRAY_BUFFER, vf.subarray(0, nq * FPQ), gl.STREAM_DRAW);
       for (let i = 0; i < nb; i++) {
         const b = B[i];
         if (!b.n) continue;
@@ -562,7 +571,7 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
         gl.drawElements(gl.TRIANGLES, b.n * 6, gl.UNSIGNED_SHORT, b.q0 * 12);
         S1.draws++;
       }
-      S1.quads += nq; S1.flushes++;
+      S1.quads += nq; S1.flushes++; S1.tFl += performance.now() - tq;
       nq = 0; nb = 0; cb = null; gen++;
     }
 
