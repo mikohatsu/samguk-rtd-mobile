@@ -383,7 +383,7 @@
   // 패턴 gen: 엔진·raid.js의 hazard 생성기 이름. min: 추가되는 난이도 단계(0 쉬움~3 악몽). ctr: 반격 창.
   // style caster: 붙지 않고 순간이동하며 원거리로 친다. phases: 체력 비율(at)에서 시작하는 고유 기믹(raid.js mechs).
   // 조조 화용도(raid.js mechs.huarong): 길 위·아래 불판. delay 깔리기까지(초), tick 초당 피해(보스 한 방 b.hit 배율, 난이도 bossAtk 포함), after 바람이 그친 뒤 더 타는 시간(초)
-  const HUARONG_FIRE = { delay: 0.3, tick: 0.25, after: 0.5, road: 280 }; // road: 길 폭(2026-11-26 190→280, 몸통 키 127 + 옛 여유)
+  const HUARONG_FIRE = { delay: 0.3, tick: 0.25, after: 0.5, road: 190 }; // road: 길 폭(발판 깊이 44라 190 그대로)
   const bosses = [
     { round: 10, id: 'b_janggak', name: '장각', mark: '角', title: '황건의 난', place: '광종', fx: '#f2dd5c', reqDps: 48, hitTier: 2, time: 120,
       arena: { sky: '#3a2f14', ground: '#6b5a2c', motif: 'altar' }, line: '창천은 이미 죽었고, 황천이 일어나리라.',
@@ -973,16 +973,14 @@
       // 반격 게이지(raid.js addCounter, 2026-11-26 사용자 결정): 정면 한 대 = ctrFront, 뒤·옆 한 대 = 1. 뒤·옆 몫은 게이지의 ctrBackCap까지만 →
       // 뒤에서만 때리면 그로기가 안 되고, 절반 이상은 정면에서 채워야 한다.
       ctrFront: 2, ctrBackCap: 0.5,
-      // 보스전 피격 판정(engine.js bodyBox·champHit, 2026-11-26 사용자 결정 「딱 유닛 그림을 피격 판정으로, 장판은 테두리 선까지」):
-      // 장수 위치(x, y) 기준 몸통 사각형 x±hw, y+top(머리 위 끝)~y+bot(발끝). 그림(03-unit piece: 크기 r·3.7 = 148, 발끝 = y + r·0.8 = y+32)의
-      // 불투명 화소를 잰 값: 키 119(전원 116~119), 몸통 폭(가로 10~90% 화소) 중앙 52·3/4 63 → 56. 무기 끝은 넣지 않는다.
-      // hitEdge: 장판 그림의 테두리 선 바깥 끝(06-boss-vfx tele 바깥 어두운 선 4)까지 판정에 넣는 양. dangerPad: AI 회피 여유(몸통을 이만큼 더 늘려 본다)
-      hitBox: { hw: 28, top: -87, bot: 32 }, hitEdge: 4, dangerPad: 18,
-      // 판정 재조정(2026-11-26 사용자 「그림 판정 + 기술 재조정」): 한 점 판정에 맞춰 짜인 틈·길·안전지대를 몸통에 맞춘다(production/team/2026-11-26/boss-rules.md 7절)
-      //   gapPad 줄·탄·고리 사이 틈에 몸통 말고 더 주는 여유, meleeR 보스 근접 베기 반지름(150→120), dominoN 화웅 낙석 줄 수(8 그대로: 7로 줄이면 낙석이 번지는 속도가 빨라져 오히려 더 맞았다),
-      //   gateR 팔진도 생문 크기(95→120), rowsW 등애 성도 함락 줄 폭 비율(0.8→0.7). 동남풍·궁루·십자·고리·탄 간격은 engine.js가 몸통 크기로 계산한다
-      //   hzShrink 보스 장판 크기를 몸통이 커진 만큼 덜기(원·부채꼴 반지름 −20, 직선 폭 −20, 고리 폭 −40. engine.js fitHazard), rainSpread 낙석·낙뢰가 흩어지는 폭(170→240)
-      gapPad: 24, meleeR: 120, dominoN: 8, gateR: 120, rowsW: 0.7, hzShrink: 20, rainSpread: 240,
+      // 보스전 피격 판정(engine.js footPoly·champHit, 2026-11-26 사용자 결정 「기존처럼 하반신(발판 쪽)이 피격 범위, 보스 판정은 선 걸치기라도 하면 맞음,
+      // 2.5D 레이드(던파 같은 거) 관례를 따라가자」): 장수 발밑 원판과 같은 타원(가운데 = 위치 + (0, dy), 반지름 rx·ry. 03-unit discSprite + 바깥 선)이
+      // 장판 그림(테두리 선 바깥 끝 hitEdge 4까지)과 조금이라도 겹치면 맞는다. dangerPad: AI 회피 여유(발판을 이만큼 더 늘려 본다)
+      hitFoot: { dy: 28.8, rx: 38.8, ry: 18.2 }, hitEdge: 4, dangerPad: 18,
+      // 기술 틈을 발판에 맞추기(2026-11-26): 동남풍·궁루 화살 간격, 십자 줄 수, 고리 사이 틈, 탄막 수를 engine.js가 발판 크기 + gapPad로 계산한다
+      gapPad: 8,
+      // 이동기(대시)는 피해 없이 이동만(2026-11-26 사용자 「이동기에 왜 딜이 있어???」): 대시로 발동하는 인연 피해(synergy.js synRun)를 끈다
+      dashNoDmg: false, // 2026-11-26 사용자 결정: 대시 인연 피해 유지(발동 때 인연 이름 표시)
       itemBias: 3, // 들고 있는 신화·불멸 아이템과 관련된 장수가 랜덤으로 나올 가중치
     },
   };

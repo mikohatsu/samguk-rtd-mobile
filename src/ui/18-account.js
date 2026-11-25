@@ -51,7 +51,7 @@
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0; S.xpFrom = (r.me.xp || 0) - (r.gained || 0);
       // 서버가 준 관직 승급·업적 첫 달성 보상: 결과창 '다음 목표' 칸에 알린다(14-endstats-xp.js goalBox)
       S.rwRank = Array.isArray(r.rankUp) && r.rankUp.length ? r.rankUp : null; S.rwAch = Array.isArray(r.ach) && r.ach.length ? r.ach : null;
-      // 경험치는 결과창의 '내 정보' 막대가 채운다(2026-11-25: 따로 덮던 #xpfx 연출은 누르면 건너뛰어져 결과창 안으로 옮겼다)
+      // 경험치는 통계창 앞 경험치 연출 창(14 xpGate·playXp)이 보이고, 통계창 '내 정보' 줄은 최종 값(2026-11-26: 연출 창 되살림. 연출 중에는 넘기지 않고 끝난 뒤 눌러서 넘긴다)
       dirty(); const box = $('overlay'); box.dataset.key = '';
       // 받을 수 있는 미션 보상이 생겼는지 한 번 물어본다(결과창 '다음 목표'의 한 줄, 로비 미션 버튼의 빨간 점)
       const mine = g;

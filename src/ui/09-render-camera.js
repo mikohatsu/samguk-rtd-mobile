@@ -21,13 +21,14 @@
     else if (S.arenaUsed && !g.fight && !S.stay) { arenaFree(S.arenaUsed); S.arenaUsed = null; }
     if (!arenaV) arenaWarm(); // 보스 라운드 바로 앞 라인에서 다음 경기장 바닥을 미리 나눠 그려 둔다(07-arena, 등장 첫 프레임 멈춤 방지)
     if (S.camPh !== ph) { S.camPh = ph; resetCam(); }
+    stepFit(dt);
     if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) {
       const ac = g.active();
       if (ac) {
         // 2026-11-26 사용자 결정: 보스전 카메라는 내가 조종하는 장수가 항상 화면 가운데. 보스 위치는 보지 않는다(예전: 보스를 같이 담으려고 높이를 절충해 보스가 움직이면 화면이 끌려갔다).
-        // 프레임마다 남은 거리의 절반씩 따라간다: 걷는 중 지연은 약 4단위(사실상 가운데), 돌진(280단위)·출전 직후에는 0.1초 남짓 미끄러져 붙는다.
-        const ck = 1 - Math.pow(0.5, S.f60);
-        S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ac.y - S.cam.y) * ck;
+        // 장수 그림과 같은 값(같은 프레임의 ac.x·ac.y)에 바로 맞춘다. 예전에는 프레임마다 남은 거리의 절반씩 따라가서, 게임 계산(초당 60번)과 화면 그리기가
+        // 어긋나 한 프레임에 0걸음·2걸음이 섞이면 카메라 지연이 들쭉날쭉해져 걷는 장수가 화면에서 덜덜 떨렸다(2026-11-26 사용자 「움직일 때 덜덜 떨림」).
+        S.cam.x = ac.x; S.cam.y = ac.y;
       }
     }
     applyCam();
@@ -177,7 +178,37 @@
       c.x = vw >= W ? W / 2 : Math.max(vw / 2, Math.min(W - vw / 2, c.x));
       c.y = vh >= H ? H / 2 : Math.max(vh / 2, Math.min(H - vh / 2, c.y));
     }
-    S.scale = s * B.dpr; S.ox = (B.sw / 2 - c.x * s) * B.dpr; S.oy = (B.sh / 2 - c.y * s) * B.dpr;
+    // 'fit'(선택창 안 A): 라인 화면 전체를 같은 비율 f로 줄여 화면 위 끝(0)~선택창 위 끝 사이에 넣는다. 가로는 가운데 맞춤, 남는 좌우는 지도 바깥 배경.
+    // 화면 점 (X, Y) → (sw/2 + (X - sw/2)·f, Y·f). f = 1이면 예전 식 그대로. 입력(10-input toWorld)은 S.scale·S.ox·S.oy를 쓰므로 함께 맞는다
+    const f = S.camArena ? 1 : S.fit.f;
+    S.scale = s * f * B.dpr; S.ox = (B.sw / 2 - c.x * s * f) * B.dpr; S.oy = (B.sh / 2 - c.y * s) * f * B.dpr;
+  }
+  // ---- 선택창 시험 스위치(2026-11-26 사용자 비교용, 설정 화면 없음): localStorage 'rtd-selui' ----
+  // 'fit' = 선택창이 열려 있는 동안 라인 화면을 선택창 위 영역에 맞춰 줄인다(위 applyCam). 'slim' = 2명 이상 고르면 선택창을 한 줄 띠로 접는다(13-info-timers).
+  // 'both' = 두 안을 함께(비교용). 없으면 지금 그대로(f는 늘 1).
+  // 2026-11-26 사용자 결정: 기본은 'slim'(B, 전장 크기 유지). 비교 시험용으로 'fit'·'both'·'off' 값은 남긴다.
+  const SELUI = (() => { try { const v = localStorage.getItem('rtd-selui'); return v === 'off' ? '' : v || 'slim'; } catch (e) { return 'slim'; } })();
+  const SEL_FIT = SELUI === 'fit' || SELUI === 'both', SEL_SLIM = SELUI === 'slim' || SELUI === 'both';
+  const FIT_T = 0.15; // 열고 닫을 때 줄었다 펴지는 시간(초)
+  const FIT_RM = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches; // 움직임 줄이기: 바로 바뀐다
+  S.fit = { f: 1, a: 1, b: 1, t: FIT_T, top: 0, at: 0, vis: false };
+  // 목표 배율: 선택창 위 끝(무대 CSS px)까지 남은 높이 / 무대 높이. 선택창 위치는 0.12초마다(또는 열림·닫힘이 바뀔 때) 잰다(매 프레임 레이아웃을 읽지 않게)
+  function fitTarget() {
+    if (!SEL_FIT || !S.base || S.camArena || !laneOn()) return 1;
+    const sb = $('selbar'), vis = !sb.hidden && !sb.classList.contains('boss'), F = S.fit, now = performance.now();
+    if (!vis) { F.vis = false; return 1; }
+    if (!F.vis || now - F.at > 120) {
+      F.vis = true; F.at = now;
+      const vr = view.getBoundingClientRect(), r = sb.getBoundingClientRect();
+      F.top = vr.height ? ((r.top - vr.top) * S.base.sh) / vr.height : S.base.sh;
+    }
+    return Math.max(0.3, Math.min(1, (F.top - 6) / S.base.sh));
+  }
+  function stepFit(dt) {
+    const F = S.fit, to = fitTarget();
+    if (Math.abs(to - F.b) > 0.001) { F.a = F.f; F.b = to; F.t = FIT_RM ? FIT_T : 0; }
+    if (F.t < FIT_T) { F.t = Math.min(FIT_T, F.t + dt); const k = F.t / FIT_T, e = k * k * (3 - 2 * k); F.f = F.a + (F.b - F.a) * e; }
+    else F.f = F.b;
   }
   function fit() {
     const st = $('stage'), sw = st.clientWidth, sh = st.clientHeight, dpr = Math.min((window.devicePixelRatio || 1) * zoom, qDpr(), Math.sqrt(qPix() / Math.max(1, sw * sh))) * Q.rs;

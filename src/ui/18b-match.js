@@ -18,7 +18,9 @@
   // 프레임 시트 한 장: 바깥(i)이 한 칸만 보이게 자르고, 가운데(b)가 줄을, 그림(img)이 칸을 steps()로 넘긴다
   const mtSheet = (name) => `<i class="mt-fx mt-${name}"><b><img alt="" src="gfx/fxa_${name}.png?v=1"></b></i>`;
   function mtCardHtml(p, i, ord, host) {
-    const st = p.state || {}, r = mtRank(st.gr), tier = mtTier(r), low = Q.level === 'low';
+    // 내 카드는 내 계정 경험치에서 바로(progression.js view: 계정 카드·로비·결과창과 같은 관직. 2026-11-26). 동료 카드는 서버가 준 값
+    const st0 = p.state || {}, mv = p.me && ACC.token && ACC.me ? window.RTD_PROG.view(t, ACC.me.track, ACC.me.xp || 0) : null;
+    const st = mv ? Object.assign({}, st0, { gr: mv.key, lv: mv.lv }) : st0, r = mtRank(st.gr), tier = mtTier(r), low = Q.level === 'low';
     const d = T.units.find((u) => u.id === st.ic) || T.units.find((u) => u.id === 'cav');
     const gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? (st.lv ? window.RTD_PROG.label(t, st.gr, st.lv | 0) : t(st.gr)) : '';
     const pum = r >= 1 && r <= 9 ? t('rankPum', { n: 10 - r }) : '';
@@ -38,9 +40,10 @@
   }
   // 내 카드 아래 한 줄: 다음 계급까지 남은 경험치(레벨 L의 누적 경험치 = progression.js xpAt, 18-account.js xpLv)
   function mtNextHtml(a) {
-    if (!a || typeof a.rank !== 'number') return '';
-    if (a.rank >= 10) return t('mt_max');
-    const nx = Math.max(0, a.rank) + 1, tk = a.track === 'civ' ? 'civ' : 'mil', left = Math.max(0, xpLv(MT_RANK_LV[nx]) - Math.round(a.xp || 0));
+    if (!a || typeof a.xp !== 'number') return '';
+    const rk = window.RTD_PROG.view(t, a.track, a.xp).rank; // 카드와 같은 곡선(경험치에서 바로)
+    if (rk >= 10) return t('mt_max');
+    const nx = rk + 1, tk = a.track === 'civ' ? 'civ' : 'mil', left = Math.max(0, xpLv(MT_RANK_LV[nx]) - Math.round(a.xp || 0));
     return t('mt_next', { r: `<b>${esc(t('rk_' + tk + nx))}</b>`, n: `<b>${left.toLocaleString()}</b>` });
   }
   // 화면 그리기: 참가자 구성이 바뀔 때만 카드를 다시 만들고(등장 연출은 처음 한 번), 평소에는 준비 표시만 고친다

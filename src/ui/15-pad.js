@@ -213,7 +213,9 @@
         }
         // 좁은 화면 CSS(폭 760px 미만)가 공격 버튼을 선택 창 위로 올릴 때 쓰는 선택 창 높이
         // 고른 유닛마다 선택 창 높이가 달라 공격 버튼이 오르내리지 않게, 선택 창이 열려 있는 동안은 가장 높았던 값을 유지한다(닫히면 다시 잰다)
-        const sb = $('selbar'), sh = sb && !sb.hidden ? sb.offsetHeight : 0;
+        // 선택창 시험 'slim'(13)으로 띠↔큰 창이 바뀌면 다시 잰다(큰 창에서 접은 뒤에도 공격 버튼이 큰 창 높이에 떠 있지 않게)
+        const sb = $('selbar'), sh = sb && !sb.hidden ? sb.offsetHeight : 0, sl = !!sb && sb.classList.contains('slim');
+        if (bar._slim !== sl) { bar._slim = sl; bar._selh = 0; }
         if (!sh) bar._selh = 0;
         else if (sh > (bar._selh || 0)) { bar._selh = sh; $('stage').style.setProperty('--selh', sh + 'px'); }
       } else if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; PAD.atk = null; PAD.aim = null; }

@@ -32,6 +32,9 @@
   }
   // 화면 표기 "계급명 등급"(군주는 이름만). tr = 번역 함수(I.t), key = 'rk_mil3' 같은 계급 문구 키
   const label = (tr, key, lv) => { const s = stepOf(lv | 0); return s ? tr('rankStep', { a: tr(key), n: s }) : tr(key); };
+  // 내 관직 표기(2026-11-26): 앱의 모든 화면(계정 카드·로비·결과창·경험치 연출·협동 대기)이 같은 경험치 → 같은 곡선 → 같은 칭호 계열로 그린다.
+  // track = 계정의 관직 갈래(mil 무관 · civ 문관). 서버가 준 level·grade를 따로 쓰면 앱과 서버 곡선이 다를 때(배포 순서) 화면마다 관직이 달라 보였다.
+  const view = (tr, track, xp) => { const lv = levelOf(xp), rank = rankOf(lv), key = 'rk_' + (track === 'civ' ? 'civ' : 'mil') + rank; return { lv, rank, key, text: label(tr, key, lv) }; };
 
   // 판 보상(서버 app.js rewardOf가 쓴다). b = { diff, mutLv, round, win }, seatMul = 판 인원 배율(app.js SEAT_MUL)
   // 경험치 = round((기본 + 라운드×perRound + 승리) × 난이도 배율 × (1 + 악몽 +N × perMut)) × 인원 배율
@@ -68,6 +71,6 @@
     { id: 'f_normal', coins: 300, diff: 'normal' }, { id: 'f_hard', coins: 500, diff: 'hard' }, { id: 'f_nightmare', coins: 700, diff: 'nightmare' },
     { id: 'f_nm1', coins: 200, mut: 1 }, { id: 'f_nm2', coins: 200, mut: 2 }, { id: 'f_nm3', coins: 200, mut: 3 }, { id: 'f_nm4', coins: 200, mut: 4 }, { id: 'f_nm5', coins: 200, mut: 5 },
   ];
-  root.RTD_PROG = { STEPS, RANK_LV, RANK_XP, GRADE_POW, MAX_LV, xpAt, levelOf, rankOf, stepOf, label, REWARD, gameReward, RANK_COINS, ACH_COINS, achCoins, DAILY, FIRSTS };
+  root.RTD_PROG = { STEPS, RANK_LV, RANK_XP, GRADE_POW, MAX_LV, xpAt, levelOf, rankOf, stepOf, label, view, REWARD, gameReward, RANK_COINS, ACH_COINS, achCoins, DAILY, FIRSTS };
   if (typeof module !== 'undefined') module.exports = root.RTD_PROG;
 })(typeof window !== 'undefined' ? window : globalThis);

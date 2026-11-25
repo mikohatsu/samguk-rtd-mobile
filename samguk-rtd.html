@@ -309,8 +309,30 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 #xpfx .xpm img { max-width: 100%; max-height: 100%; filter: drop-shadow(0 4px 8px rgba(0,0,0,.7)); }
 #xpfx .xpm b { font: 400 34px "Black Han Sans", sans-serif; color: #ffd86a; }
 #xpfx .r .xpm { opacity: .55; filter: grayscale(.6); }
-#xpfx.up .l .xpm { animation: xpup .6s ease-out; }
-@keyframes xpup { 0% { transform: scale(1.6); filter: brightness(2.2); } 100% { transform: scale(1); filter: none; } }
+/* 결과창 경험치 줄의 문양이 바뀔 때(늦은 서버 답): 살짝만 커졌다 돌아온다(예전 1.6배·밝기 2.2배 섬광은 뺐다) */
+@keyframes xpup { 0% { transform: scale(1.12); filter: brightness(1.3); } 100% { transform: scale(1); filter: none; } }
+/* 레벨업(2026-11-26): 문양이 바뀌며 금빛 테가 천천히 번지고 작은 금빛 입자가 떠오른다. 큰 빛살·섬광은 쓰지 않는다(보스 처치와 다르게, 은은하게) */
+#xpfx .xpside.l { position: relative; }
+#xpfx .xpsi { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#xpfx .l.up .xpm img { animation: xpswap 1.6s ease-out; }
+#xpfx .l.up small { animation: xpname .8s ease-out; }
+@keyframes xpswap { 0% { opacity: .2; transform: scale(.94); filter: drop-shadow(0 0 0 rgba(255,205,110,0)); } 30% { opacity: 1; transform: scale(1.04); filter: drop-shadow(0 0 12px rgba(255,205,110,.65)); } 100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 4px 8px rgba(0,0,0,.7)); } }
+@keyframes xpname { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+#xpfx .xplv { position: absolute; left: 50%; top: 42px; width: 0; height: 0; pointer-events: none; }
+#xpfx .xplv i { position: absolute; display: block; background: #ffd27a; -webkit-mask-position: center; mask-position: center; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; opacity: 0; }
+#xpfx .xplv .ring { width: 124px; height: 124px; left: -62px; top: -62px; -webkit-mask-image: url(gfx/kn_circle_02.png); mask-image: url(gfx/kn_circle_02.png); animation: xpring 1.7s ease-out forwards; }
+#xpfx .xplv .ring.r2 { background: #ffe6a8; animation-delay: .4s; }
+#xpfx .xplv .dot { width: 9px; height: 9px; left: calc(var(--x) - 4px); top: 18px; -webkit-mask-image: url(gfx/kn_circle_05.png); mask-image: url(gfx/kn_circle_05.png); animation: xprise 1.6s ease-out var(--d) forwards; }
+#xpfx .xplv .star { width: 15px; height: 15px; left: calc(var(--x) - 7px); top: 14px; background: #fff0c4; -webkit-mask-image: url(gfx/kn_star_04.png); mask-image: url(gfx/kn_star_04.png); animation: xprise 1.8s ease-out var(--d) forwards; }
+@keyframes xpring { 0% { transform: scale(.55); opacity: 0; } 18% { opacity: .5; } 100% { transform: scale(1.45); opacity: 0; } }
+@keyframes xprise { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: .85; } 100% { transform: translateY(calc(-1 * var(--h))); opacity: 0; } }
+/* 다 차면 아래에 '눌러서 계속'(그 전에는 누름을 받지 않는다) */
+#xpfx .xpnext { position: absolute; left: 0; right: 0; bottom: 16%; text-align: center; font: 700 15px var(--ui); color: #e8dcc0; text-shadow: 0 1px 3px #000; opacity: 0; transition: opacity .5s; }
+#xpfx.ready .xpnext { opacity: .92; animation: xpblink 1.8s ease-in-out .6s infinite; }
+@keyframes xpblink { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { #xpfx .xplv { display: none; } #xpfx .l.up .xpm img, #xpfx .l.up small, #xpfx.ready .xpnext { animation: none; } }
+/* 판 표를 못 받은 판의 결과창 한 줄(tkMissed) */
+#end .es-tkmiss { text-align: center; font: 700 12.5px var(--ui); color: #ff9d8a; }
 #xpfx .xpmid { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 #xpfx .xpbar { width: 100%; height: 22px; border-style: solid; border-width: 6px 8px; border-image: url(gfx/ui_menu.png) 12 fill stretch; position: relative; }
 #xpfx .xpbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(180deg, #ffe08a, #d89a2a 60%, #a8661a); box-shadow: 0 0 10px rgba(255,190,80,.7); border-radius: 2px; }
@@ -465,6 +487,30 @@ html[lang="en"] .ubig b { font-size: 14px; }
 .gsel img { position: absolute; left: 3px; top: 3px; width: 40px; height: 40px; object-fit: contain; pointer-events: none; }
 .gsel em { position: absolute; right: -4px; bottom: -4px; padding: 0 4px; border-radius: 8px; border: 1px solid var(--gc); background: rgba(16, 11, 8, .92); font: 700 11px/15px var(--ui); font-style: normal; color: #f4ecd8; }
 .grp .btn { min-height: 44px; padding: 0 10px; }
+/* 선택창 시험 'slim'(localStorage rtd-selui, 13-info-timers): 2명 이상 고르면 한 줄 띠 [고른 수 | 대표 초상 | 합성 | 상세 ▴]. 태블릿 52px, 키 낮은 폰 44px */
+#selbar.slim { grid-template-areas: "info act"; grid-template-rows: auto; height: 52px; padding: 4px 8px 4px 10px; align-items: center; }
+#selbar.slim #recipes { display: none; }
+#selbar.slim #cmds { gap: 6px; }
+#selbar .umid.slim { flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
+#selbar .umid.slim .unm { flex: none; padding-left: 20px; font: 400 16px/20px var(--display); color: #f4ecd8; white-space: nowrap; }
+#selbar .umid.slim .grps { gap: 7px; padding: 2px 4px 2px 2px; align-items: center; }
+#selbar.slim .gsel { flex: none; width: 38px; height: 38px; }
+#selbar.slim .gsel img { left: 3px; top: 3px; width: 32px; height: 32px; }
+#selbar.slim .gsel em { right: -3px; bottom: -2px; font-size: 10px; line-height: 13px; }
+#selbar .gmore { flex: none; font: 700 12px var(--ui); font-style: normal; color: var(--dim); }
+#selbar.slim .btn, #selbar.slim .umore { position: relative; min-height: 40px; padding: 0 10px; }
+#selbar.slim .umore { min-width: 0; }
+#selbar.slim .umore::after { content: ''; position: absolute; inset: -4px -2px; }
+/* 얇은 띠는 아래 라인이 비쳐 보이게 반투명으로, 띠의 빈 곳을 누르면 아래 전장이 눌린다(단추·초상은 그대로 눌림). 2026-11-26 사용자 「투명도를 조금 더 올리는 것도 고려」 */
+#selbar.slim { background: rgba(20,13,8,.45); border-color: rgba(201,164,92,.35); pointer-events: none; }
+#selbar.slim .btn, #selbar.slim .umore, #selbar.slim .gsel, #selbar.slim button { pointer-events: auto; }
+@media (max-height: 430px) {
+  #selbar.slim { height: 44px; padding: 3px 6px 3px 8px; }
+  #selbar.slim .gsel { width: 32px; height: 32px; }
+  #selbar.slim .gsel img { left: 2px; top: 2px; width: 28px; height: 28px; }
+  #selbar .umid.slim .unm { font-size: 14px; }
+  #selbar.slim .btn, #selbar.slim .umore { min-height: 34px; }
+}
 /* 상세 카드: 바 위로 뜨는 카드(틀 그림 ui_frame). 위→아래 = 우선순위, 카드 안에서 세로로 스크롤 */
 #ucard { position: absolute; z-index: 5; box-sizing: border-box; display: flex; flex-direction: column; border-style: solid; border-width: 14px; border-image: url(gfx/ui_frame.png) 20 fill stretch; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, .6)); animation: ucIn .12s ease-out; }
 #ucard[hidden] { display: none; }

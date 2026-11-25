@@ -188,7 +188,12 @@
     if (r.n) { c.syCnt[key] = (c.syCnt[key] || 0) + 1; if (c.syCnt[key] % r.n) return; }
     if (r.nth) { c.syCnt[key + 'n'] = (c.syCnt[key + 'n'] || 0) + 1; if (c.syCnt[key + 'n'] % r.nth) return; }
     if (r.cd) { if (c.syCd[key] > 0) return; c.syCd[key] = r.cd; }
-    r.do.forEach((a) => this.synDo(c, R, a, ctx));
+    // 이동기(대시)는 피해 없이 이동만(2026-11-26 사용자 「이동기에 왜 딜이 있어???」, theme rules.dashNoDmg): 대시로 발동하는 인연 효과 중
+    // 피해를 주는 것(하비의 책사 장료 돌진 dashHit, 단기의 맹장 찌르기 dmg)은 빼고 버프·재사용 같은 나머지만 쓴다
+    const noDmg = r.on === 'dash' && this.R.dashNoDmg;
+    r.do.forEach((a) => { if (noDmg && (a.k === 'dmg' || a.k === 'dashHit')) return; this.synDo(c, R, a, ctx); });
+    // 대시에 피해가 붙는 인연(단기의 맹장·하비의 책사)은 발동할 때 장수 머리 위에 인연 이름을 띄워 왜 피해가 났는지 알게 한다(2026-11-26 사용자 결정: 피해 유지 + 이름 표시)
+    if (r.on === 'dash' && !noDmg && c.owner === this.me.idx && R.s && R.s.name && r.do.some((a) => a.k === 'dmg' || a.k === 'dashHit')) this.log('dmgtext', { x: c.x, y: c.y - 150, v: '「' + R.s.name + '」', big: true });
   };
   // 메아리를 거는 스킬: 첫 직선 스킬(없으면 첫 피해 스킬)
   P.synFirstSkill = function (c) {

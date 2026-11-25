@@ -441,7 +441,8 @@
     $('lico').src = iconSrc(me ? me.icon : 'cav');
     // 로그인하지 않았으면 이름 자리에 '로그인 안 함 · 눌러서 로그인'. 인터넷이 끊겨 있으면 등급 옆에 '오프라인'
     $('lnick').textContent = me ? me.nick : L('profGuest');
-    $('lrank').textContent = me ? `${rkLabel(me.grade, me.level)}${root.navigator && root.navigator.onLine === false ? ' · ' + L('offlineTag') : ''}` : L('profTap');
+    // 내 관직: 경험치에서 바로(progression.js view, 계정 카드·결과창·협동 대기 카드와 같은 값. 2026-11-26)
+    $('lrank').textContent = me ? `${root.RTD_PROG ? root.RTD_PROG.view(C.t, me.track, me.xp || 0).text : rkLabel(me.grade, me.level)}${root.navigator && root.navigator.onLine === false ? ' · ' + L('offlineTag') : ''}` : L('profTap');
     $('lcur').hidden = !me;
     if (me) { $('lcoins').textContent = (me.coins || 0).toLocaleString(); $('lgems').textContent = (me.gems || 0).toLocaleString(); }
     // #lcur .cur 은 CSS가 display:flex 라 hidden 속성이 안 먹는다 → style로 숨긴다

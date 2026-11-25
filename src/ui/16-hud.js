@@ -66,7 +66,7 @@
     // 전선이 75%를 넘으면 한 판에 한 번 알림 줄로 경고(칸이 빨개지는 것만으로는 놓치기 쉽다)
     if (!vp && !S.frontWarned && g.phase === 'wave' && !g.over && en > g.limit * 0.75) { S.frontWarned = true; toast(t('frontWarn'), 'warn'); }
     // 보스 처치 뒤: 미뤄 둔 알림을 내보내고, 討伐成功 패널이 떠 있는 동안 알림 줄을 아래로(패널과 겹치지 않게)
-    { const n0 = performance.now(); if (S.toastQ && S.toastQ.length && n0 >= (S.toastHoldUntil || 0) && !S.kill) { const q = S.toastQ; S.toastQ = []; q.forEach(([a, b]) => toast(a, b)); }
+    { const n0 = performance.now(); if (S.toastQ && S.toastQ.length && n0 >= (S.toastHoldUntil || 0) && !S.kill && !warnOn()) { const q = S.toastQ; S.toastQ = []; q.forEach(([a, b]) => toast(a, b)); }
       const vic = n0 < (S.vicUntil || 0) || vicOn, stg = $('stage'); if (stg.classList.contains('vic') !== vic) stg.classList.toggle('vic', vic); }
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
     // 오른쪽 버튼 열: 라인 화면에서만
@@ -152,8 +152,11 @@
       key = 'oh'; h = '';
     } else if (g.over) {
       if (S.drawer) { S.drawer = null; $('drawer').hidden = true; } // 오른쪽 서랍이 결과·경험치 연출을 가리지 않게
-      // 결과창은 바로 띄우고, 경험치·보상은 창 안 '내 정보'가 서버 답을 기다려 채운다(14-endstats-xp esStep). 그동안 바닥 버튼은 잠긴다
-      key = 'o' + (S.xpGained != null ? S.xpGained : ''); h = endStats();
+      // 결과를 보낸 판은 먼저 경험치 연출 창(14 xpGate·playXp: 서버 답 기다림 → 막대 → '눌러서 계속'), 그 뒤 통계창(2026-11-26 되살림).
+      // 답이 없거나 경험치가 0이면 바로 통계창: 창 안 '내 정보'가 늦은 답을 기다려 채운다(14 esStep). 그동안 바닥 버튼은 잠긴다
+      const gate = xpGate();
+      if (gate) { key = 'ox' + gate; h = `<div class="over xpwait">${gate === 'w' ? `<div class="xpsend">${esc(t('sendingResult'))}</div>` : ''}</div>`; }
+      else { key = 'o' + (S.xpGained != null ? S.xpGained : ''); h = endStats(); }
     }
     if (box.dataset.key !== key) {
       // 출진 카드를 고를 때마다 다시 그려도 목록 스크롤 자리를 지킨다(아래쪽 장수를 누르면 맨 위로 튀던 문제)
@@ -204,9 +207,10 @@
       else if (e.type === 'trialEnd') { Snd.setBoss(false); Snd.play(e.win ? 'win' : 'round'); S.trialRes = e; }
       else if (e.type === 'over' && g.trial) continue;
       else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); S.tkMiss = !!(S.tkWant && !S.gameTk); S.repP = reportResult(); if (window.RTD_LOBBY) { S.progBefore = window.RTD_LOBBY.progNow(); window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.gameTk); } if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
-      else if (e.type === 'banner') S.banner = { text: e.text, sub: e.sub, t: 3 };
+      // 알림 띠는 대기열로(08-pop pushBanner). 중간보스 등장 띠는 붉은 경고 띠로 바꿔 맨 앞에(엔진 spawnMid의 띠: 이름·설명이 중간보스 표와 같다)
+      else if (e.type === 'banner') { const m = (T.midbosses || []).find((x) => x.story === e.sub && String(e.text).includes(x.name)); pushBanner(m ? { warn: true, text: I.t('midWarn'), sub: m.name, t: MIDWARN_LEN } : { text: e.text, sub: e.sub, t: 3 }); }
       // 협동에서 내 라이프가 다해 탈락: 알리고 동료 전장 보기로 바꾼다(관전). 조작은 10-input·11-actions의 spect가 막는다
-      else if (e.type === 'elim') { S.banner = { text: t('elimTitle'), sub: t('elimSub'), t: 4 }; toast(t('elimSub'), 'warn'); setSel([]); S.dropSel = null; S.drawer = null; S.ticket = null; S.combineAsk = null; spectView(); }
+      else if (e.type === 'elim') { pushBanner({ text: t('elimTitle'), sub: t('elimSub'), t: 4 }); toast(t('elimSub'), 'warn'); setSel([]); S.dropSel = null; S.drawer = null; S.ticket = null; S.combineAsk = null; spectView(); }
       else if (e.type === 'dmgtext') {
         // 숫자가 같은 자리에 겹쳐 안 읽히지 않게 조금씩 흩어 놓는다
         if (S.dmg.length < 40) S.dmg.push({ x: e.x + (typeof e.v === 'number' && g.phase === 'boss' ? (Math.random() - 0.5) * 90 : 0), y: e.y - (typeof e.v === 'number' && g.phase === 'boss' ? Math.random() * 30 : 0), v: e.v, big: e.big != null ? e.big : g.phase === 'boss', t: 0 });
@@ -232,7 +236,7 @@
         const fp = g.fight && g.fight.def.patterns && g.fight.def.patterns.find((q) => q.n === e.name);
         if (window.RTD_RIG) S.bossAct = window.RTD_RIG.actOf(fp ? fp.gen : '');
       }
-      else if (e.type === 'achievement') { toast(I.t('achDone', { a: e.ach.name }), 'good'); Snd.play('ach'); S.banner = { text: e.ach.name, sub: e.ach.desc, t: 2.6 }; }
+      else if (e.type === 'achievement') { toast(I.t('achDone', { a: e.ach.name }), 'good'); pushBanner({ text: e.ach.name, sub: e.ach.desc, t: 2.6, snd: 'ach' }); } // 소리는 띠가 실제로 뜰 때
       else if (e.type === 'champDead') toast(I.t('champDown', { a: e.name }), 'warn');
       // 장수 스킬 이름은 이미 장수 머리 위에 크게 뜬다. 알림 줄까지 띄우면 보스 기술 이름(피해야 할 경고)을 가려서, 화타 치료 같은 것만 알림으로 보인다.
       else if (e.type === 'skill') { if (!(g.fight && g.fight.champs.some((c) => (c.def.sk || []).some((s) => s.n === e.name)))) toast(e.name); }

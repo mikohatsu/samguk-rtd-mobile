@@ -93,7 +93,7 @@
     const trk = ACC.me.track === 'civ' ? 'civ' : 'mil', lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = lvSpan(lv), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
     S.es.xpNow = xp;
     if (el.dataset.lv !== String(lv)) { const first = el.dataset.lv == null; el.dataset.lv = lv; el.dataset.r = r; el.querySelector('.esx-mk').innerHTML = rankMark(r); el.querySelector('.esx-nx').innerHTML = r < 10 ? rankMark(rkOfLv(lv + 1)) : ''; if (!first) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } }
-    const rn = el.querySelector('.esx-rn'), lt = el.querySelector('.esx-lv'), nm = window.RTD_PROG.label(t, 'rk_' + trk + r, lv), lvs = '';
+    const rn = el.querySelector('.esx-rn'), lt = el.querySelector('.esx-lv'), nm = window.RTD_PROG.view(t, trk, xp).text, lvs = ''; // 계정 카드·로비와 같은 함수(2026-11-26)
     if (rn.textContent !== nm) rn.textContent = nm;
     if (lt.textContent !== lvs) lt.textContent = lvs;
     const pf = S.xpFrom != null && r < 10 ? Math.max(0, Math.min(k, (S.xpFrom - lo) / (hi - lo))) : k;
@@ -115,6 +115,7 @@
     let xpDone = true;
     const xr = root.querySelector('.es-xp:not(.guest)');
     if (!ACC.token || !ACC.me) { /* 로그인 안 함: 기다릴 경험치 없음 */ }
+    else if (E.fast) { esDrawXp(root, esXpEnd()); E.coinOn = true; } // 연출 창에서 이미 채웠다
     else if (S.xpFrom != null && S.xpGained > 0) {
       if (!E.xpT0) E.xpT0 = Math.max(now, E.t0 + 500);
       if (now >= E.xpT0) { const gn = root.querySelector('.esx-gain'); if (gn && !gn.classList.contains('on')) gn.classList.add('on'); E.coinOn = true; }
@@ -155,7 +156,8 @@
     const s = g.stats, win = g.over === 'win', mm = Math.floor(g.time / 60), ss = Math.floor(g.time % 60);
     const cell = (l, v, cls, extra) => `<div class="esr-c ${cls || ''}"${extra || ''}><small class="esr-l">${l}</small><span class="esr-v">${v}</span></div>`;
     // 결과창 진행 상태(강제 보기): 처음 그릴 때 시작한다. want = 서버에 결과를 보냈다(경험치·동전 답을 기다린다)
-    if (!S.es || S.es.g !== g) S.es = { g, t0: performance.now(), want: !!S.reported, open: false, shown: 0, xpT0: 0, xpEnd: 0, nextAt: 0, xpNow: null, coinOn: false, raf: 0 };
+    // fast = 통계창 앞 경험치 연출 창(playXp)을 이미 봤다: 경험치 줄·보상 한 줄은 처음부터 최종 값으로(막대를 다시 채우지 않는다)
+    if (!S.es || S.es.g !== g) { const fast = S.xpSeen === g; S.es = { g, t0: performance.now(), want: !!S.reported, open: false, shown: fast ? 9 : 0, xpT0: fast ? 1 : 0, xpEnd: 0, nextAt: 0, xpNow: null, coinOn: fast, raf: 0, fast }; }
     const lock = !S.es.open;
     // 큰 칸 4: 도달 라운드(승리면 「クリア」, 값 주홍) · 난이도 · 최고 등급(등급색) · 처치
     const hasMut = !!(g.mutLv && g.muts && g.muts.length);
@@ -198,7 +200,7 @@
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
     // 창 = 스크롤되는 본문(.es-body) + 고정 바닥 줄(.es-foot). 버튼이 통계 칸을 가리지 않는다
     return `<div class="over" id="end"><div class="sheet es ${win ? 'is-win' : 'is-lose'}"><div class="es-body">
-      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss ? `<div class="dim" style="color:#ff9d8a">${t('noTicket')}</div>` : ''}
+      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss ? `<div class="dim es-tkmiss">${esc(t('tkMissed'))}</div>` : ''}
       ${esMe()}
       <div class="es-rec"><div class="esr-big">${big}</div><div class="esr-small">${small}</div></div>
       ${goalBox()}
@@ -206,9 +208,7 @@
       ${detail.trim() ? `<div class="es-detail">${detail}</div>` : ''}
       </div><div class="es-foot ${lock ? 'lock' : ''}">${['stay', 'restart', againOk ? 'again' : ''].filter(Boolean).map((a) => `<button class="btn ${a === 'restart' ? 'es-again' : a === 'again' ? 'go es-again2' : 'es-stay'} ${lock ? 'lock' : ''}" data-act="${a}" type="button" ${lock ? 'disabled' : ''}>${a === 'stay' ? I.t('stayBtn') : a === 'again' ? I.t('againSame') : t('quitGame')}</button>`).join('')}</div></div></div>`;
   }
-  // ---- 판 끝 경험치 연출: 화면을 어둡게 흐리고, 지금 계급 문양 ─ 경험치 막대 ─ 다음 계급 문양.
-  // +경험치가 뜬 뒤 막대가 그만큼 차오르고(계급이 오르면 문양이 바뀜), 잠시 뒤 사라지며 결과창이 나온다.
-  // 관직 곡선은 progression.js(서버와 같은 표, 2026-11-24)
+  // ---- 관직 곡선 도우미: progression.js(서버와 같은 표)
   const RANK_LV = window.RTD_PROG.RANK_LV;
   const lvOfXp = window.RTD_PROG.levelOf;
   const rkOfLv = window.RTD_PROG.rankOf;
@@ -217,30 +217,79 @@
   // 등급 한 칸(레벨 lv → lv+1)의 경험치 범위. 군주는 끝
   const lvSpan = (lv) => [xpAt(lv), lv < window.RTD_PROG.MAX_LV ? xpAt(lv + 1) : xpAt(lv) + 1];
   const rankMark = (r) => `<span class="xpm"><img alt="" src="gfx/rank_${r}.png" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${r}'}))"></span>`;
+  // ---- 판 끝 경험치 연출 창(2026-11-26 되살림: 결과창 개편 뒤 통계창 앞에서 빠져 있었다) ----
+  // 결과를 서버에 보낸 판(로그인 + 판 표)은 통계창 전에 이 창을 띄운다. 서버 답을 ES_WAIT까지 기다리고(그동안 '결과를 보내는 중…'),
+  // 경험치를 받았으면 막대가 차오르고(등급·관직이 오르면 은은한 연출) → 다 차면 '눌러서 계속' → 누르면 통계창.
+  // 차오르는 동안 누르는 것은 받지 않는다(연타로 연출을 놓치던 문제). 답이 없거나 받은 경험치가 0이면 창 없이 통계창(통계창이 사정을 알린다).
+  // 돌려주는 값: '' = 통계창으로, 'w' = 답 기다림, 'p' = 연출 중(16-hud renderOverlay가 키로 쓴다)
+  function xpGate() {
+    if (S.xpDone || !S.reported || !ACC.token || !ACC.me) return '';
+    if (S.xpPlaying) return 'p';
+    const now = performance.now(); if (!S.overAt) S.overAt = now;
+    if (S.xpFrom != null && S.xpGained > 0) {
+      S.xpPlaying = true; const mine = g;
+      playXp(S.xpFrom, S.xpFrom + S.xpGained, S.coinGained, () => { if (g !== mine) return; S.xpPlaying = false; S.xpDone = true; S.xpSeen = g; dirty(); $('overlay').dataset.key = ''; });
+      return 'p';
+    }
+    if (S.repDone || now - S.overAt > ES_WAIT) { S.xpDone = true; return ''; }
+    return 'w';
+  }
+  // 화면을 어둡게 흐리고, 지금 등급 문양 ─ 경험치 막대 ─ 다음 등급 문양. 막대는 등급 한 칸(2026-11-25 economy-v2: 계급마다 등급 1~5).
+  // 등급·관직이 오르면: 문양이 바뀌며 금빛 테가 천천히 번지고 작은 금빛 입자(kn_circle_05·kn_star_04)가 위로 떠오른다. 관직이 오르면 테 두 겹·입자를 조금 더.
+  // 보스 처치의 큰 빛살·섬광은 쓰지 않는다. 움직임 줄이기 설정이면 입자·테 없이 문양만 바뀐다(CSS).
+  const XP_DELAY = 700, XP_FILL = 1400, XP_PER_LV = 350, XP_FILL_MAX = 3600, XP_TAIL = 900, XP_LV_HOLD = 1400;
   function playXp(from, to, coins, done) {
-    const track = ACC.me && ACC.me.track === 'civ' ? 'civ' : 'mil';
-    const el = document.createElement('div'); el.id = 'xpfx';
-    el.innerHTML = `<div class="xpbox"><div class="xpside l"></div><div class="xpmid"><div class="xpbar"><i></i></div><div class="xpnum"></div><div class="xpgain">+${fmt(to - from)} XP</div><div class="xpcoin">+${fmt(coins || 0)} ${t('lb_coin')}</div></div><div class="xpside r"></div></div>`;
+    const track = ACC.me && ACC.me.track, V = (xp) => window.RTD_PROG.view(t, track, xp);
+    const el = document.createElement('div'); el.id = 'xpfx'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-live', 'polite');
+    el.innerHTML = `<div class="xpbox"><div class="xpside l"><div class="xpsi"></div></div><div class="xpmid"><div class="xpbar"><i></i></div><div class="xpnum"></div><div class="xpgain">+${fmt(to - from)} XP</div><div class="xpcoin">+${fmt(coins || 0)} ${esc(t('lb_coin'))}</div></div><div class="xpside r"><div class="xpsi"></div></div></div><div class="xpnext">${esc(I.t('tapNext'))}</div>`;
     $('app').appendChild(el);
-    // 양옆: 지금 등급과 다음 등급("백인대장 3" → "백인대장 4"). 막대는 등급 한 칸(2026-11-25 economy-v2)
-    const side = (lv) => `${rankMark(rkOfLv(lv))}<small>${esc(window.RTD_PROG.label(t, 'rk_' + track + rkOfLv(lv), lv))}</small>`;
-    let shownLv = -1;
+    // 양옆: 지금 등급과 다음 등급("백인대장 3" → "백인대장 4")
+    const side = (lv) => { const v = V(xpAt(lv)); return `${rankMark(v.rank)}<small>${esc(v.text)}</small>`; };
+    const L = el.querySelector('.l');
+    let shownLv = -1, shownRk = -1, lastUp = 0;
+    const lvUp = (rankUp) => {
+      L.classList.remove('up', 'rk'); void L.offsetWidth; L.classList.add('up'); if (rankUp) L.classList.add('rk');
+      const fx = document.createElement('span'); fx.className = 'xplv'; fx.setAttribute('aria-hidden', 'true');
+      let h = `<i class="ring"></i>${rankUp ? '<i class="ring r2"></i>' : ''}`;
+      const n = rankUp ? 12 : 7;
+      for (let i = 0; i < n; i++) h += `<i class="${i % 3 === 2 ? 'star' : 'dot'}" style="--x:${Math.round((Math.random() * 2 - 1) * 40)}px;--d:${((i / n) * 0.7 + Math.random() * 0.15).toFixed(2)}s;--h:${Math.round(46 + Math.random() * 44)}px"></i>`;
+      fx.innerHTML = h; L.appendChild(fx);
+      setTimeout(() => fx.remove(), 2800);
+      lastUp = performance.now();
+      Snd.play('ach', 250);
+    };
     const draw = (xp) => {
       const lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = lvSpan(lv), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
-      if (lv !== shownLv) { el.querySelector('.l').innerHTML = side(lv); el.querySelector('.r').innerHTML = r < 10 ? side(lv + 1) : ''; if (shownLv >= 0) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } shownLv = lv; }
+      if (lv !== shownLv) {
+        L.querySelector('.xpsi').innerHTML = side(lv); el.querySelector('.r .xpsi').innerHTML = r < 10 ? side(lv + 1) : '';
+        if (shownLv >= 0 && lv > shownLv) lvUp(r > shownRk);
+        shownLv = lv; shownRk = r;
+      }
       el.querySelector('.xpbar i').style.width = (k * 100).toFixed(1) + '%';
       el.querySelector('.xpnum').textContent = r >= 10 ? 'MAX' : `${fmt(Math.round(xp - lo))} / ${fmt(hi - lo)}`;
     };
     draw(from);
-    // 화면을 누르면 연출을 건너뛴다(끝 값으로 채우고 바로 결과창)
-    let fin = false;
-    const end = () => { if (fin) return; fin = true; el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 600); };
-    el.addEventListener('pointerdown', () => { if (fin) return; draw(to); end(); });
+    // 끝난 뒤에만 넘긴다: 누르기(터치·마우스) 또는 Enter·Space·Esc
+    let ready = false, fin = false;
+    const end = () => { if (!ready || fin) return; fin = true; document.removeEventListener('keydown', key); el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 500); };
+    const key = (e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') { e.preventDefault(); end(); } };
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); end(); });
+    document.addEventListener('keydown', key);
     requestAnimationFrame(() => el.classList.add('in'));
-    // 0.7초 뒤 +XP가 뜨고, 1.4초 동안 차오른다. 다 차고 1.6초 뒤 사라진다.
-    setTimeout(() => { if (fin) return; el.classList.add('gain'); const t0 = performance.now(), D = 1400;
-      const step = (now) => { if (fin) return; const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3); draw(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); else setTimeout(end, 1600); };
-      requestAnimationFrame(step); }, 700);
+    const lvN = Math.max(0, lvOfXp(to) - lvOfXp(from)), D = Math.min(XP_FILL_MAX, XP_FILL + lvN * XP_PER_LV);
+    setTimeout(() => {
+      if (fin || !el.isConnected) return;
+      el.classList.add('gain'); const t0 = performance.now();
+      const step = (now) => {
+        if (fin || !el.isConnected) return;
+        const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3); draw(from + (to - from) * e);
+        if (p < 1) { requestAnimationFrame(step); return; }
+        // 다 찼다: 마지막 레벨업 연출이 가라앉을 때까지 조금 둔 뒤 '눌러서 계속'
+        const wait = Math.max(XP_TAIL, lastUp ? lastUp + XP_LV_HOLD - performance.now() : 0);
+        setTimeout(() => { if (fin) return; ready = true; el.classList.add('ready'); }, wait);
+      };
+      requestAnimationFrame(step);
+    }, XP_DELAY);
   }
   // ---- 신화·불멸 체험 결과 카드(trial-mode.md 4-3): 장수 얼굴·이름·등급·칭호, 큰 숫자 3개(총 피해·초당 피해·최대 한 방),
   // 걸린 시간과 「강화 10단계 기준」, 마속의 한 줄, 특성 목록, 「이 장수 해금하기」(동전 안내)·「상점으로 돌아가기」. 두 버튼 모두 로비 상점 해금 탭의 그 장수 카드로(11-actions trialLeave).

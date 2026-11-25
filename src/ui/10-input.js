@@ -29,7 +29,9 @@
     S.cam.x += before.x - after.x; S.cam.y += before.y - after.y; applyCam();
     S.camHold = performance.now() + 2500;
   };
-  const panBy = (sx, sy, dx, dy) => { const k = S.base.s0 * S.cam.z; S.cam.x = sx - dx / k; S.cam.y = sy - dy / k; applyCam(); S.camHold = performance.now() + 2500; };
+  // 끌기 배율 k(화면 px / 전장 단위): 지금 그리는 배율 그대로(S.scale은 캔버스 px라 dpr로 나눈다). 선택창 시험 'fit'(09)이 라인을 줄인 동안도 손가락과 지도가 같이 움직인다
+  const camK = () => S.scale / S.base.dpr;
+  const panBy = (sx, sy, dx, dy) => { const k = camK(); S.cam.x = sx - dx / k; S.cam.y = sy - dy / k; applyCam(); S.camHold = performance.now() + 2500; };
   // 터치 기기는 확대·축소를 막는다(가장 축소한 화면으로 고정). 마우스 휠 확대는 PC에서만.
   view.addEventListener('wheel', (e) => { if (!g) return; e.preventDefault(); if (S.coarse) return; zoomAt(e.clientX, e.clientY, S.cam.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
   const ptrs = new Map();
@@ -160,7 +162,7 @@
     if (pinch && ptrs.size >= 2) {
       const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
       if (!S.coarse) zoomAt(pinch.mx, pinch.my, pinch.z * (d / pinch.d));
-      const k = S.base.s0 * S.cam.z; S.cam.x -= (mx - pinch.mx) / k; S.cam.y -= (my - pinch.my) / k; applyCam();
+      const k = camK(); S.cam.x -= (mx - pinch.mx) / k; S.cam.y -= (my - pinch.my) / k; applyCam();
       pinch.mx = mx; pinch.my = my; pinch.z = S.cam.z; pinch.d = d;
       return;
     }

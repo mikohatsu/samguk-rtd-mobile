@@ -52,10 +52,11 @@
           <button class="btn go" id="acc-guest" type="button">${t('loginGuest')}</button>
           <div class="err" id="acc-err"></div></div>`;
       }
-      const m = ACC.me, lv = m.level, max = m.rank >= 10, f = max ? 1 : Math.max(0, Math.min(1, (m.xp - xpLv(lv)) / Math.max(1, xpLv(lv + 1) - xpLv(lv))));
+      // 관직은 경험치에서 바로(progression.js view): 결과창·로비·협동 대기 카드와 같은 값(2026-11-26)
+      const m = ACC.me, V = window.RTD_PROG.view(t, m.track, m.xp || 0), lv = V.lv, max = V.rank >= 10, f = max ? 1 : Math.max(0, Math.min(1, (m.xp - xpLv(lv)) / Math.max(1, xpLv(lv + 1) - xpLv(lv))));
       const guest = m.provider === 'guest', prov = m.provider === 'apple' ? 'Apple' : m.provider === 'google' ? 'Google' : guest ? t('provGuest') : '';
-      const trk = m.track === 'civ' ? 'civ' : 'mil', nextR = !max && m.rank >= 0 && m.rank < 10 ? t('goalRank', { a: esc(t('rk_' + trk + (m.rank + 1))), n: fmt(Math.max(0, xpLv(RANK_LV[m.rank + 1]) - (m.xp || 0))) }) : '';
-      return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${m.rank | 0}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(window.RTD_PROG.label(t, m.grade, lv))}${pum(m.rank)}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
+      const trk = m.track === 'civ' ? 'civ' : 'mil', nextR = !max ? t('goalRank', { a: esc(t('rk_' + trk + (V.rank + 1))), n: fmt(Math.max(0, xpLv(RANK_LV[V.rank + 1]) - (m.xp || 0))) }) : '';
+      return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${V.rank}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(V.text)}${pum(V.rank)}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
         <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })}・XP ${fmt(m.xp)}</div>
         <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button><button class="btn acc-q" id="acc-treebtn" type="button" aria-label="${esc(t('treeHead'))}" aria-controls="shtip" aria-expanded="false">?</button></div>
         ${guest && (!app || N.ssoHas('apple') || N.ssoHas('google')) ? `<div class="acc-link"><b>${t('linkHead')}</b><div class="hint2">${t('linkHint')}</div><div class="acc-btns">${(app ? N.ssoHas('apple') : apple) ? `<button class="btn sso apple" data-sso="apple" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}${!app || N.ssoHas('google') ? `<button class="btn sso google" data-sso="google" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button>` : ''}</div></div>` : ''}
@@ -114,7 +115,9 @@
     // 카드는 바뀐 자리만 다시 그린다(새로 들어온 사람 카드만 등장 연출이 걸리고, 다른 카드는 깜빡이지 않는다)
     const lbSlotHtml = (p, i) => {
       if (!p) return `<div class="lb-slot empty"><div class="lb-pt"><img class="lb-ring" alt="" src="gfx/ui_select.png"></div><b class="lb-nm">${t('emptySeat')}</b><small class="lb-gr">${t('lb_invite')}</small></div>`;
-      const st = p.state || {}, r = mtRank(st.gr), gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
+      // 내 자리는 내 계정 경험치에서 바로(progression.js view, 계정 카드·결과창과 같은 관직. 2026-11-26). 동료 자리는 서버가 준 값
+      const st0 = p.state || {}, mv = p.me && ACC.token && ACC.me ? window.RTD_PROG.view(t, ACC.me.track, ACC.me.xp || 0) : null;
+      const st = mv ? Object.assign({}, st0, { gr: mv.key, lv: mv.lv }) : st0, r = mtRank(st.gr), gr =/^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
       return `<div class="lb-slot in${p.me ? ' me' : ''}${i === 0 ? ' host' : ''}" data-id="${esc(String(p.id))}">${i === 0 ? `<span class="lb-tag host">${t('host')}</span>` : ''}${p.me ? `<span class="lb-tag mine">${t('me')}</span>` : ''}`
         + `<div class="lb-pt"><img class="av" alt="" src="${Art.portrait(defOf[st.ic] || defOf.cav)}"><img class="lb-ring" alt="" src="gfx/ui_select.png"><img class="lb-rk" alt="" src="gfx/rank_${r}.png" onerror="this.remove()"></div>`
         + `<b class="lb-nm">${esc(st.name || '?')}</b><small class="lb-gr">${esc(gr && st.lv ? window.RTD_PROG.label(t, st.gr, st.lv | 0) : gr)}</small></div>`;
@@ -144,8 +147,8 @@
     // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 누적 경험치와 무관·문관 칭호. 계급마다 등급 1~5(군주 제외). 곡선은 progression.js(서버와 같다, 2026-11-25 economy-v2)
     const RANK_LV = window.RTD_PROG.RANK_LV;
     function treeHtml(m) {
-      const mine = m.track === 'civ' ? 'civ' : 'mil';
-      const rows = RANK_LV.map((lv, i) => `<tr class="${m.rank === i ? 'cur' : ''}"><td class="rk"><img alt="" src="gfx/rank_${i}.png" onerror="this.remove()">${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
+      const mine = m.track === 'civ' ? 'civ' : 'mil', myR = window.RTD_PROG.view(t, m.track, m.xp || 0).rank;
+      const rows = RANK_LV.map((lv, i) => `<tr class="${myR === i ? 'cur' : ''}"><td class="rk"><img alt="" src="gfx/rank_${i}.png" onerror="this.remove()">${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
       return `<table><thead><tr><th>${t('treeStage')}</th><th class="n">${t('treeXp')}</th><th class="${mine === 'mil' ? 'me' : ''}">${t('trackMil')}</th><th class="${mine === 'civ' ? 'me' : ''}">${t('trackCiv')}</th></tr></thead><tbody>${rows}</tbody></table><div class="note">${t('treeSteps')}</div><div class="note">${t('treeNote', { xp: Math.round(m.xp).toLocaleString() })}</div>`;
     }
     const setErr = (e) => { const el = $('acc-err'); if (el) el.textContent = e ? errText(e) : ''; };

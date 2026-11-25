@@ -597,13 +597,42 @@
     }
     c.restore();
   }
+  // ---- 알림 띠 대기열(2026-11-26) ----
+  // 예전에는 띠가 한 칸(S.banner)뿐이라 업적 띠가 막 뜬 중간보스 띠를 덮어 「뜬지도 모르는」 일이 있었다.
+  // S.banner = 지금 띠, S.bannerQ = 기다리는 띠. 규칙:
+  //  - 중간보스 경고(warn)는 맨 앞으로 끼어든다. 떠 있던 보통 띠는 경고 뒤로 돌려 처음부터 다시 보인다.
+  //  - 보통 띠(업적·탈락 등)는 줄을 선다. 뒤에 기다리는 띠가 있으면 지금 띠는 1.4초까지만 보인다(줄이 밀리지 않게). 많아야 4개.
+  //  - 보스 등장 연출·처치 연출·신화/불멸 등장·토벌 성공 패널 동안은 띠를 멈춰 두었다가(시간이 흐르지 않음) 끝나면 이어서.
+  //  - 경고가 떠 있거나 기다리는 동안은 글 알림(toast)도 모아 두었다가 경고가 끝나면 차례로(12-panels toast, 16-hud renderHud).
+  const BANNER_MAX = 4, BANNER_SHORT = 1.4, MIDWARN_LEN = 2.2;
+  function pushBanner(b) {
+    if (S.bannerG !== g) { S.bannerG = g; S.bannerQ = []; S.banner = null; } // 새 판: 지난 판의 띠는 버린다
+    const Q = S.bannerQ;
+    if (b.warn) {
+      const cur = S.banner;
+      if (cur && !cur.warn) { delete cur.len; cur.t = cur.t0 || cur.t; Q.unshift(cur); S.banner = b; }
+      else if (cur) { let i = 0; while (i < Q.length && Q[i].warn) i++; Q.splice(i, 0, b); }
+      else S.banner = b;
+    } else if (!S.banner) S.banner = b;
+    else { Q.push(b); while (Q.length > BANNER_MAX) { const i = Q.findIndex((x) => !x.warn); if (i < 0) break; Q.splice(i, 1); } }
+    b.t0 = b.t;
+  }
+  // 띠를 멈춰 둘 때: 보스 처치 순간(killOn), 보스 등장 연출, 신화·불멸 등장, 토벌 성공 패널
+  const bannerHold = () => killOn() || g.phase === 'bossIntro' || !!(S.pop && (S.pop.vic || (S.pop.def && S.pop.def.tier >= 9)));
+  // 중간보스 경고가 떠 있거나 차례를 기다린다(글 알림을 모아 둔다)
+  const warnOn = () => !!(g && !g.over && S.bannerG === g && ((S.banner && S.banner.warn) || (S.bannerQ || []).some((x) => x.warn)));
   function drawBanner() {
-    const b = S.banner, c = ctx;
+    let b = S.banner;
     if (!b) return;
-    if (b.len == null) b.len = b.t;
-    if (killOn()) return; // 보스 처치 순간이 끝난 뒤에 띄운다
+    if (S.bannerG !== g) { S.banner = null; return; }
+    if (bannerHold()) return; // 연출이 끝난 뒤에 띄운다
+    if (b.len == null) { b.len = b.t; if (b.snd) Snd.play(b.snd); }
+    const Q = S.bannerG === g ? S.bannerQ || [] : [];
+    if (!b.warn && Q.length) b.t = Math.min(b.t, Math.max(0.3, BANNER_SHORT - (b.len - b.t))); // 뒤에 기다리는 띠가 있으면 짧게(사라지는 0.3초는 남긴다)
     b.t -= S.fdt;
-    if (b.t <= 0) { S.banner = null; return; }
+    if (b.t <= 0) { S.banner = Q.shift() || null; return; }
+    if (b.warn) { drawMidWarn(b); return; }
+    const c = ctx;
     // 등장: 먹 띠가 가운데에서 양옆으로 그어지고(0.22초) 제목이 살짝 크게 박혔다 돌아온다. 사라질 때는 흐려진다.
     const el = b.len - b.t, sw = 1 - Math.pow(1 - Math.min(1, el / 0.22), 3), ts = el < 0.3 ? 1 + 0.25 * (1 - el / 0.3) : 1;
     c.save(); c.globalAlpha = Math.min(1, b.t * 2); c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -613,5 +642,21 @@
     c.globalAlpha *= Math.min(1, el / 0.15);
     c.save(); c.translate(W / 2, 200); c.scale(ts, ts); c.lineJoin = 'round'; c.lineWidth = 5; c.strokeStyle = 'rgba(14,9,6,.85)'; c.font = '400 40px "Black Han Sans", sans-serif'; c.strokeText(b.text, 0, 0); c.fillStyle = '#ffd86a'; c.fillText(b.text, 0, 0); c.restore();
     c.fillStyle = '#e8dcc0'; c.font = '400 20px "Gowun Batang", serif'; c.fillText(b.sub || '', W / 2, 238);
+    c.restore();
+  }
+  // 중간보스 경고 띠: 붉은 경고 그림(gfx/vs_warn, 보스전 경고와 같은 그림)이 가운데에서 양옆으로 펼쳐지고 두 번 깜빡인 뒤 머문다(약 2.2초).
+  // 위에 「中ボス出現 / 중간보스 출현」 큰 글씨, 아래 이름. 그림이 없으면 글씨만(도형으로 대신 그리지 않는다)
+  function drawMidWarn(b) {
+    const c = ctx, el = b.len - b.t, pic = Art.pic('vs_warn');
+    const sw = 1 - Math.pow(1 - Math.min(1, el / 0.2), 3);
+    const blink = el < 0.8 ? 0.55 + 0.45 * Math.cos((el / 0.4) * Math.PI * 2) : 1; // 0~0.8초에 두 번 깜빡
+    const a = Math.min(1, b.t / 0.3); // 끝 0.3초 흐려짐
+    const bw = 860, bh = pic ? (bw * pic.height) / pic.width : 176, y0 = 128;
+    c.save(); c.textAlign = 'center'; c.textBaseline = 'middle';
+    if (pic) { c.save(); c.beginPath(); c.rect(W / 2 - (bw / 2) * sw, y0 - 20, bw * sw, bh + 40); c.clip(); c.globalAlpha = a * blink * 0.96; c.drawImage(pic, W / 2 - bw / 2, y0, bw, bh); c.restore(); }
+    const ta = a * Math.min(1, el / 0.12), ts = el < 0.28 ? 1 + 0.3 * (1 - el / 0.28) : 1, cy = y0 + bh * 0.42;
+    c.globalAlpha = ta;
+    c.save(); c.translate(W / 2, cy); c.scale(ts, ts); c.lineJoin = 'round'; c.lineWidth = 7; c.strokeStyle = 'rgba(20,4,2,.9)'; c.font = '400 50px "Black Han Sans", sans-serif'; c.strokeText(b.text, 0, 0); c.fillStyle = '#fff1dc'; c.fillText(b.text, 0, 0); c.restore();
+    if (b.sub) { c.lineJoin = 'round'; c.lineWidth = 5; c.strokeStyle = 'rgba(20,4,2,.9)'; c.font = '700 26px "Gowun Batang", serif'; c.strokeText(b.sub, W / 2, cy + 46); c.fillStyle = '#ffd86a'; c.fillText(b.sub, W / 2, cy + 46); }
     c.restore();
   }

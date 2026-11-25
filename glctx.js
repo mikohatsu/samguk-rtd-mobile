@@ -249,6 +249,10 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
       return [x, best.y];
     }
     function resetAtlas() { flush(); rows = []; nextY = 4; exact.clear(); fam.clear(); repoch++; S1.resets++; }
+    // 웹 글꼴이 늦게 들어오면(한글은 unicode-range 조각이라 그 글자가 처음 쓰일 때 받는다) 그 전에 대체 글꼴로 그려 둔 글자 캐시를 버린다.
+    // 2026-11-26 실기(탭 S7): 4성 등장 「감녕 등장」의 '녕'만 기기 글꼴로 그려진 채 굳었다. 다음 프레임 시작에서 아틀라스·큰 글자 캐시를 비운다.
+    let fontDirty = false;
+    if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { fontDirty = true; });
     // 따로 올리는 큰 것(아틀라스에 안 들어가는 것): 키가 있으면 최근 6개, 없으면 돌려 쓰는 3장
     const solo = new Map(); const soloPool = [];
     // 보조 2D 캔버스(CPU): 도형·글자를 그 영역만 그린다
@@ -513,6 +517,7 @@ void main() { gl_FragColor = texture2D(uT, vT) * vC * texture2D(uM, clamp(vM, vM
       if (lost || gl.isContextLost()) { toFallback(); return; }
       if (sizeFrom !== view && (view.width !== sizeFrom.width || view.height !== sizeFrom.height)) { view.width = sizeFrom.width; view.height = sizeFrom.height; }
       W = view.width; H = view.height;
+      if (fontDirty) { fontDirty = false; resetAtlas(); for (const e of solo.values()) e.tr.owner = null; } // 글꼴이 새로 들어옴 → 글자 캐시 다시 그리기
       rBudget = 60000;
       if (st.sd) { unsupported.add('clip-across-frames'); st.sd = 0; }
       if (sdLeft) { gl.stencilMask(0xff); gl.clearStencil(0); gl.clear(gl.STENCIL_BUFFER_BIT); sdLeft = false; }

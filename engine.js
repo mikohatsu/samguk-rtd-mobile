@@ -33,29 +33,41 @@
   };
   const inCone = (px, py, x, y, a, r, arc, pad) =>
     dist(px, py, x, y) <= r + pad && (dist(px, py, x, y) < pad || angDiff(Math.atan2(py - y, px - x), a) <= arc / 2);
-  // ---- 피격 판정 도형(2026-11-26 사용자 결정 「딱 유닛 그림을 피격 판정으로, 장판은 테두리 선까지」) ----
-  // 몸통 사각형 b = [x0, y0, x1, y1](바닥 좌표 = 화면 좌표, 결투장은 위에서 내려다본 평면을 그대로 그린다). Game.bodyBox가 만든다.
-  // 사각형에서 점까지 가장 가까운 거리 / 가장 먼 모서리까지 거리
-  const boxDist = (b, x, y) => dist(clamp(x, b[0], b[2]), clamp(y, b[1], b[3]), x, y);
-  const boxFar = (b, x, y) => Math.hypot(Math.max(Math.abs(x - b[0]), Math.abs(x - b[2])), Math.max(Math.abs(y - b[1]), Math.abs(y - b[3])));
-  // 볼록 다각형(꼭짓점 목록)과 사각형이 겹치는가(분리축 정리: 두 축 x·y와 다각형 변의 법선에 투영해 한 축이라도 떨어지면 안 겹침)
-  const polyBox = (pts, b) => {
-    const bx = [b[0], b[2], b[2], b[0]], by = [b[1], b[1], b[3], b[3]], axes = [[1, 0], [0, 1]];
-    for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; axes.push([q[1] - p[1], p[0] - q[0]]); }
-    for (const [ax, ay] of axes) {
+  // ---- 피격 판정 도형(2026-11-26 사용자 결정, 같은 날 「던파식」으로 바꿈) ----
+  // 2.5D 레이드(던전앤파이터·캐슬 크래셔 등)의 관례: 바닥 장판·지상 공격은 캐릭터 발밑 그림자(바닥 평면의 발자국)로 판정하고 높이는 공중 판정에만 쓴다.
+  // 그래서 장수 피격 범위 = 발밑 원판(03-unit piece의 discSprite)과 같은 타원. 장판은 그려진 테두리 선 바깥 끝까지. 둘이 조금이라도 겹치면 맞는다.
+  // 타원은 볼록 16각형(꼭짓점 목록)으로 다룬다(오차 반지름의 2% 미만). Game.footPoly가 만든다.
+  // 볼록 다각형 둘이 겹치는가(분리축 정리: 두 다각형 변의 법선에 투영해 한 축이라도 떨어지면 안 겹침)
+  const polyPoly = (A, B) => {
+    for (const P of [A, B]) for (let i = 0; i < P.length; i++) {
+      const p = P[i], q = P[(i + 1) % P.length], ax = q[1] - p[1], ay = p[0] - q[0];
       let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
-      for (const [x, y] of pts) { const v = x * ax + y * ay; if (v < a0) a0 = v; if (v > a1) a1 = v; }
-      for (let i = 0; i < 4; i++) { const v = bx[i] * ax + by[i] * ay; if (v < b0) b0 = v; if (v > b1) b1 = v; }
+      for (const [x, y] of A) { const v = x * ax + y * ay; if (v < a0) a0 = v; if (v > a1) a1 = v; }
+      for (const [x, y] of B) { const v = x * ax + y * ay; if (v < b0) b0 = v; if (v > b1) b1 = v; }
       if (a1 < b0 || b1 < a0) return false;
     }
     return true;
   };
+  // 점에서 볼록 다각형까지 가장 가까운 거리(안이면 0) / 가장 먼 꼭짓점까지 거리
+  const polyNear = (P, x, y) => {
+    let inside = true, best = Infinity;
+    for (let i = 0; i < P.length; i++) {
+      const [x0, y0] = P[i], [x1, y1] = P[(i + 1) % P.length], dx = x1 - x0, dy = y1 - y0;
+      if (dx * (y - y0) - dy * (x - x0) < 0) inside = false;
+      const t = clamp(((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+      best = Math.min(best, dist(x, y, x0 + dx * t, y0 + dy * t));
+    }
+    return inside ? 0 : best;
+  };
+  const polyFar = (P, x, y) => P.reduce((m, [px, py]) => Math.max(m, dist(px, py, x, y)), 0);
   // 직선 장판(x,y에서 a 방향으로 len, 폭 w)의 네 꼭짓점, 부채꼴(반지름 r, 벌어진 각 arc)을 호 10조각으로 나눈 다각형(arc가 π보다 크면 반씩 나눠 본다)
   const linePoly = (x, y, a, len, w) => { const c = Math.cos(a), s = Math.sin(a), hw = w / 2; return [[x - s * hw, y + c * hw], [x + c * len - s * hw, y + s * len + c * hw], [x + c * len + s * hw, y + s * len - c * hw], [x + s * hw, y - c * hw]]; };
   const conePoly = (x, y, a, r, arc) => { const out = [[x, y]]; for (let i = 0; i <= 10; i++) { const t = a - arc / 2 + (arc * i) / 10; out.push([x + Math.cos(t) * r, y + Math.sin(t) * r]); } return out; };
-  const coneBox = (h, b) => (h.arc > Math.PI ? coneBox({ x: h.x, y: h.y, a: h.a - h.arc / 4, r: h.r, arc: h.arc / 2 }, b) || coneBox({ x: h.x, y: h.y, a: h.a + h.arc / 4, r: h.r, arc: h.arc / 2 }, b) : polyBox(conePoly(h.x, h.y, h.a, h.r, h.arc), b));
-  // 몸통 사각형 기본값(theme rules.hitBox가 없을 때): 장수 그림(발 = 위치 + 32, 키 119, 몸통 폭 56) — production/team/2026-11-26/boss-rules.md
-  const HITBOX = { hw: 28, top: -87, bot: 32 };
+  const conePolyHit = (h, P) => (h.arc > Math.PI ? conePolyHit({ x: h.x, y: h.y, a: h.a - h.arc / 4, r: h.r, arc: h.arc / 2 }, P) || conePolyHit({ x: h.x, y: h.y, a: h.a + h.arc / 4, r: h.r, arc: h.arc / 2 }, P) : polyPoly(conePoly(h.x, h.y, h.a, h.r, h.arc), P));
+  const rectPoly = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+  // 발밑 타원 기본값(theme rules.hitFoot이 없을 때): 원판 가운데 = 위치 + (0, dy), 반지름 rx·ry(원판 그림 + 바깥 선). 03-unit discSprite: 100×48 칸에 45×20 타원,
+  // 장수 원판 크기 r·0.95/46(r = 40) → 37.2×16.5, 바깥 선 절반 1.7 → 38.8×18.2, 가운데 y + r·0.72 = y + 28.8
+  const HITFOOT = { dy: 28.8, rx: 38.8, ry: 18.2 };
 
   class Game {
     constructor(theme, opt) {
@@ -1455,48 +1467,51 @@
     }
     danger(x, y, t) {
       // 인공지능과 비조작 유닛의 회피용 위험도. 텔레그래프를 그대로 읽는다.
-      // 피격 판정과 같은 몸통 사각형(bodyBox)을 회피 여유 R.dangerPad만큼 더 늘려 본다(2026-11-26: 예전에는 위치 한 점 + 34)
+      // 피격 판정과 같은 발밑 타원(footPoly)을 회피 여유 R.dangerPad만큼 더 늘려 본다(2026-11-26: 예전에는 위치 한 점 + 34)
       let v = 0;
-      const bx = this.bodyBox(x, y, this.hitEdge() + this.dangerPad());
+      const P = this.footPoly(x, y, this.hitEdge() + this.dangerPad());
       for (const h of this.fight.hazards) {
         if (h.own) continue;
         // 탄환은 지금 자리와 0.7초 뒤까지 날아갈 길을 함께 피한다
-        if (h.k === 'proj') { if (this.projDanger(h, bx)) v += 2; continue; }
-        if (this.hazardBox(h, bx)) v += 3;
+        if (h.k === 'proj') { if (this.projDanger(h, P)) v += 2; continue; }
+        if (this.hazardFoot(h, P)) v += 3;
       }
       return v;
     }
-    // ---- 피격 판정: 장수 몸통 사각형 대 장판 모양(2026-11-26) ----
-    // 몸통 사각형 [x0, y0, x1, y1]: 위치(x, y) 기준 좌우 hw, 위 top·아래 bot(발끝). pad만큼 사방으로 늘린다.
-    bodyBox(x, y, pad) { const B = this.R.hitBox || HITBOX, p = pad || 0; return [x - B.hw - p, y + B.top - p, x + B.hw + p, y + B.bot + p]; }
+    // ---- 피격 판정: 장수 발밑 타원 대 장판 모양(2026-11-26 「던파식 발밑 판정」) ----
+    // 발밑 타원(볼록 16각형): 위치(x, y) + (0, dy)를 가운데로 반지름 rx·ry. pad만큼 사방으로 늘린다.
+    footPoly(x, y, pad) {
+      const F = this.R.hitFoot || HITFOOT, p = pad || 0, cy = y + F.dy, rx = F.rx + p, ry = F.ry + p, out = [];
+      for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; out.push([x + Math.cos(a) * rx, cy + Math.sin(a) * ry]); }
+      return out;
+    }
+    footMid() { return (this.R.hitFoot || HITFOOT).dy; }
     // 장판 그림의 테두리 선 바깥 끝(06-boss-vfx tele의 바깥 어두운 선 TELE.darkW = 4)까지를 판정에 넣는 양
     hitEdge() { return this.R.hitEdge != null ? this.R.hitEdge : 4; }
-    // ---- 기술 틈을 몸통에 맞추기(2026-11-26 판정 재조정, 사용자 「그림 판정 + 기술 재조정」) ----
-    // 몸통 폭·키(테두리 선 포함), 방향 a인 직선에 수직으로 잰 몸통 폭, 틈에 더 주는 여유(R.gapPad)
-    bodyW() { const B = this.R.hitBox || HITBOX; return 2 * (B.hw + this.hitEdge()); }
-    bodyH() { const B = this.R.hitBox || HITBOX; return B.bot - B.top + 2 * this.hitEdge(); }
-    bodyAcross(a) { return this.bodyW() * Math.abs(Math.sin(a)) + this.bodyH() * Math.abs(Math.cos(a)); }
-    gapPad() { return this.R.gapPad != null ? this.R.gapPad : 24; }
-    // 한 점에서 퍼지는 직선 여러 줄(폭 w)의 간격(rad): 거리 d에서 줄 사이 틈이 몸통(방향 a 기준) + 여유 이상이 되게. base보다 좁히지는 않는다
-    // 틈은 몸통의 보스 쪽 끝(거리 d − 줄 방향 몸통 길이의 절반)에서 잰다(가장 좁은 자리)
-    fanStep(base, w, d, a) {
-      const along = this.bodyW() * Math.abs(Math.cos(a)) + this.bodyH() * Math.abs(Math.sin(a));
-      return Math.max(base, (w + this.bodyAcross(a) + this.gapPad()) / Math.max(100, d - along / 2));
-    }
+    // ---- 기술 틈을 발판에 맞추기(2026-11-26) ----
+    // 발판 폭·깊이(테두리 선 포함), 방향 a인 직선에 수직으로 잰 발판 폭 / 직선 방향 길이, 틈에 더 주는 여유(R.gapPad)
+    footW() { return 2 * ((this.R.hitFoot || HITFOOT).rx + this.hitEdge()); }
+    footD() { return 2 * ((this.R.hitFoot || HITFOOT).ry + this.hitEdge()); }
+    footAcross(a) { const rx = this.footW() / 2, ry = this.footD() / 2; return 2 * Math.hypot(rx * Math.sin(a), ry * Math.cos(a)); }
+    footAlong(a) { const rx = this.footW() / 2, ry = this.footD() / 2; return 2 * Math.hypot(rx * Math.cos(a), ry * Math.sin(a)); }
+    gapPad() { return this.R.gapPad != null ? this.R.gapPad : 8; }
+    // 한 점에서 퍼지는 직선 여러 줄(폭 w)의 간격(rad): 거리 d에서 줄 사이 틈이 발판(방향 a 기준) + 여유 이상이 되게. base보다 좁히지는 않는다.
+    // 틈은 발판의 보스 쪽 끝(거리 d − 직선 방향 발판 길이의 절반)에서 잰다(가장 좁은 자리)
+    fanStep(base, w, d, a) { return Math.max(base, (w + this.footAcross(a) + this.gapPad()) / Math.max(100, d - this.footAlong(a) / 2)); }
     dangerPad() { return this.R.dangerPad != null ? this.R.dangerPad : 18; }
-    // 이 장판이 장수 c의 몸통(그림)과 겹치는가: 동료·AI 장수 모두 이 판정을 쓴다
-    champHit(h, c) { return this.hazardBox(h, this.bodyBox(c.x, c.y, this.hitEdge())); }
-    // 탄환이 몸통에 닿았나 / 탄환 길(0.7초) 위인가
-    projHit(h, c) { return boxDist(this.bodyBox(c.x, c.y, this.hitEdge()), h.x, h.y) < h.r; }
-    projDanger(h, bx) { return boxDist(bx, h.x, h.y) < h.r + 40 || polyBox(linePoly(h.x, h.y, h.a, h.v * 0.7, h.r * 2 + 10), bx); }
-    // 장판 h와 사각형 b(이미 늘린 몸통)가 겹치는가. raid.js가 레이드 장판 모양(rect·band·all·los 등)을 덧붙인다.
-    hazardBox(h, b) {
-      if (h.k === 'circle') return boxDist(b, h.x, h.y) <= h.r;
-      if (h.k === 'line') return polyBox(linePoly(h.x, h.y, h.a, h.len, h.w), b);
-      if (h.k === 'cone') return coneBox(h, b);
-      if (h.k === 'donut') return boxDist(b, h.x, h.y) <= h.r1 && boxFar(b, h.x, h.y) >= h.r0;
-      // 안전지대: 몸통 전체가 어느 한 안전 원 안에 들어가야 안 맞는다(늘린 만큼 = 바깥 위험 장판의 테두리 선이 원 안쪽으로 그려진 폭)
-      if (h.k === 'safe') return !h.spots.some((s) => boxFar(b, s[0], s[1]) <= s[2]);
+    // 이 장판이 장수 c의 발판과 겹치는가: 동료·AI 장수 모두 이 판정을 쓴다
+    champHit(h, c) { return this.hazardFoot(h, this.footPoly(c.x, c.y, this.hitEdge())); }
+    // 탄환이 발판에 닿았나 / 탄환 길(0.7초) 위인가
+    projHit(h, c) { return polyNear(this.footPoly(c.x, c.y, this.hitEdge()), h.x, h.y) < h.r; }
+    projDanger(h, P) { return polyNear(P, h.x, h.y) < h.r + 40 || polyPoly(linePoly(h.x, h.y, h.a, h.v * 0.7, h.r * 2 + 10), P); }
+    // 장판 h와 발판 다각형 P(이미 늘린 것)가 겹치는가. raid.js가 레이드 장판 모양(rect·band·all·los 등)을 덧붙인다.
+    hazardFoot(h, P) {
+      if (h.k === 'circle') return polyNear(P, h.x, h.y) <= h.r;
+      if (h.k === 'line') return polyPoly(linePoly(h.x, h.y, h.a, h.len, h.w), P);
+      if (h.k === 'cone') return conePolyHit(h, P);
+      if (h.k === 'donut') return polyNear(P, h.x, h.y) <= h.r1 && polyFar(P, h.x, h.y) >= h.r0;
+      // 안전지대: 발판 전체가 어느 한 안전 원 안에 들어가야 안 맞는다(늘린 만큼 = 바깥 위험 장판의 테두리 선이 원 안쪽으로 그려진 폭)
+      if (h.k === 'safe') return !h.spots.some((s) => polyFar(P, s[0], s[1]) <= s[2]);
       return false;
     }
     stepFight(dt) {
@@ -1591,8 +1606,7 @@
         if (!hold) { b.x += ((t.x - b.x) / d) * sp; b.y += ((t.y - b.y) / d) * sp; }
       } else if (b.atkCd <= 0) {
         b.atkCd = 1.6;
-        // 근접 베기 반지름(R.meleeR, 2026-11-26 150→120): 몸통 판정에서 머리(위로 87)까지 닿아 사정거리가 아래쪽으로 75 늘어난 것을 되돌린다
-        this.addHazards([{ k: 'cone', x: b.x, y: b.y, a: Math.atan2(t.y - b.y, t.x - b.x), r: this.R.meleeR || 150, arc: 1.5, delay: 0.5, dmg: b.hit * 0.14, fx: 'blade' }]);
+        this.addHazards([{ k: 'cone', x: b.x, y: b.y, a: Math.atan2(t.y - b.y, t.x - b.x), r: 150, arc: 1.5, delay: 0.5, dmg: b.hit * 0.14, fx: 'blade' }]);
       }
       if (f.bigCd > 0) f.bigCd -= dt;
       if (this.bigPending()) b.gap = Math.max(b.gap, 1.6);
@@ -1632,21 +1646,9 @@
     addHazards(list) {
       const f = this.fight, c = f.def.fx;
       const M = f.mech || {}, weak = 1 - Math.min(0.5, (f.bweak || 0) + (M.adT > 0 ? M.adV : 0));
-      const out = list.map((h) => this.fitHazard(Object.assign({ c, t: 0, fx: f.vis || undefined }, h, h.dmg ? { dmg: h.dmg * this.mut.hazDmg * weak } : {})));
+      const out = list.map((h) => Object.assign({ c, t: 0, fx: f.vis || undefined }, h, h.dmg ? { dmg: h.dmg * this.mut.hazDmg * weak } : {}));
       this.fight.hazards.push(...out);
       if (this.net) this.net.sendHazards(out);
-    }
-    // 보스 장판 크기를 몸통 판정에 맞춰 줄인다(R.hzShrink, 2026-11-26 판정 재조정): 한 점 판정 때 짜인 크기에서 몸통이 커진 만큼 덜어,
-    // 몸통 가운데 기준으로 맞는 범위가 예전 한 점 + 16과 비슷해지게 한다. 그림도 이 값으로 그리므로 그림과 판정은 그대로 일치한다.
-    // 경기장 전체를 덮는 구획(화웅 낙석 줄·등애 절벽)과 내 장판(own)은 건드리지 않는다.
-    fitHazard(h) {
-      const s = this.R.hzShrink || 0;
-      if (!s || h.own) return h;
-      if (h.k === 'circle') h.r = Math.max(30, h.r - s);
-      else if (h.k === 'cone') h.r = Math.max(60, h.r - s);
-      else if (h.k === 'line') h.w = Math.max(20, h.w - s); // 직선은 양쪽에서 반씩(가는 줄이 너무 얇아지지 않게)
-      else if (h.k === 'donut') { const m = (h.r0 + h.r1) / 2, hw = Math.max(15, (h.r1 - h.r0) / 2 - s); h.r0 = m - hw; h.r1 = m + hw; }
-      return h;
     }
     stepHazards(dt) {
       const f = this.fight, b = f.boss;
@@ -1880,7 +1882,7 @@
     rain(f, b, t, p, pace, all) {
       const list = [];
       for (let i = 0; i < p.n; i++) {
-        const o = all[i % all.length], s = i < all.length ? 0 : this.R.rainSpread || 170; // 흩어지는 폭(2026-11-26 몸통 판정에 맞춰 넓힘, R.rainSpread)
+        const o = all[i % all.length], s = i < all.length ? 0 : 170;
         list.push({ k: 'circle', x: clamp(o.x + (this.rand() - 0.5) * s * 2, ARENA.x0, ARENA.x1), y: clamp(o.y + (this.rand() - 0.5) * s * 2, ARENA.y0, ARENA.y1), r: p.r, delay: (0.9 + i * 0.16) * pace, dmg: b.hit * 0.3 });
       }
       this.addHazards(list);
@@ -1894,16 +1896,16 @@
       this.addHazards(list);
     },
     cross(f, b, t, p, pace) {
-      // 2026-11-26: 보스에서 300 떨어진 곳의 줄 사이 틈이 몸통 키(가장 긴 쪽) + 여유 이상이 되게 줄 수를 줄인다
-      const a0 = Math.atan2(t.y - b.y, t.x - b.x), list = [], n = Math.max(2, Math.min(p.n, Math.floor((Math.PI * 2 * 300) / (70 + this.bodyH() + this.gapPad()))));
+      // 2026-11-26: 보스에서 300 떨어진 곳의 줄 사이 틈이 발판 폭(가장 긴 쪽) + 여유 이상이 되게 줄 수를 줄인다
+      const a0 = Math.atan2(t.y - b.y, t.x - b.x), list = [], n = Math.max(2, Math.min(p.n, Math.floor((Math.PI * 2 * 300) / (70 + this.footW() + this.gapPad()))));
       for (let i = 0; i < n; i++) list.push({ k: 'line', x: b.x, y: b.y, a: a0 + (i / n) * Math.PI * 2, len: 2000, w: 70, delay: 1.1 * pace, dmg: b.hit * 0.4 });
       this.addHazards(list);
     },
     nova(f, b, t, p, pace) { this.addHazards([{ k: 'circle', x: b.x, y: b.y, r: p.r, delay: 1.2 * pace, dmg: b.hit * 0.45 }]); },
     rings(f, b, t, p, pace) {
       const list = [];
-      // 고리 폭 100, 고리 사이 틈은 몸통 키 + 여유(2026-11-26, 예전 40: 한 점 판정에 맞춘 틈)
-      const pitch = 100 + this.bodyH() + this.gapPad();
+      // 고리 폭 100, 고리 사이 틈은 발판 폭 + 여유(2026-11-26, 예전 40: 한 점 판정에 맞춘 틈)
+      const pitch = 100 + this.footW() + this.gapPad();
       for (let i = 0; i < Math.min(p.n, 7); i++) list.push({ k: 'donut', x: b.x, y: b.y, r0: 90 + i * pitch, r1: 190 + i * pitch, delay: (1 + i * 0.45) * pace, dmg: b.hit * 0.35 });
       this.addHazards(list);
     },
@@ -1920,8 +1922,8 @@
     },
     bullet(f, b, t, p, pace) {
       const list = [];
-      // 2026-11-26: 보스에서 350 떨어진 곳의 탄 사이 틈이 몸통(폭·키 평균) + 여유 이상이 되게 한 바퀴 탄 수를 줄인다
-      const n = Math.max(6, Math.min(p.n, Math.floor((Math.PI * 2 * 350) / (30 + (this.bodyW() + this.bodyH()) / 2 + this.gapPad()))));
+      // 2026-11-26: 보스에서 350 떨어진 곳의 탄 사이 틈이 발판(폭·깊이 평균) + 여유 이상이 되게 한 바퀴 탄 수를 줄인다
+      const n = Math.max(6, Math.min(p.n, Math.floor((Math.PI * 2 * 350) / (30 + (this.footW() + this.footD()) / 2 + this.gapPad()))));
       for (let w = 0; w < p.waves; w++) for (let i = 0; i < n; i++) {
         list.push({ k: 'proj', x: b.x, y: b.y, a: (i / n) * Math.PI * 2 + w * 0.2, v: 300, r: 15, delay: (0.8 + w * 0.5) * pace, dmg: b.hit * 0.2 });
       }
@@ -1934,12 +1936,12 @@
     },
     rows(f, b, t, p, pace) {
       const list = [], gap = (ARENA.y1 - ARENA.y0) / p.n, off = this.rand() < 0.5 ? 0 : 1;
-      for (let i = 0; i < p.n; i++) list.push({ k: 'line', x: ARENA.x0, y: ARENA.y0 + gap * (i + 0.5), a: 0, len: ARENA.x1 - ARENA.x0, w: gap * (this.R.rowsW != null ? this.R.rowsW : 0.8), delay: (1.1 + ((i + off) % 2) * 0.9) * pace, dmg: b.hit * 0.4 });
+      for (let i = 0; i < p.n; i++) list.push({ k: 'line', x: ARENA.x0, y: ARENA.y0 + gap * (i + 0.5), a: 0, len: ARENA.x1 - ARENA.x0, w: gap * 0.8, delay: (1.1 + ((i + off) % 2) * 0.9) * pace, dmg: b.hit * 0.4 });
       this.addHazards(list);
     },
   };
 
-  const api = { Game, W, H, ROAD, INNER, ARENA, PATH, dist, clamp, inLine, inCone, angDiff, boxDist, boxFar, polyBox, linePoly };
+  const api = { Game, W, H, ROAD, INNER, ARENA, PATH, dist, clamp, inLine, inCone, angDiff, polyPoly, polyNear, polyFar, linePoly, rectPoly };
   root.RTD_ENGINE = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

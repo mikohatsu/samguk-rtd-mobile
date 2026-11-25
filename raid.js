@@ -3,7 +3,7 @@
 // 장판(hazard)은 기존처럼 방장이 만들어 hz로 보내고, 각자 자기 출전 유닛에게 적용한다.
 (function (root) {
   const E = root.RTD_ENGINE || (typeof require !== 'undefined' ? require('./engine.js') : null);
-  const { Game, ARENA, dist, clamp, inLine, inCone, angDiff, boxDist } = E;
+  const { Game, ARENA, dist, clamp, inLine, inCone, angDiff, polyPoly, polyNear, rectPoly } = E;
   const P = Game.prototype;
   const CX = (ARENA.x0 + ARENA.x1) / 2, CY = (ARENA.y0 + ARENA.y1) / 2;
   const AW = ARENA.x1 - ARENA.x0, AH = ARENA.y1 - ARENA.y0;
@@ -196,7 +196,7 @@
       if (o.life != null) { o.life -= dt; if (o.life <= 0) { M.objs = M.objs.filter((x) => x !== o); continue; } }
       if (o.k === 'tower' && o.cd <= 0) {
         o.cd = 3.4; const t = this.nearestTo(o.x, o.y);
-        // 세 줄 간격: 표적 거리에서 줄 사이 틈이 몸통 + 여유 이상(최소 0.25, 2026-11-26)
+        // 세 줄 간격: 표적 거리에서 줄 사이 틈이 발판 + 여유 이상(최소 0.25, 2026-11-26)
         if (t) { const a0 = Math.atan2(t.y - o.y, t.x - o.x), st = this.fanStep(0.25, 40, dist(t.x, t.y, o.x, o.y), a0); this.addHazards([-st, 0, st].map((da) => ({ k: 'line', x: o.x, y: o.y, a: a0 + da, len: 1500, w: 40, delay: 1 * pace, dmg: b.hit * 0.28, fx: 'arrow' }))); }
       } else if (o.k === 'amb' && o.cd <= 0) {
         o.cd = 2.6; const t = this.nearestTo(o.x, o.y);
@@ -233,34 +233,34 @@
       return dist(bx + dx * t, by + dy * t, p.x, p.y) < p.r * 0.8 && dist(x, y, p.x, p.y) < 260;
     });
   };
-  // 몸통 사각형 판정(engine.js hazardBox)에 레이드 장판 모양을 더한다. b는 이미 테두리·여유만큼 늘린 몸통 [x0, y0, x1, y1]
-  const baseBox = P.hazardBox;
-  P.hazardBox = function (h, b) {
-    if (h.k === 'rect') return b[2] >= h.x && b[0] <= h.x + h.rw && b[3] >= h.y && b[1] <= h.y + h.rh;
-    if (h.k === 'band') return b[1] < h.y0 || b[3] > h.y1; // 길 밖이 위험: 몸통이 길 위·아래 선을 넘으면
+  // 발판 판정(engine.js hazardFoot)에 레이드 장판 모양을 더한다. F는 이미 테두리·여유만큼 늘린 발판 다각형
+  const baseFoot = P.hazardFoot;
+  const ys = (F) => F.reduce((m, p) => [Math.min(m[0], p[1]), Math.max(m[1], p[1])], [Infinity, -Infinity]);
+  P.hazardFoot = function (h, F) {
+    if (h.k === 'rect') return polyPoly(rectPoly(h.x, h.y, h.rw, h.rh), F);
+    if (h.k === 'band') { const [y0, y1] = ys(F); return y0 < h.y0 || y1 > h.y1; } // 길 밖이 위험: 발판이 길 위·아래 선을 넘으면
     if (h.k === 'all') return true;
-    if (h.k === 'los') return this.exposed(h.x, h.y, (b[0] + b[2]) / 2, (b[1] + b[3]) / 2); // 돌기둥 그림자: 몸통 가운데가 가려지면 안전
+    if (h.k === 'los') { const c = F.reduce((m, p) => [m[0] + p[0] / F.length, m[1] + p[1] / F.length], [0, 0]); return this.exposed(h.x, h.y, c[0], c[1]); } // 돌기둥 그림자: 발판 가운데가 가려지면 안전
     if (PASSIVE[h.k]) return false;
-    return baseBox.call(this, h, b);
+    return baseFoot.call(this, h, F);
   };
   // 인공지능과 비조작 유닛의 회피용 위험도
-  // 피격 판정과 같은 몸통 사각형을 회피 여유(R.dangerPad)만큼 늘려 본다(engine.js danger와 같음)
+  // 피격 판정과 같은 발판 타원을 회피 여유(R.dangerPad)만큼 늘려 본다(engine.js danger와 같음)
   P.danger = function (x, y) {
     let v = 0;
-    // 안쪽이 안전한 장판(안전지대·생문 95, 화용도 길 190)은 몸통 + 테두리 + 6만: 여유를 다 붙이면 몸통이 안전 원·길에 다 안 들어가 갈 곳이 없어진다
-    const f = this.fight, e = this.hitEdge(), bx = this.bodyBox(x, y, e + this.dangerPad()), bi = this.bodyBox(x, y, e + 6);
+    // 안쪽이 안전한 장판(안전지대·생문, 화용도 길)은 발판 + 테두리 + 6만: 여유를 다 붙이면 안전 원·길이 좁아져 갈 곳이 줄어든다
+    const f = this.fight, e = this.hitEdge(), fx = this.footPoly(x, y, e + this.dangerPad()), fi = this.footPoly(x, y, e + 6);
     for (const h of f.hazards) {
       if (h.own || PASSIVE[h.k]) continue;
-      if (h.k === 'proj') { if (this.projDanger(h, bx)) v += 2; continue; }
+      if (h.k === 'proj') { if (this.projDanger(h, fx)) v += 2; continue; }
       if (h.dur && h.fired && h.t > h.delay + h.dur - 0.2) continue;
-      if (this.hazardBox(h, h.k === 'safe' || h.k === 'band' ? bi : bx)) v += 3;
+      if (this.hazardFoot(h, h.k === 'safe' || h.k === 'band' ? fi : fx)) v += 3;
     }
     return v;
   };
-  // 피할 때 함께 따져 볼 자리: 돌기둥 그림자, 안전지대·생문 한가운데. 안전지대·길은 몸통(그림) 가운데가 한가운데 오게 장수 위치를 내린다(bodyMid)
-  P.bodyMid = function () { const B = this.R.hitBox || { top: -87, bot: 32 }; return (B.top + B.bot) / 2; };
+  // 피할 때 함께 따져 볼 자리: 돌기둥 그림자, 안전지대·생문 한가운데. 안전지대·길은 발판 가운데가 한가운데 오게 장수 위치를 올린다(footMid)
   P.raidSpots = function () {
-    const f = this.fight, out = [], my = this.bodyMid();
+    const f = this.fight, out = [], my = this.footMid();
     f.hazards.forEach((h) => {
       if (h.k === 'los' && !h.fired) f.mech.objs.forEach((p) => { if (p.k === 'pillar') { const a = Math.atan2(p.y - h.y, p.x - h.x); out.push([p.x + Math.cos(a) * (p.r + 46), p.y + Math.sin(a) * (p.r + 46)]); } });
       if (h.k === 'safe' && !h.fired) h.spots.forEach((s) => out.push([s[0], s[1] - my]));
@@ -282,7 +282,7 @@
       if (h.k !== 'wind' && h.k !== 'gaze') this.log('sfx', { s: 'boom', gap: 110 });
       if (h.k === 'push') {
         own.forEach((c) => {
-          if (boxDist(this.bodyBox(c.x, c.y, this.hitEdge()), h.x, h.y) > h.r) return; // 몸통이 충격파 원에 닿으면 밀린다
+          if (polyNear(this.footPoly(c.x, c.y, this.hitEdge()), h.x, h.y) > h.r) return; // 발판이 충격파 원에 닿으면 밀린다
           const a = Math.atan2(c.y - h.y, c.x - h.x);
           c.kx = (Math.cos(a) * h.pw) / 0.35; c.ky = (Math.sin(a) * h.pw) / 0.35; c.kt = 0.35; c.move = false;
         });
@@ -316,7 +316,7 @@
     // 무력화 실패 대비 안전지대: 시전 끝 3.5초 전부터
     if (M.cast && M.cast.spots && M.cast.t > M.cast.dur - 3.5) {
       const s = M.cast.spots.slice().sort((p, q) => dist(c.x, c.y, p[0], p[1]) - dist(c.x, c.y, q[0], q[1]))[0];
-      return [s[0], s[1] - this.bodyMid()];
+      return [s[0], s[1] - this.footMid()];
     }
     // 반격: 보스 정면으로
     if (M.ctr > 0 && !this.inFront(c)) { const r = Math.min(200, this.range(c.def) * 0.8); return [clamp(b.x + Math.cos(M.face) * r, ARENA.x0, ARENA.x1), clamp(b.y + Math.sin(M.face) * r, ARENA.y0, ARENA.y1)]; }
@@ -378,7 +378,7 @@
     // 화웅: 사수관 낙석이 한 줄씩 차례로 떨어진다(두 번, 방향 반대)
     domino: {
       start(f, b) {
-        const n = this.R.dominoN || 8, w = AW / n, dir = this.rand() < 0.5 ? 1 : -1, pace = this.pace(), list = [];
+        const n = 8, w = AW / n, dir = this.rand() < 0.5 ? 1 : -1, pace = this.pace(), list = [];
         for (let wave = 0; wave < 2; wave++) for (let i = 0; i < n; i++) {
           const col = (dir * (wave ? -1 : 1)) > 0 ? i : n - 1 - i;
           list.push({ k: 'rect', raid: 1, x: ARENA.x0 + col * w, y: ARENA.y0, rw: w, rh: AH, delay: (2 + i * (this.R.dominoStep || 0.85) + wave * 9) * pace, dmg: b.hit * 0.5 }); // dominoStep: 줄 사이 시간(2026-11-26 0.85→1.05: 몸통 폭만큼 더 건너야 한다)
@@ -524,7 +524,7 @@
       for (let i = 7; i > 0; i--) { const j = (this.rand() * (i + 1)) | 0; [syms[i], syms[j]] = [syms[j], syms[i]]; }
       const delay = 5.6 * pace, pos = ring(8, 470, 330, this.rand());
       M.objs = M.objs.filter((o) => o.k !== 'gate');
-      const gr = this.R.gateR || 95; // 생문 크기(2026-11-26 95→120: 몸통 전체가 들어가야 안전하다)
+      const gr = 95;
       pos.forEach(([x, y], i) => this.addObj('gate', x, y, gr, 0, { s: syms[i], life: delay + 0.4 }));
       M.sym = syms[(this.rand() * 8) | 0];
       const g = pos[syms.indexOf(M.sym)];

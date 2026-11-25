@@ -1,7 +1,14 @@
   // 선택 정보 바(안 A). 상태: 라인 정지 / 동료 전장(읽기 전용) / 드롭 / 선택 없음 / 다중 선택 / 한 기(+상세 카드). 보스전은 renderFight.
   // 선택 해제 X(#selx)는 바 왼쪽 위 모서리에 따로 있어 오른쪽 큰 행동(합성·해산)과 떨어져 있다.
   const plain = (h, sub) => `<div class="umid"><div class="ul1"><b class="unm">${h}</b></div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
-  function renderInfo() { renderInfo0(); edgeFades(); }
+  function renderInfo() {
+    S.selSlim = false; renderInfo0();
+    // 선택창 시험 'slim'(09 SELUI): 접힌 띠 모양(CSS #selbar.slim)
+    const sb = $('selbar'); if (sb.classList.contains('slim') !== S.selSlim) sb.classList.toggle('slim', S.selSlim);
+    edgeFades();
+  }
+  // 'slim' 띠의 펼치기(data-selfull=1)·큰 창의 접기(=0). 고른 묶음이 바뀌면 다시 접힌다(renderInfo0)
+  $('selbar').addEventListener('click', (e) => { const b = e.target.closest('[data-selfull]'); if (!b) return; S.selFull = b.dataset.selfull === '1'; Snd.play('click', 40); dirty(); });
   // 가로로 밀어 보는 줄이 오른쪽으로 더 있으면 끝을 흐리게(.ovx), 상세 카드가 아래로 더 있으면 아래 끝을 흐리게(.ovy)
   function edgeFade(el) {
     const x = el.scrollWidth - el.clientWidth - el.scrollLeft > 2;
@@ -60,8 +67,24 @@
       const d = defOf[id], need = T.combineNeed[d.tier], ok = !!need && c[id] >= need && g.ownedOf(p, id).length >= need;
       return `<div class="grp" style="--gc:${tierColor(d.tier) || '#9a8e78'}"><button class="gsel" data-act="selDef" data-arg="${id}" type="button" title="${esc(d.name)} ${esc(rankTag(d.tier))}" aria-label="${esc(d.name)} ${esc(rankTag(d.tier))} ×${c[id]}"><img alt="" src="${Art.portrait(d)}"><em>×${c[id]}</em></button>${ok ? `<button class="btn go" data-act="combine" data-arg="${id}" type="button">${I.t('combineBtn')}</button>` : ''}</div>`;
     };
+    // 선택창 시험 'slim'·'both'(09 SEL_SLIM, 2026-11-26 비교용): 2명 이상이면 한 줄 띠 = [고른 수 | 대표 초상 4묶음(+남은 묶음 수) | 합성(채운 묶음이 있으면 첫 묶음) | 상세 ▴]
+    // 상세를 누르면 아래의 지금 큰 창 + 접기 ▾. 고른 묶음이 바뀌면 다시 띠로 접힌다
+    if (SEL_SLIM) {
+      const fk = list.map((x) => x.id).join();
+      if (S.selFullK !== fk) { S.selFullK = fk; S.selFull = false; }
+      if (!S.selFull) {
+        S.selSlim = true;
+        const SN = 4, cOk = ids.find((id) => { const d = defOf[id], need = T.combineNeed[d.tier]; return !!need && c[id] >= need && g.ownedOf(p, id).length >= need; });
+        const por = (id) => { const d = defOf[id]; return `<button class="gsel" style="--gc:${tierColor(d.tier) || '#9a8e78'}" data-act="selDef" data-arg="${id}" type="button" aria-label="${esc(d.name)} ${esc(rankTag(d.tier))} ×${c[id]}"><img alt="" src="${Art.portrait(d)}"><em>×${c[id]}</em></button>`; };
+        setInfo(`<div class="umid slim"><b class="unm">${I.t('nSelected', { n: list.length })}</b><div class="grps">${ids.slice(0, SN).map(por).join('')}${ids.length > SN ? `<i class="gmore">+${ids.length - SN}</i>` : ''}</div></div>`);
+        setRecipes('');
+        setCmds(`${cOk ? `<button class="btn go" data-act="combine" data-arg="${cOk}" type="button">${I.t('combineBtn')}</button>` : ''}<button class="umore" data-selfull="1" type="button" aria-expanded="false">${I.t('detOpen')} ▴</button>`);
+        ucardShow('');
+        return;
+      }
+    }
     setInfo(`<div class="umid"><div class="ul1"><b class="unm">${I.t('nSelected', { n: list.length })}</b></div><div class="grps">${ids.map(grp).join('')}</div></div>`);
-    setRecipes(`<div class="rc none"><span class="rp">${I.t('recipeOne')}</span></div>`);
+    setRecipes(`<div class="rc none"><span class="rp">${I.t('recipeOne')}</span></div>${SEL_SLIM ? `<button class="umore on" data-selfull="0" type="button" aria-expanded="true">${I.t('detClose')} ▾</button>` : ''}`);
     setCmds('');
     ucardShow('');
   }

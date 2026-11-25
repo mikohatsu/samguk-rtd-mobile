@@ -3546,13 +3546,42 @@
     }
     c.restore();
   }
+  // ---- 알림 띠 대기열(2026-11-26) ----
+  // 예전에는 띠가 한 칸(S.banner)뿐이라 업적 띠가 막 뜬 중간보스 띠를 덮어 「뜬지도 모르는」 일이 있었다.
+  // S.banner = 지금 띠, S.bannerQ = 기다리는 띠. 규칙:
+  //  - 중간보스 경고(warn)는 맨 앞으로 끼어든다. 떠 있던 보통 띠는 경고 뒤로 돌려 처음부터 다시 보인다.
+  //  - 보통 띠(업적·탈락 등)는 줄을 선다. 뒤에 기다리는 띠가 있으면 지금 띠는 1.4초까지만 보인다(줄이 밀리지 않게). 많아야 4개.
+  //  - 보스 등장 연출·처치 연출·신화/불멸 등장·토벌 성공 패널 동안은 띠를 멈춰 두었다가(시간이 흐르지 않음) 끝나면 이어서.
+  //  - 경고가 떠 있거나 기다리는 동안은 글 알림(toast)도 모아 두었다가 경고가 끝나면 차례로(12-panels toast, 16-hud renderHud).
+  const BANNER_MAX = 4, BANNER_SHORT = 1.4, MIDWARN_LEN = 2.2;
+  function pushBanner(b) {
+    if (S.bannerG !== g) { S.bannerG = g; S.bannerQ = []; S.banner = null; } // 새 판: 지난 판의 띠는 버린다
+    const Q = S.bannerQ;
+    if (b.warn) {
+      const cur = S.banner;
+      if (cur && !cur.warn) { delete cur.len; cur.t = cur.t0 || cur.t; Q.unshift(cur); S.banner = b; }
+      else if (cur) { let i = 0; while (i < Q.length && Q[i].warn) i++; Q.splice(i, 0, b); }
+      else S.banner = b;
+    } else if (!S.banner) S.banner = b;
+    else { Q.push(b); while (Q.length > BANNER_MAX) { const i = Q.findIndex((x) => !x.warn); if (i < 0) break; Q.splice(i, 1); } }
+    b.t0 = b.t;
+  }
+  // 띠를 멈춰 둘 때: 보스 처치 순간(killOn), 보스 등장 연출, 신화·불멸 등장, 토벌 성공 패널
+  const bannerHold = () => killOn() || g.phase === 'bossIntro' || !!(S.pop && (S.pop.vic || (S.pop.def && S.pop.def.tier >= 9)));
+  // 중간보스 경고가 떠 있거나 차례를 기다린다(글 알림을 모아 둔다)
+  const warnOn = () => !!(g && !g.over && S.bannerG === g && ((S.banner && S.banner.warn) || (S.bannerQ || []).some((x) => x.warn)));
   function drawBanner() {
-    const b = S.banner, c = ctx;
+    let b = S.banner;
     if (!b) return;
-    if (b.len == null) b.len = b.t;
-    if (killOn()) return; // 보스 처치 순간이 끝난 뒤에 띄운다
+    if (S.bannerG !== g) { S.banner = null; return; }
+    if (bannerHold()) return; // 연출이 끝난 뒤에 띄운다
+    if (b.len == null) { b.len = b.t; if (b.snd) Snd.play(b.snd); }
+    const Q = S.bannerG === g ? S.bannerQ || [] : [];
+    if (!b.warn && Q.length) b.t = Math.min(b.t, Math.max(0.3, BANNER_SHORT - (b.len - b.t))); // 뒤에 기다리는 띠가 있으면 짧게(사라지는 0.3초는 남긴다)
     b.t -= S.fdt;
-    if (b.t <= 0) { S.banner = null; return; }
+    if (b.t <= 0) { S.banner = Q.shift() || null; return; }
+    if (b.warn) { drawMidWarn(b); return; }
+    const c = ctx;
     // 등장: 먹 띠가 가운데에서 양옆으로 그어지고(0.22초) 제목이 살짝 크게 박혔다 돌아온다. 사라질 때는 흐려진다.
     const el = b.len - b.t, sw = 1 - Math.pow(1 - Math.min(1, el / 0.22), 3), ts = el < 0.3 ? 1 + 0.25 * (1 - el / 0.3) : 1;
     c.save(); c.globalAlpha = Math.min(1, b.t * 2); c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -3562,6 +3591,22 @@
     c.globalAlpha *= Math.min(1, el / 0.15);
     c.save(); c.translate(W / 2, 200); c.scale(ts, ts); c.lineJoin = 'round'; c.lineWidth = 5; c.strokeStyle = 'rgba(14,9,6,.85)'; c.font = '400 40px "Black Han Sans", sans-serif'; c.strokeText(b.text, 0, 0); c.fillStyle = '#ffd86a'; c.fillText(b.text, 0, 0); c.restore();
     c.fillStyle = '#e8dcc0'; c.font = '400 20px "Gowun Batang", serif'; c.fillText(b.sub || '', W / 2, 238);
+    c.restore();
+  }
+  // 중간보스 경고 띠: 붉은 경고 그림(gfx/vs_warn, 보스전 경고와 같은 그림)이 가운데에서 양옆으로 펼쳐지고 두 번 깜빡인 뒤 머문다(약 2.2초).
+  // 위에 「中ボス出現 / 중간보스 출현」 큰 글씨, 아래 이름. 그림이 없으면 글씨만(도형으로 대신 그리지 않는다)
+  function drawMidWarn(b) {
+    const c = ctx, el = b.len - b.t, pic = Art.pic('vs_warn');
+    const sw = 1 - Math.pow(1 - Math.min(1, el / 0.2), 3);
+    const blink = el < 0.8 ? 0.55 + 0.45 * Math.cos((el / 0.4) * Math.PI * 2) : 1; // 0~0.8초에 두 번 깜빡
+    const a = Math.min(1, b.t / 0.3); // 끝 0.3초 흐려짐
+    const bw = 860, bh = pic ? (bw * pic.height) / pic.width : 176, y0 = 128;
+    c.save(); c.textAlign = 'center'; c.textBaseline = 'middle';
+    if (pic) { c.save(); c.beginPath(); c.rect(W / 2 - (bw / 2) * sw, y0 - 20, bw * sw, bh + 40); c.clip(); c.globalAlpha = a * blink * 0.96; c.drawImage(pic, W / 2 - bw / 2, y0, bw, bh); c.restore(); }
+    const ta = a * Math.min(1, el / 0.12), ts = el < 0.28 ? 1 + 0.3 * (1 - el / 0.28) : 1, cy = y0 + bh * 0.42;
+    c.globalAlpha = ta;
+    c.save(); c.translate(W / 2, cy); c.scale(ts, ts); c.lineJoin = 'round'; c.lineWidth = 7; c.strokeStyle = 'rgba(20,4,2,.9)'; c.font = '400 50px "Black Han Sans", sans-serif'; c.strokeText(b.text, 0, 0); c.fillStyle = '#fff1dc'; c.fillText(b.text, 0, 0); c.restore();
+    if (b.sub) { c.lineJoin = 'round'; c.lineWidth = 5; c.strokeStyle = 'rgba(20,4,2,.9)'; c.font = '700 26px "Gowun Batang", serif'; c.strokeText(b.sub, W / 2, cy + 46); c.fillStyle = '#ffd86a'; c.fillText(b.sub, W / 2, cy + 46); }
     c.restore();
   }
   function render(now) {
@@ -3587,13 +3632,14 @@
     else if (S.arenaUsed && !g.fight && !S.stay) { arenaFree(S.arenaUsed); S.arenaUsed = null; }
     if (!arenaV) arenaWarm(); // 보스 라운드 바로 앞 라인에서 다음 경기장 바닥을 미리 나눠 그려 둔다(07-arena, 등장 첫 프레임 멈춤 방지)
     if (S.camPh !== ph) { S.camPh = ph; resetCam(); }
+    stepFit(dt);
     if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) {
       const ac = g.active();
       if (ac) {
         // 2026-11-26 사용자 결정: 보스전 카메라는 내가 조종하는 장수가 항상 화면 가운데. 보스 위치는 보지 않는다(예전: 보스를 같이 담으려고 높이를 절충해 보스가 움직이면 화면이 끌려갔다).
-        // 프레임마다 남은 거리의 절반씩 따라간다: 걷는 중 지연은 약 4단위(사실상 가운데), 돌진(280단위)·출전 직후에는 0.1초 남짓 미끄러져 붙는다.
-        const ck = 1 - Math.pow(0.5, S.f60);
-        S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ac.y - S.cam.y) * ck;
+        // 장수 그림과 같은 값(같은 프레임의 ac.x·ac.y)에 바로 맞춘다. 예전에는 프레임마다 남은 거리의 절반씩 따라가서, 게임 계산(초당 60번)과 화면 그리기가
+        // 어긋나 한 프레임에 0걸음·2걸음이 섞이면 카메라 지연이 들쭉날쭉해져 걷는 장수가 화면에서 덜덜 떨렸다(2026-11-26 사용자 「움직일 때 덜덜 떨림」).
+        S.cam.x = ac.x; S.cam.y = ac.y;
       }
     }
     applyCam();
@@ -3743,7 +3789,37 @@
       c.x = vw >= W ? W / 2 : Math.max(vw / 2, Math.min(W - vw / 2, c.x));
       c.y = vh >= H ? H / 2 : Math.max(vh / 2, Math.min(H - vh / 2, c.y));
     }
-    S.scale = s * B.dpr; S.ox = (B.sw / 2 - c.x * s) * B.dpr; S.oy = (B.sh / 2 - c.y * s) * B.dpr;
+    // 'fit'(선택창 안 A): 라인 화면 전체를 같은 비율 f로 줄여 화면 위 끝(0)~선택창 위 끝 사이에 넣는다. 가로는 가운데 맞춤, 남는 좌우는 지도 바깥 배경.
+    // 화면 점 (X, Y) → (sw/2 + (X - sw/2)·f, Y·f). f = 1이면 예전 식 그대로. 입력(10-input toWorld)은 S.scale·S.ox·S.oy를 쓰므로 함께 맞는다
+    const f = S.camArena ? 1 : S.fit.f;
+    S.scale = s * f * B.dpr; S.ox = (B.sw / 2 - c.x * s * f) * B.dpr; S.oy = (B.sh / 2 - c.y * s) * f * B.dpr;
+  }
+  // ---- 선택창 시험 스위치(2026-11-26 사용자 비교용, 설정 화면 없음): localStorage 'rtd-selui' ----
+  // 'fit' = 선택창이 열려 있는 동안 라인 화면을 선택창 위 영역에 맞춰 줄인다(위 applyCam). 'slim' = 2명 이상 고르면 선택창을 한 줄 띠로 접는다(13-info-timers).
+  // 'both' = 두 안을 함께(비교용). 없으면 지금 그대로(f는 늘 1).
+  // 2026-11-26 사용자 결정: 기본은 'slim'(B, 전장 크기 유지). 비교 시험용으로 'fit'·'both'·'off' 값은 남긴다.
+  const SELUI = (() => { try { const v = localStorage.getItem('rtd-selui'); return v === 'off' ? '' : v || 'slim'; } catch (e) { return 'slim'; } })();
+  const SEL_FIT = SELUI === 'fit' || SELUI === 'both', SEL_SLIM = SELUI === 'slim' || SELUI === 'both';
+  const FIT_T = 0.15; // 열고 닫을 때 줄었다 펴지는 시간(초)
+  const FIT_RM = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches; // 움직임 줄이기: 바로 바뀐다
+  S.fit = { f: 1, a: 1, b: 1, t: FIT_T, top: 0, at: 0, vis: false };
+  // 목표 배율: 선택창 위 끝(무대 CSS px)까지 남은 높이 / 무대 높이. 선택창 위치는 0.12초마다(또는 열림·닫힘이 바뀔 때) 잰다(매 프레임 레이아웃을 읽지 않게)
+  function fitTarget() {
+    if (!SEL_FIT || !S.base || S.camArena || !laneOn()) return 1;
+    const sb = $('selbar'), vis = !sb.hidden && !sb.classList.contains('boss'), F = S.fit, now = performance.now();
+    if (!vis) { F.vis = false; return 1; }
+    if (!F.vis || now - F.at > 120) {
+      F.vis = true; F.at = now;
+      const vr = view.getBoundingClientRect(), r = sb.getBoundingClientRect();
+      F.top = vr.height ? ((r.top - vr.top) * S.base.sh) / vr.height : S.base.sh;
+    }
+    return Math.max(0.3, Math.min(1, (F.top - 6) / S.base.sh));
+  }
+  function stepFit(dt) {
+    const F = S.fit, to = fitTarget();
+    if (Math.abs(to - F.b) > 0.001) { F.a = F.f; F.b = to; F.t = FIT_RM ? FIT_T : 0; }
+    if (F.t < FIT_T) { F.t = Math.min(FIT_T, F.t + dt); const k = F.t / FIT_T, e = k * k * (3 - 2 * k); F.f = F.a + (F.b - F.a) * e; }
+    else F.f = F.b;
   }
   function fit() {
     const st = $('stage'), sw = st.clientWidth, sh = st.clientHeight, dpr = Math.min((window.devicePixelRatio || 1) * zoom, qDpr(), Math.sqrt(qPix() / Math.max(1, sw * sh))) * Q.rs;
@@ -3790,7 +3866,9 @@
     S.cam.x += before.x - after.x; S.cam.y += before.y - after.y; applyCam();
     S.camHold = performance.now() + 2500;
   };
-  const panBy = (sx, sy, dx, dy) => { const k = S.base.s0 * S.cam.z; S.cam.x = sx - dx / k; S.cam.y = sy - dy / k; applyCam(); S.camHold = performance.now() + 2500; };
+  // 끌기 배율 k(화면 px / 전장 단위): 지금 그리는 배율 그대로(S.scale은 캔버스 px라 dpr로 나눈다). 선택창 시험 'fit'(09)이 라인을 줄인 동안도 손가락과 지도가 같이 움직인다
+  const camK = () => S.scale / S.base.dpr;
+  const panBy = (sx, sy, dx, dy) => { const k = camK(); S.cam.x = sx - dx / k; S.cam.y = sy - dy / k; applyCam(); S.camHold = performance.now() + 2500; };
   // 터치 기기는 확대·축소를 막는다(가장 축소한 화면으로 고정). 마우스 휠 확대는 PC에서만.
   view.addEventListener('wheel', (e) => { if (!g) return; e.preventDefault(); if (S.coarse) return; zoomAt(e.clientX, e.clientY, S.cam.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
   const ptrs = new Map();
@@ -3921,7 +3999,7 @@
     if (pinch && ptrs.size >= 2) {
       const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
       if (!S.coarse) zoomAt(pinch.mx, pinch.my, pinch.z * (d / pinch.d));
-      const k = S.base.s0 * S.cam.z; S.cam.x -= (mx - pinch.mx) / k; S.cam.y -= (my - pinch.my) / k; applyCam();
+      const k = camK(); S.cam.x -= (mx - pinch.mx) / k; S.cam.y -= (my - pinch.my) / k; applyCam();
       pinch.mx = mx; pinch.my = my; pinch.z = S.cam.z; pinch.d = d;
       return;
     }
@@ -4145,7 +4223,8 @@
   const toast = (text, tone) => {
     // 보스 처치 연출 중(S.toastHoldUntil, 16-hud bossWin)이면 미뤘다가 16-hud renderHud가 한꺼번에 내보낸다
     // 보스 처치 연출(S.kill) 중에도 모아 두었다가 끝나면 보인다
-    if (performance.now() < (S.toastHoldUntil || 0) || S.kill) { (S.toastQ = S.toastQ || []).push([text, tone]); return; }
+    // 중간보스 경고 띠가 떠 있거나 기다리는 동안(08-pop warnOn)도 모아 둔다: 경고를 가리지 않고 끝나면 차례로
+    if (performance.now() < (S.toastHoldUntil || 0) || S.kill || warnOn()) { (S.toastQ = S.toastQ || []).push([text, tone]); return; }
     const box = $('toasts');
     // 같은 알림이 연달아 오면 줄을 쌓지 않고 ×N으로 합친다(전선 포화로 라이프가 연속으로 깎일 때 화면을 덮던 문제)
     const prev = box.lastElementChild;
@@ -4529,7 +4608,14 @@
   // 선택 정보 바(안 A). 상태: 라인 정지 / 동료 전장(읽기 전용) / 드롭 / 선택 없음 / 다중 선택 / 한 기(+상세 카드). 보스전은 renderFight.
   // 선택 해제 X(#selx)는 바 왼쪽 위 모서리에 따로 있어 오른쪽 큰 행동(합성·해산)과 떨어져 있다.
   const plain = (h, sub) => `<div class="umid"><div class="ul1"><b class="unm">${h}</b></div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
-  function renderInfo() { renderInfo0(); edgeFades(); }
+  function renderInfo() {
+    S.selSlim = false; renderInfo0();
+    // 선택창 시험 'slim'(09 SELUI): 접힌 띠 모양(CSS #selbar.slim)
+    const sb = $('selbar'); if (sb.classList.contains('slim') !== S.selSlim) sb.classList.toggle('slim', S.selSlim);
+    edgeFades();
+  }
+  // 'slim' 띠의 펼치기(data-selfull=1)·큰 창의 접기(=0). 고른 묶음이 바뀌면 다시 접힌다(renderInfo0)
+  $('selbar').addEventListener('click', (e) => { const b = e.target.closest('[data-selfull]'); if (!b) return; S.selFull = b.dataset.selfull === '1'; Snd.play('click', 40); dirty(); });
   // 가로로 밀어 보는 줄이 오른쪽으로 더 있으면 끝을 흐리게(.ovx), 상세 카드가 아래로 더 있으면 아래 끝을 흐리게(.ovy)
   function edgeFade(el) {
     const x = el.scrollWidth - el.clientWidth - el.scrollLeft > 2;
@@ -4588,8 +4674,24 @@
       const d = defOf[id], need = T.combineNeed[d.tier], ok = !!need && c[id] >= need && g.ownedOf(p, id).length >= need;
       return `<div class="grp" style="--gc:${tierColor(d.tier) || '#9a8e78'}"><button class="gsel" data-act="selDef" data-arg="${id}" type="button" title="${esc(d.name)} ${esc(rankTag(d.tier))}" aria-label="${esc(d.name)} ${esc(rankTag(d.tier))} ×${c[id]}"><img alt="" src="${Art.portrait(d)}"><em>×${c[id]}</em></button>${ok ? `<button class="btn go" data-act="combine" data-arg="${id}" type="button">${I.t('combineBtn')}</button>` : ''}</div>`;
     };
+    // 선택창 시험 'slim'·'both'(09 SEL_SLIM, 2026-11-26 비교용): 2명 이상이면 한 줄 띠 = [고른 수 | 대표 초상 4묶음(+남은 묶음 수) | 합성(채운 묶음이 있으면 첫 묶음) | 상세 ▴]
+    // 상세를 누르면 아래의 지금 큰 창 + 접기 ▾. 고른 묶음이 바뀌면 다시 띠로 접힌다
+    if (SEL_SLIM) {
+      const fk = list.map((x) => x.id).join();
+      if (S.selFullK !== fk) { S.selFullK = fk; S.selFull = false; }
+      if (!S.selFull) {
+        S.selSlim = true;
+        const SN = 4, cOk = ids.find((id) => { const d = defOf[id], need = T.combineNeed[d.tier]; return !!need && c[id] >= need && g.ownedOf(p, id).length >= need; });
+        const por = (id) => { const d = defOf[id]; return `<button class="gsel" style="--gc:${tierColor(d.tier) || '#9a8e78'}" data-act="selDef" data-arg="${id}" type="button" aria-label="${esc(d.name)} ${esc(rankTag(d.tier))} ×${c[id]}"><img alt="" src="${Art.portrait(d)}"><em>×${c[id]}</em></button>`; };
+        setInfo(`<div class="umid slim"><b class="unm">${I.t('nSelected', { n: list.length })}</b><div class="grps">${ids.slice(0, SN).map(por).join('')}${ids.length > SN ? `<i class="gmore">+${ids.length - SN}</i>` : ''}</div></div>`);
+        setRecipes('');
+        setCmds(`${cOk ? `<button class="btn go" data-act="combine" data-arg="${cOk}" type="button">${I.t('combineBtn')}</button>` : ''}<button class="umore" data-selfull="1" type="button" aria-expanded="false">${I.t('detOpen')} ▴</button>`);
+        ucardShow('');
+        return;
+      }
+    }
     setInfo(`<div class="umid"><div class="ul1"><b class="unm">${I.t('nSelected', { n: list.length })}</b></div><div class="grps">${ids.map(grp).join('')}</div></div>`);
-    setRecipes(`<div class="rc none"><span class="rp">${I.t('recipeOne')}</span></div>`);
+    setRecipes(`<div class="rc none"><span class="rp">${I.t('recipeOne')}</span></div>${SEL_SLIM ? `<button class="umore on" data-selfull="0" type="button" aria-expanded="true">${I.t('detClose')} ▾</button>` : ''}`);
     setCmds('');
     ucardShow('');
   }
@@ -5032,7 +5134,7 @@
     const trk = ACC.me.track === 'civ' ? 'civ' : 'mil', lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = lvSpan(lv), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
     S.es.xpNow = xp;
     if (el.dataset.lv !== String(lv)) { const first = el.dataset.lv == null; el.dataset.lv = lv; el.dataset.r = r; el.querySelector('.esx-mk').innerHTML = rankMark(r); el.querySelector('.esx-nx').innerHTML = r < 10 ? rankMark(rkOfLv(lv + 1)) : ''; if (!first) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } }
-    const rn = el.querySelector('.esx-rn'), lt = el.querySelector('.esx-lv'), nm = window.RTD_PROG.label(t, 'rk_' + trk + r, lv), lvs = '';
+    const rn = el.querySelector('.esx-rn'), lt = el.querySelector('.esx-lv'), nm = window.RTD_PROG.view(t, trk, xp).text, lvs = ''; // 계정 카드·로비와 같은 함수(2026-11-26)
     if (rn.textContent !== nm) rn.textContent = nm;
     if (lt.textContent !== lvs) lt.textContent = lvs;
     const pf = S.xpFrom != null && r < 10 ? Math.max(0, Math.min(k, (S.xpFrom - lo) / (hi - lo))) : k;
@@ -5054,6 +5156,7 @@
     let xpDone = true;
     const xr = root.querySelector('.es-xp:not(.guest)');
     if (!ACC.token || !ACC.me) { /* 로그인 안 함: 기다릴 경험치 없음 */ }
+    else if (E.fast) { esDrawXp(root, esXpEnd()); E.coinOn = true; } // 연출 창에서 이미 채웠다
     else if (S.xpFrom != null && S.xpGained > 0) {
       if (!E.xpT0) E.xpT0 = Math.max(now, E.t0 + 500);
       if (now >= E.xpT0) { const gn = root.querySelector('.esx-gain'); if (gn && !gn.classList.contains('on')) gn.classList.add('on'); E.coinOn = true; }
@@ -5094,7 +5197,8 @@
     const s = g.stats, win = g.over === 'win', mm = Math.floor(g.time / 60), ss = Math.floor(g.time % 60);
     const cell = (l, v, cls, extra) => `<div class="esr-c ${cls || ''}"${extra || ''}><small class="esr-l">${l}</small><span class="esr-v">${v}</span></div>`;
     // 결과창 진행 상태(강제 보기): 처음 그릴 때 시작한다. want = 서버에 결과를 보냈다(경험치·동전 답을 기다린다)
-    if (!S.es || S.es.g !== g) S.es = { g, t0: performance.now(), want: !!S.reported, open: false, shown: 0, xpT0: 0, xpEnd: 0, nextAt: 0, xpNow: null, coinOn: false, raf: 0 };
+    // fast = 통계창 앞 경험치 연출 창(playXp)을 이미 봤다: 경험치 줄·보상 한 줄은 처음부터 최종 값으로(막대를 다시 채우지 않는다)
+    if (!S.es || S.es.g !== g) { const fast = S.xpSeen === g; S.es = { g, t0: performance.now(), want: !!S.reported, open: false, shown: fast ? 9 : 0, xpT0: fast ? 1 : 0, xpEnd: 0, nextAt: 0, xpNow: null, coinOn: fast, raf: 0, fast }; }
     const lock = !S.es.open;
     // 큰 칸 4: 도달 라운드(승리면 「クリア」, 값 주홍) · 난이도 · 최고 등급(등급색) · 처치
     const hasMut = !!(g.mutLv && g.muts && g.muts.length);
@@ -5137,7 +5241,7 @@
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
     // 창 = 스크롤되는 본문(.es-body) + 고정 바닥 줄(.es-foot). 버튼이 통계 칸을 가리지 않는다
     return `<div class="over" id="end"><div class="sheet es ${win ? 'is-win' : 'is-lose'}"><div class="es-body">
-      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss ? `<div class="dim" style="color:#ff9d8a">${t('noTicket')}</div>` : ''}
+      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss ? `<div class="dim es-tkmiss">${esc(t('tkMissed'))}</div>` : ''}
       ${esMe()}
       <div class="es-rec"><div class="esr-big">${big}</div><div class="esr-small">${small}</div></div>
       ${goalBox()}
@@ -5145,9 +5249,7 @@
       ${detail.trim() ? `<div class="es-detail">${detail}</div>` : ''}
       </div><div class="es-foot ${lock ? 'lock' : ''}">${['stay', 'restart', againOk ? 'again' : ''].filter(Boolean).map((a) => `<button class="btn ${a === 'restart' ? 'es-again' : a === 'again' ? 'go es-again2' : 'es-stay'} ${lock ? 'lock' : ''}" data-act="${a}" type="button" ${lock ? 'disabled' : ''}>${a === 'stay' ? I.t('stayBtn') : a === 'again' ? I.t('againSame') : t('quitGame')}</button>`).join('')}</div></div></div>`;
   }
-  // ---- 판 끝 경험치 연출: 화면을 어둡게 흐리고, 지금 계급 문양 ─ 경험치 막대 ─ 다음 계급 문양.
-  // +경험치가 뜬 뒤 막대가 그만큼 차오르고(계급이 오르면 문양이 바뀜), 잠시 뒤 사라지며 결과창이 나온다.
-  // 관직 곡선은 progression.js(서버와 같은 표, 2026-11-24)
+  // ---- 관직 곡선 도우미: progression.js(서버와 같은 표)
   const RANK_LV = window.RTD_PROG.RANK_LV;
   const lvOfXp = window.RTD_PROG.levelOf;
   const rkOfLv = window.RTD_PROG.rankOf;
@@ -5156,30 +5258,79 @@
   // 등급 한 칸(레벨 lv → lv+1)의 경험치 범위. 군주는 끝
   const lvSpan = (lv) => [xpAt(lv), lv < window.RTD_PROG.MAX_LV ? xpAt(lv + 1) : xpAt(lv) + 1];
   const rankMark = (r) => `<span class="xpm"><img alt="" src="gfx/rank_${r}.png" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${r}'}))"></span>`;
+  // ---- 판 끝 경험치 연출 창(2026-11-26 되살림: 결과창 개편 뒤 통계창 앞에서 빠져 있었다) ----
+  // 결과를 서버에 보낸 판(로그인 + 판 표)은 통계창 전에 이 창을 띄운다. 서버 답을 ES_WAIT까지 기다리고(그동안 '결과를 보내는 중…'),
+  // 경험치를 받았으면 막대가 차오르고(등급·관직이 오르면 은은한 연출) → 다 차면 '눌러서 계속' → 누르면 통계창.
+  // 차오르는 동안 누르는 것은 받지 않는다(연타로 연출을 놓치던 문제). 답이 없거나 받은 경험치가 0이면 창 없이 통계창(통계창이 사정을 알린다).
+  // 돌려주는 값: '' = 통계창으로, 'w' = 답 기다림, 'p' = 연출 중(16-hud renderOverlay가 키로 쓴다)
+  function xpGate() {
+    if (S.xpDone || !S.reported || !ACC.token || !ACC.me) return '';
+    if (S.xpPlaying) return 'p';
+    const now = performance.now(); if (!S.overAt) S.overAt = now;
+    if (S.xpFrom != null && S.xpGained > 0) {
+      S.xpPlaying = true; const mine = g;
+      playXp(S.xpFrom, S.xpFrom + S.xpGained, S.coinGained, () => { if (g !== mine) return; S.xpPlaying = false; S.xpDone = true; S.xpSeen = g; dirty(); $('overlay').dataset.key = ''; });
+      return 'p';
+    }
+    if (S.repDone || now - S.overAt > ES_WAIT) { S.xpDone = true; return ''; }
+    return 'w';
+  }
+  // 화면을 어둡게 흐리고, 지금 등급 문양 ─ 경험치 막대 ─ 다음 등급 문양. 막대는 등급 한 칸(2026-11-25 economy-v2: 계급마다 등급 1~5).
+  // 등급·관직이 오르면: 문양이 바뀌며 금빛 테가 천천히 번지고 작은 금빛 입자(kn_circle_05·kn_star_04)가 위로 떠오른다. 관직이 오르면 테 두 겹·입자를 조금 더.
+  // 보스 처치의 큰 빛살·섬광은 쓰지 않는다. 움직임 줄이기 설정이면 입자·테 없이 문양만 바뀐다(CSS).
+  const XP_DELAY = 700, XP_FILL = 1400, XP_PER_LV = 350, XP_FILL_MAX = 3600, XP_TAIL = 900, XP_LV_HOLD = 1400;
   function playXp(from, to, coins, done) {
-    const track = ACC.me && ACC.me.track === 'civ' ? 'civ' : 'mil';
-    const el = document.createElement('div'); el.id = 'xpfx';
-    el.innerHTML = `<div class="xpbox"><div class="xpside l"></div><div class="xpmid"><div class="xpbar"><i></i></div><div class="xpnum"></div><div class="xpgain">+${fmt(to - from)} XP</div><div class="xpcoin">+${fmt(coins || 0)} ${t('lb_coin')}</div></div><div class="xpside r"></div></div>`;
+    const track = ACC.me && ACC.me.track, V = (xp) => window.RTD_PROG.view(t, track, xp);
+    const el = document.createElement('div'); el.id = 'xpfx'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-live', 'polite');
+    el.innerHTML = `<div class="xpbox"><div class="xpside l"><div class="xpsi"></div></div><div class="xpmid"><div class="xpbar"><i></i></div><div class="xpnum"></div><div class="xpgain">+${fmt(to - from)} XP</div><div class="xpcoin">+${fmt(coins || 0)} ${esc(t('lb_coin'))}</div></div><div class="xpside r"><div class="xpsi"></div></div></div><div class="xpnext">${esc(I.t('tapNext'))}</div>`;
     $('app').appendChild(el);
-    // 양옆: 지금 등급과 다음 등급("백인대장 3" → "백인대장 4"). 막대는 등급 한 칸(2026-11-25 economy-v2)
-    const side = (lv) => `${rankMark(rkOfLv(lv))}<small>${esc(window.RTD_PROG.label(t, 'rk_' + track + rkOfLv(lv), lv))}</small>`;
-    let shownLv = -1;
+    // 양옆: 지금 등급과 다음 등급("백인대장 3" → "백인대장 4")
+    const side = (lv) => { const v = V(xpAt(lv)); return `${rankMark(v.rank)}<small>${esc(v.text)}</small>`; };
+    const L = el.querySelector('.l');
+    let shownLv = -1, shownRk = -1, lastUp = 0;
+    const lvUp = (rankUp) => {
+      L.classList.remove('up', 'rk'); void L.offsetWidth; L.classList.add('up'); if (rankUp) L.classList.add('rk');
+      const fx = document.createElement('span'); fx.className = 'xplv'; fx.setAttribute('aria-hidden', 'true');
+      let h = `<i class="ring"></i>${rankUp ? '<i class="ring r2"></i>' : ''}`;
+      const n = rankUp ? 12 : 7;
+      for (let i = 0; i < n; i++) h += `<i class="${i % 3 === 2 ? 'star' : 'dot'}" style="--x:${Math.round((Math.random() * 2 - 1) * 40)}px;--d:${((i / n) * 0.7 + Math.random() * 0.15).toFixed(2)}s;--h:${Math.round(46 + Math.random() * 44)}px"></i>`;
+      fx.innerHTML = h; L.appendChild(fx);
+      setTimeout(() => fx.remove(), 2800);
+      lastUp = performance.now();
+      Snd.play('ach', 250);
+    };
     const draw = (xp) => {
       const lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = lvSpan(lv), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
-      if (lv !== shownLv) { el.querySelector('.l').innerHTML = side(lv); el.querySelector('.r').innerHTML = r < 10 ? side(lv + 1) : ''; if (shownLv >= 0) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } shownLv = lv; }
+      if (lv !== shownLv) {
+        L.querySelector('.xpsi').innerHTML = side(lv); el.querySelector('.r .xpsi').innerHTML = r < 10 ? side(lv + 1) : '';
+        if (shownLv >= 0 && lv > shownLv) lvUp(r > shownRk);
+        shownLv = lv; shownRk = r;
+      }
       el.querySelector('.xpbar i').style.width = (k * 100).toFixed(1) + '%';
       el.querySelector('.xpnum').textContent = r >= 10 ? 'MAX' : `${fmt(Math.round(xp - lo))} / ${fmt(hi - lo)}`;
     };
     draw(from);
-    // 화면을 누르면 연출을 건너뛴다(끝 값으로 채우고 바로 결과창)
-    let fin = false;
-    const end = () => { if (fin) return; fin = true; el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 600); };
-    el.addEventListener('pointerdown', () => { if (fin) return; draw(to); end(); });
+    // 끝난 뒤에만 넘긴다: 누르기(터치·마우스) 또는 Enter·Space·Esc
+    let ready = false, fin = false;
+    const end = () => { if (!ready || fin) return; fin = true; document.removeEventListener('keydown', key); el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 500); };
+    const key = (e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') { e.preventDefault(); end(); } };
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); end(); });
+    document.addEventListener('keydown', key);
     requestAnimationFrame(() => el.classList.add('in'));
-    // 0.7초 뒤 +XP가 뜨고, 1.4초 동안 차오른다. 다 차고 1.6초 뒤 사라진다.
-    setTimeout(() => { if (fin) return; el.classList.add('gain'); const t0 = performance.now(), D = 1400;
-      const step = (now) => { if (fin) return; const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3); draw(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); else setTimeout(end, 1600); };
-      requestAnimationFrame(step); }, 700);
+    const lvN = Math.max(0, lvOfXp(to) - lvOfXp(from)), D = Math.min(XP_FILL_MAX, XP_FILL + lvN * XP_PER_LV);
+    setTimeout(() => {
+      if (fin || !el.isConnected) return;
+      el.classList.add('gain'); const t0 = performance.now();
+      const step = (now) => {
+        if (fin || !el.isConnected) return;
+        const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3); draw(from + (to - from) * e);
+        if (p < 1) { requestAnimationFrame(step); return; }
+        // 다 찼다: 마지막 레벨업 연출이 가라앉을 때까지 조금 둔 뒤 '눌러서 계속'
+        const wait = Math.max(XP_TAIL, lastUp ? lastUp + XP_LV_HOLD - performance.now() : 0);
+        setTimeout(() => { if (fin) return; ready = true; el.classList.add('ready'); }, wait);
+      };
+      requestAnimationFrame(step);
+    }, XP_DELAY);
   }
   // ---- 신화·불멸 체험 결과 카드(trial-mode.md 4-3): 장수 얼굴·이름·등급·칭호, 큰 숫자 3개(총 피해·초당 피해·최대 한 방),
   // 걸린 시간과 「강화 10단계 기준」, 마속의 한 줄, 특성 목록, 「이 장수 해금하기」(동전 안내)·「상점으로 돌아가기」. 두 버튼 모두 로비 상점 해금 탭의 그 장수 카드로(11-actions trialLeave).
@@ -5417,7 +5568,9 @@
         }
         // 좁은 화면 CSS(폭 760px 미만)가 공격 버튼을 선택 창 위로 올릴 때 쓰는 선택 창 높이
         // 고른 유닛마다 선택 창 높이가 달라 공격 버튼이 오르내리지 않게, 선택 창이 열려 있는 동안은 가장 높았던 값을 유지한다(닫히면 다시 잰다)
-        const sb = $('selbar'), sh = sb && !sb.hidden ? sb.offsetHeight : 0;
+        // 선택창 시험 'slim'(13)으로 띠↔큰 창이 바뀌면 다시 잰다(큰 창에서 접은 뒤에도 공격 버튼이 큰 창 높이에 떠 있지 않게)
+        const sb = $('selbar'), sh = sb && !sb.hidden ? sb.offsetHeight : 0, sl = !!sb && sb.classList.contains('slim');
+        if (bar._slim !== sl) { bar._slim = sl; bar._selh = 0; }
         if (!sh) bar._selh = 0;
         else if (sh > (bar._selh || 0)) { bar._selh = sh; $('stage').style.setProperty('--selh', sh + 'px'); }
       } else if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; PAD.atk = null; PAD.aim = null; }
@@ -5526,7 +5679,7 @@
     // 전선이 75%를 넘으면 한 판에 한 번 알림 줄로 경고(칸이 빨개지는 것만으로는 놓치기 쉽다)
     if (!vp && !S.frontWarned && g.phase === 'wave' && !g.over && en > g.limit * 0.75) { S.frontWarned = true; toast(t('frontWarn'), 'warn'); }
     // 보스 처치 뒤: 미뤄 둔 알림을 내보내고, 討伐成功 패널이 떠 있는 동안 알림 줄을 아래로(패널과 겹치지 않게)
-    { const n0 = performance.now(); if (S.toastQ && S.toastQ.length && n0 >= (S.toastHoldUntil || 0) && !S.kill) { const q = S.toastQ; S.toastQ = []; q.forEach(([a, b]) => toast(a, b)); }
+    { const n0 = performance.now(); if (S.toastQ && S.toastQ.length && n0 >= (S.toastHoldUntil || 0) && !S.kill && !warnOn()) { const q = S.toastQ; S.toastQ = []; q.forEach(([a, b]) => toast(a, b)); }
       const vic = n0 < (S.vicUntil || 0) || vicOn, stg = $('stage'); if (stg.classList.contains('vic') !== vic) stg.classList.toggle('vic', vic); }
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
     // 오른쪽 버튼 열: 라인 화면에서만
@@ -5612,8 +5765,11 @@
       key = 'oh'; h = '';
     } else if (g.over) {
       if (S.drawer) { S.drawer = null; $('drawer').hidden = true; } // 오른쪽 서랍이 결과·경험치 연출을 가리지 않게
-      // 결과창은 바로 띄우고, 경험치·보상은 창 안 '내 정보'가 서버 답을 기다려 채운다(14-endstats-xp esStep). 그동안 바닥 버튼은 잠긴다
-      key = 'o' + (S.xpGained != null ? S.xpGained : ''); h = endStats();
+      // 결과를 보낸 판은 먼저 경험치 연출 창(14 xpGate·playXp: 서버 답 기다림 → 막대 → '눌러서 계속'), 그 뒤 통계창(2026-11-26 되살림).
+      // 답이 없거나 경험치가 0이면 바로 통계창: 창 안 '내 정보'가 늦은 답을 기다려 채운다(14 esStep). 그동안 바닥 버튼은 잠긴다
+      const gate = xpGate();
+      if (gate) { key = 'ox' + gate; h = `<div class="over xpwait">${gate === 'w' ? `<div class="xpsend">${esc(t('sendingResult'))}</div>` : ''}</div>`; }
+      else { key = 'o' + (S.xpGained != null ? S.xpGained : ''); h = endStats(); }
     }
     if (box.dataset.key !== key) {
       // 출진 카드를 고를 때마다 다시 그려도 목록 스크롤 자리를 지킨다(아래쪽 장수를 누르면 맨 위로 튀던 문제)
@@ -5664,9 +5820,10 @@
       else if (e.type === 'trialEnd') { Snd.setBoss(false); Snd.play(e.win ? 'win' : 'round'); S.trialRes = e; }
       else if (e.type === 'over' && g.trial) continue;
       else if (e.type === 'over') { Snd.play(e.win ? 'win' : 'lose'); Snd.setBoss(false); S.tkMiss = !!(S.tkWant && !S.gameTk); S.repP = reportResult(); if (window.RTD_LOBBY) { S.progBefore = window.RTD_LOBBY.progNow(); window.RTD_LOBBY.recordGame(g, S.online, net ? 'room' : bots.length ? 'ai' : 'solo', S.gameTk); } if (S.saveOn) { try { localStorage.removeItem('rtd-save'); } catch (er) { /* 저장 불가 */ } } }
-      else if (e.type === 'banner') S.banner = { text: e.text, sub: e.sub, t: 3 };
+      // 알림 띠는 대기열로(08-pop pushBanner). 중간보스 등장 띠는 붉은 경고 띠로 바꿔 맨 앞에(엔진 spawnMid의 띠: 이름·설명이 중간보스 표와 같다)
+      else if (e.type === 'banner') { const m = (T.midbosses || []).find((x) => x.story === e.sub && String(e.text).includes(x.name)); pushBanner(m ? { warn: true, text: I.t('midWarn'), sub: m.name, t: MIDWARN_LEN } : { text: e.text, sub: e.sub, t: 3 }); }
       // 협동에서 내 라이프가 다해 탈락: 알리고 동료 전장 보기로 바꾼다(관전). 조작은 10-input·11-actions의 spect가 막는다
-      else if (e.type === 'elim') { S.banner = { text: t('elimTitle'), sub: t('elimSub'), t: 4 }; toast(t('elimSub'), 'warn'); setSel([]); S.dropSel = null; S.drawer = null; S.ticket = null; S.combineAsk = null; spectView(); }
+      else if (e.type === 'elim') { pushBanner({ text: t('elimTitle'), sub: t('elimSub'), t: 4 }); toast(t('elimSub'), 'warn'); setSel([]); S.dropSel = null; S.drawer = null; S.ticket = null; S.combineAsk = null; spectView(); }
       else if (e.type === 'dmgtext') {
         // 숫자가 같은 자리에 겹쳐 안 읽히지 않게 조금씩 흩어 놓는다
         if (S.dmg.length < 40) S.dmg.push({ x: e.x + (typeof e.v === 'number' && g.phase === 'boss' ? (Math.random() - 0.5) * 90 : 0), y: e.y - (typeof e.v === 'number' && g.phase === 'boss' ? Math.random() * 30 : 0), v: e.v, big: e.big != null ? e.big : g.phase === 'boss', t: 0 });
@@ -5692,7 +5849,7 @@
         const fp = g.fight && g.fight.def.patterns && g.fight.def.patterns.find((q) => q.n === e.name);
         if (window.RTD_RIG) S.bossAct = window.RTD_RIG.actOf(fp ? fp.gen : '');
       }
-      else if (e.type === 'achievement') { toast(I.t('achDone', { a: e.ach.name }), 'good'); Snd.play('ach'); S.banner = { text: e.ach.name, sub: e.ach.desc, t: 2.6 }; }
+      else if (e.type === 'achievement') { toast(I.t('achDone', { a: e.ach.name }), 'good'); pushBanner({ text: e.ach.name, sub: e.ach.desc, t: 2.6, snd: 'ach' }); } // 소리는 띠가 실제로 뜰 때
       else if (e.type === 'champDead') toast(I.t('champDown', { a: e.name }), 'warn');
       // 장수 스킬 이름은 이미 장수 머리 위에 크게 뜬다. 알림 줄까지 띄우면 보스 기술 이름(피해야 할 경고)을 가려서, 화타 치료 같은 것만 알림으로 보인다.
       else if (e.type === 'skill') { if (!(g.fight && g.fight.champs.some((c) => (c.def.sk || []).some((s) => s.n === e.name)))) toast(e.name); }
@@ -6068,7 +6225,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0; S.xpFrom = (r.me.xp || 0) - (r.gained || 0);
       // 서버가 준 관직 승급·업적 첫 달성 보상: 결과창 '다음 목표' 칸에 알린다(14-endstats-xp.js goalBox)
       S.rwRank = Array.isArray(r.rankUp) && r.rankUp.length ? r.rankUp : null; S.rwAch = Array.isArray(r.ach) && r.ach.length ? r.ach : null;
-      // 경험치는 결과창의 '내 정보' 막대가 채운다(2026-11-25: 따로 덮던 #xpfx 연출은 누르면 건너뛰어져 결과창 안으로 옮겼다)
+      // 경험치는 통계창 앞 경험치 연출 창(14 xpGate·playXp)이 보이고, 통계창 '내 정보' 줄은 최종 값(2026-11-26: 연출 창 되살림. 연출 중에는 넘기지 않고 끝난 뒤 눌러서 넘긴다)
       dirty(); const box = $('overlay'); box.dataset.key = '';
       // 받을 수 있는 미션 보상이 생겼는지 한 번 물어본다(결과창 '다음 목표'의 한 줄, 로비 미션 버튼의 빨간 점)
       const mine = g;
@@ -6118,7 +6275,9 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   // 프레임 시트 한 장: 바깥(i)이 한 칸만 보이게 자르고, 가운데(b)가 줄을, 그림(img)이 칸을 steps()로 넘긴다
   const mtSheet = (name) => `<i class="mt-fx mt-${name}"><b><img alt="" src="gfx/fxa_${name}.png?v=1"></b></i>`;
   function mtCardHtml(p, i, ord, host) {
-    const st = p.state || {}, r = mtRank(st.gr), tier = mtTier(r), low = Q.level === 'low';
+    // 내 카드는 내 계정 경험치에서 바로(progression.js view: 계정 카드·로비·결과창과 같은 관직. 2026-11-26). 동료 카드는 서버가 준 값
+    const st0 = p.state || {}, mv = p.me && ACC.token && ACC.me ? window.RTD_PROG.view(t, ACC.me.track, ACC.me.xp || 0) : null;
+    const st = mv ? Object.assign({}, st0, { gr: mv.key, lv: mv.lv }) : st0, r = mtRank(st.gr), tier = mtTier(r), low = Q.level === 'low';
     const d = T.units.find((u) => u.id === st.ic) || T.units.find((u) => u.id === 'cav');
     const gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? (st.lv ? window.RTD_PROG.label(t, st.gr, st.lv | 0) : t(st.gr)) : '';
     const pum = r >= 1 && r <= 9 ? t('rankPum', { n: 10 - r }) : '';
@@ -6138,9 +6297,10 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   }
   // 내 카드 아래 한 줄: 다음 계급까지 남은 경험치(레벨 L의 누적 경험치 = progression.js xpAt, 18-account.js xpLv)
   function mtNextHtml(a) {
-    if (!a || typeof a.rank !== 'number') return '';
-    if (a.rank >= 10) return t('mt_max');
-    const nx = Math.max(0, a.rank) + 1, tk = a.track === 'civ' ? 'civ' : 'mil', left = Math.max(0, xpLv(MT_RANK_LV[nx]) - Math.round(a.xp || 0));
+    if (!a || typeof a.xp !== 'number') return '';
+    const rk = window.RTD_PROG.view(t, a.track, a.xp).rank; // 카드와 같은 곡선(경험치에서 바로)
+    if (rk >= 10) return t('mt_max');
+    const nx = rk + 1, tk = a.track === 'civ' ? 'civ' : 'mil', left = Math.max(0, xpLv(MT_RANK_LV[nx]) - Math.round(a.xp || 0));
     return t('mt_next', { r: `<b>${esc(t('rk_' + tk + nx))}</b>`, n: `<b>${left.toLocaleString()}</b>` });
   }
   // 화면 그리기: 참가자 구성이 바뀔 때만 카드를 다시 만들고(등장 연출은 처음 한 번), 평소에는 준비 표시만 고친다
@@ -6294,10 +6454,11 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
           <button class="btn go" id="acc-guest" type="button">${t('loginGuest')}</button>
           <div class="err" id="acc-err"></div></div>`;
       }
-      const m = ACC.me, lv = m.level, max = m.rank >= 10, f = max ? 1 : Math.max(0, Math.min(1, (m.xp - xpLv(lv)) / Math.max(1, xpLv(lv + 1) - xpLv(lv))));
+      // 관직은 경험치에서 바로(progression.js view): 결과창·로비·협동 대기 카드와 같은 값(2026-11-26)
+      const m = ACC.me, V = window.RTD_PROG.view(t, m.track, m.xp || 0), lv = V.lv, max = V.rank >= 10, f = max ? 1 : Math.max(0, Math.min(1, (m.xp - xpLv(lv)) / Math.max(1, xpLv(lv + 1) - xpLv(lv))));
       const guest = m.provider === 'guest', prov = m.provider === 'apple' ? 'Apple' : m.provider === 'google' ? 'Google' : guest ? t('provGuest') : '';
-      const trk = m.track === 'civ' ? 'civ' : 'mil', nextR = !max && m.rank >= 0 && m.rank < 10 ? t('goalRank', { a: esc(t('rk_' + trk + (m.rank + 1))), n: fmt(Math.max(0, xpLv(RANK_LV[m.rank + 1]) - (m.xp || 0))) }) : '';
-      return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${m.rank | 0}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(window.RTD_PROG.label(t, m.grade, lv))}${pum(m.rank)}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
+      const trk = m.track === 'civ' ? 'civ' : 'mil', nextR = !max ? t('goalRank', { a: esc(t('rk_' + trk + (V.rank + 1))), n: fmt(Math.max(0, xpLv(RANK_LV[V.rank + 1]) - (m.xp || 0))) }) : '';
+      return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${V.rank}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(V.text)}${pum(V.rank)}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
         <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })}・XP ${fmt(m.xp)}</div>
         <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button><button class="btn acc-q" id="acc-treebtn" type="button" aria-label="${esc(t('treeHead'))}" aria-controls="shtip" aria-expanded="false">?</button></div>
         ${guest && (!app || N.ssoHas('apple') || N.ssoHas('google')) ? `<div class="acc-link"><b>${t('linkHead')}</b><div class="hint2">${t('linkHint')}</div><div class="acc-btns">${(app ? N.ssoHas('apple') : apple) ? `<button class="btn sso apple" data-sso="apple" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}${!app || N.ssoHas('google') ? `<button class="btn sso google" data-sso="google" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button>` : ''}</div></div>` : ''}
@@ -6356,7 +6517,9 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 카드는 바뀐 자리만 다시 그린다(새로 들어온 사람 카드만 등장 연출이 걸리고, 다른 카드는 깜빡이지 않는다)
     const lbSlotHtml = (p, i) => {
       if (!p) return `<div class="lb-slot empty"><div class="lb-pt"><img class="lb-ring" alt="" src="gfx/ui_select.png"></div><b class="lb-nm">${t('emptySeat')}</b><small class="lb-gr">${t('lb_invite')}</small></div>`;
-      const st = p.state || {}, r = mtRank(st.gr), gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
+      // 내 자리는 내 계정 경험치에서 바로(progression.js view, 계정 카드·결과창과 같은 관직. 2026-11-26). 동료 자리는 서버가 준 값
+      const st0 = p.state || {}, mv = p.me && ACC.token && ACC.me ? window.RTD_PROG.view(t, ACC.me.track, ACC.me.xp || 0) : null;
+      const st = mv ? Object.assign({}, st0, { gr: mv.key, lv: mv.lv }) : st0, r = mtRank(st.gr), gr =/^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
       return `<div class="lb-slot in${p.me ? ' me' : ''}${i === 0 ? ' host' : ''}" data-id="${esc(String(p.id))}">${i === 0 ? `<span class="lb-tag host">${t('host')}</span>` : ''}${p.me ? `<span class="lb-tag mine">${t('me')}</span>` : ''}`
         + `<div class="lb-pt"><img class="av" alt="" src="${Art.portrait(defOf[st.ic] || defOf.cav)}"><img class="lb-ring" alt="" src="gfx/ui_select.png"><img class="lb-rk" alt="" src="gfx/rank_${r}.png" onerror="this.remove()"></div>`
         + `<b class="lb-nm">${esc(st.name || '?')}</b><small class="lb-gr">${esc(gr && st.lv ? window.RTD_PROG.label(t, st.gr, st.lv | 0) : gr)}</small></div>`;
@@ -6386,8 +6549,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 누적 경험치와 무관·문관 칭호. 계급마다 등급 1~5(군주 제외). 곡선은 progression.js(서버와 같다, 2026-11-25 economy-v2)
     const RANK_LV = window.RTD_PROG.RANK_LV;
     function treeHtml(m) {
-      const mine = m.track === 'civ' ? 'civ' : 'mil';
-      const rows = RANK_LV.map((lv, i) => `<tr class="${m.rank === i ? 'cur' : ''}"><td class="rk"><img alt="" src="gfx/rank_${i}.png" onerror="this.remove()">${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
+      const mine = m.track === 'civ' ? 'civ' : 'mil', myR = window.RTD_PROG.view(t, m.track, m.xp || 0).rank;
+      const rows = RANK_LV.map((lv, i) => `<tr class="${myR === i ? 'cur' : ''}"><td class="rk"><img alt="" src="gfx/rank_${i}.png" onerror="this.remove()">${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
       return `<table><thead><tr><th>${t('treeStage')}</th><th class="n">${t('treeXp')}</th><th class="${mine === 'mil' ? 'me' : ''}">${t('trackMil')}</th><th class="${mine === 'civ' ? 'me' : ''}">${t('trackCiv')}</th></tr></thead><tbody>${rows}</tbody></table><div class="note">${t('treeSteps')}</div><div class="note">${t('treeNote', { xp: Math.round(m.xp).toLocaleString() })}</div>`;
     }
     const setErr = (e) => { const el = $('acc-err'); if (el) el.textContent = e ? errText(e) : ''; };

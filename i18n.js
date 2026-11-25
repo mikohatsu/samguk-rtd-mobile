@@ -136,7 +136,6 @@
     appears: ['{a} 등장', '{a} 登場', '{a} appears', '{a} 登场'],
     whose: ['{w}의 ', '{w}の ', '{w}\'s ', '{w}的'],
     whoseGeneral: ['{w}의 무장', '{w}の武将', '{w}\'s general', '{w}的武将'],
-    bossDown: ['토벌 성공', '討伐成功', 'Victory', '讨伐成功'],
     timeTaken: ['걸린 시간 {t}', '所要時間 {t}', 'Time {t}', '用时 {t}'],
     fastBonus: ['빠른 클리어 보너스', '速攻ボーナス', 'Fast-clear bonus', '速通奖励'],
     rewardsGot: ['획득 보상', '獲得報酬', 'Rewards', '获得奖励'],
@@ -383,8 +382,10 @@
     err_ad_cap: ['오늘 받을 수 있는 광고 보상을 모두 받았습니다.', '本日の広告報酬はすべて受け取りました。', "You have claimed all of today's ad rewards.", '今日的广告奖励已全部领取。'],
     err_bad_receipt: ['결제를 확인하지 못했습니다.', '購入を確認できませんでした。', 'The purchase could not be verified.', '无法验证购买。'],
     err_other_account: ['이 구매는 다른 계정에 연결되어 있습니다.', 'この購入は別のアカウントに連携されています。', 'This purchase is linked to another account.', '此购买已关联到其他账号。'],
-    // 판 표를 끝까지 못 받은 판의 결과 화면, 서버가 알려 준 최소 버전보다 낮을 때(로딩 화면)
-    noTicket: ['서버에 연결하지 못해 이번 판의 보상을 받지 못했습니다.', 'サーバーに接続できなかったため、今回のバトルの報酬を受け取れませんでした。', "Could not reach the server, so this game's rewards were not received.", '未能连接服务器，本局奖励未能领取。'],
+    // 판 표(서버가 판 시작 때 내주는 기록표)를 끝까지 못 받은 판의 결과 화면. 표가 없으면 서버가 결과를 받지 않아 경험치·동전·전적이 오르지 않는다(17-loop S.tkMiss).
+    // 2026-11-26: 예전 열쇠 noTicket이 선택권 창의 '보유한 선택권이 없습니다'(같은 이름)를 덮어써, 선택권이 0장일 때 이 글이 선택권 창에 떴다 → 열쇠를 나눔
+    tkMissed: ['판을 시작할 때 서버와 연결되지 않아, 이번 판의 경험치·동전·전적은 계정에 기록되지 않습니다.', 'バトル開始時にサーバーへ接続できなかったため、今回の経験値・銅銭・戦績はアカウントに記録されません。', "The server couldn't be reached when this game started, so this game's XP, coins and record won't be saved to your account.", '本局开始时未能连接服务器，因此本局的经验值、铜钱和战绩不会记入账号。'],
+    // 서버가 알려 준 최소 버전보다 낮을 때(로딩 화면)
     updateNeed: ['새 버전이 나왔습니다. 스토어에서 업데이트해 주세요.', '新しいバージョンがあります。ストアでアップデートしてください。', 'A new version is available. Please update from the store.', '有新版本，请前往商店更新。'],
     updateWeb: ['새 버전이 나왔습니다. 페이지를 새로고침해 주세요.', '新しいバージョンがあります。ページを再読み込みしてください。', 'A new version is available. Please reload the page.', '有新版本，请刷新页面。'],
     updateReload: ['새로고침', '再読み込み', 'Reload', '刷新'], updateSkip: ['그대로 계속', 'このまま続ける', 'Continue anyway', '继续'], updateStore: ['스토어로 가기', 'ストアへ', 'Go to store', '前往商店'],
@@ -439,6 +440,8 @@
     e_joined: ['{a} 합류', '{a}が加入', '{a} joined', '{a}加入'],
     e_dismissed: ['{a} 해임', '{a}を解任', '{a} dismissed', '{a}已解任'],
     e_midBanner: ['중간보스 {a}', '中ボス {a}', 'Mid-boss: {a}', '中首领 {a}'],
+    // 중간보스 등장 경고 띠(08-pop drawMidWarn): 붉은 경고 그림 위 큰 글씨 + 아래 이름
+    midWarn: ['중간보스 출현', '中ボス出現', 'Mid-boss incoming', '中首领出现'],
     e_lifeLost: ['라이프 -{n}: {why}', 'ライフ -{n}：{why}', 'Lives -{n}: {why}', '生命 -{n}：{why}'],
     e_frontFull: ['전선 포화', '戦線飽和', 'Front overflow', '战线饱和'],
     e_midMissed: ['{a} 놓침', '{a}を逃した', '{a} escaped', '{a}逃脱'],
@@ -460,6 +463,8 @@
     roomLeave: ['방 나가기', 'ルームを出る', 'Leave room', '退出房间'],
     langLater: ['로비로 돌아가면 바뀝니다', 'ロビーへ戻ると切り替わります', 'Applies when you return to the lobby', '返回大厅后生效'],
     sendingResult: ['결과를 보내는 중…', '結果を送信中…', 'Sending result…', '正在提交结果…'],
+    // 판 끝 경험치 연출 창(14 playXp): 막대가 다 차고 나면 아래에 뜬다. 누르면 통계창으로
+    tapNext: ['눌러서 계속', 'タップして続ける', 'Tap to continue', '点击继续'],
     overwriteSave: ['이어하기 기록이 지워집니다 · 한 번 더', '「続きから」の記録が消えます・もう一度', 'Saved game will be erased · tap again', '将清除“继续游戏”的存档 · 再按一次'],
     lockedTag: ['잠김', 'ロック中', 'Locked', '未解锁'],
     needUnlock: ['해금 필요', '解放が必要', 'Unlock required', '需要解锁'], // 잠긴 신화·불멸 조합식 위 쇠사슬 표시(12-panels recipeRow)
@@ -750,4 +755,10 @@
   }
   root.RTD_I18N = { lang, LANGS, t, localizeTheme, applyDom, setLang, skillText, synTierText };
   if (root.RTD_THEME) localizeTheme(root.RTD_THEME);
+  // 캔버스에 그리는 장수 이름(4~8성 등장 「○○ 등장」 등)의 글자 조각을 미리 받아 둔다. 캔버스는 글꼴을 기다려 주지 않아
+  // 처음 그릴 때 없는 조각의 글자만 기기 글꼴로 나온다(2026-11-26 실기: 감녕의 '녕'). 늦게 들어온 글꼴은 glctx.js가 글자 캐시를 비워 다시 그린다.
+  if (root.RTD_THEME && typeof document !== 'undefined' && document.fonts && document.fonts.load) {
+    const nm = root.RTD_THEME.units.map((u) => u.name).join('') + t('appears', { a: '' });
+    ['400 20px "Black Han Sans"', '400 20px "East Sea Dokdo"'].forEach((f) => document.fonts.load(f, nm).catch(() => {}));
+  }
 })(typeof window !== 'undefined' ? window : globalThis);

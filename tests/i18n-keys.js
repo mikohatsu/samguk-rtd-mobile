@@ -28,6 +28,28 @@ function tableOf(src) {
 const i18nSrc = rd('i18n.js'), lobbySrc = rd('lobby.js');
 const SI = tableOf(i18nSrc), SL = tableOf(lobbySrc);
 ok(Object.keys(SI).length > 300 && Object.keys(SL).length > 50, `문구표 읽음: i18n.js ${Object.keys(SI).length}개, lobby.js ${Object.keys(SL).length}개`);
+// 같은 열쇠가 문구표에 두 번 있으면 뒤의 것이 앞의 것을 말없이 덮는다(2026-11-26: 결과창용 noTicket이 선택권 창의 noTicket을 덮어
+// 선택권이 0장일 때 「서버에 연결하지 못해…」가 선택권 창에 떴다). 문구표 안의 줄 머리 열쇠를 세어 두 번 이상인 것을 찾는다.
+function dupKeys(src) {
+  const i = src.indexOf('const S = {'), a = src.indexOf('{', i);
+  let d = 0, q = null, tok = '', last = '';
+  const seen = new Set(), dup = [];
+  for (let j = a; j < src.length; j++) {
+    const c = src[j];
+    if (q) { if (c === '\\') j++; else if (c === q) q = null; continue; }
+    if (c === Q1 || c === Q2 || c === Q3) { q = c; tok = ''; last = ''; continue; }
+    if (c === '/' && src[j + 1] === '/') { j = src.indexOf('\n', j) - 1; continue; }
+    if (c === '{' || c === '[' || c === '(') { d++; tok = ''; last = ''; continue; }
+    if (c === '}' || c === ']' || c === ')') { d--; tok = ''; last = ''; if (!d) break; continue; }
+    if (d !== 1) continue;
+    if (/[A-Za-z0-9_]/.test(c)) { tok += c; continue; }
+    if (tok) { last = tok; tok = ''; }
+    if (c === ':') { if (last) { if (seen.has(last)) dup.push(last); seen.add(last); } last = ''; }
+    else if (!/\s/.test(c)) last = '';
+  }
+  return [...new Set(dup)];
+}
+for (const [f, src] of [['i18n.js', i18nSrc], ['lobby.js', lobbySrc]]) { const dd = dupKeys(src); ok(dd.length === 0, `${f} 문구표에 두 번 적힌 열쇠 ${dd.length}건${dd.length ? ': ' + dd.join(', ') : ''}`); }
 
 // 호출에서 첫 인자를 잘라 그 안의 글자 상수를 모은다(삼항식의 양쪽 모두). 'a' + x 꼴은 앞머리(prefix)로 따로 모은다.
 function calls(src, re) {
