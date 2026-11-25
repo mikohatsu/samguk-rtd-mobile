@@ -83,7 +83,10 @@
       // 카드는 바와 같은 폭·같은 왼쪽 끝(태블릿에서 바만 넓고 카드는 560px로 왼쪽에 붙어 어긋나 보이던 것).
       // 바 위 22px 띄움: 바 왼쪽 위 모서리 밖으로 16px 나온 선택 해제 X(#selx)가 카드 아래 테를 덮지 않게
       c.style.left = sb.offsetLeft + 'px'; c.style.width = sb.offsetWidth + 'px'; c.classList.toggle('wide', sb.offsetWidth >= 720); // 넓은 화면(태블릿)은 두 단
-      c.style.bottom = (ph - sb.offsetTop + 22) + 'px'; c.style.maxHeight = Math.max(120, Math.min(sb.offsetTop - 22 - 8, ph * 0.6)) + 'px';
+      // 키 낮은 폰(360px)에서는 카드 위 끝이 오른쪽 위 배속·메뉴 단추(#tr)를 덮었다 → 가로로 겹치면 그 아래 6px까지만
+      const tr = $('tr'), tOver = tr && tr.offsetWidth && tr.offsetLeft < sb.offsetLeft + sb.offsetWidth && tr.offsetLeft + tr.offsetWidth > sb.offsetLeft;
+      const top0 = tOver ? tr.offsetTop + tr.offsetHeight + 6 : 8;
+      c.style.bottom = (ph - sb.offsetTop + 22) + 'px'; c.style.maxHeight = Math.max(120, Math.min(sb.offsetTop - 22 - top0, ph * 0.6)) + 'px';
     }
   }
   document.addEventListener('pointerdown', (e) => {
@@ -273,10 +276,15 @@
     // 아래 안전 영역(아이폰 홈 막대): #synall의 padding-bottom(var(--sb) = max(6px, env(safe-area-inset-bottom)))을 화면 크기가 바뀔 때만 읽는다
     const szk = window.innerWidth + 'x' + window.innerHeight;
     if (S.synSbK !== szk) { S.synSbK = szk; S.synSb = parseFloat(getComputedStyle($('synall')).paddingBottom) || 6; }
-    const left = hud.offsetLeft, topY = hud.offsetTop + hud.offsetHeight + 6, avail = Math.max(60, vh - topY - S.synSb - 4);
+    const left = hud.offsetLeft, topY = hud.offsetTop + hud.offsetHeight + 6;
+    // 조이스틱(#joy, 유닛을 고르면 왼쪽 아래에 뜬다)이 보이면 그 위에서 멈춘다. 키 낮은 폰(390px)에서 인연 칸·목록 버튼이 조이스틱 위쪽 절반을 덮어 손가락을 가로챘다
+    // 폴드 접은 화면(키 344px)은 그 사이가 60px도 안 돼 최소 높이 60이 조이스틱을 5px 덮었다 → 조이스틱이 있으면 그 위가 끝이고, 한 줄도 안 들어가면 목록 버튼만 둔다
+    const joy = $('joy'), joyOn = !!(joy && !joy.hidden && joy.getClientRects().length);
+    const joyTop = joyOn ? joy.getBoundingClientRect().top / zoom - 6 : vh - S.synSb - 4;
+    const avail = joyOn ? Math.max(24, Math.min(vh - S.synSb - 4, joyTop) - topY) : Math.max(60, vh - S.synSb - 4 - topY);
     // 얼굴 그림은 주소가 길어 매번 만들지 않는다(구성이 바뀌거나 5초마다 한 번만 다시 그린다 — 그림이 늦게 불러져도 따라온다)
     // 칸 한 줄 높이(칸 + 줄 간격)는 그려진 칸에서 재어 둔다. 목록 버튼 자리(약 24px)와 위 여백(7px)을 빼고 들어가는 줄 수 × 3칸
-    const rows = Math.max(1, Math.floor((avail - 31) / (S.synRowH || 46)));
+    const rows = Math.max(joyOn ? 0 : 1, Math.floor((avail - 31) / (S.synRowH || 46)));
     const list = synBarList(vis, g.me, rows * 3), more = vis.length - list.length;
     const key = list.map((x) => x.s.id + x.n + ':' + x.lv).join() + '|' + more + '@' + Math.floor(performance.now() / 5000);
     if (bar.dataset.key !== key) {

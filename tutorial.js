@@ -177,6 +177,14 @@
       let y = below ? r.bottom + 12 : Math.max(8, r.top - bh - 12);
       // 대상이 화면 높이를 거의 다 차지하면(서랍 등) 옆에 둔다
       if (!below && r.top - bh - 12 < 8) { y = Math.max(8, H / 2 - bh / 2); x = r.left > W / 2 ? Math.max(SL, r.left - bw - 12) : Math.min(W - bw - SR, r.right + 12); }
+      // 로비 상점 안내: 폰(키 낮은 화면)에서 상점 버튼 아래에 두면 출진·이어하기 버튼(#lplay)을 덮었다 → 그 왼쪽으로 비킨다
+      if (mode === 'shop') {
+        const lp = $('#lplay'), pr = vis(lp) ? lp.getBoundingClientRect() : null;
+        if (pr && x < pr.right && x + bw > pr.left && y < pr.bottom && y + bh > pr.top) {
+          const room = pr.left - SL - 8; // 작은 폰(640px)은 360px 말풍선이 왼쪽에 다 안 들어간다 → 들어갈 만큼 좁힌다(최소 240)
+          if (room < bw && room >= 240) { box.style.width = room + 'px'; x = SL; } else x = Math.max(SL, pr.left - bw - 8);
+        }
+      }
       box.style.left = x + 'px'; box.style.top = y + 'px';
     } else {
       ring.hidden = true;
@@ -205,6 +213,8 @@
       if (vis($('#lpanel'))) { hide(); return; } // 메뉴 창이 열려 있으면 잠시 숨긴다
     } else if (mode === 'shop') {
       if (!titleOn()) { hide(); stop(); return; }
+      // 전투 시작 창이나 상점이 아닌 메뉴 창이 열려 있으면 잠시 숨긴다(상점 버튼을 가리키는 말풍선이 창 위로 떠 '다음'을 가렸다)
+      if (setupOpen() || (vis($('#lpanel')) && LB().panel && LB().panel() !== 'shop')) { if (box && !box.hidden) hide(); return; }
     } else {
       if (!ctx || !ctx.g) return;
       // 판이 끝났는데 안내가 남았으면 마친 것으로 친다(첫 신화와 연출은 로비로 돌아갔을 때)

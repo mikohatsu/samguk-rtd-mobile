@@ -1,6 +1,8 @@
-  // ---- 결과창 맨 위 '다음 목표' 칸(글 2~4줄, 그림 없음): 진 곳 · 이번 판으로 새로 열린 것(난이도·상점) · 다음 관직까지 남은 경험치 · 가장 싼 잠긴 장수까지 남은 동전.
-  // S.progBefore = 이 판을 기록하기 직전의 해금 진행도(16-hud drainEvents의 'over'). 로그인하지 않은 판은 열린 것과 진 곳만 나온다.
+  // ---- 결과창(2026-11-25 다시 짬, production/team/2026-11-25/endscreen-spec.md) ----
+  // 위에서부터: 제목판 → 진 곳 한 줄 → ① 경험치 줄(상자 없음) → ①' 보상 한 줄 → ② 배틀기록(종이 한 장) → ③ 다음 목표(글만, 3줄까지) → 세부(보스전 표·라인 피해·강화·합성) → 고정 버튼 줄.
+  // 진 곳 한 줄: 보스에게 졌으면 보스와 남은 체력, 아니면 라이프. 협동에서 탈락했으면 탈락 라운드와 팀 결과(칸으로 두지 않는다)
   function lostLine() {
+    if (g.out) return `${esc(t('elimAt', { n: g.out }))} · ${esc(t(g.teamOver === 'win' ? 'elimTeamWin' : 'elimTeamLose'))}`;
     if (g.over === 'win') return '';
     const b = g.stats.bosses[g.stats.bosses.length - 1], f = g.fight;
     if (b && !b.win && b.round === g.round) {
@@ -9,90 +11,97 @@
     }
     return I.t(g.lives <= 0 ? 'goalLostLane' : 'goalLost', { r: g.round });
   }
-  // 다음 목표 카드(2026-11-25 개편): 그림(gfx 아이콘·장수 얼굴·관직 문양) + 제목 + 한 줄 설명 + 진행 막대.
-  // 실제 데이터만 쓴다: 난이도 해금 진행(RTD_LOBBY.progNow), 다음 관직까지 경험치, 가장 싼 잠긴 장수까지 동전, 오늘의 미션(RTD_LOBBY.missions).
-  // 이 판으로 받은 관직 승급·업적 보상·미션 받기 알림은 '내 정보'(esMe)의 보상 줄로 옮겼다.
+  // 경험치 막대와 같은 값: 서버 답이 왔으면 이번 판 뒤 경험치(받기 전 + 받은 것), 아니면 계정 값.
+  // (예전 goalBox는 갱신 전 ACC.me.xp로 다음 관직을 계산해, 막대는 軍候인데 '다음 관직'이 百人隊長로 나오는 일이 있었다)
+  const esXpEnd = () => (S.xpFrom != null ? S.xpFrom + (S.xpGained || 0) : (ACC.me && ACC.me.xp) || 0);
+  // ③ 다음 목표: 글만, 많아야 3줄. 한 줄 = "무엇까지 · 얼마". ' · ' 뒤(위치 안내 등)는 흐리게.
+  // 우선순위: 이번 판으로 열린 것(2줄까지) → 진 판 조언 → 받을 미션 보상 → 지금 동전으로 장수 해금 → 다음 난이도 조건 → 다음 관직까지 XP → 장수 해금까지 남은 동전
   function goalBox() {
     const DF = ['easy', 'normal', 'hard', 'nightmare'], win = g.over === 'win', num = (n) => Math.round(n).toLocaleString(), out = [];
     const dn = (id) => esc((T.difficulties.find((d) => d.id === id) || {}).name || id);
-    const pct = (k) => Math.round(Math.max(0, Math.min(1, k)) * 100);
-    const card = (ic, head, body, bar, cls) => `<div class="esg ${cls || ''}">${ic}<div class="esg-t"><b>${head}</b>${body ? `<small>${body}</small>` : ''}${bar != null ? `<span class="esg-bar"><i style="width:${pct(bar)}%"></i></span>` : ''}</div></div>`;
-    const pic = (src, cls) => `<span class="esg-ic ${cls || ''}"><img alt="" src="${src}" onerror="this.remove()"></span>`;
-    // 진 판: 이미 있는 통계로 한 줄 조언(강화를 한 번도 안 했으면 강화, 합성을 한 번도 안 했으면 합성)
-    let tip = '';
-    if (!win) { const ups = Object.values(g.me.upgrades || {}).reduce((a, b) => a + b, 0); tip = !ups ? I.t('tipUpgrade') : !g.stats.combines ? I.t('tipCombine') : ''; }
-    // 난이도: 이번 판으로 열린 것이 있으면 그것을, 없으면 다음에 열 난이도(또는 악몽 +N)와 깨야 할 판
+    const k = (s) => `<b>${s}</b>`;
+    const line = (html, cls) => { const i = html.lastIndexOf(' · '); out.push(`<li${cls ? ` class="${cls}"` : ''}>${i > 0 ? `${html.slice(0, i)}<span> · ${html.slice(i + 3)}</span>` : html}</li>`); };
     const pb = S.progBefore, pn = window.RTD_LOBBY && window.RTD_LOBBY.progNow ? window.RTD_LOBBY.progNow() : null, mut = g.mutLv || 0;
-    let opened = false;
+    // 1. 이번 판으로 열린 것(승리 판)
+    let opened = 0;
     if (win && pb) {
       const i = DF.indexOf(g.diff.id), nx = T.difficulties.find((d) => d.id === DF[i + 1]);
-      if (i > pb.clr && nx) { out.push(card(pic('gfx/ic_war.png'), I.t('goalDiff', { a: esc(nx.name) }), I.t('esgNew'), null, 'new')); opened = true; }
-      if (g.diff.id === 'nightmare' && mut > pb.nmx && mut < 5) { out.push(card(pic('gfx/ic_war.png'), I.t('goalMut', { n: mut + 1 }), I.t('esgNew'), null, 'new')); opened = true; }
-      if (pb.clr < 0) out.push(card(pic('gfx/ic_shop.png'), I.t('goalShop'), '', null, 'new'));
+      if (i > pb.clr && nx) { line(I.t('goalDiff', { a: k(esc(nx.name)) }), 'new'); opened++; }
+      if (g.diff.id === 'nightmare' && mut > pb.nmx && mut < 5) { line(I.t('goalMut', { n: mut + 1 }), 'new'); opened++; }
+      if (pb.clr < 0 && opened < 2) { line(I.t('goalShop'), 'new'); opened++; }
     }
-    if (!opened && pn) {
-      const nxt = DF[pn.clr + 1], after = DF[pn.clr + 2];
-      if (nxt && after) out.push(card(pic('gfx/ic_war.png'), I.t('esgDiffNext', { a: dn(after) }), I.t('esgDiffNeed', { a: dn(nxt) })));
-      else if (pn.clr >= 2 && pn.nmx + 2 <= 5) { const k = pn.nmx + 1; out.push(card(pic('gfx/ic_war.png'), I.t('esgDiffNext', { a: `${dn('nightmare')} +${k + 1}` }), I.t('esgDiffNeed', { a: dn('nightmare') + (k ? ` +${k}` : '') }))); }
-    }
+    // 2. 진 판 조언(강화를 한 번도 안 했으면 강화, 합성을 한 번도 안 했으면 합성)
+    if (!win) { const ups = Object.values(g.me.upgrades || {}).reduce((a, b) => a + b, 0); if (!ups) line(I.t('tipUpgrade'), 'tip'); else if (!g.stats.combines) line(I.t('tipCombine'), 'tip'); }
     const me = ACC.token && ACC.me;
+    // 3. 받을 미션 보상
+    if (me && S.msClaim) line(I.t('goalMsShort'));
+    // 4·7. 가장 싼 잠긴 장수(지금 동전으로 되면 4, 아니면 7로 뒤에)
+    let coinLine = '';
     if (me) {
-      // 다음 관직: 다음 계급 문양, 남은 경험치, 지금 계급 안에서 찬 정도
-      const trk = me.track === 'civ' ? 'civ' : 'mil', xp = me.xp || 0, r = rkOfLv(lvOfXp(xp));
-      if (r < 10) { const [lo, hi] = rankSpan(r); out.push(card(pic(`gfx/rank_${r + 1}.png`, 'rk'), I.t('esgRank', { a: esc(t('rk_' + trk + (r + 1))) }), I.t('esgXpLeft', { n: num(Math.max(0, hi - xp)) }), (xp - lo) / Math.max(1, hi - lo))); }
-      // 가장 싼 잠긴 장수: 얼굴, 이름, 모은 동전/값
       const U = T.unlock, shop = !window.RTD_LOBBY || window.RTD_LOBBY.shopOpen();
       if (U && shop) {
         const d = U.lockedIds().filter((id) => !(me.owned || []).includes(U.key(id))).map((id) => defOf[id]).filter(Boolean).sort((a, b) => U.coins[a.tier] - U.coins[b.tier])[0];
-        if (d) { const cost = U.coins[d.tier], need = cost - (me.coins || 0); out.push(card(pic(Art.portrait(d), 'pt'), I.t('esgUnlock', { a: `<span style="color:${tierColor(d.tier)}">${esc(d.name)}</span>` }), I.t(need > 0 ? 'goalCoins' : 'goalCoinsOk', { n: num(Math.max(0, need)), r: esc(rankName(d.tier)) }), (me.coins || 0) / Math.max(1, cost), need > 0 ? '' : 'ok')); }
-      }
-      // 오늘의 미션: 3줄(이름 · 진행 막대 · n/m). 다 깬 것은 금색, 받은 것은 흐리게
-      const ms = window.RTD_LOBBY && window.RTD_LOBBY.missions ? window.RTD_LOBBY.missions() : null;
-      if (ms && Array.isArray(ms.daily) && ms.daily.length) {
-        const rows = ms.daily.map((x) => `<span class="esg-ms ${x.claimed ? 'got' : x.done ? 'done' : ''}"><em>${esc(t('ms_' + x.id))}</em><span class="esg-bar"><i style="width:${pct(x.n / Math.max(1, x.need))}%"></i></span><u>${x.claimed ? '✓' : `${Math.min(x.n, x.need)}/${x.need}`}</u></span>`).join('');
-        out.push(`<div class="esg ms">${pic('gfx/ic_mission.png')}<div class="esg-t"><b>${esc(t('msToday'))}${S.msClaim ? ` <span class="esg-new">${esc(I.t('esgClaim'))}</span>` : ''}</b>${rows}</div></div>`);
+        if (d) { const need = U.coins[d.tier] - (me.coins || 0), r = k(esc(rankName(d.tier))); if (need <= 0) line(I.t('goalCoinsOk', { r })); else coinLine = I.t('goalCoins', { n: k(num(need)), r }); }
       }
     }
-    if (!out.length && !tip) return '';
-    return `<div class="es-goal"><h4>${I.t('goalHead')}</h4>${tip ? `<div class="esg-tip">${tip}</div>` : ''}${out.join('')}</div>`;
+    // 5. 다음 난이도를 여는 조건(이번 판으로 열린 것이 없을 때)
+    if (!opened && pn) {
+      const nxt = DF[pn.clr + 1], after = DF[pn.clr + 2];
+      if (nxt && after) line(I.t('goalDiffNeed2', { a: k(dn(nxt)), b: k(dn(after)) }));
+      else if (pn.clr >= 2 && pn.nmx + 2 <= 5) { const n = pn.nmx + 1; line(I.t('goalDiffNeed2', { a: k(dn('nightmare') + (n ? ` +${n}` : '')), b: k(`${dn('nightmare')} +${n + 1}`) })); }
+    }
+    // 6. 다음 관직까지(막대와 같은 xp)
+    if (me) { const xp = esXpEnd(), r = rkOfLv(lvOfXp(xp)); if (r < 10) { const trk = me.track === 'civ' ? 'civ' : 'mil'; line(I.t('esGoalRank', { a: k(esc(t('rk_' + trk + (r + 1)))), n: k(num(Math.max(0, rankSpan(r)[1] - xp))) })); } }
+    if (coinLine) line(coinLine);
+    if (!out.length) return '';
+    return `<div class="es-next ${S.es && S.es.open ? 'on' : ''}"><span class="esn-cap">${esc(I.t('goalHead'))}</span><ul>${out.slice(0, 3).join('')}</ul></div>`;
   }
-  // ---- 내 정보(2026-11-25): 관직 문양·이름·레벨, 경험치 막대(이번 판 획득분이 차오른다), 받은 동전·번 금화, 이번 판 보상(승급·업적·미션) ----
-  // 막대와 보상 줄은 esStep이 매 프레임 그린다. 결과창을 다시 그려도(미션 소식 등) S.es에 둔 진행 상태로 이어서 그린다.
+  // ①' 보상 한 줄: 동전(판 보상) · 승급(여러 번이면 하나로) · 업적 첫 달성(2개 이상이면 ×N). 상자 없이 그림 20px + 글.
+  // 자리는 처음부터 잡아 두고(투명) esStep이 차례로 켠다. 동전은 +XP와 함께, 승급·업적은 막대가 다 찬 뒤 하나씩(seq).
   function esRewards() {
     const me = ACC.me, trk = me && me.track === 'civ' ? 'civ' : 'mil', num = (n) => Math.round(n).toLocaleString(), out = [];
-    (S.rwRank || []).forEach((x) => out.push(`<img alt="" src="gfx/rank_${x.rank}.png" onerror="this.remove()"><span>${I.t('goalRankUp', { a: esc(t('rk_' + trk + x.rank)), n: num(x.coins) })}</span>`));
-    (S.rwAch || []).forEach((x) => { const a = T.achievements.find((q) => q.id === x.id); out.push(`<img alt="" src="gfx/ach_pennant.png" onerror="this.remove()"><span>${I.t('esAchGot', { a: esc(a ? a.name : x.id), n: num(x.coins) })}</span>`); });
-    if (S.msClaim) out.push(`<img alt="" src="gfx/ic_mission.png" onerror="this.remove()"><span>${I.t('goalMission')}</span>`);
+    const rk = S.rwRank || [], ac = S.rwAch || [], sum = (l) => l.reduce((a, x) => a + (x.coins || 0), 0);
+    if (rk.length) { const top = rk.reduce((a, x) => (x.rank > a.rank ? x : a), rk[0]); out.push(`<img alt="" src="gfx/rank_${top.rank}.png" onerror="this.remove()"><span>${esc(I.t('esChipRank', { a: t('rk_' + trk + top.rank), n: num(sum(rk)) }))}</span>`); }
+    if (ac.length === 1) { const a = T.achievements.find((q) => q.id === ac[0].id); out.push(`<img alt="" src="gfx/ach_pennant.png" onerror="this.remove()"><span>${esc(I.t('esChipAch1', { a: a ? a.name : ac[0].id, n: num(sum(ac)) }))}</span>`); }
+    else if (ac.length > 1) out.push(`<img alt="" src="gfx/ach_pennant.png" onerror="this.remove()"><span>${esc(I.t('esChipAchN', { k: ac.length, n: num(sum(ac)) }))}</span>`);
     return out;
   }
+  // ① 경험치 줄: 관직 문양 · 관직명 Lv · 막대(이전 몫 어두운 금 + 이번 판 몫 밝은 금) · 수치 · +XP · 다음 관직 문양(흐리게)
   function esMe() {
-    const E = S.es, s = g.stats, me = ACC.token && ACC.me;
-    const gold = `<span class="esm-it gold"><small>${esc(I.t('goldEarned'))}</small><b>${fmt(s.goldIn)}</b></span>`;
-    if (!me) return `<div class="es-me guest"><h4>${esc(I.t('esMeHead'))}</h4><div class="esm-hint">${esc(I.t('esLoginHint'))}</div><div class="esm-loot">${gold}</div></div>`;
+    const E = S.es, me = ACC.token && ACC.me;
+    if (!me) return `<div class="es-xp guest">${esc(I.t('esLoginHint'))}</div>`;
     const wait = S.xpFrom == null && E && E.want && !S.repDone;
-    const coins = `<span class="esm-it"><small>${esc(I.t('esCoinsGot'))}</small><b><i class="ico coin" aria-hidden="true"></i>${wait ? '…' : '+' + fmt(S.coinGained || 0)}</b></span>`;
-    const rw = esRewards().map((h, i) => `<div class="esm-ri ${E && (E.open || i < E.shown) ? 'on' : ''}">${h}</div>`).join('');
+    const st = wait ? esc(t('sendingResult')) : S.repDone && S.xpFrom == null && E && E.want ? esc(t('noServer')) : '';
     const xp = E && E.xpNow != null ? E.xpNow : S.xpFrom != null ? S.xpFrom : me.xp || 0, r = rkOfLv(lvOfXp(xp));
-    return `<div class="es-me" data-r="${r}"><h4>${esc(I.t('esMeHead'))}</h4><div class="esm-top"><span class="esm-mk">${rankMark(r)}</span><div class="esm-id"><b class="esm-rn"></b><small class="esm-lv"></small></div><div class="esm-gain ${E && E.xpT0 ? 'on' : ''}">${S.xpGained ? `+${fmt(S.xpGained)} XP` : ''}</div></div>
-      <div class="esm-bar"><i></i></div><div class="esm-num">${wait ? esc(t('sendingResult')) : S.repDone && S.xpFrom == null && E && E.want ? esc(t('noServer')) : ''}</div>
-      <div class="esm-loot">${coins}${gold}</div>${rw ? `<div class="esm-rw">${rw}</div>` : ''}</div>`;
+    const gain = S.xpGained ? `+${fmt(S.xpGained)} XP` : '';
+    const row = `<div class="es-xp ${st ? 'st' : ''}" data-r="${r}"><span class="esx-mk">${rankMark(r)}</span><span class="esx-id"><b class="esx-rn"></b><small class="esx-lv"></small></span>`
+      + `<span class="esx-bar"><i class="n"></i><i class="p"></i></span><span class="esx-num">${st}</span><span class="esx-gain ${E && E.xpT0 && performance.now() >= E.xpT0 ? 'on' : ''}">${gain}</span><span class="esx-nx">${r < 10 ? rankMark(r + 1) : ''}</span></div>`;
+    // 보상 줄: 서버 답을 기다리는 동안과 답을 받은 뒤만 자리를 잡는다(보내지 않은 판·답이 없는 판은 받을 것이 없다)
+    if (!(E && E.want && !S.repDone) && S.xpFrom == null) return row;
+    const coin = S.xpFrom != null ? `<span class="esr coin ${E && E.coinOn ? 'on' : ''}" aria-label="${esc(I.t('esCoinsGot'))} +${fmt(S.coinGained || 0)}"><i class="ico coin" aria-hidden="true"></i><span>+${fmt(S.coinGained || 0)}</span></span>` : '';
+    const rw = S.xpFrom != null ? esRewards().map((h, i) => `<span class="esr seq ${E && (E.open || i < E.shown) ? 'on' : ''}">${h}</span>`).join('') : '';
+    return `${row}<div class="es-rw">${coin}${rw}</div>`;
   }
-  // 막대 그리기: 경험치 xp일 때 계급·레벨·막대·숫자. 계급이 바뀌면 문양을 바꾸고 한 번 튀게 한다
+  // 막대 그리기: 경험치 xp일 때 계급·레벨·막대·숫자. 계급이 바뀌면 문양(지금·다음)을 바꾸고 한 번 튀게 한다.
+  // 이전 몫(.p) = 이 판 전 경험치가 지금 계급 안에서 찬 만큼(계급을 넘었으면 0), 이번 판 몫(.n) = 지금까지
   function esDrawXp(root, xp) {
-    const el = root.querySelector('.es-me:not(.guest)');
+    const el = root.querySelector('.es-xp:not(.guest)');
     if (!el || !ACC.me) return;
     const trk = ACC.me.track === 'civ' ? 'civ' : 'mil', lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = rankSpan(r), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
     S.es.xpNow = xp;
-    if (+el.dataset.r !== r) { el.dataset.r = r; el.querySelector('.esm-mk').innerHTML = rankMark(r); el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); }
-    const rn = el.querySelector('.esm-rn'), lt = el.querySelector('.esm-lv'), nm = t('rk_' + trk + r), lvs = t('level', { n: lv });
+    if (+el.dataset.r !== r) { el.dataset.r = r; el.querySelector('.esx-mk').innerHTML = rankMark(r); el.querySelector('.esx-nx').innerHTML = r < 10 ? rankMark(r + 1) : ''; el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); }
+    const rn = el.querySelector('.esx-rn'), lt = el.querySelector('.esx-lv'), nm = t('rk_' + trk + r), lvs = t('level', { n: lv });
     if (rn.textContent !== nm) rn.textContent = nm;
     if (lt.textContent !== lvs) lt.textContent = lvs;
-    el.querySelector('.esm-bar i').style.width = (k * 100).toFixed(1) + '%';
-    const nb = el.querySelector('.esm-num');
-    if (S.xpFrom != null || !S.es.want) { const v = r >= 10 ? 'MAX' : `${fmt(Math.round(xp - lo))} / ${fmt(hi - lo)}`; if (nb.textContent !== v) nb.textContent = v; }
+    const pf = S.xpFrom != null && r < 10 ? Math.max(0, Math.min(k, (S.xpFrom - lo) / (hi - lo))) : k;
+    el.querySelector('.esx-bar .n').style.width = (k * 100).toFixed(1) + '%';
+    el.querySelector('.esx-bar .p').style.width = (pf * 100).toFixed(1) + '%';
+    const nb = el.querySelector('.esx-num');
+    if (S.xpFrom != null || !S.es.want) { const v = r >= 10 ? 'MAX' : `${fmt(Math.round(xp - lo))} / ${fmt(hi - lo)}`; if (nb.textContent !== v) nb.textContent = v; if (el.classList.contains('st')) el.classList.remove('st'); }
   }
-  // ---- 결과창 진행(강제 보기): 창이 뜬 뒤 최소 ES_MIN, 서버 답(최대 ES_WAIT)을 기다려 경험치가 다 차고 보상 줄이 하나씩 다 나온 뒤에야
+  // ---- 결과창 진행(강제 보기): 창이 뜬 뒤 최소 ES_MIN, 서버 답(최대 ES_WAIT)을 기다려 경험치가 다 차고 보상이 하나씩 다 나온 뒤에야
   // 바닥 버튼(게임에 남기·로비로·다시)을 연다. 잠긴 동안 버튼은 눌리지 않고(disabled) 아래 가는 줄이 차오르며, 열릴 때 한 번 빛난다.
+  // 다음 목표 글은 버튼이 열릴 때 함께 나타난다(자리는 처음부터 잡혀 있어 밀림 없음)
   const ES_MIN = 2500, ES_WAIT = 8000, ES_FILL = 1400, ES_RANK = 500, ES_ITEM = 700, ES_TAIL = 500;
   function esStep() {
     const E = S.es, root = document.getElementById('end');
@@ -101,21 +110,23 @@
     if (!root || E.g !== g) return;
     const now = performance.now();
     let xpDone = true;
+    const xr = root.querySelector('.es-xp:not(.guest)');
     if (!ACC.token || !ACC.me) { /* 로그인 안 함: 기다릴 경험치 없음 */ }
     else if (S.xpFrom != null && S.xpGained > 0) {
       if (!E.xpT0) E.xpT0 = Math.max(now, E.t0 + 500);
-      const gn = root.querySelector('.esm-gain'); if (gn && now >= E.xpT0 && !gn.classList.contains('on')) gn.classList.add('on');
+      if (now >= E.xpT0) { const gn = root.querySelector('.esx-gain'); if (gn && !gn.classList.contains('on')) gn.classList.add('on'); E.coinOn = true; }
       const from = S.xpFrom, to = from + S.xpGained, D = ES_FILL + Math.max(0, rkOfLv(lvOfXp(to)) - rkOfLv(lvOfXp(from))) * ES_RANK;
       const p = Math.max(0, Math.min(1, (now - E.xpT0) / D));
       esDrawXp(root, from + (to - from) * (1 - Math.pow(1 - p, 3)));
+      if (xr) xr.classList.toggle('fill', p > 0 && p < 1);
       if (p < 1) xpDone = false;
     } else if (E.want && !S.repDone && now - E.t0 < ES_WAIT) { xpDone = false; esDrawXp(root, ACC.me.xp || 0); }
-    else esDrawXp(root, S.xpFrom != null ? S.xpFrom + (S.xpGained || 0) : ACC.me.xp || 0);
+    else { esDrawXp(root, esXpEnd()); if (S.xpFrom != null) E.coinOn = true; }
+    if (E.coinOn) { const c = root.querySelector('.esr.coin'); if (c && !c.classList.contains('on')) c.classList.add('on'); }
     if (xpDone && !E.xpEnd) { E.xpEnd = now; E.nextAt = now + 300; }
-    // 보상 줄을 하나씩
-    const items = root.querySelectorAll('.esm-ri');
-    // 작은 화면에서 보상 줄이 창 아래로 밀려 있으면 그 줄이 보이게 본문을 내린다(nearest: 이미 보이면 움직이지 않는다)
-    if (xpDone && E.shown < items.length && now >= E.nextAt) { const it = items[E.shown]; it.classList.add('on'); try { it.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* 옛 브라우저 */ } E.shown++; E.nextAt = now + ES_ITEM; Snd.play('ach', 200); }
+    // 승급·업적을 하나씩(자리는 이미 잡혀 있으므로 본문을 스크롤하지 않는다)
+    const items = root.querySelectorAll('.esr.seq');
+    if (xpDone && E.shown < items.length && now >= E.nextAt) { items[E.shown].classList.add('on'); E.shown++; E.nextAt = now + ES_ITEM; Snd.play('ach', 200); }
     const seqEnd = xpDone && E.shown >= items.length ? Math.max(E.nextAt || 0, E.xpEnd) : 0;
     if (!E.open) {
       const until = seqEnd ? Math.max(E.t0 + ES_MIN, seqEnd + ES_TAIL) : 0;
@@ -129,28 +140,36 @@
     S.es.open = true;
     root.querySelectorAll('.es-foot .btn').forEach((b) => { b.disabled = false; b.classList.remove('lock'); b.classList.add('ready'); });
     const f = root.querySelector('.es-foot'); if (f) { f.classList.remove('lock'); f.style.removeProperty('--lk'); }
+    const nx = root.querySelector('.es-next'); if (nx) nx.classList.add('on');
   }
   // 결과창을 (다시) 그린 직후 부른다: 진행을 이어 간다
   function esKick() { const E = S.es; if (E && !E.raf && E.g === g) E.raf = requestAnimationFrame(esStep); }
+  // ② 배틀기록 칸 하나: 라벨 + 값. 값은 숫자(굵은 숫자 글꼴)와 단위(작게)를 나눠 쓴다
+  // 문구 안의 {n} 자리에서 갈라 숫자만 크게: 「{n}討伐」 → 0 + 討伐
+  const esNumUnit = (key, n) => { const s = String(I.t(key, { n: '\u0001' })).split('\u0001'); return `${s[0] ? `<small>${esc(s[0])}</small>` : ''}<b>${n}</b>${s[1] ? `<small>${esc(s[1])}</small>` : ''}`; };
   // 판 끝 통계: 요약 · 보스전 기록(순위) · 라인 피해 순위 · 강화·조합 기록
   function endStats() {
     const s = g.stats, win = g.over === 'win', mm = Math.floor(g.time / 60), ss = Math.floor(g.time % 60);
-    const card = (l, v, sub, cls) => `<div class="es-card ${cls || ''}"><small>${l}</small><b>${v}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
+    const cell = (l, v, cls, extra) => `<div class="esr-c ${cls || ''}"${extra || ''}><small class="esr-l">${l}</small><span class="esr-v">${v}</span></div>`;
     // 결과창 진행 상태(강제 보기): 처음 그릴 때 시작한다. want = 서버에 결과를 보냈다(경험치·동전 답을 기다린다)
-    if (!S.es || S.es.g !== g) S.es = { g, t0: performance.now(), want: !!S.reported, open: false, shown: 0, xpT0: 0, xpEnd: 0, nextAt: 0, xpNow: null, raf: 0 };
+    if (!S.es || S.es.g !== g) S.es = { g, t0: performance.now(), want: !!S.reported, open: false, shown: 0, xpT0: 0, xpEnd: 0, nextAt: 0, xpNow: null, coinOn: false, raf: 0 };
     const lock = !S.es.open;
-    // 받은 경험치·동전은 위쪽 '내 정보'(esMe)로 옮겼다(2026-11-25)
-    // 탈락한 사람: 내 기록은 패배(도달 라운드는 판이 끝난 라운드)이고 팀 결과를 따로 알린다
-    const elim = g.out ? `<div class="es-card"><small>${esc(t('elimTitle'))}</small><b>${esc(t(g.teamOver === 'win' ? 'elimTeamWin' : 'elimTeamLose'))}</b><i>${esc(t('elimAt', { n: g.out }))}</i></div>` : '';
-    const cards = elim + [
-      card(I.t('reachRound'), `${g.resultRound} / ${g.diff.rounds}`), card(I.t('playTime'), `${mm}:${String(ss).padStart(2, '0')}`),
-      card(I.t('kills'), fmt(s.kills)), card(I.t('midboss'), I.t('midKills', { n: s.midKill }), s.midMiss ? I.t('midMiss', { n: s.midMiss }) : I.t('noMiss')),
-      card(I.t('lifeLost'), `${s.lifeLost}`, I.t('livesLeft', { n: g.lives })), card(I.t('bestTier'), s.bestName ? `${esc(s.bestName)}` : '-', s.best ? rankName(s.best) : ''),
-      card(I.t('goldEarned'), fmt(s.goldIn), I.t('upHire', { a: fmt(s.goldUp), b: fmt(s.goldHire) })), card(I.t('combCraft'), `${s.combines} · ${s.crafts.length}`, I.t('tixChest', { a: s.tickets, b: s.chests })),
-      card(I.t('ach'), `${Object.keys(g.me.done).length} / ${T.achievements.length}`),
-    ].join('')
-      // 현재 난이도 칸: 악몽 +N이면 (!) 표시, 꾹 누르면 이번 판 변형 규칙 팝업
-      + `<div class="es-card es-diff ${g.mutLv && g.muts && g.muts.length ? 'has-mut' : ''}" style="--dc:${DIFF_COL[g.diff.id] || '#c99a2e'}"><small>${t('difficulty')}</small><b>${esc(g.diff.name)}${g.mutLv ? ` +${g.mutLv}` : ''}</b>${net ? `<i>${esc(I.t('nCoop', { n: net.roster().length }))}</i>` : ''}${g.mutLv && g.muts && g.muts.length ? `<em class="es-bang" aria-label="${esc(I.t('mutHead', { n: g.mutLv }))}">!</em>` : ''}</div>`;
+    // 큰 칸 4: 도달 라운드(승리면 「クリア」, 값 주홍) · 난이도 · 최고 등급(등급색) · 처치
+    const hasMut = !!(g.mutLv && g.muts && g.muts.length);
+    const diff = `<b class="tx">${esc(g.diff.name)}</b>${g.mutLv ? `<em class="mut">+${g.mutLv}</em>` : ''}${net ? `<small>${esc(I.t('nCoop', { n: net.roster().length }))}</small>` : ''}`
+      + (hasMut ? `<em class="es-bang" aria-label="${esc(I.t('mutHead', { n: g.mutLv }))}">!</em>` : '');
+    const best = s.bestName ? `<b class="tx" style="--tc:${tierColor(s.best)}">${esc(s.bestName)}</b>${s.best != null ? `<small>${esc(rankTag(s.best))}</small>` : ''}` : '<b>-</b>';
+    const big = cell(esc(I.t(win ? 'esClear' : 'reachRound')), `<b>${g.resultRound}</b><small>/ ${g.diff.rounds}</small>`, `rd ${win ? 'win' : ''}`)
+      + cell(esc(t('difficulty')), diff, `es-diff ${hasMut ? 'has-mut' : ''}`)
+      + cell(esc(I.t('bestTier')), best, 'best')
+      + cell(esc(I.t('kills')), `<b>${fmt(s.kills)}</b>`);
+    // 작은 칸 6: 시간 · 중보스(놓친 경우만 「逃しN」 붉게) · 잃은 라이프(라이프가 다해 졌을 때만 붉게) · 번 금화 · 합성·조합 · 업적
+    const small = cell(esc(I.t('playTime')), `<b>${mm}:${String(ss).padStart(2, '0')}</b>`)
+      + cell(esc(I.t('midboss')), esNumUnit('midKills', s.midKill) + (s.midMiss ? `<em class="bad">${esc(I.t('esMidMiss', { n: s.midMiss }))}</em>` : ''))
+      + cell(esc(I.t('lifeLost')), `<b>${s.lifeLost}</b>`, !win && g.lives <= 0 ? 'bad' : '')
+      + cell(esc(I.t('goldEarned')), `<b>${fmt(s.goldIn)}</b>`)
+      + cell(esc(I.t('combCraft')), `<b>${s.combines}</b><small>·</small><b>${s.crafts.length}</b>`)
+      + cell(esc(I.t('ach')), `<b>${Object.keys(g.me.done).length}</b><small>/ ${T.achievements.length}</small>`);
     // 보스전: 결과·시간·빠른 클리어와 피해 순위
     const bossRows = s.bosses.map((b) => {
       const rows = (S.bossRows && S.bossRows[b.round]) || Object.keys(b.dealt).map((k) => ({ name: k, v: b.dealt[k] })).sort((x, y) => y.v - x.v);
@@ -164,21 +183,24 @@
     // 내용이 없는 칸은 제목째 숨긴다. 강화는 1단계 이상 올린 것만
     const ups = T.upgrades.filter((u) => (g.me.upgrades[u.id] || 0) > 0).map((u) => `<span class="chip">${esc(u.name)} ${I.t('lvN', { n: g.me.upgrades[u.id] || 0 })}</span>`).join('');
     const crafts = s.crafts.map((n) => `<span class="chip">${esc(n)}</span>`).join('');
+    const detail = `${bossRows ? `<h3>${I.t('bossLog')}</h3><table class="es-boss"><tr><th>${I.t('thBoss')}</th><th>${I.t('thResult')}</th><th>${I.t('thTime')}</th><th>${I.t('thChamp')}</th><th>${I.t('dmgRank')}</th></tr>${bossRows}</table>` : ''}
+      ${dmgRows ? `<h3>${I.t('laneDmgRank')}</h3>${dmgRows}` : ''}
+      ${ups ? `<h3>${I.t('upgrade')}</h3><div class="chips">${ups}</div>` : ''}
+      ${crafts ? `<h3>${I.t('craftedHead')}</h3><div class="chips">${crafts}</div>` : ''}`;
     // '같은 설정으로 다시': 이 판이 마지막에 시작한 설정(rtd-last)과 같은 싱글 판일 때만(협동 방·빠른 대전·이어하기는 숨김)
     let last = null; try { last = JSON.parse(localStorage.getItem('rtd-last') || 'null'); } catch (e) { last = null; }
     const againOk = !!last && !S.fromSnap && !S.online && last.play === 'offline' && last.diff === g.diff.id && (bots.length ? last.mode === 'ai' : !net && last.mode === 'solo');
     const lost = lostLine();
-    // 승리: 철괴 제목판을 키워 글씨를 얹는다. 패배: 기울어진 부서진 나무판(흰 깃발 그림)에 '전선 붕괴'.
+    // 제목판: 먹 붓자국 위 붓글씨(승리 금빛, 패배 종이색)
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
-    // 창 = 스크롤되는 본문(.es-body) + 고정 바닥 줄(.es-foot). 버튼이 통계 카드를 가리지 않는다
-    return `<div class="over" id="end"><div class="sheet es"><div class="es-body">
-      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}<div class="es-top">${esMe()}${goalBox()}</div>${S.tkMiss ? `<div class="dim" style="color:#ff9d8a">${t('noTicket')}</div>` : ''}
-      ${g.mutLv && g.muts && g.muts.length ? `<div class="es-mutpop" hidden><b>${esc(I.t('mutHead', { n: g.mutLv }))}</b>${g.muts.map((m, i) => mutCard(m.id, i)).join('')}</div>` : ''}
-      ${bossRows ? `<h3>${I.t('bossLog')}</h3><table class="es-boss"><tr><th>${I.t('thBoss')}</th><th>${I.t('thResult')}</th><th>${I.t('thTime')}</th><th>${I.t('thChamp')}</th><th>${I.t('dmgRank')}</th></tr>${bossRows}</table>` : ''}
-      ${dmgRows ? `<h3>${I.t('laneDmgRank')}</h3>${dmgRows}` : ''}
-      ${ups ? `<h3>${I.t('upgrade')}</h3><div class="chips">${ups}</div>` : ''}
-      ${crafts ? `<h3>${I.t('craftedHead')}</h3><div class="chips">${crafts}</div>` : ''}
-      <h3>${I.t('esRecord')}</h3><div class="es-cards">${cards}</div>
+    // 창 = 스크롤되는 본문(.es-body) + 고정 바닥 줄(.es-foot). 버튼이 통계 칸을 가리지 않는다
+    return `<div class="over" id="end"><div class="sheet es ${win ? 'is-win' : 'is-lose'}"><div class="es-body">
+      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss ? `<div class="dim" style="color:#ff9d8a">${t('noTicket')}</div>` : ''}
+      ${esMe()}
+      <div class="es-rec"><div class="esr-big">${big}</div><div class="esr-small">${small}</div></div>
+      ${goalBox()}
+      ${hasMut ? `<div class="es-mutpop" hidden><b>${esc(I.t('mutHead', { n: g.mutLv }))}</b>${g.muts.map((m, i) => mutCard(m.id, i)).join('')}</div>` : ''}
+      ${detail.trim() ? `<div class="es-detail">${detail}</div>` : ''}
       </div><div class="es-foot ${lock ? 'lock' : ''}">${['stay', 'restart', againOk ? 'again' : ''].filter(Boolean).map((a) => `<button class="btn ${a === 'restart' ? 'es-again' : a === 'again' ? 'go es-again2' : 'es-stay'} ${lock ? 'lock' : ''}" data-act="${a}" type="button" ${lock ? 'disabled' : ''}>${a === 'stay' ? I.t('stayBtn') : a === 'again' ? I.t('againSame') : t('quitGame')}</button>`).join('')}</div></div></div>`;
   }
   // ---- 판 끝 경험치 연출: 화면을 어둡게 흐리고, 지금 계급 문양 ─ 경험치 막대 ─ 다음 계급 문양.

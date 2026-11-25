@@ -84,7 +84,7 @@
     u('join', '조인', '仁', 'wei', 9, { rng: 150, as: 0.95, title: '위의 방패', hz: '曹仁', qc: '吾當死守此城', quote: '이 성은 내가 죽어서라도 지킨다.', p: [pct('철옹성', 'hpPct', { pct: 0.8, desc: '보스전 체력 80% 증가' }), pct('사수의 의지', 'aura', { pct: 0.18, r: 200, fac: 'wei', desc: '주변 위 유닛 공격력 18% 증가' })],
       sk: [{ n: '팔문금쇄진', k: 'shield', dur: 2.2, cd: 20, fx: '#7da7e8' }, { n: '철기 반격', k: 'cone', r: 240, arc: 1.5, mult: 5, cd: 12, fx: '#9ec0f0' }] }),
     u('sunuk', '순욱', '彧', 'wei', 9, { rng: 260, as: 1.1, title: '왕좌지재', hz: '荀彧', qc: '奉主上以從民望', quote: '천자를 받들어 백성의 바람을 따르는 것, 그것이 대의입니다.', p: [pct('왕좌의 계책', 'globalAtk', { pct: 0.12, fac: 'wei', desc: '모든 위 유닛 공격력 12% 증가' }), pct('왕좌의 안목', 'crit', { ch: 0.3, mult: 2.3, desc: '30% 확률로 2.3배 피해' })],
-      sk: [{ n: '구호탄랑', k: 'buff', atk: 0.5, dur: 6, cd: 22, fx: '#8db8ec' }, { n: '이호경식', k: 'circle', r: 170, range: 500, mult: 5.5, delay: 0.6, cd: 15, fx: '#a8c8ff' }] }),
+      sk: [{ n: '구호탄랑', k: 'buff', atk: 0.5, dur: 6, cd: 22, fx: '#8db8ec' }, { n: '이호경식', k: 'circle', r: 170, range: 500, mult: 5.5, delay: 0.6, cd: 15, fx: '#ffa040' }] }),
     u('jangbi', '장비', '飛', 'shu', 9, { rng: 170, as: 0.95, title: '만인지적', hz: '張飛', qc: '燕人張翼德在此', quote: '연인 장익덕이 여기 있다!', p: [pct('장판교의 일갈', 'stun', { ch: 0.15, dur: 0.8, desc: '15% 확률로 기절' }), pct('장팔사모', 'splash', { r: 120, pct: 0.7, desc: '주변 적에게 70% 범위 피해' })],
       sk: [{ n: '장판교 대갈', k: 'circle', r: 220, range: 0, mult: 4, delay: 0.2, stun: 1.2, cd: 18, fx: '#f0d060' }, { n: '사모 돌격', k: 'line', len: 420, w: 100, mult: 6, cd: 13, fx: '#88d8a8' }] }),
     u('joun', '조운', '雲', 'shu', 9, { rng: 170, as: 0.7, title: '상산의 일신시담', hz: '趙雲', qc: '吾乃常山趙子龍也', quote: '나는 상산의 조자룡이다!', p: [pct('칠진칠출', 'everyN', { n: 7, mult: 7, desc: '7번째 공격마다 7배 피해' }), pct('장판파의 기적', 'bossPct', { pct: 0.2, desc: '보스·중간보스 피해 20% 증가' })],
@@ -93,13 +93,13 @@
     u('macho', '마초', '超', 'shu', 9, { rng: 170, as: 0.75, title: '금마초', hz: '馬超', qc: '誓殺曹賊 以報父仇', quote: '아버지의 원수, 조조를 반드시 베리라!', p: [pct('서량 돌격', 'everyN', { n: 6, mult: 5, desc: '6번째 공격마다 5배 피해' }), pct('신위천장군', 'crit', { ch: 0.25, mult: 2.4, desc: '25% 확률로 2.4배 피해' })],
       sk: [{ n: '서량 철기 돌격', k: 'line', len: 500, w: 110, mult: 5.5, cd: 12, dashThrough: true, fx: '#e8d27a' }, { n: '금마초의 위용', k: 'buff', atk: 0.5, dur: 5, cd: 22, fx: '#ffe8a0' }] }),
     u('sonchaek', '손책', '策', 'wu', 9, { rng: 170, as: 0.75, title: '소패왕', hz: '孫策', qc: '決機於兩陣之間 與天下爭衡', quote: '두 진 사이에서 승부를 내고, 천하와 겨루는 일은 내가 한다.', p: [pct('소패왕의 기세', 'crit', { ch: 0.35, mult: 2.3, desc: '35% 확률로 2.3배 피해' }), pct('강동 평정', 'globalAtk', { pct: 0.12, fac: 'wu', desc: '모든 오 유닛 공격력 12% 증가' })],
-      sk: [{ n: '패왕 돌격', k: 'line', len: 460, w: 110, mult: 6, cd: 12, dashThrough: true, fx: '#f09070' }] }),
+      sk: [{ n: '패왕 돌격', k: 'line', len: 460, w: 110, mult: 6, cd: 12, dashThrough: true, fx: '#5fd0d8' }] }),
     u('yukson', '육손', '遜', 'wu', 9, { rng: 280, as: 1.1, title: '서생 대도독', hz: '陸遜', qc: '火燒連營七百里', quote: '칠백 리 영채를 불길로 태우리라.', p: [pct('화공 연영', 'burn', { pct: 0.6, dur: 4, desc: '공격력 60%의 화상 4초' }), pct('화염 번짐', 'splash', { r: 130, pct: 0.5, desc: '주변 적에게 50% 범위 피해' })],
       sk: [{ n: '칠백리 화공', k: 'line', len: 700, w: 130, mult: 6, cd: 15, fx: '#ff8a3c' }, { n: '인내의 진', k: 'buff', atk: 0.5, dur: 6, cd: 22, fx: '#ffc08a' }] }),
     u('dongtak', '동탁', '卓', 'etc', 9, { rng: 170, as: 1.05, title: '상국', hz: '董卓', qc: '天下之事 豈不在我', quote: '천하의 일이 내 손에 달려 있지 않더냐!', p: [pct('서량 철기', 'globalAtk', { pct: 0.15, fac: 'etc', desc: '모든 그 외 소속 유닛 공격력 15% 증가' }), pct('포악', 'hpPct', { pct: 0.6, desc: '보스전 체력 60% 증가' })],
       sk: [{ n: '폭정의 압살', k: 'circle', r: 200, range: 300, mult: 5.5, delay: 0.5, cd: 14, fx: '#d05050' }] }),
     u('choseon', '초선', '蟬', 'etc', 9, { rng: 230, as: 0.9, title: '폐월의 미인', hz: '貂蟬', qc: '月亦羞而避於雲後', quote: '달도 부끄러워 구름 뒤에 숨는다지요.', p: [pct('폐월', 'stun', { ch: 0.12, dur: 0.6, desc: '12% 확률로 기절' }), pct('경국의 춤', 'bossPct', { pct: 0.2, desc: '보스·중간보스 피해 20% 증가' })],
-      sk: [{ n: '미인계', k: 'charm', dur: 3, amp: 0.3, cd: 30, fx: '#ff9ad0' }, { n: '연무', k: 'circle', r: 170, range: 460, mult: 5.5, delay: 0.5, cd: 14, fx: '#ffb0e0' }] }),
+      sk: [{ n: '미인계', k: 'charm', dur: 3, amp: 0.3, cd: 30, fx: '#ff9ad0' }, { n: '연무', k: 'circle', r: 170, range: 460, mult: 5.5, delay: 0.5, cd: 14, fx: '#ffe0f0' }] }),
     // 불멸: 최중요 인물, 화려한 이펙트, 액티브 최대 3개
     u('jojo', '조조', '操', 'wei', 10, { rng: 240, as: 0.95, title: '난세의 간웅', hz: '曹操', qc: '寧我負天下人 休教天下人負我', quote: '내가 천하를 버릴지언정, 천하가 나를 버리게 두지 않겠다.', p: [pct('치세의 능신', 'globalAtk', { pct: 0.25, fac: 'wei', desc: '모든 위 유닛 공격력 25% 증가' }), pct('호표기', 'aura', { pct: 0.2, r: 240, desc: '주변 모든 아군 공격력 20% 증가' }), pct('적벽의 교훈', 'bossPct', { pct: 0.25, desc: '보스·중간보스 피해 25% 증가' })],
       sk: [{ n: '의천검', k: 'line', len: 520, w: 110, mult: 8, cd: 11, fx: '#7ab0ff' }, { n: '호표기 돌격', k: 'cone', r: 340, arc: 1.2, mult: 7, cd: 15, fx: '#a8c8ff' }, { n: '위무의 호령', k: 'buff', atk: 0.8, dur: 6, cd: 26, fx: '#d0e0ff' }] }),
@@ -110,13 +110,13 @@
     u('gwanu', '관우', '羽', 'shu', 10, { rng: 170, as: 0.95, title: '무성', hz: '關羽', qc: '酒且斟下 某去便來', quote: '술은 잠시 따라 두시오. 금방 다녀오겠소.', p: [pct('청룡언월도', 'splash', { r: 150, pct: 1, desc: '주변 적에게 100% 범위 피해' }), pct('오관참장', 'everyN', { n: 5, mult: 6, desc: '5번째 공격마다 6배 피해' }), pct('무성의 위엄', 'pierce', { pct: 0.6, desc: '적 방어력 60% 무시' })],
       sk: [{ n: '청룡언월참', k: 'line', len: 620, w: 130, mult: 10, cd: 12, fx: '#4fe0a0' }, { n: '수엄칠군', k: 'circle', r: 230, range: 460, mult: 8, delay: 0.8, cd: 17, fx: '#5fc8f0' }, { n: '단도부회', k: 'shield', dur: 1.5, cd: 22, fx: '#a0ffd0' }] }),
     u('jegal', '제갈량', '亮', 'shu', 10, { rng: 300, as: 1.15, title: '와룡', hz: '諸葛亮', qc: '鞠躬盡瘁 死而後已', quote: '몸을 굽혀 온 힘을 다하고, 죽은 뒤에야 그치리라.', p: [pct('천하삼분지계', 'globalAtk', { pct: 0.2, fac: 'all', desc: '모든 아군 공격력 20% 증가' }), pct('화공', 'burn', { pct: 0.8, dur: 4, desc: '공격력 80%의 화상 4초' }), pct('공명의 혜안', 'splash', { r: 150, pct: 0.8, desc: '주변 적에게 80% 범위 피해' })],
-      sk: [{ n: '동남풍', k: 'line', len: 900, w: 150, mult: 8, cd: 13, fx: '#ffb060' }, { n: '팔진도', k: 'circle', r: 240, range: 520, mult: 6, delay: 0.6, stun: 1.5, cd: 20, fx: '#a0d8ff' }, { n: '칠성단', k: 'heal', pct: 0.35, cd: 24, fx: '#e0f0ff' }] }),
+      sk: [{ n: '동남풍', k: 'line', len: 900, w: 150, mult: 8, cd: 13, fx: '#ffb060' }, { n: '팔진도', k: 'circle', r: 240, range: 520, mult: 6, delay: 0.6, stun: 1.5, cd: 20, fx: '#fff0c8' }, { n: '칠성단', k: 'heal', pct: 0.35, cd: 24, fx: '#e0f0ff' }] }),
     u('songwon', '손권', '權', 'wu', 10, { rng: 230, as: 0.95, title: '자수성가의 오왕', hz: '孫權', qc: '孤與老賊 勢不兩立', quote: '나와 늙은 역적은 결코 함께 설 수 없다.', p: [pct('삼대의 기업', 'globalAtk', { pct: 0.3, fac: 'wu', desc: '모든 오 유닛 공격력 30% 증가' }), pct('제왕의 눈', 'bossPct', { pct: 0.3, desc: '보스·중간보스 피해 30% 증가' }), pct('강동의 수성', 'hpPct', { pct: 0.5, desc: '보스전 체력 50% 증가' })],
-      sk: [{ n: '합비의 일격', k: 'line', len: 480, w: 120, mult: 8, cd: 11, fx: '#ff9080' }, { n: '용인술', k: 'buff', atk: 0.9, dur: 6, cd: 26, fx: '#ffc0b0' }] }),
+      sk: [{ n: '합비의 일격', k: 'line', len: 480, w: 120, mult: 8, cd: 11, fx: '#e0303c' }, { n: '용인술', k: 'buff', atk: 0.9, dur: 6, cd: 26, fx: '#ffc0b0' }] }),
     u('juyu', '주유', '瑜', 'wu', 10, { rng: 290, as: 1.05, title: '미주랑', hz: '周瑜', qc: '操自送死 而可迎之邪', quote: '조조가 제 발로 죽으러 오는데, 어찌 맞아들이겠습니까!', p: [pct('적벽의 불길', 'burn', { pct: 1, dur: 4, desc: '공격력 100%의 화상 4초' }), pct('연환 화공', 'splash', { r: 170, pct: 0.9, desc: '주변 적에게 90% 범위 피해' }), pct('수군 대도독', 'aura', { pct: 0.2, r: 240, fac: 'wu', desc: '주변 오 유닛 공격력 20% 증가' })],
       sk: [{ n: '적벽 화공', k: 'line', len: 820, w: 170, mult: 9, cd: 13, fx: '#ff6a2a' }, { n: '연환선 폭발', k: 'circle', r: 250, range: 520, mult: 7, delay: 0.8, cd: 16, fx: '#ffa040' }, { n: '곡조 비기', k: 'buff', atk: 0.7, dur: 7, cd: 26, fx: '#ffd0a0' }] }),
     u('taesaja', '태사자', '慈', 'wu', 10, { rng: 250, as: 0.7, title: '신의의 궁장', hz: '太史慈', qc: '大丈夫生於亂世 當帶三尺劍立不世之功', quote: '대장부가 난세에 났으면 삼척 검을 차고 불세출의 공을 세워야 한다!', p: [pct('백발백중', 'crit', { ch: 0.4, mult: 2.8, desc: '40% 확률로 2.8배 피해' }), pct('신정의 결투', 'bossPct', { pct: 0.35, desc: '보스·중간보스 피해 35% 증가' }), pct('쌍극', 'multi', { n: 2, desc: '적 2기를 추가 타격' })],
-      sk: [{ n: '신궁 연사', k: 'cone', r: 380, arc: 0.6, mult: 8, cd: 11, fx: '#ffb080' }, { n: '단기 포위 돌파', k: 'line', len: 560, w: 110, mult: 8, cd: 13, dashThrough: true, fx: '#ff9a70' }, { n: '신의의 맹세', k: 'buff', atk: 0.9, dur: 6, cd: 26, fx: '#ffd0b0' }] }),
+      sk: [{ n: '신궁 연사', k: 'cone', r: 380, arc: 0.6, mult: 8, cd: 11, fx: '#ffd66a' }, { n: '단기 포위 돌파', k: 'line', len: 560, w: 110, mult: 8, cd: 13, dashThrough: true, fx: '#e8eef8' }, { n: '신의의 맹세', k: 'buff', atk: 0.9, dur: 6, cd: 26, fx: '#ffd66a' }] }),
     u('janggak', '장각', '角', 'etc', 10, { rng: 290, as: 1.15, title: '천공장군', hz: '張角', qc: '蒼天已死 黃天當立', quote: '창천은 이미 죽었고, 황천이 일어나리라.', p: [pct('태평요술', 'multi', { n: 3, desc: '번개가 적 3기를 추가 타격' }), pct('황천의 뇌운', 'stun', { ch: 0.12, dur: 0.7, desc: '12% 확률로 기절' }), pct('부적수', 'bossPct', { pct: 0.3, desc: '보스·중간보스 피해 30% 증가' })],
       sk: [{ n: '황천 낙뢰', k: 'circle', r: 220, range: 540, mult: 8, delay: 0.6, cd: 12, fx: '#f2dd5c' }, { n: '천공 뇌진', k: 'line', len: 760, w: 140, mult: 8, cd: 14, fx: '#ffe880' }, { n: '부적수', k: 'heal', pct: 0.45, cd: 22, fx: '#fff0a0' }] }),
     u('yeopo', '여포', '布', 'etc', 10, { rng: 190, as: 0.65, title: '비장', hz: '呂布', qc: '人中呂布 馬中赤兔', quote: '사람 중엔 여포, 말 중엔 적토.', p: [pct('무쌍', 'crit', { ch: 0.4, mult: 3, desc: '40% 확률로 3배 피해' }), pct('방천화극', 'splash', { r: 170, pct: 1, desc: '주변 적에게 100% 범위 피해' }), pct('적토마', 'hpPct', { pct: 0.5, desc: '보스전 체력 50% 증가' })],
@@ -183,8 +183,8 @@
     songwon: (s) => ({ p: [guard(0.4)], sk: { n: '합비 사수', k: 'reflect', mult: 3, dur: 4, cd: 18, fx: '#ff9080' } }),
     // 힐러(모두 전군 치료, 수치와 덧붙는 효과가 다르다)
     hwangwol: (s) => ({ p: [P('목우 보급', 'regen', { pct: 0.012 + s * 0.004 }, `보스전 아군 전체 매초 체력 ${((0.012 + s * 0.004) * 100).toFixed(1)}% 회복`)], sk: heal('전군 치료', 0.3 + s * 0.05, 18) }),
-    yubi: (s) => ({ p: [P('인덕의 손길', 'healLow', { pct: 0.1 }, '3초마다 체력 50% 이하인 아군(다른 사령관 포함) 체력 10% 회복')], sk: heal('인덕의 전군 치료', 0.45, 20) }),
-    janggak: (s) => ({ p: [P('부적수 축복', 'healBuff', { pct: 0.15 }, '전군 치료 때 아군 전체 3초간 공격력 15% 증가')], sk: heal('태평 전군 치료', 0.35, 20, { hot: 0.03, hotDur: 5 }) }),
+    yubi: (s) => ({ p: [P('인덕의 손길', 'healLow', { pct: 0.1 }, '3초마다 체력 50% 이하인 아군(다른 사령관 포함) 체력 10% 회복')], sk: heal('인덕의 전군 치료', 0.45, 20, { fx: '#fff0c0' }) }),
+    janggak: (s) => ({ p: [P('부적수 축복', 'healBuff', { pct: 0.15 }, '전군 치료 때 아군 전체 3초간 공격력 15% 증가')], sk: heal('태평 전군 치료', 0.35, 20, { fx: '#f2d25c', hot: 0.03, hotDur: 5 }) }),
     // 버퍼
     gwanpyeong: (s) => ({ p: [partyAtk('부자의 기세', 0.08 + s * 0.03)], sk: { n: '공격 호령', k: 'rally', atk: 0.3 + s * 0.1, dur: 6, cd: 22, fx: '#ffe07a' } }),
     sunuk: (s) => ({ p: [P('왕좌의 보좌', 'partyCdr', { pct: 0.08 + s * 0.03 }, `보스전 아군 전체 스킬 재사용 ${per(0.08 + s * 0.03)} 단축`)], sk: { n: '철벽 진형', k: 'pshield', dur: 3, cd: 22, fx: '#ffe07a' } }),
@@ -193,7 +193,7 @@
     jegalgeun: (s) => ({ p: [expose(0.08), breaker('기세 꺾기', 0.5)], sk: weaken('허점 노출', 0.2, 20) }),
     gahu: (s) => ({ p: [breaker('독계', 0.6)], sk: { n: '반간계', k: 'delay', v: 3, cd: 18, fx: '#9ad070' } }),
     chugyung: (s) => ({ p: [expose(0.1), breaker('비도 견제', 0.7)], sk: { n: '비도 난사', k: 'roar', v: 0.15, dur: 6, cd: 18, fx: '#f07a3e' } }),
-    gwakga: (s) => ({ p: [expose(0.12), breaker('기책 간파', 1.2)], sk: weaken('유계 간파', 0.3, 20) }),
+    gwakga: (s) => ({ p: [expose(0.12), breaker('기책 간파', 1.2)], sk: Object.assign(weaken('유계 간파', 0.3, 20), { fx: '#bfe0ff' }) }),
     choseon: (s) => ({ p: [P('경국지색', 'bossWeak', { pct: 0.1 }, '출전 중 보스 공격력 10% 감소')] }),
     samaui: (s) => ({ p: [expose(0.2), breaker('낭고', 1)], sk: weaken('고평릉의 함정', 0.4, 22) }),
     // 스킬 딜러
@@ -235,18 +235,19 @@
   });
 
   // 스킬 연출(skillfx.js): 이름에 맞는 모양을 고른다. 표에 없는 역할 스킬은 종류(k)별 기본값.
+  // 2026-11-25: 7성 이상은 장수마다 다른 연출(같은 장수의 두 스킬이 아니면 한 연출을 둘이 쓰지 않는다). 장수별 표는 production/team/2026-11-25/skill-fx-map.md
   const SKILL_VX = {
-    '성동격서': 'feint', '음평 강행': 'thrust', '팔문금쇄 파쇄': 'rune', '공격 호령': 'rally', '허점 노출': 'curse', '이간계': 'miasma', '반간계': 'scheme',
-    '맹수 돌격': 'claw', '진영 사수': 'taunt', '단극 투척': 'throw', '엄호': 'barrier', '낙가 돌격': 'thrust', '연노 일제사': 'arrows', '전군 치료': 'heal',
-    '연환 화염': 'fireblast', '강동 호령': 'rally', '연환궁': 'arrows', '비연보': 'wind', '소화극 난무': 'blades', '비도 연속 투척': 'throw', '비도 난사': 'knives',
-    '유계': 'rune', '요절의 예지': 'guard', '유계 간파': 'curse', '팔문금쇄진': 'guard', '철기 반격': 'blades', '팔문금쇄 방진': 'barrier',
-    '구호탄랑': 'power', '이호경식': 'rune', '철벽 진형': 'barrier', '장판교 대갈': 'shock', '사모 돌격': 'thrust', '장판교 호통': 'roar',
-    '단기 돌파': 'thrust', '용담': 'guard', '서량 철기 돌격': 'charge', '금마초의 위용': 'power', '패왕 돌격': 'thrust', '칠백리 화공': 'fireline', '인내의 진': 'guard', '폭정의 압살': 'quake',
-    '미인계': 'hearts', '연무': 'petals', '의천검': 'sword', '호표기 돌격': 'charge', '사기 진작': 'wind', '낭고상': 'rune', '농성 대기': 'guard', '고평릉의 함정': 'curse',
-    '쌍고검': 'blades', '인덕의 전군 치료': 'heal', '오호 소집': 'rally', '청룡언월참': 'crescent', '수엄칠군': 'flood', '단도부회': 'guard',
-    '동남풍': 'windfire', '팔진도': 'rune', '칠성단': 'heal', '합비의 일격': 'thrust', '용인술': 'rally', '합비 사수': 'reflect',
-    '적벽 화공': 'fireline', '연환선 폭발': 'fireblast', '곡조 비기': 'power', '신궁 연사': 'arrows', '단기 포위 돌파': 'thrust', '신의의 맹세': 'power',
-    '황천 낙뢰': 'lightning', '천공 뇌진': 'thunderline', '태평 전군 치료': 'heal', '무쌍 난무': 'storm', '적토 돌진': 'thrust', '천하무쌍': 'power',
+    '성동격서': 'feint', '음평 강행': 'mountain', '팔문금쇄 파쇄': 'rune', '공격 호령': 'rally', '허점 노출': 'curse', '이간계': 'miasma', '반간계': 'scheme',
+    '맹수 돌격': 'claw', '진영 사수': 'taunt', '단극 투척': 'halberds', '엄호': 'bulwark', '낙가 돌격': 'thrust', '연노 일제사': 'repeater', '전군 치료': 'heal',
+    '연환 화염': 'fireblast', '강동 호령': 'tiger', '연환궁': 'arrows', '비연보': 'swallow', '소화극 난무': 'blades', '비도 연속 투척': 'throw', '비도 난사': 'knives',
+    '유계': 'ghostplan', '요절의 예지': 'mist', '유계 간파': 'expose', '팔문금쇄진': 'eightlock', '철기 반격': 'spearfan', '팔문금쇄 방진': 'barrier',
+    '구호탄랑': 'power', '이호경식': 'twotigers', '철벽 진형': 'imperial', '장판교 대갈': 'bellow', '사모 돌격': 'snakespear', '장판교 호통': 'roar',
+    '단기 돌파': 'comet', '용담': 'spearspin', '서량 철기 돌격': 'ironcav', '금마초의 위용': 'goldlion', '패왕 돌격': 'surge', '칠백리 화공': 'fireline', '인내의 진': 'firering', '폭정의 압살': 'quake',
+    '미인계': 'hearts', '연무': 'petals', '의천검': 'heavensword', '호표기 돌격': 'tigercav', '사기 진작': 'wind', '낭고상': 'wolfgaze', '농성 대기': 'shroud', '고평릉의 함정': 'snare',
+    '쌍고검': 'twinsword', '인덕의 전군 치료': 'virtue', '오호 소집': 'fivetigers', '청룡언월참': 'crescent', '수엄칠군': 'flood', '단도부회': 'lonesword',
+    '동남풍': 'windfire', '팔진도': 'bagua', '칠성단': 'sevenstar', '합비의 일격': 'royalstrike', '용인술': 'dispatch', '합비 사수': 'reflect',
+    '적벽 화공': 'fireship', '연환선 폭발': 'chainblast', '곡조 비기': 'melody', '신궁 연사': 'divinebow', '단기 포위 돌파': 'breakout', '신의의 맹세': 'oath',
+    '황천 낙뢰': 'lightning', '천공 뇌진': 'thunderline', '태평 전군 치료': 'talisman', '무쌍 난무': 'musang', '적토 돌진': 'redhare', '천하무쌍': 'peerless',
   };
   const SKILL_VX_K = { line: 'thrust', cone: 'blades', circle: 'burst', buff: 'power', shield: 'guard', heal: 'heal', rally: 'rally', taunt: 'taunt', cover: 'barrier', pshield: 'barrier', hasteAll: 'wind', roar: 'roar', delay: 'scheme', reflect: 'reflect', charm: 'hearts', weaken: 'curse' };
   units.forEach((d) => (d.sk || []).forEach((s) => { s.vx = SKILL_VX[s.n] || SKILL_VX_K[s.k]; }));

@@ -37,6 +37,7 @@
     shopLocked: ['쉬움 난이도를 클리어하면 상점이 열립니다', '「かんたん」をクリアするとショップが開きます', 'Clear Easy to open the Shop', '通关“简单”后开放商店'],
     shopLockShort: ['쉬움 클리어로 열림', 'かんたんクリアで開放', 'Clear Easy to open', '通关简单后开放'],
     unlockHint: ['잠긴 신화·불멸 장수는 조합할 수 없습니다(상자에서는 아이템이 나오니, 열면 바로 합성할 수 있습니다). 한 번 열면 이 계정에서 계속 나옵니다. 플레이로 모은 동전만으로도 모두 열 수 있습니다.', 'ロック中の神話・不滅の武将は合成できません（宝箱からアイテムは出るので、解放すればすぐ合成できます）。一度解放すると、このアカウントではずっと使えます。プレイで集めた銅銭だけでも全員解放できます。', 'Locked Myth/Immortal generals cannot be crafted (chests still drop their items, so unlock them to craft). Once unlocked they stay on this account. Everything can be unlocked with coins earned by playing.', '未解锁的神话·不灭武将无法合成（宝箱仍会掉落其道具，解锁后即可合成）。解锁后在本账号永久有效。只靠游戏获得的铜钱也能全部解锁。'],
+    shInfo: ['안내', '説明', 'Info', '说明'],
     unlocked: ['해금됨', '解放済み', 'Unlocked', '已解锁'], unlockBtn: ['해금', '解放', 'Unlock', '解锁'], tMyth: ['신화', '神話', 'Myth', '神话'], tImm: ['불멸', '不滅', 'Immortal', '不灭'],
     adBtn: ['광고 보고 동전 +{n}', '広告を見て銅銭+{n}', 'Watch ad: +{n} coins', '看广告 铜钱+{n}'], adLeft: ['오늘 남은 횟수 {n}', '今日の残り{n}回', '{n} left today', '今日剩余{n}次'],
     adCap: ['오늘은 더 볼 수 없습니다.', '今日はこれ以上見られません。', 'No more ads today.', '今天已达上限。'], adFail: ['광고를 보여 주지 못했습니다.', '広告を表示できませんでした。', 'Could not show the ad.', '无法显示广告。'],
@@ -396,25 +397,33 @@
   const legalLink = (page, label) => `<a href="${root.RTD_API || ''}/${page}?lang=${C.I.lang}" target="_blank" rel="noopener" style="color:inherit;display:inline-block;padding:10px 2px">${label}</a>`;
   // 설정 창의 구매 복원 줄(상점은 쉬움을 깨야 열리므로 설정에도 둔다). 앱이고 결제가 켜져 있을 때만 보이고, 로그인 전에는 버튼 대신 안내만
   const restoreRow = () => (iapReady() ? `<div class="setlist"><div class="h">${L('restore')}</div><div class="row"><div><small>${L('restoreHint')}</small></div>${C.ACC.me && C.ACC.token ? `<button type="button" class="toggle" data-iaprestore="1">${L('restore')}</button>` : `<small>${L('needLogin')}</small>`}</div></div>` : '');
+  // ---------- 상점 카드(2026-11-25 다듬기: 글 대신 그림·배지) ----------
+  // 카드 = 그림(주인공) + 이름 한 줄 + 아래 버튼 한 줄. 등급(신화·불멸)은 카드 틀 색, 상태는 배지(잠김 자물쇠·장착 ✓·부족 금액).
+  // 동전 가격 버튼 = 동사(구매·해금) + 동전 + 숫자. 셋을 한 줄 글(.sh-pr)로 묶어 기준선이 맞게 한다(정렬 점검 2026-11-25). 체험 버튼 옆(좁음)에서는 동사가 윗줄.
+  const coinTag = (n) => `<i class="ico coin" aria-hidden="true"></i><b>${(n || 0).toLocaleString()}</b>`;
+  const priceBtn = (attr, cost, verb, me) => `<button class="sh-buy${me.coins < cost ? ' short' : ''}" type="button" ${attr} ${me.coins < cost ? 'disabled' : ''} aria-label="${esc(verb)} ${cost}" title="${esc(verb)}"><span class="sh-pr"><span class="sh-vb">${esc(verb)}</span>${coinTag(cost)}</span></button>`;
+  // o: { cls, id(체험 반짝임용 data-card), art(그림 html), rk(등급·기본 표시), st('lock'|'on'), short(부족 금액), name, foot(버튼 html) }
+  const shCard = (o) => `<div class="sh-card ${o.cls || ''}"${o.id ? ` data-card="${o.id}"` : ''}><div class="sh-art">${o.art}${o.rk ? `<span class="sh-rk">${o.rk}</span>` : ''}${o.st === 'lock' ? '<i class="sh-st lock ico lock" aria-hidden="true"></i>' : o.st === 'on' ? '<i class="sh-st on" aria-hidden="true">✓</i>' : ''}${o.short ? `<span class="sh-short">${L('short', { n: o.short.toLocaleString() })}</span>` : ''}</div><span class="sh-nm">${o.name}</span><div class="sh-ft">${o.foot}</div></div>`;
+  // 장수 해금 카드 그림: 원화 축소본(gfx/ilt_*, 원본 il_*에서 잘라 줄임). 원화가 없는 장수는 SD 초상
+  const heroArt = (d) => { const v = (C.T.illusts || {})[d.id]; return v ? `<img class="il" alt="" loading="lazy" decoding="async" src="gfx/ilt_${d.id}.jpg?v=${v}">` : `<img class="sd" alt="" src="${Art.portrait(d)}">`; };
   function unlockHtml(me) {
     const U = UL(), N = root.RTD_NATIVE || {}, iap = iapReady(), owns = (id) => (me.owned || []).includes(U.key(id));
-    let h = `<div class="lp-note">${L('unlockHint')}</div>`, bar = '';
+    let h = '', bar = '';
     // 광고·결제 버튼은 앱에서만(웹 브라우저에서는 RTD_NATIVE.on이 false라 숨는다)
-    if (N.rewardOn && N.rewardOn()) bar += `<button class="btn go" type="button" data-adrw="1">${L((me.owned || []).includes(U.noAdsKey) ? 'adFree' : 'adBtn', { n: U.ad.coins })}${adLeft != null ? ' (' + L('adLeft', { n: adLeft }) + ')' : ''}</button>`;
-    if (iap && U.lockedIds().some((id) => unitOf(id).tier === 10 && !owns(id))) bar += `<button class="btn" type="button" data-iap="${U.iap.all10[0]}">${L('iapAll')} · ${L('iapBtn', { y: U.iap.all10[1].toLocaleString('en-US') })}</button>`;
-    if (iap) { const nk = U.noAdsKey, np = U.iap.noads; bar += (me.owned || []).includes(nk) ? `<span class="pr">${L('noAdsOn')}</span>` : `<button class="btn" type="button" data-iap="${np[0]}" title="${L('noAdsHint')}">${L('noAds')} · ${L('iapBtn', { y: np[1].toLocaleString('en-US') })}</button>`; }
-    if (iap) bar += `<button class="btn" type="button" data-iaprestore="1">${L('restore')}</button>`;
-    if (bar) h += `<div class="lp-unlbar">${bar}</div>`;
-    h += `<div class="lp-grid">${U.lockedIds().map((id) => {
-      const d = unitOf(id), own = owns(id), cost = U.coins[d.tier], ip = U.iap[d.tier];
-      const buy = own ? `<span class="pr">${L('unlocked')}</span>`
-        : `<button class="btn go" type="button" data-unl="${id}" ${me.coins < cost ? 'disabled' : ''}>${L('unlockBtn')} · <i class="ico coin" aria-hidden="true"></i>${cost}</button>${me.coins < cost ? `<span class="short">${L('short', { n: cost - me.coins })}</span>` : ''}` + (iap && ip ? `<button class="btn" type="button" data-iap="${ip[0] + id}">${L('iapBtn', { y: ip[1].toLocaleString('en-US') })}</button>` : '');
+    if (N.rewardOn && N.rewardOn()) bar += `<button class="sh-offer go" type="button" data-adrw="1">${L((me.owned || []).includes(U.noAdsKey) ? 'adFree' : 'adBtn', { n: U.ad.coins })}${adLeft != null ? ' <small>' + L('adLeft', { n: adLeft }) + '</small>' : ''}</button>`;
+    if (iap && U.lockedIds().some((id) => unitOf(id).tier === 10 && !owns(id))) bar += `<button class="sh-offer" type="button" data-iap="${U.iap.all10[0]}">${L('iapAll')} <b>¥${U.iap.all10[1].toLocaleString('en-US')}</b></button>`;
+    if (iap) { const nk = U.noAdsKey, np = U.iap.noads; bar += (me.owned || []).includes(nk) ? `<span class="sh-offer done">✓ ${L('noAdsOn')}</span>` : `<button class="sh-offer" type="button" data-iap="${np[0]}" title="${L('noAdsHint')}">${L('noAds')} <b>¥${np[1].toLocaleString('en-US')}</b></button>`; }
+    if (iap) bar += `<button class="sh-offer sub" type="button" data-iaprestore="1">${L('restore')}</button>`;
+    if (bar) h += `<div class="sh-offers">${bar}</div>`;
+    h += `<div class="sh-grid">${U.lockedIds().map((id) => {
+      const d = unitOf(id), own = owns(id), cost = U.coins[d.tier], ip = U.iap[d.tier], imm = d.tier === 10;
       // 체험(2026-11-25): 잠긴 카드마다. 무료·무제한, 확인 창 없음(잃는 것이 없다)
-      const tr = own ? '' : `<button class="btn trial" type="button" data-trial="${id}">${esc(C.t('trialBtn'))}</button>`;
-      return `<div class="lp-card ${own ? 'on' : 'lock'}" data-card="${id}"><img alt="" src="${Art.portrait(d)}"><span class="nm">${esc(d.name || id)}</span><span class="rk">${L(d.tier === 10 ? 'tImm' : 'tMyth')}</span>${buy}${tr}</div>`;
+      const foot = own ? `<span class="sh-done">✓ ${L('unlocked')}</span>`
+        : `<button class="sh-try" type="button" data-trial="${id}">${esc(C.t('trialBtn'))}</button>${priceBtn(`data-unl="${id}"`, cost, L('unlockBtn'), me)}` + (iap && ip ? `<button class="sh-yen" type="button" data-iap="${ip[0] + id}" aria-label="${L('iapBtn', { y: ip[1].toLocaleString('en-US') })}">¥${ip[1].toLocaleString('en-US')}</button>` : '');
+      return shCard({ cls: (imm ? 'r10' : 'r9') + (own ? ' own' : ' lock') + (iap && ip && !own ? ' iap' : ''), id, art: heroArt(d), rk: L(imm ? 'tImm' : 'tMyth'), st: own ? '' : 'lock', short: !own && me.coins < cost ? cost - me.coins : 0, name: esc(d.name || id), foot });
     }).join('')}</div>`;
     // 결제 버튼이 보일 때만: 특정상거래법 표시·이용약관
-    if (iap) h += `<div class="lp-note">${legalLink('tokushoho', L('tokusho'))} · ${legalLink('terms', C.t('terms'))}</div>`;
+    if (iap) h += `<div class="sh-legal">${legalLink('tokushoho', L('tokusho'))} · ${legalLink('terms', C.t('terms'))}</div>`;
     return h;
   }
 
@@ -520,7 +529,7 @@
   function closePanel() { panel = null; wizBack = false; $('lpanel').hidden = true; $('lhold').appendChild($('accbox')); if (C && C.clearAccNote) C.clearAccNote(); }
   // rseq = 창을 그릴 때마다 오르는 번호(서버 답을 기다리는 사이 다른 탭·창으로 바꿨으면 늦게 온 답을 버린다)
   // wizBack = 전투 시작 창의 '계정 열기'로 계정 창에 왔다(로그인하면 전투 시작 창을 온라인이 골라진 채로 다시 연다)
-  let rseq = 0, wizBack = false;
+  let rseq = 0, wizBack = false, shHint = false; // shHint = 상점 ⓘ 설명을 펼쳤다
   const loadingHtml = () => `<div class="lp-note lp-wait">${L('loading')}</div>`;
   const failHtml = () => `<div class="lp-note lp-fail">${L('loadFail')} <button class="btn" type="button" data-retry="1">${L('retry')}</button></div>`;
   const tabs = (list) => { if (!ptab || !list.some(([k]) => k === ptab)) ptab = list[0][0]; $('lptabs').innerHTML = list.map(([k, l]) => `<button type="button" class="${ptab === k ? 'on' : ''}" data-ptab="${k}">${l}</button>`).join(''); };
@@ -597,29 +606,32 @@
     }
     if (panel === 'shop') {
       tabs([['unlock', L('unlockTab')], ['icons', L('icons')], ['skins', L('skins')], ['maps', L('maps')]].concat(GEMS_ON ? [['gems', L('gems')]] : []));
-      if (!me) { body.innerHTML = `<div class="lp-note">${L('needLogin')} <button class="btn" type="button" data-lp="account">${L('openAcc')}</button></div>`; return; }
+      if (!me) { body.innerHTML = `<div class="sh-empty"><img alt="" src="gfx/ic_shop.png"><p>${L('needLogin')}</p><button class="btn go" type="button" data-lp="account">${L('openAcc')}</button></div>`; return; }
+      // 탭 줄 오른쪽 = 재화 바(창 안에서 스크롤해도 늘 보인다) + ⓘ(동전 얻는 법·해금 설명은 눌러야 펼친다)
+      $('lptabs').insertAdjacentHTML('beforeend', `<div class="sh-wallet"><span class="sh-coins" role="status" aria-label="${L('balance', { n: (me.coins || 0).toLocaleString() })}">${coinTag(me.coins)}</span><button class="sh-ib${shHint ? ' on' : ''}" type="button" data-shinfo="1" aria-expanded="${shHint}" aria-label="${L('shInfo')}">i</button></div>`);
       const has = (id) => SHOP.free(id) || me.owned.includes(id);
-      const btn = (id, cost, on, kind, unit) => has(id)
-        ? `<button class="btn" type="button" data-equip="${kind}" data-id="${id}" ${unit ? `data-unit="${unit}"` : ''} ${on && kind !== 'skin' ? 'disabled' : ''}>${on ? L(kind === 'skin' ? 'unequip' : 'equipped') : L('equip')}</button>`
-        : `<button class="btn go" type="button" data-buy="${id}" ${me.coins < cost ? 'disabled' : ''}>${L('buy')} · <i class="ico coin" aria-hidden="true"></i>${cost}</button>${me.coins < cost ? `<span class="short">${L('short', { n: cost - me.coins })}</span>` : ''}`;
-      // 창 안에서도 잔액이 보이게(위 줄의 잔액은 창에 가려진다)
-      let h = `<div class="lp-bal"><i class="ico coin" aria-hidden="true"></i>${L('balance', { n: (me.coins || 0).toLocaleString() })}</div><div class="lp-note">${L('coinHint')}</div>`;
+      // 아래 버튼: 가진 것은 장착(장착 중이면 ✓ 표시, 외형은 해제), 없는 것은 동전 가격 버튼
+      const foot = (id, cost, on, kind, unit) => (has(id)
+        ? `<button class="sh-eq${on ? ' on' : ''}" type="button" data-equip="${kind}" data-id="${id}" ${unit ? `data-unit="${unit}"` : ''} ${on && kind !== 'skin' ? 'disabled' : ''}>${on ? (kind === 'skin' ? L('unequip') : '✓ ' + L('equipped')) : L('equip')}</button>`
+        : priceBtn(`data-buy="${id}"`, cost, L('buy'), me));
+      const card = (id, cost, on, kind, unit, art, name, cls) => shCard({ cls: (cls || '') + (on ? ' on' : has(id) ? ' own' : ''), art, rk: SHOP.free(id) ? L('free') : '', st: on ? 'on' : '', short: !has(id) && me.coins < cost ? cost - me.coins : 0, name, foot: foot(id, cost, on, kind, unit) });
+      let h = `<div class="sh-hint" ${shHint ? '' : 'hidden'}>${L('coinHint')}${ptab === 'unlock' ? '<br>' + L('unlockHint') : ''}</div>`;
       if (ptab === 'unlock') {
         h += unlockHtml(me);
       } else if (ptab === 'icons') {
-        h += `<div class="lp-grid">${SHOP.ICON_FREE.map((u) => [u, 0]).concat(SHOP.ICON_SHOP).map(([u, cost]) => `<div class="lp-card ${me.icon === u ? 'on' : ''}"><img alt="" src="${iconSrc(u)}"><span class="nm">${esc((C.T.units.find((d) => d.id === u) || {}).name || u)}</span>${cost ? '' : `<span class="pr">${L('free')}</span>`}${btn('icon_' + u, cost, me.icon === u, 'icon')}</div>`).join('')}</div>`;
+        h += `<div class="sh-grid">${SHOP.ICON_FREE.map((u) => [u, 0]).concat(SHOP.ICON_SHOP).map(([u, cost]) => card('icon_' + u, cost, me.icon === u, 'icon', null, `<img class="sd" alt="" src="${iconSrc(u)}">`, esc((C.T.units.find((d) => d.id === u) || {}).name || u))).join('')}</div>`;
       } else if (ptab === 'skins') {
-        h += `<div class="lp-grid">${Object.keys(SHOP.UNIT_SKINS).map((k) => {
-          const sk = SHOP.UNIT_SKINS[k], d = C.T.units.find((u) => u.id === sk.unit), on = me.skins && me.skins[sk.unit] === k;
-          return `<div class="lp-card ${on ? 'on' : ''}"><img alt="" data-skinpv="${k}" src="${iconSrc(d.id)}"><span class="nm">${esc(nm(sk.name))}</span>${btn('skin_' + k, sk.price, on, 'skin', sk.unit)}</div>`;
+        h += `<div class="sh-grid">${Object.keys(SHOP.UNIT_SKINS).map((k) => {
+          const sk = SHOP.UNIT_SKINS[k], d = C.T.units.find((u) => u.id === sk.unit), on = !!(me.skins && me.skins[sk.unit] === k);
+          return card('skin_' + k, sk.price, on, 'skin', sk.unit, `<img class="sd" alt="" data-skinpv="${k}" src="${iconSrc(d.id)}">`, esc(nm(sk.name)));
         }).join('')}</div>`;
       } else if (ptab === 'maps') {
-        h += `<div class="lp-grid">${Object.keys(SHOP.MAP_SKINS).map((k) => {
+        h += `<div class="sh-grid wide">${Object.keys(SHOP.MAP_SKINS).map((k) => {
           const sk = SHOP.MAP_SKINS[k], on = (me.mapSkin || 'spring') === k;
-          return `<div class="lp-card ${on ? 'on' : ''}"><canvas class="lp-sw" data-mappv="${k}" width="144" height="96"></canvas><span class="nm">${esc(nm(sk.name))}</span>${sk.price ? '' : `<span class="pr">${L('free')}</span>`}${btn('map_' + k, sk.price, on, 'map')}</div>`;
+          return card('map_' + k, sk.price, on, 'map', null, `<canvas class="mp" data-mappv="${k}" width="240" height="160"></canvas>`, esc(nm(sk.name)), 'map');
         }).join('')}</div>`;
       } else if (GEMS_ON) {
-        h = `<div class="lp-note">${L('gemHint')}</div><div class="lp-grid">${SHOP.GEM_PACKS.map(([id, n, yen]) => `<div class="lp-card"><span style="font:900 26px 'Noto Serif KR',serif;color:#ff8a9a">寶</span><span class="nm">${n}</span><span class="pr">¥${yen.toLocaleString('en-US')}</span><button class="btn" type="button" disabled>${L('soon')}</button></div>`).join('')}</div>`;
+        h = `<div class="sh-hint">${L('gemHint')}</div><div class="sh-grid">${SHOP.GEM_PACKS.map(([id, n, yen]) => shCard({ cls: 'gem', art: `<span class="sh-gem">寶</span>`, rk: `¥${yen.toLocaleString('en-US')}`, name: String(n), foot: `<button class="sh-eq" type="button" disabled>${L('soon')}</button>` })).join('')}</div>`;
       }
       body.innerHTML = h;
       // 미리보기: 장수 외형은 색을 바꾼 초상, 지도는 바뀐 바닥 색
@@ -761,8 +773,8 @@
   // 신고·차단은 바로 실행하지 않는다. 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 실행한다.
   function armed(b) {
     if (b.dataset.armed) return true;
-    const label = b.textContent; b.dataset.armed = '1'; b.classList.add('arm'); b.textContent = C.t('confirmAgain');
-    setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.classList.remove('arm'); b.textContent = label; } }, 3000);
+    const label = b.innerHTML; b.dataset.armed = '1'; b.classList.add('arm'); b.textContent = C.t('confirmAgain'); // 되돌릴 때 버튼 안 그림(동전)까지 살린다
+    setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.classList.remove('arm'); b.innerHTML = label; } }, 3000);
     return false;
   }
   function chatLine(html) { const log = $('chatlog'); if (!log) return; log.insertAdjacentHTML('beforeend', html); while (log.children.length > 80) log.firstChild.remove(); log.scrollTop = log.scrollHeight; }
@@ -870,6 +882,7 @@
       if (e.target.id === 'lbleave') { back(); return; }
       if (e.target.id === 'mretry') { startMatch(); return; }
       const pt = e.target.closest('[data-ptab]'); if (pt) { ptab = pt.dataset.ptab; renderPanel(); return; }
+      const si = e.target.closest('[data-shinfo]'); if (si) { shHint = !shHint; si.classList.toggle('on', shHint); si.setAttribute('aria-expanded', String(shHint)); const hn = $('lpbody').querySelector('.sh-hint'); if (hn) hn.hidden = !shHint; return; }
       const rm = e.target.closest('[data-rmode]'); if (rm) { rmode = rm.dataset.rmode; renderPanel(); return; }
       const rd = e.target.closest('[data-rdiff]'); if (rd) { rdiff = rd.dataset.rdiff; rdiffSet = true; renderPanel(); return; }
       const ri = e.target.closest('[data-rimm]'); if (ri) { rimm = ri.dataset.rimm; renderPanel(); return; }

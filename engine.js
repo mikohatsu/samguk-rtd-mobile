@@ -1258,6 +1258,14 @@
       const dmg = this.champAtk(c) / this.attackTime(c.def) * s.mult * (1 + this.pv(c.def, 'skillPct') + this.synGet(c, 'skillAmp') + Math.max(0, cdrX - 0.6)) * (s.mult > 0 ? 1 + this.synTakeNext(c) : 1);
       const hitBoss = (extra) => { if (f.mech.hide) return; this.damageBoss(dmg, c, extra); this.log('dmgtext', { x: b.x, y: b.y - 90, v: Math.round(dmg), big: true }); this.synFire(c, 'skillHit', { s, i }); this.synFire(c, 'anyHit', {}); };
       let spx = null, spy = null; // 원형 스킬이 떨어진 자리(수경 법진·메아리)
+      // 스킬 소리(audio.js SFX.sk): 연출 이름(vx)별 시전음 + 명중음. 직선·부채꼴은 보스까지 거리 비율(fr)로 연출이 보스에 닿는 순간에 명중음을 맞춘다.
+      // 원형은 시전음만 내고 터지는 소리는 stepHazards가 낸다. 피해 숫자보다 먼저 내야 audio.js가 같은 순간의 일반 타격음('hit')을 빼 준다.
+      // 판정은 아래 피해 계산과 같은 식을 읽기만 한다(대시로 자리가 바뀌기 전).
+      {
+        const sr = s.k === 'line' ? s.len : s.k === 'cone' ? s.r : 0;
+        const sh = !f.mech.hide && (s.k === 'line' ? inLine(b.x, b.y, c.x, c.y, a, s.len, s.w, 60) : s.k === 'cone' ? inCone(b.x, b.y, c.x, c.y, a, s.r, s.arc, 60) : false);
+        this.log('sfx', { s: 'sk', gap: 30, vx: s.vx, k: s.k, tier: c.def.tier, fr: sr ? Math.min(1, dist(c.x, c.y, b.x, b.y) / sr) : 0, hit: sh, dl: s.delay || 0 });
+      }
       if (s.k === 'line') {
         this.fx.push({ k: 'beam', x: c.x, y: c.y, a, len: s.len, w: s.w, t: 0, life: 0.5, c: s.fx, vx: s.vx }); this.log('shake', { v: 0.6 });
         if (inLine(b.x, b.y, c.x, c.y, a, s.len, s.w, 60)) hitBoss();
@@ -1320,7 +1328,6 @@
       }
       this.synFire(c, 'skill', { s, i, a, px: spx, py: spy });
       this.log('skill', { name: s.n, c: s.fx });
-      this.log('sfx', { s: 'skill' });
       return true;
     }
     healLeft() {
@@ -1581,6 +1588,8 @@
           h.fired = true;
           if (!h.own) this.log('sfx', { s: 'boom', gap: 110 });
           if (h.own) {
+            // 원형 스킬이 터지는 소리(audio.js SFX.skb). 예전에는 내 장판이 터질 때 소리가 없었다(빗나가면 무음). 피해 숫자보다 먼저 낸다.
+            this.log('sfx', { s: 'skb', gap: 30, vx: h.vx, tier: h.champ ? h.champ.def.tier : 7, hit: !(f.mech && f.mech.hide) && dist(b.x, b.y, h.x, h.y) <= h.r + 60 });
             this.fx.push({ k: 'blast', x: h.x, y: h.y, r: h.r, t: 0, life: 0.6, c: h.c, vx: h.vx }); this.log('shake', { v: 0.8 });
             if (dist(b.x, b.y, h.x, h.y) <= h.r + 60) { this.damageBoss(h.dmg, h.champ, { stun: h.stun }); this.log('dmgtext', { x: b.x, y: b.y - 90, v: Math.round(h.dmg), big: true }); if (h.champ) { this.synFire(h.champ, 'skillHit', {}); this.synFire(h.champ, 'anyHit', {}); } }
           } else { f.champs.forEach((c) => { if (!c.dead && this.hazardHits(h, c.x, c.y, 16)) this.hurtChamp(c, h.dmg); }); this.synHazardFired(h); }

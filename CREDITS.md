@@ -64,12 +64,13 @@
 - 서버 쪽 라이브러리(server/node_modules)는 배포물에 들어가지 않으므로 표기 대상이 아니다.
 
 ## 그림 (장수·보스·일러스트·배경·UI)
-- gfx/의 장수·보스 SD 그림, il_*, tex_*, ui_*, prop_*, rank_*, fx_*, vx_*, 로비 배경은 이미지 생성 도구로 만든 것(웹판 세션에서 제작). gfx/rig_*는 그 그림을 잘라 만든 것.
+- gfx/의 장수·보스 SD 그림, il_*, tex_*, ui_*, prop_*, rank_*, fx_*, vx_*, 로비 배경은 이미지 생성 도구로 만든 것(웹판 세션에서 제작). gfx/rig_*는 그 그림을 잘라 만든 것. gfx/ilt_*는 il_*의 위쪽을 잘라 240×320으로 줄인 것(상점 장수 해금 카드, 2026-11-25).
 - gfx/hb_*(보스전 고해상도 보스 그림)와 gfx/rig_b_*는 위 그림을 Real-ESRGAN(BSD-3-Clause, realesrgan-x4plus-anime)으로 업스케일한 것(2026-11-25, art_src/build-boss-hires.py). 도구는 앱에 넣지 않는다. 캐릭터 그림의 흰 테두리 제거는 art_src/build-defringe.py(가공만, 출처 그대로).
 - 도구: **Canva AI**(Canva 커넥터의 그림 생성, 배경 제거도 Canva). 웹판 세션 기록 기준 약 268회 생성, 작업 ID는 웹판 gfx/media.json·map.txt에 있다. ui_*, rank_*, 로비 배경은 모바일 세션에서 같은 방식으로 만들었다.
 - 요금제: Canva Pro(유료, 사용자 확인 2026-11-11).
 - gfx/madae.png(마대, 2026-11-17): Canva AI generate-image, 기존 gfx/macho.png를 참고 그림으로 올려 그림체를 맞추고 Canva 배경 제거. Canva 미디어 ID MAHbLX9tjGA(원본)·MAHbLVsnPuA(배경 제거). 원본 art_src/madae_canva.png.
 - gfx/masok.png·masok_s.png·hb_masok*.png·rig_b_masok_*.png(체험 보스 마속): Canva AI 생성(2026-11-25), 마속. 기존 gfx/jegal.png를 4배 키운 그림을 화풍 참고로 올려 생성. 원본 art_src/masok_f_canva_trim.png(앞, 투명 배경)·art_src/masok_s_canva_cut.png(옆, 흰 배경을 가장자리 채우기로 지움). 게임용은 art_src/build-masok.py로 자르고 줄이기만 했다(새로 그리지 않음).
+- gfx/vs_jian·vs_guandao·vs_fangtian·vs_shemao(스킬 연출 무기: 의천검·청룡언월도·방천화극·장팔사모), vs_seal·vs_lamp·vs_chain·vs_petal(옥새·칠성 등불·사슬·꽃잎): Canva AI generate-image(2026-11-25, 글만으로 생성, 미디어 ID MAHb69r9LK8·MAHb6zP0NRY), 흰 배경은 코드로 제거하고 잘라 크기 맞춤. 원본 art_src/canva_weapons42.png·canva_props42.png.
 - 상업 이용: 가능. Canva AI Product Terms(https://www.canva.com/policies/ai-product-terms/)에 따르면 생성물은 사용자 소유이고 판매를 포함한 상업적 이용이 허용된다. 표기 의무 없음.
 - 한계: AI 생성물은 나라에 따라 저작권 보호를 못 받을 수 있고(남이 베껴도 막기 어려움), 독점권도 보장되지 않는다. 알아볼 수 있는 실존 인물·타사 캐릭터·상표가 들어가면 Canva가 권리를 보장해 주지 않는다.
 

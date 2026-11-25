@@ -195,7 +195,7 @@
     // 보스 처치 보상 알림(grant 'toast')은 bossWin보다 먼저 쌓이므로, 같은 묶음에 bossWin이 있으면 먼저 알림을 붙잡는다(처치 연출 위로 뜨던 것)
     if (g.events.some((e) => e.type === 'bossWin')) S.toastHoldUntil = Math.max(S.toastHoldUntil || 0, performance.now() + 1300 + 5500);
     for (const e of g.events) {
-      if (e.type === 'sfx') { Snd.play(e.s, e.gap); continue; }
+      if (e.type === 'sfx') { Snd.play(e.s, e.gap, e); continue; } // 스킬 소리(sk·skb)는 이벤트의 vx·등급·명중 여부를 쓴다
       if (e.type === 'toast') toast(e.text, e.tone);
       else if (e.type === 'pop') { queuePop(e.def, e.who || (net ? net.name : null)); if (e.def.tier >= 9 && g.phase !== 'boss') S.freeze = (S.freeze || 0) + POP_DUR[e.def.tier]; if (net && !e.remote) net.send('pop', { id: e.def.id, name: net.name }); }
       else if (e.type === 'round') { Snd.play('round'); saveGame(); }

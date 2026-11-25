@@ -1,5 +1,7 @@
   // 스킬 이펙트를 쓴 장수의 등급(이펙트 모양 vx와 색이 같은 스킬을 가진 결투장 장수 중 가장 높은 등급). 처음 볼 때 한 번 찾고,
-  // 그때 신화·불멸이면 흔들림과 묵직한 소리를 더한다. 게임 객체에는 아무것도 붙이지 않는다.
+  // 그때 신화·불멸이면 흔들림을 더한다. 게임 객체에는 아무것도 붙이지 않는다.
+  // 묵직한 소리는 여기서 내지 않는다(2026-11-25): 엔진의 스킬 소리 이벤트(sk·skb)가 등급 무게를 명중 순간에 싣는다.
+  // 예전 skillHi/skillMax는 연출을 처음 그릴 때 울려 원형 스킬은 시점이 어긋났고, 치료·방어 같은 기운 스킬에도 폭발 쿵이 났다.
   const SKT = new WeakMap();
   function skillTier(f) {
     let v = SKT.get(f);
@@ -10,7 +12,6 @@
     SKT.set(f, v);
     if (v >= 9 && f.t < 0.15) {
       S.shake = Math.max(S.shake || 0, v >= 10 ? 0.9 : 0.6);
-      Snd.play(v >= 10 ? 'skillMax' : 'skillHi', 120);
       if (v >= 10) S.skFlash = { t: 0, c: f.c };
     }
     return v;
@@ -29,14 +30,22 @@
   // 게임 상태(g.fx)는 고치지 않고, 연출 이름을 붙인 사본을 이펙트마다 한 번 만들어 둔다
   const VXC = new WeakMap();
   function withVx(f, vx) { let o = VXC.get(f); if (!o) { o = Object.create(f); o.vx = vx; VXC.set(f, o); } return o; }
+  // 불멸 강화류 연출은 엔진 수명보다 0.2초 길게 그린다(skillfx extra, 2026-11-25 검토 4-1). 엔진이 g.fx에서 지운 뒤에도
+  // 화면 쪽 사본으로 남은 몫을 마저 그린다(게임 상태는 고치지 않는다).
+  const LING = new Map(); let fxFr = 0;
   function drawFx(c) {
     if (window.RTD_SKFX) window.RTD_SKFX.setQuality(Q.level === 'low' ? 0.5 : Q.level === 'mid' ? 0.75 : 1);
+    fxFr++;
     for (const f of g.fx) {
       if (f.t < 0) continue;
-      const p = f.t / f.life;
+      let p = f.t / f.life;
       // 스킬 연출(skillfx.js, 그림·프레임 애니메이션). 연출 이름(vx)이 없는 직선·부채꼴·폭발·기운도 기본 연출로 그린다.
       const SK = window.RTD_SKFX, dvx = f.vx || defVx(f);
-      if (dvx && SK && SK.fx(c, f.vx ? f : withVx(f, dvx), p, f.vx ? skillTier(f) : 0)) { c.globalAlpha = 1; continue; }
+      if (dvx && SK) {
+        const ff = f.vx ? f : withVx(f, dvx), tr = f.vx ? skillTier(f) : 0, ex = SK.extra ? SK.extra(f, tr) : 0;
+        if (ex) { p = f.t / (f.life + ex); LING.set(f, { f: ff, t: f.t, life: f.life + ex, tier: tr, fr: fxFr }); }
+        if (SK.fx(c, ff, p, tr)) { c.globalAlpha = 1; continue; }
+      }
       if (f.k === 'shot') { c.globalAlpha = Math.min(1, (1 - p) * 3); Art.shot(c, f); c.globalAlpha = 1; continue; }
       c.globalAlpha = 1 - p;
       // 작은 충격파: 프레임 애니메이션 고리
@@ -55,6 +64,14 @@
       else if (f.k === 'blast') { if (!Art.fxAnim(c, 'boom', p, f.x, f.y - f.r * 0.2, f.r * 3.4, f.r * 3.4, 0, 1)) Art.fxImg(c, 'boom', f.x, f.y, f.r * 2.6 * (0.7 + p * 0.5), p, (1 - p) * 1.4); Art.fxAnim(c, 'wave', p, f.x, f.y, f.r * 3.2, f.r * 3.2, 0, 1, null, { col: f.c, sy: 0.6 }); }
       else if (f.k === 'aura') Art.fxImg(c, 'magic', f.x, f.y + 20, f.r * 2.4, p * 2, (1 - p) * 1.2, 0.45);
       // (그림을 아직 못 받았을 때 도형으로 대신 그리던 것은 뺐다: 그림은 첫 화면에서 이미 받는다)
+    }
+    // 엔진이 지운 불멸 강화류 연출의 남은 0.2초
+    for (const [k, o] of LING) {
+      if (o.fr === fxFr) continue;
+      o.t += S.fdt || 0;
+      // 시간이 멈춘 동안(일시정지 등) 끝없이 남지 않게 40프레임이 지나면 버린다
+      if (o.t >= o.life || fxFr - o.fr > 40 || !window.RTD_SKFX) { LING.delete(k); continue; }
+      window.RTD_SKFX.fx(c, o.f, o.t / o.life, o.tier);
     }
     c.globalAlpha = 1;
     drawSkFlash(c);

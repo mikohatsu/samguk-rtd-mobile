@@ -20,7 +20,8 @@ GROUPS = {  # 이름: (파일들, 최대 길이 초)
   'bow':    ([B + 'swing.wav', B + 'swing2.wav', B + 'swing3.wav'], 0.30),
   'shield': (['rpg/RPG Sound Pack/inventory/wood-small.wav', 'kenney/OGG/chop.ogg'], 0.30),
   'magic':  ([B + 'magic1.wav'], 0.60),
-  'skill':  ([B + 'spell.wav'], 1.20),
+  # 2026-11-25: 스킬 소리가 연출별로 나뉘어(audio.js SFX.sk) 이 녹음은 원형 스킬 시전의 앞 0.3초로만 쓴다 → 1.20초에서 0.40초로(약 47KB 줄어듦)
+  'skill':  ([B + 'spell.wav'], 0.40),
   'clash':  ([M + 'melee sound.wav', M + 'animal melee sound.wav'], 0.35),
 }
 def load(f, cap):
