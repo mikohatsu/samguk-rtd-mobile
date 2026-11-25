@@ -272,7 +272,8 @@
     const o = BGC[id] || (BGC[id] = { cv: null, key: '', last: '' });
     // 기준은 카메라(S.scale·S.ox·S.oy). 화면 흔들림·타격 확대는 그 위에 얹히는 작은 변환이라, 둘레에 여백을 둔 저장본을 그대로 쓴다.
     const key = S.scale + '|' + S.ox + '|' + S.oy + '|' + view.width + '|' + view.height + '|' + ver + '|' + src.width;
-    if (c !== ctx || key !== o.last) { o.last = key; c.drawImage(src, R.x, R.y, R.w, R.h); return; }
+    // WebGL 층(ctx.isGL)은 큰 원본도 텍스처로 한 번 올려 두면 통째로 그려도 가볍다. 저장본을 쓰면 카메라가 움직일 때마다 CPU로 다시 그려 올려야 해 오히려 느리다
+    if (c !== ctx || ctx.isGL || key !== o.last) { o.last = key; c.drawImage(src, R.x, R.y, R.w, R.h); return; }
     const mx = Math.ceil(view.width * 0.06), my = Math.ceil(view.height * 0.06), cw = view.width + mx * 2, ch = view.height + my * 2;
     if (o.key !== key) {
       if (!o.cv) o.cv = document.createElement('canvas');

@@ -7,7 +7,22 @@
   // 일본어는 큰 수를 万·億 단위로
   const fmtJa = (n) => (n >= 1e8 ? (n / 1e8).toFixed(1) + '億' : n >= 1e6 ? Math.round(n / 1e4) + '万' : (n / 1e4).toFixed(1) + '万');
   const fmt = (n) => (n >= 1e4 && window.RTD_I18N && window.RTD_I18N.lang === 'ja' ? fmtJa(n) : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'K' : Math.round(n).toLocaleString());
-  const view = $('view'), ctx = view.getContext('2d');
+  // 안드로이드 앱은 #view만 WebGL 그리기 층(glctx.js, 2D와 같은 모양의 객체)으로 그린다: WebView의 Canvas 2D가 CPU로 돌아 보스전이 12~14fps까지 떨어졌다.
+  // PC·iOS는 2D 그대로. 시험용 localStorage 'rtd-gl'('1' 켬, '0' 끔). WebGL을 못 만들면 2D.
+  const GLX = window.RTD_GLCTX, view = $('view');
+  // 시험용(실기기 측정, 설정 화면 없음): localStorage 'rtd-cv' — 'keep': fit()이 같은 크기를 #view에 다시 넣지 않는다(다시 넣으면 캔버스 바탕을 새로 잡는다).
+  // 'swap': 2D 그리기 캔버스를 #view 위에 따로 겹치고(입력은 #view가 그대로 받는다), 크기가 바뀔 때마다 새 캔버스로 갈아 끼운다. 그 밖(기본)은 예전 그대로. WebGL 층이면 쓰지 않는다.
+  const CV = (() => { try { return localStorage.getItem('rtd-cv') || ''; } catch (e) { return ''; } })();
+  let dcv = null, cvSwaps = 0;
+  function drawCanvas(w, h) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    cv.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;';
+    if (dcv) dcv.replaceWith(cv); else view.parentNode.insertBefore(cv, view.nextSibling);
+    dcv = cv; cvSwaps++;
+    return cv;
+  }
+  let ctx = (GLX && GLX.want() && GLX.create(view)) || null;
+  if (!ctx) ctx = CV === 'swap' ? drawCanvas(view.width, view.height).getContext('2d') : view.getContext('2d');
   // ---- 화질: high(PC 기본) / mid(폰 기본) / low, 30fps 제한. 이 기기에만 저장한다. ----
   const Q = (() => {
     let s = {};
@@ -23,7 +38,9 @@
   const BLUR = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur');
   // 빛 번짐(shadowBlur)은 iOS에서 특히 무겁다: 보통은 상한을 두고, 낮음은 끈다
   function applyQuality() {
-    if (Q.level === 'high' && !Q.coarse) delete ctx.shadowBlur;
+    // WebGL 층은 번짐 상한을 자기 속성(blurCap)으로 받는다(아래 2D 쪽과 같은 값)
+    if (ctx.isGL) ctx.blurCap = Q.level === 'high' && !Q.coarse ? Infinity : Q.level === 'mid' && !Q.coarse ? 6 : 0;
+    else if (Q.level === 'high' && !Q.coarse) delete ctx.shadowBlur;
     else {
       // 휴대폰·태블릿(터치 기기)은 화질과 상관없이 끈다(높음 포함): 번짐 하나하나가 흐림 연산이라 안드로이드에서 프레임이 크게 떨어진다
       const cap = Q.level === 'mid' && !Q.coarse ? 6 : 0;
@@ -337,7 +354,8 @@
     const o = BGC[id] || (BGC[id] = { cv: null, key: '', last: '' });
     // 기준은 카메라(S.scale·S.ox·S.oy). 화면 흔들림·타격 확대는 그 위에 얹히는 작은 변환이라, 둘레에 여백을 둔 저장본을 그대로 쓴다.
     const key = S.scale + '|' + S.ox + '|' + S.oy + '|' + view.width + '|' + view.height + '|' + ver + '|' + src.width;
-    if (c !== ctx || key !== o.last) { o.last = key; c.drawImage(src, R.x, R.y, R.w, R.h); return; }
+    // WebGL 층(ctx.isGL)은 큰 원본도 텍스처로 한 번 올려 두면 통째로 그려도 가볍다. 저장본을 쓰면 카메라가 움직일 때마다 CPU로 다시 그려 올려야 해 오히려 느리다
+    if (c !== ctx || ctx.isGL || key !== o.last) { o.last = key; c.drawImage(src, R.x, R.y, R.w, R.h); return; }
     const mx = Math.ceil(view.width * 0.06), my = Math.ceil(view.height * 0.06), cw = view.width + mx * 2, ch = view.height + my * 2;
     if (o.key !== key) {
       if (!o.cv) o.cv = document.createElement('canvas');
@@ -3307,7 +3325,10 @@
   function fit() {
     const st = $('stage'), sw = st.clientWidth, sh = st.clientHeight, dpr = Math.min((window.devicePixelRatio || 1) * zoom, qDpr(), Math.sqrt(qPix() / Math.max(1, sw * sh))) * Q.rs;
     view.style.width = sw + 'px'; view.style.height = sh + 'px';
-    view.width = Math.round(sw * dpr); view.height = Math.round(sh * dpr);
+    const nw = Math.round(sw * dpr), nh = Math.round(sh * dpr);
+    // 시험용 'rtd-cv'(01-setup): keep이면 같은 크기는 다시 넣지 않는다, swap이면 크기가 바뀔 때만 그리기 캔버스를 새로 만든다
+    if (CV !== 'keep' || view.width !== nw || view.height !== nh) { view.width = nw; view.height = nh; }
+    if (dcv && (dcv.width !== nw || dcv.height !== nh)) { ctx = drawCanvas(nw, nh).getContext('2d'); applyQuality(); }
     const first = !S.base;
     S.base = { sw, sh, dpr, s0: Math.min(sw / W, sh / H) };
     if (first) resetCam(); else applyCam();
@@ -5494,7 +5515,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 팁(명사·시너지)은 모든 판에서 보고, 단계 안내는 혼자 하는 오프라인 새 판에서만(tutorial)
     const tutOn = !!(window.RTD_TUT && window.RTD_TUT.maybeStart({ get g() { return g; }, S, T, t: I.t, dirty, tutorial: S.saveOn && !opt.snap, onSkip: () => { if (autoPref) autoOnAll(); dirty(); } }));
     if (!opt.snap && !tutOn && autoPref && !S.trial) autoOnAll();
-    window.__rtd = { g, S, begin, net, bots, xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); }, tick, render, dom: () => { renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
+    window.__rtd = { g, S, begin, net, bots, cv: () => ({ mode: CV, swaps: cvSwaps, gl: !!ctx.isGL, w: view.width, h: view.height }), xp: playXp, frame: (now) => { tick(now, 0.1); render(now); renderPane(); renderInfo(); renderTimers(); renderOverlay(); }, tick, render, dom: () => { renderPane(); renderInfo(); renderTimers(); renderOverlay(); } };
     view.focus({ preventScroll: true });
     last = performance.now();
     // 악몽 +N: 이번 판 규칙을 도장 찍듯 보여 주는 동안 멈춘다(이어하기는 이미 본 판이라 생략)

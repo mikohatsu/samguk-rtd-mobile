@@ -184,7 +184,10 @@
   function fit() {
     const st = $('stage'), sw = st.clientWidth, sh = st.clientHeight, dpr = Math.min((window.devicePixelRatio || 1) * zoom, qDpr(), Math.sqrt(qPix() / Math.max(1, sw * sh))) * Q.rs;
     view.style.width = sw + 'px'; view.style.height = sh + 'px';
-    view.width = Math.round(sw * dpr); view.height = Math.round(sh * dpr);
+    const nw = Math.round(sw * dpr), nh = Math.round(sh * dpr);
+    // 시험용 'rtd-cv'(01-setup): keep이면 같은 크기는 다시 넣지 않는다, swap이면 크기가 바뀔 때만 그리기 캔버스를 새로 만든다
+    if (CV !== 'keep' || view.width !== nw || view.height !== nh) { view.width = nw; view.height = nh; }
+    if (dcv && (dcv.width !== nw || dcv.height !== nh)) { ctx = drawCanvas(nw, nh).getContext('2d'); applyQuality(); }
     const first = !S.base;
     S.base = { sw, sh, dpr, s0: Math.min(sw / W, sh / H) };
     if (first) resetCam(); else applyCam();
