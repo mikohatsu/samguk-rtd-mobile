@@ -44,17 +44,18 @@
     const path = S.online ? '/api/result' : '/api/history';
     const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: net ? 'room' : bots.length ? 'ai' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.resultRound, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {}, ach: Object.keys((g.me && g.me.done) || {}).filter((k) => g.me.done[k]) };
     const uid = ACC.me && ACC.me.id, r = await api(path, body);
+    S.repDone = true; // 결과창(14-endstats-xp esStep)이 답을 기다리다 경험치 막대를 채운다
     if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend(path, body, uid);
     if (r.me) {
-      ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0;
+      ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0; S.xpFrom = (r.me.xp || 0) - (r.gained || 0);
       // 서버가 준 관직 승급·업적 첫 달성 보상: 결과창 '다음 목표' 칸에 알린다(14-endstats-xp.js goalBox)
       S.rwRank = Array.isArray(r.rankUp) && r.rankUp.length ? r.rankUp : null; S.rwAch = Array.isArray(r.ach) && r.ach.length ? r.ach : null;
-      // 경험치 연출도 패배 연출(S.endHoldUntil)이 끝난 뒤에 띄운다
-      if (r.gained > 0) { S.xpPlaying = true; const mine0 = g; setTimeout(() => { if (g !== mine0) return; playXp(r.me.xp - r.gained, r.me.xp, r.coins, () => { S.xpPlaying = false; S.xpDone = true; dirty(); $('overlay').dataset.key = ''; }); }, Math.max(0, (S.endHoldUntil || 0) - performance.now())); }
+      // 경험치는 결과창의 '내 정보' 막대가 채운다(2026-11-25: 따로 덮던 #xpfx 연출은 누르면 건너뛰어져 결과창 안으로 옮겼다)
       dirty(); const box = $('overlay'); box.dataset.key = '';
       // 받을 수 있는 미션 보상이 생겼는지 한 번 물어본다(결과창 '다음 목표'의 한 줄, 로비 미션 버튼의 빨간 점)
       const mine = g;
-      if (window.RTD_LOBBY && window.RTD_LOBBY.missionCheck) window.RTD_LOBBY.missionCheck().then((n) => { if (g !== mine || !n) return; S.msClaim = true; dirty(); $('overlay').dataset.key = ''; });
+      // 받을 것이 없어도 다시 그린다: '다음 목표'의 오늘의 미션 진행이 이 판을 반영한다
+      if (window.RTD_LOBBY && window.RTD_LOBBY.missionCheck) window.RTD_LOBBY.missionCheck().then((n) => { if (g !== mine || S.stay) return; S.msClaim = !!n; dirty(); $('overlay').dataset.key = ''; });
     }
   }
   // 판 끝 전면 광고: 판이 끝나 로비로 돌아갈 때만(판 도중에는 절대 안 띄운다).

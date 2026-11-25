@@ -13,7 +13,9 @@
   const enemyAt = (x, y) => g.enemies.find((e) => dist(e.x, e.y, x, y) < e.r + 12);
   // 보스전 중에도 Tab으로 내 라인 화면에 와서 선택권·조합·강화를 할 수 있다. 그동안 결투 시간은 그대로 흐른다.
   const inBoss = () => g && g.phase === 'boss' && !S.laneView;
-  const laneOn = () => g && (g.phase === 'wave' || (g.phase === 'boss' && !!S.laneView));
+  // 보스 처치 연출(S.kill, 07-arena) 동안은 판이 이미 라인으로 넘어갔어도 결투장을 그리므로 라인 화면으로 치지 않는다
+  // (라인 버튼 열·인연 줄·선택 바·조이스틱이 연출 위로 먼저 돌아오고, 보이지 않는 라인을 누르게 되던 것)
+  const laneOn = () => g && !S.kill && (g.phase === 'wave' || (g.phase === 'boss' && !!S.laneView));
   // 협동에서 라이프가 다해 탈락한 뒤(관전): 동료 전장 보기·화면 끌기만 되고 내 라인·장수 조작은 막는다(engine.js eliminate)
   const spect = () => !!(g && g.out && !g.over);
   view.addEventListener('contextmenu', (e) => e.preventDefault());

@@ -10,9 +10,13 @@
   }
   // 탈락(관전) 중에 되는 행동: 보기·설정·나가기만. 내 라인·장수를 바꾸는 행동은 막는다(10-input spect)
   const SPECT_OK = new Set(['tab', 'drawer', 'drawerClose', 'selExp', 'langSet', 'gfx', 'fps30', 'keepSyn', 'perf', 'credits', 'desel', 'esc', 'ucard', 'statDet', 'viewPeer', 'allyList', 'laneView', 'vol', 'book', 'timer', 'quit', 'restart', 'again', 'resume', 'tutReset', 'lang', 'ticketClose', 'combineNo', 'speed']);
+  // 게임에 남기(끝난 판의 전장, 17-loop stayEnter) 동안 되는 행동: 보기·선택·이동·설정·로비로. 판을 바꾸는 행동(합성·해산·뽑기·강화·선택권·명사·자동·배속·스킬)은 막는다.
+  // 서랍은 설정 탭만(강화·명사·선택권 탭은 살 수 있는 버튼이 있어서)
+  const STAY_OK = new Set(['drawer', 'tab', 'drawerClose', 'selExp', 'langSet', 'gfx', 'fps30', 'perf', 'credits', 'desel', 'esc', 'ucard', 'statDet', 'selDef', 'amove', 'modeMove', 'stop', 'champ', 'vol', 'restart', 'quit', 'lang', 'stayView']);
   // ---- 행동: DOM 갱신 중에도 놓치지 않게 pointerdown 위임으로 받는다 ----
   function doAct(a, arg) {
     if (spect() && (!SPECT_OK.has(a) || (a === 'viewPeer' && arg === 'me'))) return;
+    if (S.stay && (!STAY_OK.has(a) || ((a === 'drawer' || a === 'tab') && arg !== 'set'))) return;
     Snd.play('click', 40);
     const p = g && g.me, list = g ? selUnits() : [], u = list[0];
     if (a === 'tab') { S.tab = arg; S.drawer = arg; }
@@ -80,6 +84,9 @@
     else if (a === 'dash') { g.dash(g.active(), S.mouse.x, S.mouse.y); }
     else if (a === 'champ') g.selectChamp(+arg);
     else if (a === 'restart') adThen(() => location.reload());
+    // 결과창 '게임에 남기': 결과창을 닫고 끝난 판의 전장에 남는다(17-loop). 결과창 버튼이 열린 뒤에만
+    else if (a === 'stay') stayEnter();
+    else if (a === 'stayView') stayView();
     // 결과창 '같은 설정으로 다시': 다시 불러온 뒤 로딩이 끝나면 마지막 설정으로 바로 시작한다(19-title startAgain)
     else if (a === 'again') { try { sessionStorage.setItem('rtd-again', '1'); } catch (e) { /* 저장 불가 */ } adThen(() => location.reload()); }
     // 판 도중 나가기(설정 탭): 두 번 눌러 확인. 혼자 하는 오프라인 판은 저장해 두고(이어하기) 멈춘다.

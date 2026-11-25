@@ -64,7 +64,7 @@
   };
   // 장수 id → 조각 이름(보스와 같은 그림을 쓰는 장수는 보스 조각)
   const res = (id) => (RIGS[id] ? id : RIGS['b_' + id] ? 'b_' + id : id);
-  const VER = 5;
+  const VER = 6; // 6: 보스 조각 2배 해상도(art_src/build-boss-hires.py). 조각은 원래 크기(R.w×R.h)로 줄여 그리므로 좌표·관절은 그대로
   const img = {}, ready = {};
   function load(id, v) {
     const key = id + '_' + v;
@@ -136,7 +136,7 @@
   let work = null, sil = null;
   function canv(w, h) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; return cv; }
   const cache = new Map(); let cachePx = 0;
-  const CACHE_MAX = 10e6; // 저장할 픽셀 수 상한(약 40MB)
+  const CACHE_MAX = 16e6; // 저장할 픽셀 수 상한(약 64MB). 보스 조각이 2배 해상도라 프레임 하나가 최대 4배 커져 10e6에서 올렸다
   const TAU = Math.PI * 2;
   // 동작 상태를 프레임 번호로 끊는다: [저장 키, 그 프레임의 상태]
   function quant(st, v) {
@@ -161,6 +161,7 @@
     w.translate(fx, fy); w.scale(1, P.bsy); w.translate(-fx, -fy);
     w.translate(R.hip[0], R.hip[1]); w.rotate(P.body); w.translate(-R.hip[0], -R.hip[1]);
     const order = [{ id: 'body', z: 0 }].concat(R.parts).sort((a, b) => a.z - b.z);
+    let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity; // 조각이 실제로 덮는 범위(작업 캔버스 화소)
     for (const pt of order) {
       const im = img[key + '_' + pt.id];
       if (!im || !im.complete) continue;
@@ -168,9 +169,10 @@
       w.save();
       if (dy) w.translate(0, dy);
       if (a) { w.translate(pt.pivot[0], pt.pivot[1]); w.rotate(a); w.translate(-pt.pivot[0], -pt.pivot[1]); }
-      w.drawImage(im, 0, 0);
+      w.drawImage(im, 0, 0, R.w, R.h);
+      { const m = w.getTransform(); for (const [px, py] of [[0, 0], [R.w, 0], [0, R.h], [R.w, R.h]]) { const X = m.a * px + m.c * py + m.e, Y = m.b * px + m.d * py + m.f; if (X < bx0) bx0 = X; if (X > bx1) bx1 = X; if (Y < by0) by0 = Y; if (Y > by1) by1 = Y; } }
       // 기술: 무기가 빛난다
-      if (pt.role === 'weapon' && P.glow > 0.05) { w.globalCompositeOperation = 'lighter'; w.globalAlpha = P.glow * 0.55; w.drawImage(im, 0, 0); }
+      if (pt.role === 'weapon' && P.glow > 0.05) { w.globalCompositeOperation = 'lighter'; w.globalAlpha = P.glow * 0.55; w.drawImage(im, 0, 0, R.w, R.h); }
       w.restore();
     }
     // 외곽선용 실루엣
@@ -179,9 +181,18 @@
     sc.drawImage(work, 0, 0); sc.globalCompositeOperation = 'source-in'; sc.fillStyle = '#140c06'; sc.fillRect(0, 0, wp, hp);
     // 기존 그림과 같은 외곽선: 152칸 기준 3px
     const k = Math.min(122 / R.h, 144 / R.w), ol = (3 / k) * q;
-    const out = canv(wp, hp), o = out.getContext('2d');
+    // 성능: 저장 캔버스는 여백(PAD)을 뺀 실제 그림 범위(+외곽선)만 남긴다. 여백이 넓이의 절반 이상이라 같은 캐시 상한에 프레임이 2~3배 들어간다
+    // (보스전에서 캐시가 넘쳐 초당 약 10번 다시 합성하던 것). 위치·배율은 그대로라 그려지는 모습은 같다.
+    const e = Math.ceil(ol) + 2, cx0 = Math.max(0, Math.floor(bx0) - e), cy0 = Math.max(0, Math.floor(by0) - e);
+    const cx1 = Math.min(wp, Math.ceil(bx1) + e), cy1 = Math.min(hp, Math.ceil(by1) + e);
+    const trim = isFinite(bx0) && cx1 > cx0 && cy1 > cy0, ox = trim ? cx0 : 0, oy = trim ? cy0 : 0, ow = trim ? cx1 - cx0 : wp, oh = trim ? cy1 - cy0 : hp;
+    const out = canv(ow, oh), o = out.getContext('2d');
+    o.translate(-ox, -oy);
     for (let a = 0; a < 8; a++) o.drawImage(sil, 0, 0, wp, hp, Math.cos((a * Math.PI) / 4) * ol, Math.sin((a * Math.PI) / 4) * ol, wp, hp);
     o.drawImage(work, 0, 0, wp, hp, 0, 0, wp, hp);
+    // 원래 캔버스(wp×hp)가 (W×H) 단위에 대응하던 배율 그대로 자른 조각의 자리를 적어 둔다
+    const ux = W / wp, uy = H / hp;
+    out._r = [ox * ux, oy * uy, ow * ux, oh * uy];
     return out;
   }
   // c: 캔버스, x,y: 기존 그림과 같은 기준점, size: 기존 그림 크기(r*3.7과 같은 기준), flip: 좌우 반전, st.view: 'f' 앞 / 's' 옆(기본)
@@ -193,26 +204,86 @@
     const k = Math.min(122 / R.h, 144 / R.w), s = (k * size) / 152, fx = R.w / 2, fy = R.h;
     // 화면에 실제로 그려질 배율에 맞춰 저장 해상도를 고른다(작게 그릴 유닛을 크게 저장하지 않는다)
     const m = c.getTransform ? c.getTransform() : null, eff = s * (m ? Math.hypot(m.a, m.b) : 1);
-    const q = Math.max(0.2, Math.min(1, Math.ceil(eff * 5) / 5));
+    // 원본보다 크게 저장하지 않는다: 2배 해상도 조각(보스)은 2까지, 나머지는 1까지
+    const bim = img[id + '_' + v + '_body'], qMax = bim && bim.naturalWidth ? Math.max(1, Math.min(2, Math.round((bim.naturalWidth / R.w) * 5) / 5)) : 1;
+    const q = Math.max(0.2, Math.min(qMax, Math.ceil(eff * 5) / 5));
     const [fk, qs] = quant(st, v), ck = id + '_' + v + '|' + fk + '|' + q;
     let cv = cache.get(ck);
     if (cv) { cache.delete(ck); cache.set(ck, cv); }
     else {
       cv = compose(id + '_' + v, R, RG.kind, qs, q);
       cache.set(ck, cv); cachePx += cv.width * cv.height;
-      while (cachePx > CACHE_MAX && cache.size > 1) { const old = cache.keys().next().value, oc = cache.get(old); cachePx -= oc.width * oc.height; oc.width = oc.height = 0; cache.delete(old); }
+      while (cachePx > CACHE_MAX && cache.size > 1) { const old = cache.keys().next().value, oc = cache.get(old); cachePx -= oc.width * oc.height; oc.width = oc.height = 0; if (oc._sil) { for (const k in oc._sil) oc._sil[k].width = oc._sil[k].height = 0; oc._sil = null; } cache.delete(old); }
     }
     c.save();
     c.translate(x, y + size * (134 / 152 - 0.6));
     if (st.state === 'dead') { const d = ease(st.k || 0); c.globalAlpha *= 1 - d * 0.6; c.rotate((flip ? 1 : -1) * d * 1.35); }
     c.scale(flip ? -s : s, s);
-    c.drawImage(cv, -fx - PAD, -fy - PAD, R.w + PAD * 2, R.h + PAD * 2);
+    const rr = cv._r || [0, 0, R.w + PAD * 2, R.h + PAD * 2];
+    c.drawImage(cv, -fx - PAD + rr[0], -fy - PAD + rr[1], rr[2], rr[3]);
+    // 맞았을 때 번쩍임: st.tint 색 실루엣을 st.tintA만큼 덮는다(흰색 = 보스 피격, 빨강 = 장수 피격). 프레임마다 한 번 만들어 둔다(ctx.filter는 느리다)
+    if (st.tint && st.tintA > 0.01) { c.globalAlpha *= Math.min(1, st.tintA); c.drawImage(silOf(cv, st.tint), -fx - PAD + rr[0], -fy - PAD + rr[1], rr[2], rr[3]); }
     c.restore();
     return true;
+  }
+  // 그림 한 장의 한 색 실루엣(그림에 붙여 저장. 그림이 캐시에서 빠지면 같이 버린다)
+  function silOf(im, col) {
+    const m = im._sil || (im._sil = {});
+    let s = m[col];
+    if (s) return s;
+    s = canv(im.width, im.height);
+    const x = s.getContext('2d'); x.drawImage(im, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, s.width, s.height);
+    return (m[col] = s);
+  }
+  // 보스 처치: 조각이 몸에서 떨어져 나간다. 무기·빈손 조각은 바깥 위로 튕겨 돌며 떨어지고, 몸은 발끝을 축으로 넘어지며 가라앉고 흐려진다.
+  // k: 0→1 진행, white: 흰 실루엣을 덮는 정도(부서지는 순간). 조각 그림 그대로라 외곽선은 없다(흰 번쩍임이 걷힐 때쯤엔 흐려지고 있다).
+  function drawBreak(c, id, x, y, size, flip, v, k, white) {
+    id = res(id);
+    const RG = RIGS[id], R = RG && RG.views[v];
+    if (!R || !has(id, v) || typeof document === 'undefined') return false;
+    const key = id + '_' + v, s = (Math.min(122 / R.h, 144 / R.w) * size) / 152, fx = R.w / 2, fy = R.h, e = ease(k);
+    c.save();
+    c.translate(x, y + size * (134 / 152 - 0.6)); c.scale(flip ? -s : s, s);
+    const ga = c.globalAlpha, order = [{ id: 'body', z: 0 }].concat(R.parts).sort((a, b) => a.z - b.z);
+    order.forEach((pt, i) => {
+      const im = img[key + '_' + pt.id];
+      if (!im || !im.complete) return;
+      c.save();
+      if (pt.id === 'body') {
+        c.translate(0, e * 14); c.rotate(-e * 1.3);
+        c.globalAlpha = ga * (1 - Math.max(0, (k - 0.5) / 0.5));
+      } else {
+        // 조각마다 몸 가운데에서 바깥쪽으로(관절이 몸 가운데 어느 쪽에 있나) 튕긴다. 위로 솟았다가 떨어지며 돈다(그림 픽셀 단위)
+        const px = pt.pivot[0] - fx, py = pt.pivot[1] - fy, dir = px < 0 ? -1 : 1, sp = 1 + i * 0.25;
+        const dx = dir * (70 + 40 * i) * k, dy = -150 * sp * k + 260 * k * k;
+        c.translate(px + dx, py + dy); c.rotate(dir * k * (2.6 + i)); c.translate(-px, -py);
+        c.globalAlpha = ga * (1 - Math.max(0, (k - 0.6) / 0.4));
+      }
+      c.drawImage(im, -fx, -fy, R.w, R.h);
+      if (white > 0.01) { c.globalAlpha *= Math.min(1, white); c.drawImage(silOf(im, '#ffffff'), -fx, -fy, R.w, R.h); }
+      c.restore();
+    });
+    c.restore();
+    return true;
+  }
+  // 보스전이 끝난 뒤 결투장 몫을 비운다(07-arena arenaFree): 작업 캔버스 2장(보스 2배 조각이라 각 약 10MB), 넘긴 id(지난 보스·출전 장수)의
+  // 프레임 캐시와 그 실루엣, 조각 그림에 붙은 부서짐 실루엣. 다음에 그릴 때 다시 만든다(라인의 같은 장수는 작은 프레임만 다시 합성한다).
+  function free(ids) {
+    if (work) { work.width = work.height = 0; work = null; }
+    if (sil) { sil.width = sil.height = 0; sil = null; }
+    const keys = new Set((ids || []).map(res));
+    if (!keys.size) return;
+    const zap = (cv) => { if (cv._sil) { for (const k in cv._sil) cv._sil[k].width = cv._sil[k].height = 0; cv._sil = null; } };
+    for (const [ck, cv] of [...cache]) {
+      const k0 = ck.slice(0, ck.indexOf('|')), id = k0.slice(0, k0.lastIndexOf('_'));
+      if (!keys.has(id)) continue;
+      cachePx -= cv.width * cv.height; zap(cv); cv.width = cv.height = 0; cache.delete(ck);
+    }
+    for (const k in img) { const im = img[k]; if (im && im._sil && [...keys].some((id) => k.startsWith(id + '_'))) zap(im); }
   }
   // 보스 기술 종류(gen) → 동작
   const ACT = { nova: 'omni', rings: 'omni', spread: 'omni', safe: 'omni', gates: 'omni', gaze: 'omni',
     fan: 'aim', cross: 'aim', sweep: 'aim', charge: 'aim', line: 'aim', dash: 'aim' };
   const actOf = (gen) => ACT[gen] || 'raise';
-  root.RTD_RIG = { has, draw, actOf, list: () => Object.keys(RIGS), cacheInfo: () => ({ n: cache.size, px: cachePx }) };
+  root.RTD_RIG = { has, draw, drawBreak, actOf, list: () => Object.keys(RIGS), cacheInfo: () => ({ n: cache.size, px: cachePx }), free };
 })(typeof window !== 'undefined' ? window : globalThis);

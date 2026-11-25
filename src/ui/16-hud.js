@@ -17,7 +17,8 @@
     const cell = (l, v, cls) => `<div class="hs ${cls || ''}"><small>${l}</small><b>${v}</b></div>`;
     // 보스전 화면(bossV)에서는 접는다: 라운드 칸 하나 + 동료 얼굴 줄만. 남은 시간은 전장 위 가운데(07-arena)에 크게 나오므로 여기서는 뺀다.
     // 보스전 중 라인 보기에서도 결투 시간 칸은 뺀다(같은 시간이 'ボス戦に戻る' 버튼에 있다).
-    const bossV = g.phase === 'boss' && !S.laneView;
+    // 보스 처치 연출(S.kill) 동안도 보스전 모양을 유지한다(라인 정보 줄이 연출 위로 먼저 돌아오지 않게)
+    const bossV = (g.phase === 'boss' && !S.laneView) || !!S.kill;
     let h = bossV ? `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}</div>`
       : `<div class="hrow">${cell(t('round'), `${g.round}/${g.diff.rounds}`)}${g.phase === 'boss' ? '' : cell(g.phase === 'wave' ? t('timeLeft') : t('duel'), tm)}${cell(T.currency, fmt(gold), 'gold')}${cell(t('lives'), lives, lives <= 5 ? 'alert' : '') + cell(t('front'), `${en}/${g.limit}`, en > g.limit * 0.75 ? 'alert' : '')}</div>`; // 병력 칸은 뺐다(2026-11-21 사용자 요청)
     // 탈락(관전) 중 표시: 위 정보 줄에 늘 보인다
@@ -52,7 +53,10 @@
     const box = $('hud');
     // 결과창 위에 겹치지 않게. 보스 등장 연출(bossIntro) 동안에도 숨긴다(위 검은 띠와 화면 왼쪽을 가리지 않게).
     // 보스 처치 뒤 討伐成功 패널이 떠 있는 동안(S.vicUntil)도 숨긴다(라인 HUD가 패널보다 먼저 돌아와 겹치지 않게)
-    box.style.display = g.over || g.phase === 'bossIntro' || performance.now() < (S.vicUntil || 0) ? 'none' : '';
+    // 討伐成功 패널은 처치 연출이 끝난 뒤 뜨므로(08-pop), 패널이 기다리거나 떠 있는 동안도 숨긴다(S.vicUntil은 실제 시간이라 느린 기기에서 먼저 끝났다). 처치 연출 중에는 숨기지 않고 보스전 모양.
+    const vicOn = !!(S.pop && S.pop.vic) || popQ.some((q) => q.vic);
+    S.vicOn = vicOn; // tutorial.js도 이 값으로 팁을 미룬다
+    box.style.display = g.over || g.phase === 'bossIntro' || (!S.kill && (performance.now() < (S.vicUntil || 0) || vicOn)) ? 'none' : '';
     if (box.classList.contains('boss') !== bossV) box.classList.toggle('boss', bossV);
     // 첫 라운드에 아직 아무 유닛도 고르지 않았으면 화면 아래에 한 줄 힌트(한 번 고르면 이 판에서는 다시 안 나온다). 안내 말풍선이 떠 있으면 숨긴다
     if (S.sel.length) S.everSel = true;
@@ -61,8 +65,8 @@
     // 전선이 75%를 넘으면 한 판에 한 번 알림 줄로 경고(칸이 빨개지는 것만으로는 놓치기 쉽다)
     if (!vp && !S.frontWarned && g.phase === 'wave' && !g.over && en > g.limit * 0.75) { S.frontWarned = true; toast(t('frontWarn'), 'warn'); }
     // 보스 처치 뒤: 미뤄 둔 알림을 내보내고, 討伐成功 패널이 떠 있는 동안 알림 줄을 아래로(패널과 겹치지 않게)
-    { const n0 = performance.now(); if (S.toastQ && S.toastQ.length && n0 >= (S.toastHoldUntil || 0)) { const q = S.toastQ; S.toastQ = []; q.forEach(([a, b]) => toast(a, b)); }
-      const vic = n0 < (S.vicUntil || 0), stg = $('stage'); if (stg.classList.contains('vic') !== vic) stg.classList.toggle('vic', vic); }
+    { const n0 = performance.now(); if (S.toastQ && S.toastQ.length && n0 >= (S.toastHoldUntil || 0) && !S.kill) { const q = S.toastQ; S.toastQ = []; q.forEach(([a, b]) => toast(a, b)); }
+      const vic = n0 < (S.vicUntil || 0) || vicOn, stg = $('stage'); if (stg.classList.contains('vic') !== vic) stg.classList.toggle('vic', vic); }
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
     // 오른쪽 버튼 열: 라인 화면에서만
     const rail = $('rail'), p = g.me, show = laneOn() && !vp && !g.over;
@@ -104,7 +108,12 @@
     }
     // 조합 확인 창이 떠 있는 사이 재료가 사라졌으면(협동·자동 조합 등) 창을 닫는다
     if (S.combineAsk && (g.over || !combinePlanOf(S.combineAsk.a, S.combineAsk.id))) { if (!g.over && S.combineAsk.drawer) S.drawer = S.combineAsk.drawer; S.combineAsk = null; }
-    if (S.paused && !g.over) {
+    if (S.stay) {
+      // 게임에 남기(2026-11-25): 끝난 판의 전장. 위 가운데에 안내 한 줄 + 전장↔보스전 바꾸기(장수가 나간 보스전이 있을 때만) + 로비로
+      const ar = S.stay.arena, can = !!S.stay.fight;
+      key = 'stay' + (ar ? 'A' : 'L') + (can ? 1 : 0);
+      h = `<div id="staybar"><span>${esc(I.t('stayNote'))}</span>${can ? `<button class="btn" data-act="stayView" type="button">${esc(t(ar ? 'toLane' : 'backToBoss'))}</button>` : ''}<button class="btn go" data-act="restart" type="button">${esc(t('quitGame'))}</button></div>`;
+    } else if (S.paused && !g.over) {
       key = 'paused'; h = `<div class="over"><div class="sheet" style="width:min(380px,100%);align-items:center;text-align:center"><h2>${t('paused')}</h2><div>${t('pausedHint')}</div><button class="btn go" data-act="resume" type="button" style="padding:10px 26px">${t('resume')}</button></div></div>`;
     } else if (S.combineAsk) {
       // 조합 확인: 이 조합으로 꺼지거나 약해지는 인연 시너지를 알리고 조합·취소를 고른다
@@ -131,22 +140,23 @@
       const late = performance.now() - S.pzAt > 10000;
       key = 'z' + net.clock.pz + (late ? 'L' : '') + (S.quitArm ? 'A' : '');
       h = `<div class="over pzwait"><div class="sheet"><h2>${I.t('waitTitle')}</h2><div>${I.t('waitPz', { a: esc(net.clock.pz) })}</div>${late ? `<div class="warnline">${I.t('waitSelf')}</div>` : ''}<div class="dim">${I.t('quitHintRoom')}</div><button class="btn ${S.quitArm ? 'warn' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitGame')}</button></div></div>`;
-    } else if (g.over && performance.now() < (S.endHoldUntil || 0)) {
+    } else if (g.over && (performance.now() < (S.endHoldUntil || 0) || S.kill)) {
+      // 마지막 보스 처치 연출(S.kill)도 끝날 때까지 미룬다(07-arena가 S.endHoldUntil을 실제 시간 4.3초로 두지만 느린 기기에서는 연출이 더 길다)
       // 패배 연출(09-render-camera가 S.endHoldUntil = 패배 순간 + 1.6초로 둔다)이 끝날 때까지 결과 창을 미룬다
       if (S.drawer) { S.drawer = null; $('drawer').hidden = true; }
       key = 'oh'; h = '';
     } else if (g.over) {
       if (S.drawer) { S.drawer = null; $('drawer').hidden = true; } // 오른쪽 서랍이 결과·경험치 연출을 가리지 않게
-      // 온라인 판은 경험치 연출이 끝난 뒤 결과창(서버 답이 4초 넘게 없으면 그냥 결과창)
-      const waitXp = S.online && ACC.token && !S.xpDone && (S.xpPlaying || (S.xpGained == null && performance.now() - (S.overAt || (S.overAt = performance.now())) < 4000));
-      if (waitXp) { key = 'ox' + (S.xpPlaying ? 'p' : ''); h = `<div class="over xpwait">${S.xpPlaying ? '' : `<div class="xpsend">${t('sendingResult')}</div>`}</div>`; }
-      else { key = 'o' + (S.xpGained != null ? S.xpGained : ''); h = endStats(); }
+      // 결과창은 바로 띄우고, 경험치·보상은 창 안 '내 정보'가 서버 답을 기다려 채운다(14-endstats-xp esStep). 그동안 바닥 버튼은 잠긴다
+      key = 'o' + (S.xpGained != null ? S.xpGained : ''); h = endStats();
     }
     if (box.dataset.key !== key) {
       // 출진 카드를 고를 때마다 다시 그려도 목록 스크롤 자리를 지킨다(아래쪽 장수를 누르면 맨 위로 튀던 문제)
-      const og = key[0] === 'p' && (box.dataset.key || '')[0] === 'p' ? box.querySelector('.grid') : null, st = og ? og.scrollTop : 0;
+      // 결과창도 다시 그릴 때(서버 답·미션 소식) 본문 스크롤 자리를 지킨다
+      const sel = key[0] === 'p' ? '.grid' : '#end .es-body', og = (key[0] === 'p' || key[0] === 'o') && (box.dataset.key || '')[0] === key[0] ? box.querySelector(sel) : null, st = og ? og.scrollTop : 0;
       box.innerHTML = h; box.dataset.key = key;
-      if (st) { const ng = box.querySelector('.grid'); if (ng) ng.scrollTop = st; }
+      if (st) { const ng = box.querySelector(sel); if (ng) ng.scrollTop = st; }
+      if (box.querySelector('#end')) esKick();
     }
     if (key[0] === 'p' && g.fight) { const el = box.querySelector('.pkT'), v = String(Math.max(0, Math.ceil(g.fight.pickT))); if (el && el.textContent !== v) el.textContent = v; }
     // 기다림 창이 떠 있는 동안에는 오른쪽 위 메뉴 버튼이 창 위로 올라온다(CSS #stage.pz). 창이 사라지면 기다린 시간도 지운다.
@@ -157,16 +167,16 @@
     const sbar = $('selbar'), boss = inBoss() && g.phase === 'boss' && !!g.fight;
     // 보스전에서 내 장수가 1명이고 쓰러지지 않았으면 장수 전환 카드를 숨긴다(왼쪽 아래 보스를 가리고 조이스틱 영역을 막아서). 2명 이상·쓰러짐(교체 출진 안내)이면 보인다.
     const myCh = boss ? g.localChamps() : null, soloCh = !!myCh && myCh.length === 1 && !myCh[0].dead;
-    const selVis = !g.over && ((boss && !soloCh) || (laneOn() && (S.sel.length > 0 || !!S.dropSel || !!(viewedPeer() && S.rsel))));
+    const selVis = (!g.over || !!S.stay) && ((boss && !soloCh) || (laneOn() && (S.sel.length > 0 || !!S.dropSel || !!(viewedPeer() && S.rsel))));
     if (sbar.hidden !== !selVis) sbar.hidden = !selVis;
     sbar.classList.toggle('boss', boss); sbar.classList.toggle('exp', !!S.selExp);
     renderSkillBar();
     renderSyn();
     // 배속: 게임판 오른쪽 위. 보스 결투장은 항상 1배속이라 숨긴다. 협동은 모두 켜야 적용된다.
-    const sb = $('speedbtn'), st = g.over || g.phase !== 'wave' ? '' : `${t('speed', { n: speed })}${net && net.clock.sp !== speed ? ` (×${net.clock.sp})` : ''}`;
+    const sb = $('speedbtn'), st = g.over || g.phase !== 'wave' || S.kill ? '' : `${t('speed', { n: speed })}${net && net.clock.sp !== speed ? ` (×${net.clock.sp})` : ''}`;
     if (sb.dataset.t !== st) { sb.textContent = st; sb.dataset.t = st; sb.hidden = !st; sb.title = net ? I.t('speedTip') : ''; }
     if (g.phase !== 'boss') { S.laneView = false; S.meterOpen = false; }
-    const bb = $('bossbtn'), bt = g.phase === 'boss' ? (S.laneView ? `${t('backToBoss')} · ${clock(Math.max(0, g.fight.limit - g.fight.t))}` : t('toLane')) : '';
+    const bb = $('bossbtn'), bt = g.phase === 'boss' && !S.stay ? (S.laneView ? `${t('backToBoss')} · ${clock(Math.max(0, g.fight.limit - g.fight.t))}` : t('toLane')) : '';
     if (bb.dataset.t !== bt) { bb.textContent = bt; bb.dataset.t = bt; bb.hidden = !bt; bb.classList.toggle('go', !!S.laneView); }
   }
   // 관전: 라인 단계에서 동료 전장을 보고 있지 않으면 아직 싸우는 동료(없으면 아무 동료)의 전장으로 바꾼다
@@ -177,6 +187,8 @@
   }
   const CANVAS_ONLY = { dmgtext: 1, proc: 1, shake: 1, pattern: 1, banner: 1 };
   function drainEvents() {
+    // 보스 처치 보상 알림(grant 'toast')은 bossWin보다 먼저 쌓이므로, 같은 묶음에 bossWin이 있으면 먼저 알림을 붙잡는다(처치 연출 위로 뜨던 것)
+    if (g.events.some((e) => e.type === 'bossWin')) S.toastHoldUntil = Math.max(S.toastHoldUntil || 0, performance.now() + 1300 + 5500);
     for (const e of g.events) {
       if (e.type === 'sfx') { Snd.play(e.s, e.gap); continue; }
       if (e.type === 'toast') toast(e.text, e.tone);
@@ -217,6 +229,7 @@
       // 장수 스킬 이름은 이미 장수 머리 위에 크게 뜬다. 알림 줄까지 띄우면 보스 기술 이름(피해야 할 경고)을 가려서, 화타 치료 같은 것만 알림으로 보인다.
       else if (e.type === 'skill') { if (!(g.fight && g.fight.champs.some((c) => (c.def.sk || []).some((s) => s.n === e.name)))) toast(e.name); }
       else if (e.type === 'bossPick') { S.pick = []; setSel([]); }
+      else if (e.type === 'bossFight') S.lastArena = g.fight; // 게임에 남기의 보스전 화면(17-loop stayEnter)이 마지막 결투장을 쓴다
       else if (e.type === 'bossWin') { { const n0 = performance.now(); S.vicUntil = n0 + 1300 + 5500; S.toastHoldUntil = S.vicUntil; } const rows = meterRows(e.dealt, e.total); (S.bossRows = S.bossRows || {})[e.boss.round] = rows; Snd.setBoss(false); Snd.play('win'); popQ.push({ vic: e, rows, t: 0, dur: 5.5, hits: {}, shake: 0 }); }
       else if (e.type === 'bossFail') { if (g.fight) (S.bossRows = S.bossRows || {})[g.fight.def.round] = meterRows(g.fight.dealt, g.fight.total); }
       else if (e.type === 'removed') { S.sel = S.sel.filter((i) => i !== e.id); }

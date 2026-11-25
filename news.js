@@ -10,6 +10,14 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.4.0', d: '2026-11-25', items: [
+      ['보스전 타격감을 새로 만들었습니다. 때리면 보스가 번쩍이고 화면이 흔들리며, 내 장수가 맞으면 붉게 번쩍이고 화면 가장자리가 붉어집니다.', 'ボス戦の打撃感を一新しました。攻撃するとボスが光って画面が揺れ、自分の武将が攻撃を受けると赤く光り、画面の端が赤くなります。', 'Boss fights now hit harder: bosses flash and the screen shakes on hits, and your hero flashes red with a red screen edge when struck.', '重做了首领战打击感：命中时首领闪光、画面震动；武将受击时会泛红，屏幕边缘也会变红。'],
+      ['보스를 쓰러뜨리면 약 4초 동안 처치 연출이 나온 뒤 다음 화면으로 넘어갑니다. 보스 그림이 더 선명해지고 그림 가장자리의 흰 선이 사라졌습니다.', 'ボスを倒すと約4秒の撃破演出のあとで次の画面に進みます。ボスの絵がより鮮明になり、絵のふちの白い線がなくなりました。', 'Defeating a boss now plays a roughly 4-second finishing sequence before moving on. Boss art is sharper and the white outlines around sprites are gone.', '击败首领后会播放约4秒的击破演出再进入下一画面。首领图像更清晰，角色边缘的白线也已消除。'],
+      ['판이 끝나면 경험치와 보상이 다 나온 뒤에 버튼이 열립니다. 「게임에 남기」를 누르면 끝난 판에 남아 내 전장과 보스전 화면을 오가며 유닛을 볼 수 있습니다.', 'バトル終了後は経験値と報酬がすべて表示されてからボタンが押せるようになります。「バトルに残る」を押すと終わったバトルに残り、自分の戦場とボス戦の画面を行き来してユニットを眺められます。', 'After a battle, buttons unlock once XP and rewards finish showing. Tap "Stay in battle" to remain and look around your lane and boss arena.', '对局结束后，经验和奖励全部显示完才能点击按钮。点击「留在战场」可留在结束的对局中，在自己的战场和首领战画面间查看单位。'],
+      ['결과창 위쪽에 내 관직·경험치·받은 동전과 금화가 보이고, 「다음 목표」에 다음 난이도·관직·해금할 장수·오늘의 미션이 나옵니다.', '結果画面の上に自分の官職・経験値・獲得した銅銭と金貨が表示され、「次の目標」に次の難易度・官職・解放できる武将・今日のミッションが出ます。', 'The results screen now shows your rank, XP, coins and gold at the top, and "Next goals" lists the next difficulty, rank, a hero to unlock and today’s missions.', '结算画面上方显示官职、经验、获得的铜钱与金币，「下一目标」列出下个难度、官职、可解锁武将和今日任务。'],
+      ['유닛 발밑의 작은 별로 어떤 인연에 속하는지 보입니다. 인연 칸을 누르면 그 인연의 유닛이 강조됩니다. 유닛 상세 창 배치를 다듬고, 판 도중 설정창을 간단하게 정리했습니다.', 'ユニットの足元の小さな星で、どの縁に属しているかが分かります。縁の枠を押すとその縁のユニットが強調されます。ユニット詳細画面のレイアウトを整え、バトル中の設定画面をすっきりさせました。', 'Small stars under units show which bonds they belong to; tap a bond to highlight its members. Polished the unit details layout and simplified the in-battle settings.', '单位脚下的小星星显示其所属羁绊，点击羁绊格可高亮相关单位。优化了单位详情布局，并精简了对局中的设置界面。'],
+      ['오래 플레이할 때와 보스전에서 프레임이 떨어지던 문제를 줄였습니다.', '長く遊んだときやボス戦でフレームレートが落ちる問題を軽減しました。', 'Reduced frame drops during long sessions and boss fights.', '减轻了长时间游玩和首领战时的掉帧问题。'],
+    ] },
     { v: '0.3.9', d: '2026-11-24', items: [
       ['보물 상자에서 이미 해금한 장수의 아이템이 훨씬 잘 나옵니다(해금한 장수가 없으면 등급 상승권).', '宝箱から解放済みの武将のアイテムがずっと出やすくなりました（解放済みがない場合は昇格券）。', 'Chests now favor items for heroes you have unlocked (or give an upgrade ticket if none).', '宝箱现在更容易掉落已解锁武将的道具（若没有则给晋级券）。'],
       ['협동에서 라이프가 다한 사람만 탈락하고, 남은 사람은 계속 싸웁니다. 탈락한 사람은 관전합니다.', '協力プレイでライフが尽きた人だけが脱落し、残りの仲間は戦い続けます。脱落した人は観戦できます。', 'In co-op, only players who run out of lives are eliminated; the rest fight on while the eliminated watch.', '合作模式中只有生命耗尽的玩家会出局，其他人继续战斗，出局者可观战。'],

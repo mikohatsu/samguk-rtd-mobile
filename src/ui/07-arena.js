@@ -82,6 +82,7 @@
         const mx = (ARENA.x0 + ARENA.x1) / 2, my = (ARENA.y0 + ARENA.y1) / 2;
         x.save(); x.globalCompositeOperation = 'multiply'; x.globalAlpha = MARK_A;
         x.drawImage(mc, mx - MARK_D / 2, my - MARK_D / 2, MARK_D, MARK_D); x.restore();
+        mc.width = mc.height = 0; // 한 번 쓰고 버리는 1024px 판: GC를 기다리지 않고 바로 놓는다
       }
       // 큰 명암 층: 무늬 몇 칸을 덮는 크기의 얼룩이라 같은 무늬가 같은 밝기로 반복되는 게 덜 보인다
       const blobs = Q.level === 'low' ? 5 : 9;
@@ -151,6 +152,21 @@
       c.strokeStyle = f.def.fx + '88'; c.lineWidth = 1.5; c.strokeRect(ARENA.x0, ARENA.y0, aw, ah);
     }
     c.restore();
+  }
+  // 보스전이 끝나면(처치 연출까지 끝나 라인으로 돌아온 뒤) 결투장 전용 캔버스를 비운다(2026-11-25 통합. 보스 그림 2배 뒤 첫 보스 후 캔버스 메모리가
+  // 52 → 141MB로 뛰고 라인에서도 그대로 남았다). 바닥 저장본(arenaCv)과 그 화면 크기 사본(blitBg 'arena'), 난간 띠, rig 작업 캔버스,
+  // 지난 보스·출전 장수의 rig 프레임과 실루엣, 보스 고해상도 그림(hb)과 실루엣. 다음 보스전(또는 게임에 남기의 결투장)에서 처음 그릴 때 다시 만든다.
+  // 09-render-camera가 결투장 화면이 끝난 프레임에 한 번 부르고, 17-loop begin이 새 판을 시작할 때 부른다.
+  function arenaFree(f) {
+    if (arenaCv) { arenaCv.width = arenaCv.height = 0; arenaCv = null; }
+    arenaKey = '';
+    if (rimCv) { rimCv.forEach((o) => { o.cv.width = o.cv.height = 0; }); rimCv = null; }
+    rimKey = '';
+    const bg = BGC.arena;
+    if (bg) { if (bg.cv) bg.cv.width = bg.cv.height = 0; bg.cv = null; bg.key = ''; bg.last = ''; }
+    const ids = f && f.def ? [f.def.id].concat((f.champs || []).map((u) => u.def && u.def.id).filter(Boolean)) : [];
+    if (window.RTD_RIG && RTD_RIG.free) RTD_RIG.free(ids);
+    if (Art.hbFree) Art.hbFree();
   }
   // ---- 보스 등장 연출의 진행값(그림만. 판정·카메라 값은 건드리지 않는다). e = 지난 시간(초, 0~4.2) ----
   // 0~0.5 레터박스(감속) / 0.2~1.6 보스 쪽으로 천천히 확대 / 1.6 내려찍기(흔들림·번쩍임·제목) / 3.6~4.2 원래대로
@@ -241,6 +257,42 @@
       });
     });
   }
+  // ---- 보스 타격감(그리기만): 움찔이 생길 때마다 타격 프레임 애니메이션(gfx/fxa_hit·hit2)·흰 번쩍·카메라 미세 흔들림·타격음,
+  // 내 장수가 친 것이면 짧은 히트스톱(혼자 할 때만. 계산을 멈추는 것은 16-hud의 강타 멈칫과 같은 방식).
+  // 강한 공격(16-hud가 강타·치명타·스킬에 S.punch = 1)이나 큰 피해(최대 체력 1.5% 이상)는 더 세게.
+  const BHIT_LEN = 0.3;
+  function bossHitFx(f, b, hr) {
+    const ac = g.active(), mine = !!(ac && ac.atkT > 0), big = (S.punch || 0) > 0.6 || hr.pend > b.mhp * 0.015;
+    hr.fl = 1; hr.big = big;
+    const L = S.bhits || (S.bhits = []);
+    if (L.length >= 4) L.shift();
+    // 맞은 자리: 보스 몸 가운데에서 친 쪽으로 조금(장수와 보스 사이 방향 hr.ax·ay의 반대)
+    L.push({ t: 0, big, x: b.x - hr.ax * 34 + (Math.random() - 0.5) * 40, y: b.y - 50 - hr.ay * 16 + (Math.random() - 0.5) * 40, r: Math.random() * 6.28, n: Math.random() < 0.5 ? 'hit' : 'hit2' });
+    if (!mine && !big) return;
+    S.shake = Math.max(S.shake || 0, big ? 0.42 : 0.16);
+    Snd.play('hit', big ? 60 : 110);
+    if (!net && mine) { const nowMs = performance.now(); if (nowMs - (S.hitStopAt || 0) > 140) { S.hitStop = Math.max(S.hitStop || 0, big ? 0.07 : 0.03); S.hitStopAt = nowMs; } }
+  }
+  // 내 장수 피격: 엔진이 이미 흔들림 0.5와 'hurt' 소리를 낸다. 여기서는 둔탁한 타격음(녹음 샘플)·짧은 진동·화면 가장자리 붉은 기운(S.phit, drawBossHud가 그림)을 더한다
+  function champHurt(u, t) {
+    u._hurtT = t;
+    S.phit = { t: 0 };
+    S.shake = Math.max(S.shake || 0, 0.65);
+    Snd.play('mace', 90);
+    if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) { /* 진동 없음 */ } }
+  }
+  function drawBossHits(c) {
+    const L = S.bhits;
+    if (!L || !L.length) return;
+    for (let i = L.length - 1; i >= 0; i--) {
+      const h = L[i];
+      h.t += S.fdt;
+      if (h.t >= BHIT_LEN) { L.splice(i, 1); continue; }
+      const p = h.t / BHIT_LEN, sz = (h.big ? 300 : 170) * (0.85 + p * 0.3);
+      Art.fxAnim(c, h.big ? 'hit2' : h.n, p, h.x, h.y, sz, sz, h.r, 1);
+      if (h.big && p < 0.7) Art.fxAnim(c, 'boom', p / 0.7, h.x, h.y, 220, 220, 0, 0.8);
+    }
+  }
   function drawArena(t) {
     const c = ctx, f = g.fight, a = f.def.arena, b = f.boss, IS = introState();
     if (!arenaFloor(c, a, f.def.id)) drawMotif(c, a.motif, '#f0e0c0', t);
@@ -281,8 +333,10 @@
       if (ac) { const a = Math.atan2(b.y - ac.y, b.x - ac.x); hr.ax = Math.cos(a); hr.ay = Math.sin(a); }
       hr.pend += dmg; hr.num += dmg;
     }
-    if (hr.pend > 0 && hr.kt >= FLINCH_GAP) { hr.k = Math.min(1.4, hr.k + 0.55 + Math.min(0.6, hr.pend / (b.mhp * 0.02))); hr.pend = 0; hr.kt = 0; }
-    hr.hp = b.hp; hr.k *= Math.pow(0.8, S.f60);
+    if (hr.pend > 0 && hr.kt >= FLINCH_GAP) { hr.k = Math.min(1.4, hr.k + 0.55 + Math.min(0.6, hr.pend / (b.mhp * 0.02))); bossHitFx(f, b, hr); hr.pend = 0; hr.kt = 0; }
+    // 히트스톱 동안은 움찔·번쩍임을 붙잡아 둔다(멈춘 순간이 보이게)
+    const held = S.hitStop > 0;
+    hr.hp = b.hp; if (!held) { hr.k *= Math.pow(0.8, S.f60); hr.fl = Math.max(0, (hr.fl || 0) - S.fdt / 0.13); }
     hr.numT += S.fdt;
     if (hr.num > 0 && hr.numT > 0.14) { if (S.dmg.length < 50) S.dmg.push({ x: b.x + (Math.random() - 0.5) * 70, y: b.y - 96, v: Math.round(hr.num), t: 0, hit: true }); hr.num = 0; hr.numT = 0; }
     let wind = 0;
@@ -307,14 +361,17 @@
       st.view = rv;
       const tgt = g.active(), flipR = rv === 'f' ? bd.flip : casting ? (tgt ? tgt.x < b.x : false) : bMove ? Math.cos(S.bossFace ?? 0) < 0 : tgt ? tgt.x < b.x : false; // 옆모습은 멈춰 있거나 기술을 쓰면 내 장수 쪽을 본다
       const drawR = () => { c.save(); c.translate(bx, by); c.scale(1, sy); RG.draw(c, f.def.id, 0, 0, sc, flipR, st); c.restore(); };
+      // 맞은 순간 흰 실루엣으로 번쩍(rig.js가 프레임마다 실루엣을 한 번 만들어 둔다. 예전 '더하기로 한 번 더 그리기'는 어두운 갑옷에서 거의 안 보였다)
+      if (hr.fl > 0.02) { st.tint = '#ffffff'; st.tintA = hr.fl * (hr.big ? 0.95 : 0.75); }
       drawR();
-      if (hr.k > 0.08) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(0.85, hr.k * 0.7); drawR(); c.restore(); }
     } else {
+      if (hr.fl > 0.02) Art.setTint('#ffffff', hr.fl * (hr.big ? 0.95 : 0.75));
       Art.drawSprite(c, bImg, bx, by, sc, bd.flip, hr.ax * hr.k * 0.06 * (bd.flip ? -1 : 1), sy);
-      if (hr.k > 0.08) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(0.85, hr.k * 0.7); Art.drawSprite(c, bImg, bx, by, sc, bd.flip, 0, sy); c.restore(); }
+      Art.setTint(null);
     }
     if (hr.slam > 0.1) { Art.fxAnim(c, 'ring', 1 - hr.slam, b.x, b.y + 62, 420, 170, 0, 1); Art.fxAnim(c, 'boom2', Math.min(0.99, (1 - hr.slam) * 1.3), b.x, b.y + 40, 260, 260, 0, 0.9); }
     if (hr.slam > 0.1) Art.fxAnim(c, 'wave', 1 - hr.slam, b.x, b.y + 62, 380, 380, 0, 0.9, null, { col: '#fff2d0', sy: 0.4 });
+    drawBossHits(c, t);
     c.filter = 'none';
     c.textAlign = 'center';
     // 판이 끝나면(시간 초과·전멸 패배 연출) 보스 머리 위 기믹 안내 글은 지운다(연출 위에 남아 장수와 겹쳤다)
@@ -359,14 +416,23 @@
       }
       drawBuffs(c, u, t);
       // 맞으면 보스 반대쪽으로 튕겨 밀린다(그림만, 위치는 그대로). 피격 빛은 붉은 빛 그림.
-      const kb = Math.max(0, (u.hurt || 0) / 0.2), ka = Math.atan2(u.y - b.y, u.x - b.x), kx = u.x + Math.cos(ka) * kb * 12, ky = u.y + Math.sin(ka) * kb * 8;
+      // 내 장수가 맞은 순간(엔진이 hurt를 0.2로 세운다): 화면 가장자리 붉은 기운·흔들림·피격음·진동, 체력 막대 깜빡임(champHurt)
+      if (u.owner === g.me.idx && (u.hurt || 0) > (u._hurtPrev || 0) + 0.05) champHurt(u, t);
+      u._hurtPrev = u.hurt || 0;
+      const kb = Math.max(0, (u.hurt || 0) / 0.2), ka = Math.atan2(u.y - b.y, u.x - b.x), kx = u.x + Math.cos(ka) * kb * 24, ky = u.y + Math.sin(ka) * kb * 14;
       if (u.hurt > 0 && SKF0) SKF0.spr(c, 'light_01', '#ff3c28', kx, ky - 10, 130, 130, 0, 0.7 * kb);
       // 조각 애니메이션 동작 상태: 공격(atkT 0.24)·스킬(0.36 이상)은 시작할 때의 길이로 구분, 맞으면 피격, 움직이면 걷기
       if ((u.atkT || 0) > (u._atkPrev || 0) + 0.01) u._atkMax = u.atkT;
       u._atkPrev = u.atkT || 0;
       const rs = u.atkT > 0 ? { state: (u._atkMax || 0) >= 0.3 ? 'skill' : 'attack', p: 1 - u.atkT / (u._atkMax || 0.24), t } : kb > 0.05 ? { state: 'hurt', k: kb, t } : { state: u.move || u.moveT > 0 ? 'walk' : 'idle', t };
+      // 맞으면 몸이 빨갛게 번쩍(빨간 실루엣: 조각 그림은 rig.js, 한 장 그림은 Art.setTint)
+      const red = kb > 0.05 ? kb * 0.6 : 0;
+      if (red) { rs.tint = '#ff2a1a'; rs.tintA = red; Art.setTint('#ff2a1a', red); }
       piece(c, kx, ky, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf(u, t, CHAMP_R), rig: rs });
-      bar(c, u.x, u.y - 80, 76 * uiS(), 7 * uiS(), u.hp / u.mhp, u.hp / u.mhp < 0.3 ? '#ff6a50' : '#7ed08c');
+      if (red) Art.setTint(null);
+      // 체력 막대: 맞은 뒤 0.45초 동안 흰색·빨간색으로 깜빡인다
+      const blink = u._hurtT != null && t - u._hurtT >= 0 && t - u._hurtT < 0.45;
+      bar(c, u.x, u.y - 80, 76 * uiS(), 7 * uiS(), u.hp / u.mhp, blink ? (Math.floor((t - u._hurtT) * 14) % 2 ? '#ff3c28' : '#ffffff') : u.hp / u.mhp < 0.3 ? '#ff6a50' : '#7ed08c');
     });
     drawAim(c);
     drawSyn(c, t, f, b); // 인연 원군·화선·기병·표식
@@ -404,6 +470,8 @@
   //   / 기술 이름 띠 104~156(가운데, 순위 줄 아래) / 기믹 안내(기 모으기 막대, 분신 안내) 162~ / 알림 띠(08-pop drawBanner)는 이 중 떠 있는 것의 아래(S.hudBottom, 09 render가 내려 그린다)
   function drawBossHud(c, t) {
     const f = g.fight, b = f.boss, M = f.mech, us = hudS(), top = hudTop();
+    // 내 장수가 맞으면 화면 가장자리가 붉게(0.5초. 목숨 잃음과 같은 가장자리 판 그림을 09-render-camera drawEdge로)
+    if (S.phit) { const k = (S.phit.t += S.fdt); if (k >= 0.5 || g.over) S.phit = null; else drawEdge(c, '230,30,20', (k < 0.05 ? k / 0.05 : 1 - (k - 0.05) / 0.45) * 0.7); }
     c.save(); c.translate(W - 56, top + 66); c.scale(Math.min(us, 1.3), Math.min(us, 1.3)); c.translate(-(W - 56), -66);
     drawMeter(c, meterRows(f.dealt, f.total));
     c.restore();
@@ -498,9 +566,16 @@
     piece(c, u.x, u.y + e * 10, CHAMP_R, u.def, t, false, { pose: { x: 0, y: e * CHAMP_R * 0.5, rot: (d.flip ? 1 : -1) * e * 1.35, flip: d.flip, v: 2, frame: 0, sy: 1 }, rig: { state: 'dead', k: e, t } });
     c.restore();
   }
-  // ---- 보스 처치 순간(그리기만. 판정·시간은 그대로): 이긴 직후 KILL_LEN초 동안 마지막 아레나를 붙잡고 보스가 쓰러진다 ----
-  // 혼자 할 때만 그동안 계산을 멈추고(히트스톱과 같은 방식), 협동은 시계를 맞춰야 해서 멈추지 않는다(화면만 붙잡는다).
-  const KILL_LEN = 1.3;
+  // ---- 보스 처치 연출(그리기만. 판정·시간은 그대로): 이긴 직후 마지막 아레나를 붙잡고 약 4.2초 동안 보스가 무너진다 ----
+  // 시간은 '연출 시간' K.t(0→KILL_LEN)로 재고, 앞부분은 느리게 흐른다(슬로모션): 0~0.12 ×0.3(번쩍이며 멎음) · 0.12~1.0 ×0.5(비틀거리며 연쇄 폭발) · 그 뒤 ×1.
+  //   1.0 부서짐: 조각 애니메이션 보스는 무기·빈손 조각이 튕겨 나가고 몸이 넘어지며 흐려진다(rig.js drawBreak). 조각이 없으면 그림이 발끝 기준으로 넘어진다.
+  //   1.0~3.0 「撃破!」 글자(i18n bossDown), 1.55 땅에 닿는 충격파·흙먼지.
+  // 혼자 할 때는 그동안 계산을 멈추고(히트스톱과 같은 방식), 협동은 시계를 맞춰야 해서 멈추지 않는다(화면만 붙잡는다).
+  // 판의 마지막 보스면 결과 창을 연출이 끝날 때까지 미룬다(S.endHoldUntil: 16-hud가 결과 창을, 17-loop가 쉬는 화면 전환을 이 시각까지 미룬다).
+  const KILL_LEN = 3.0, KILL_REAL = 4.3;
+  const killSpeed = (k) => (k < 0.12 ? 0.3 : k < 1 ? 0.5 : 1);
+  // 연쇄 폭발: [연출 시각, 보스 기준 x, y]
+  const KILL_BOOMS = [[0.1, -50, -95], [0.3, 48, -40], [0.5, -34, -8], [0.68, 58, -118], [0.86, 0, -64]];
   function watchKill() {
     if (g.fight && g.phase === 'boss') { S.lastFight = g.fight; return; }
     const f = S.lastFight;
@@ -511,45 +586,77 @@
     if (!lb || !lb.win || lb.round !== f.def.round) return;
     const ac = f.champs.find((u) => !u.dead && !u.bench);
     S.pattern = null; // 처치 연출에는 기술 이름 띠를 남기지 않는다(다음 보스전에 묵은 띠가 뜨지 않게)
-    S.kill = { f, t: 0, flip: ac ? ac.x > f.boss.x : false, hit: 0 };
+    S.bhits = []; S.phit = null;
+    S.kill = { f, t: 0, flip: ac ? ac.x > f.boss.x : false, hit: 0, boom: 0, brk: 0 };
     S.shake = Math.max(S.shake || 0, 1);
-    if (!net) S.hitStop = Math.max(S.hitStop || 0, KILL_LEN);
+    Snd.play('hit');
+    if (!net) S.hitStop = Math.max(S.hitStop || 0, KILL_REAL);
+    if (g.over) S.endHoldUntil = Math.max(S.endHoldUntil || 0, performance.now() + KILL_REAL * 1000);
     if (navigator.vibrate) { try { navigator.vibrate(30); } catch (e) { /* 진동 없음 */ } }
   }
   const killOn = () => !!(S.kill && S.kill.t < KILL_LEN);
   function drawKillCam(t) {
     const K = S.kill, f = K.f, b = f.boss, c = ctx, SK = window.RTD_SKFX;
-    K.t += S.fdt;
+    K.t += S.fdt * killSpeed(K.t);
     const k = K.t;
     arenaFloor(c, f.def.arena, f.def.id); arenaRim(c, f, 1);
     // 이긴 장수들은 보스 쪽을 보고 선다
     f.champs.forEach((u) => { if (u.dead || u.bench) return; piece(c, u.x, u.y, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf({ face: Math.atan2(b.y - u.y, b.x - u.x), def: u.def, id: 1 }, t, CHAMP_R), rig: { state: 'idle', t } }); });
     Object.values(f.ghosts || {}).forEach((o) => { if (o.def) piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf({ face: Math.atan2(b.y - o.y, b.x - o.x), def: o.def, id: 1 }, t, CHAMP_R) }); });
-    // 보스: 0.12초 하얗게 번쩍 → 쓰러짐 동작(조각 애니메이션 'dead', 없으면 그림을 발끝 기준으로 눕힘) → 흐려진다
-    const fall = Math.min(1, Math.max(0, (k - 0.12) / 0.7)), e = 1 - Math.pow(1 - fall, 3), fade = 1 - Math.max(0, (k - 0.85) / (KILL_LEN - 0.85));
     const by = b.y - 56 * (BOSS_S - 1), sc = 200 * BOSS_S, RG = window.RTD_RIG;
     const rv = RG && (RG.has(f.def.id, 'f') ? 'f' : RG.has(f.def.id, 's') ? 's' : null);
-    if (SK && k < 0.6) SK.spr(c, 'light_01', f.def.fx, b.x, b.y - 40, 560, 560, k, (1 - k / 0.6) * 0.9);
-    blobShadow(c, b.x, b.y + 62, 124 * BOSS_S, 0.7 * fade);
-    const drawB = () => {
-      if (rv) { c.save(); c.translate(b.x, by); RG.draw(c, f.def.id, 0, 0, sc, K.flip, { state: 'dead', k: e, view: rv, t }); c.restore(); return; }
-      const im = Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, 0, 0), foot = by + sc * 0.34;
-      c.save(); c.translate(b.x, foot); c.rotate((K.flip ? 1 : -1) * e * 1.35); Art.drawSprite(c, im, 0, -sc * 0.34, sc, K.flip); c.restore();
-    };
-    c.save(); c.globalAlpha = fade; drawB();
-    if (k < 0.3) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = (1 - k / 0.3) * 0.9; drawB(); }
-    c.restore();
-    // 빛살 터짐(처음) → 땅에 닿는 순간 충격파·흙먼지·흔들림
+    const brk = Math.max(0, (k - 1) / 1.2), fade = 1 - Math.max(0, (k - 2.2) / (KILL_LEN - 2.2));
+    if (SK && k < 1) SK.spr(c, 'light_01', f.def.fx, b.x, b.y - 40, 560, 560, k, (1 - k) * 0.9);
+    blobShadow(c, b.x, b.y + 62, 124 * BOSS_S, 0.7 * (1 - Math.min(1, brk)));
+    // 연쇄 폭발이 터질 때마다 흰 번쩍임이 되살아난다
+    let flash = k < 0.12 ? 1 : Math.max(0, 1 - (k - 0.12) / 0.3) * 0.9;
+    KILL_BOOMS.forEach(([k0]) => { if (k >= k0 && k < k0 + 0.1) flash = Math.max(flash, 0.6 * (1 - (k - k0) / 0.1)); });
+    if (k < 1) {
+      // 비틀거림: 피격 자세로 떨린다(점점 잦아든다)
+      const jx = Math.sin(k * 95) * 7 * (1 - k), jy = Math.sin(k * 71) * 3 * (1 - k);
+      if (rv) { c.save(); c.translate(b.x + jx, by + jy); RG.draw(c, f.def.id, 0, 0, sc, K.flip, { state: 'hurt', k: 1, view: rv, t, tint: '#ffffff', tintA: flash }); c.restore(); }
+      else { const im = Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, 0, 0); Art.setTint('#ffffff', flash); Art.drawSprite(c, im, b.x + jx, by + jy, sc, K.flip); Art.setTint(null); }
+    } else {
+      if (!K.brk) { K.brk = 1; S.shake = Math.max(S.shake || 0, 1); Snd.play('bigslam'); if (navigator.vibrate) { try { navigator.vibrate([20, 30, 50]); } catch (e) { /* 진동 없음 */ } } }
+      const white = Math.max(0, 1 - (k - 1) / 0.25);
+      if (!(rv && RG.drawBreak(c, f.def.id, b.x, by, sc, K.flip, rv, Math.min(1, brk), white))) {
+        const im = Art.namedSprite(f.def.id, T.bossLooks[f.def.id], f.def.fx, 0, 0), foot = by + sc * 0.34, e = 1 - Math.pow(1 - Math.min(1, brk / 0.6), 3);
+        c.save(); c.globalAlpha = 1 - Math.max(0, (brk - 0.5) / 0.5); c.translate(b.x, foot); c.rotate((K.flip ? 1 : -1) * e * 1.35);
+        Art.setTint('#ffffff', white); Art.drawSprite(c, im, 0, -sc * 0.34, sc, K.flip); Art.setTint(null); c.restore();
+      }
+    }
+    // 빛살 터짐(처음) → 연쇄 폭발(gfx/fxa_boom) → 부서질 때 큰 폭발(fxa_boom2)·빛살
     if (k < 0.6) Art.fxAnim(c, 'burst', k / 0.6, b.x, b.y - 60, 640, 640, 0, 1, null, { col: f.def.fx });
-    if (fall >= 1 && !K.hit) { K.hit = 1; S.shake = Math.max(S.shake || 0, 0.7); }
+    KILL_BOOMS.forEach(([k0, ox, oy], i) => {
+      if (k < k0) return;
+      if (K.boom <= i) { K.boom = i + 1; Snd.play('boom', 40); S.shake = Math.max(S.shake || 0, 0.4); }
+      const q = (k - k0) / 0.3;
+      if (q < 1) Art.fxAnim(c, i % 2 ? 'boom2' : 'boom', q, b.x + ox, b.y + oy, 250, 250, 0, 1);
+    });
+    if (k >= 1 && k < 1.6) { const q = (k - 1) / 0.6; Art.fxAnim(c, 'boom2', q, b.x, b.y - 50, 560, 560, 0, 1); Art.fxAnim(c, 'burst', q, b.x, b.y - 60, 760, 760, 0, 0.9, null, { col: f.def.fx }); }
+    // 땅에 닿는 순간: 충격파·흙먼지·흔들림
+    if (k >= 1.55 && !K.hit) { K.hit = 1; S.shake = Math.max(S.shake || 0, 0.7); Snd.play('slam'); }
     if (K.hit) {
-      const q = Math.min(0.99, (k - 0.82) / 0.45);
-      Art.fxAnim(c, 'wave', q, b.x, b.y + 62, 520, 520, 0, 0.9, null, { col: '#fff2d0', sy: 0.4 });
+      const q = Math.min(0.99, (k - 1.55) / 0.6);
+      Art.fxAnim(c, 'wave', q, b.x, b.y + 62, 560, 560, 0, 0.9, null, { col: '#fff2d0', sy: 0.4 });
       for (let i = 0; i < 5; i++) { const a = i * 1.26 + 0.4, rr = 60 + q * 120; vs(c, 'dust', b.x + Math.cos(a) * rr, b.y + 50 + Math.sin(a) * rr * 0.4 - q * 30, 150 * (0.7 + q * 0.6), a, 0.6 * (1 - q)); }
     }
     drawVfx(c);
     // 처음 0.12초 흰 섬광(화면 덮개)
     if (k < 0.12) { c.save(); c.globalAlpha = 0.5 * (1 - k / 0.12); c.fillStyle = '#fff'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); c.restore(); }
+    // 「撃破!」: 화면 고정 좌표(카메라를 풀고). 09-render-camera가 다음에 변환을 다시 세운다
+    if (k >= 1) {
+      const q = Math.min(1, (k - 1) / 0.15), s0 = 1.7 - 0.7 * outCubic(q), a = Math.min(1, q * 1.5) * fade, us = hudS(), y = hudTop() + 190 * us, txt = I.t('bossDown');
+      hudCam(c, 0, 0);
+      c.save(); c.globalAlpha = 1;
+      popBand(c, y - 70 * us, 140 * us, a * 0.9);
+      c.translate(W / 2, y); c.scale(s0 * us, s0 * us); c.globalAlpha = a;
+      c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+      fitFont(c, txt, 400, 88, '"Black Han Sans", sans-serif', W * 0.8);
+      const tg = c.createLinearGradient(0, -44, 0, 44); tg.addColorStop(0, '#fff6e0'); tg.addColorStop(0.5, '#ffd27a'); tg.addColorStop(1, f.def.fx);
+      c.lineWidth = 9; c.strokeStyle = 'rgba(14,9,6,.92)'; c.strokeText(txt, 0, 0); c.fillStyle = tg; c.fillText(txt, 0, 0);
+      c.restore();
+    }
   }
   // 등장 연출의 글씨·레터박스·번쩍임. 확대 변환을 풀고 화면 좌표로 그린다(09-render-camera에서 부른다)
   function drawBossIntro(c) {

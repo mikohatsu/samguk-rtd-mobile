@@ -3,7 +3,8 @@
   const dirty = () => (needs = true);
   const toast = (text, tone) => {
     // 보스 처치 연출 중(S.toastHoldUntil, 16-hud bossWin)이면 미뤘다가 16-hud renderHud가 한꺼번에 내보낸다
-    if (performance.now() < (S.toastHoldUntil || 0)) { (S.toastQ = S.toastQ || []).push([text, tone]); return; }
+    // 보스 처치 연출(S.kill) 중에도 모아 두었다가 끝나면 보인다
+    if (performance.now() < (S.toastHoldUntil || 0) || S.kill) { (S.toastQ = S.toastQ || []).push([text, tone]); return; }
     const box = $('toasts');
     // 같은 알림이 연달아 오면 줄을 쌓지 않고 ×N으로 합친다(전선 포화로 라이프가 연속으로 깎일 때 화면을 덮던 문제)
     const prev = box.lastElementChild;
@@ -112,22 +113,18 @@
       const zones = (k) => `<div class="zones">${ZN.map(([z, l]) => `<button class="zb ${p.zones[k] === z ? 'on' : ''}" data-act="zone" data-arg="${k}:${z}" type="button">${l}</button>`).join('')}</div>`;
       const az = (k, l) => tg(k, l) + `<div class="row zrow"><div><small>${I.t('sortPos')}</small></div>${zones(k)}</div>`;
       const ql = [['high', t('high')], ['mid', t('mid')], ['low', t('low')]];
-      // 판 도중 나가기(맨 위): 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 나간다(11-actions의 quit)
-      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : spect() ? 'quitHintElim' : 'quitHintRoom';
-      h = `<div class="h">${I.t('quitGame')}</div><div class="row"><div><small>${I.t(qh)}</small></div><button class="toggle ${S.quitArm ? 'on' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitBtn')}</button></div>`;
-      // 언어는 이 판에는 적용되지 않는다(로비로 돌아가면 바뀜)
-      h += `<div class="h">${t('language')} <small>${t('langLater')}</small></div><div class="row"><div class="zones">${I.LANGS.map(([k, n]) => `<button class="zb ${I.lang === k ? 'on' : ''}" data-act="langSet" data-arg="${k}" type="button">${n}</button>`).join('')}</div></div>`;
-      h += `<div class="h">${t('gfx')}</div><div class="row"><div>${t('gfxRow')} <small>${t('gfxHint')}</small></div><div class="zones">${ql.map(([k, l]) => `<button class="zb ${Q.level === k ? 'on' : ''}" data-act="gfx" data-arg="${k}" type="button">${l}</button>`).join('')}</div></div>`;
-      h += `<div class="row"><div>${t('fps30')} <small>${t('fps30Hint')}</small></div><button class="toggle ${Q.fps30 ? 'on' : ''}" data-act="fps30" type="button">${Q.fps30 ? t('on') : t('off')}</button></div>`;
-      h += `<div class="row"><div>${t('perfShow')} <small>${t('perfShowHint')}</small></div><button class="toggle ${Q.perf ? 'on' : ''}" data-act="perf" type="button">${Q.perf ? t('on') : t('off')}</button></div>`;
-      h += `<div class="h">${t('autoSection')}</div>` + az('t1', I.t('autoT1')) + az('t2', I.t('autoT2')) + az('t3', I.t('autoT3')) + az('t45', I.t('autoT45')) + tg('sell', I.t('autoSell'))
+      // 판 도중 설정창(2026-11-25 정리): 언어·튜토리얼·크레딧·버전은 로비 설정에만 둔다. 화질과 「로비로 돌아가기」는 창 맨 아래.
+      h = `<div class="h">${t('autoSection')}</div>` + az('t1', I.t('autoT1')) + az('t2', I.t('autoT2')) + az('t3', I.t('autoT3')) + az('t45', I.t('autoT45')) + tg('sell', I.t('autoSell'))
         + `<div class="row"><div>${t('keepSyn')} <small>${t('keepSynHint')}</small></div><button class="toggle ${g.keepSyn ? 'on' : ''}" data-act="keepSyn" type="button">${I.t(g.keepSyn ? 'onOff' : 'offOff')}</button></div>`;
       // 도움말: 인연 규칙 두 줄
       h += `<div class="h">${t('synHelpH')}</div><div class="row"><div><small>${esc(I.t('synHelp1', { n: g.synMaxPerCarry || 5 }))}</small></div></div><div class="row"><div><small>${esc(t('synHelp2'))}</small></div></div>`;
       h += `<div class="h">${t('sound')}</div>` + volRow('sfx') + volRow('bgm');
-      h += `<div class="h">${I.t('tutReplay')}</div><div class="row"><div><small>${I.t('tutReplayHint')}</small></div><button class="toggle" data-act="tutReset" type="button">${I.t('tutReplay')}</button></div>`;
-      h += `<div class="row"><div>${window.RTD_CREDITS ? window.RTD_CREDITS.label() : ''}</div><button class="toggle" data-act="credits" type="button">${t('view')}</button></div>`;
-      h += `<div class="row"><div>${t('version')}</div><div>v${window.RTD_VERSION || '?'}</div></div>`;
+      h += `<div class="h">${t('gfx')}</div><div class="row"><div>${t('gfxRow')} <small>${t('gfxHint')}</small></div><div class="zones">${ql.map(([k, l]) => `<button class="zb ${Q.level === k ? 'on' : ''}" data-act="gfx" data-arg="${k}" type="button">${l}</button>`).join('')}</div></div>`;
+      h += `<div class="row"><div>${t('fps30')} <small>${t('fps30Hint')}</small></div><button class="toggle ${Q.fps30 ? 'on' : ''}" data-act="fps30" type="button">${Q.fps30 ? t('on') : t('off')}</button></div>`;
+      h += `<div class="row"><div>${t('perfShow')} <small>${t('perfShowHint')}</small></div><button class="toggle ${Q.perf ? 'on' : ''}" data-act="perf" type="button">${Q.perf ? t('on') : t('off')}</button></div>`;
+      // 판 도중 나가기(맨 아래): 한 번 누르면 '한 번 더'로 바뀌고 3초 안에 다시 눌러야 나간다(11-actions의 quit)
+      const qh = S.saveOn ? 'quitHintSave' : lifeOffline() ? 'quitHintEnd' : spect() ? 'quitHintElim' : 'quitHintRoom';
+      h += `<div class="h">${I.t('quitGame')}</div><div class="row"><div><small>${I.t(qh)}</small></div><button class="toggle ${S.quitArm ? 'on' : ''}" data-act="quit" type="button">${I.t(S.quitArm ? 'quitAgain' : 'quitBtn')}</button></div>`;
     } else if (S.tab === 'war') {
       h = '';
     } else {

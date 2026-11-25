@@ -70,16 +70,20 @@
       c.fillText(d.kind === 'chest' ? T.chestMark : d.kind === 'item' ? T.itemMark : T.consumables[d.kind].mark, d.x, d.y + 1 + bob);
       if (dlock) c.drawImage(LOCK_IM, d.x + 6, d.y - 30 + bob, 22, 22);
     }
-    const sel = new Set(S.sel);
+    const sel = new Set(S.sel), fo = synFocus(), myIdx = g.me ? g.me.idx : 0; // fo: 열린 인연 창의 구성원(발밑 고리 + 나머지 내 유닛 흐리게)
     // 겹쳐 선 유닛은 아래쪽(y가 큰 쪽)을 나중에 그려 앞뒤가 맞게 한다(배치는 그대로, 그리는 순서만)
     const order = g.units.length > 1 ? g.units.slice().sort((a, b) => a.y - b.y || a.id - b.id) : g.units;
     for (const u of order) {
       // 라인 유닛 크기(등급이 높을수록 큼). 폰에서 알아보기 쉽게 15% 키웠다(1.3 → 1.5). 정렬 칸 간격(42)은 그대로라 줄 세우면 살짝 겹친다.
       const r = (15 + Math.min(u.def.tier, 10) * 0.8) * 1.5;
       if (sel.has(u.id)) selMark(c, u.x, u.y + (u.def.tier ? r * 0.72 : 22), u.def.tier ? r : 30, t);
-      const away = g.inFight(u);
+      const away = g.inFight(u), mine = u.owner === myIdx && u.def.tier > 0, foIn = fo && mine && fo.set.has(u.def.id);
+      if (foIn) ringSpr(c, 'circle_02', fo.col, u.x, u.y + r * 0.72, r * 1.25, t * 0.6, 0.75 + Math.sin(t * 5) * 0.2, true, 0.42);
       if (away) c.globalAlpha = 0.35;
+      else if (fo && !foIn) c.globalAlpha = 0.45;
       piece(c, u.x, u.y + (u.def.tier ? 0 : Math.sin(t * 3 + u.x) * 3), u.def.tier ? r : 30, u.def, t, u.owner === 1, { pose: poseOf(u, t, r) });
+      if (mine) drawSynMark(c, u, u.x, u.y + r * 1.3, 13 * us * (foIn ? 1.2 : 1)); // 발밑 인연 표식(13-info-timers)
+      if (fo && !foIn && !away) c.globalAlpha = 1;
       if (away) { c.globalAlpha = 1; c.save(); c.translate(u.x, u.y - r - 10); c.scale(us, us); c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,12,6,.9)'; c.lineWidth = 4; c.lineJoin = 'round'; c.font = '700 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.strokeText(I.t('deployed'), 0, 0); c.fillText(I.t('deployed'), 0, 0); c.restore(); }
       if (!u.def.tier) { c.fillStyle = '#ffe9a8'; c.strokeStyle = 'rgba(32,21,12,.85)'; c.lineWidth = 4; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.strokeText(u.def.name, u.x, u.y + 46); c.fillText(u.def.name, u.x, u.y + 46); }
     }

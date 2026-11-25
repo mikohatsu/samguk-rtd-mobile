@@ -14,6 +14,10 @@
     const arenaV = !!S.kill || !!(g.fight && g.phase !== 'wave' && !laneOn());
     const ph = S.kill ? S.camPh : g.phase + (S.laneView ? 'L' : '') + (viewedPeer() ? 'V' : '');
     S.camArena = arenaV;
+    // 결투장 화면이 끝나면(라인으로 돌아오고 처치 연출도 끝남) 결투장 전용 캔버스를 비운다(07-arena arenaFree). 보스전 중 라인 보기,
+    // 결투장에서 진 채 끝난 판(g.fight가 남는다), 게임에 남기는 비우지 않는다(새 판 시작 때 17-loop begin이 비운다)
+    if (arenaV) S.arenaUsed = S.kill ? S.kill.f : g.fight || S.arenaUsed;
+    else if (S.arenaUsed && !g.fight && !S.stay) { arenaFree(S.arenaUsed); S.arenaUsed = null; }
     if (S.camPh !== ph) { S.camPh = ph; resetCam(); }
     if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) {
       const ac = g.active();
@@ -48,7 +52,7 @@
     // 보스전 화면에서는 여기부터 카메라를 풀고 화면 고정 좌표로 그린다: 보스 체력·남은 시간·기술 이름·안내, 등장 글씨, 알림 띠, 등장 연출
     if (arenaV) {
       hudCam(ctx, 0, 0);
-      if (!S.kill && g.phase === 'boss') drawBossHud(ctx, t);
+      if (!S.kill && g.phase === 'boss' && !S.stay) drawBossHud(ctx, t); // 게임에 남기의 빈 결투장에는 보스 체력·시간 줄이 없다
       hudCam(ctx, sx, sy);
       if (intro) drawBossIntro(ctx);
     }

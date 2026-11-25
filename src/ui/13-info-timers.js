@@ -1,7 +1,20 @@
   // 선택 정보 바(안 A). 상태: 라인 정지 / 동료 전장(읽기 전용) / 드롭 / 선택 없음 / 다중 선택 / 한 기(+상세 카드). 보스전은 renderFight.
   // 선택 해제 X(#selx)는 바 왼쪽 위 모서리에 따로 있어 오른쪽 큰 행동(합성·해산)과 떨어져 있다.
   const plain = (h, sub) => `<div class="umid"><div class="ul1"><b class="unm">${h}</b></div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
-  function renderInfo() {
+  function renderInfo() { renderInfo0(); edgeFades(); }
+  // 가로로 밀어 보는 줄이 오른쪽으로 더 있으면 끝을 흐리게(.ovx), 상세 카드가 아래로 더 있으면 아래 끝을 흐리게(.ovy)
+  function edgeFade(el) {
+    const x = el.scrollWidth - el.clientWidth - el.scrollLeft > 2;
+    if (el.classList.contains('ovx') !== x) el.classList.toggle('ovx', x);
+  }
+  function edgeFades() {
+    if ($('selbar').hidden) return;
+    $('selbar').querySelectorAll('.uchips, .upills, .grps').forEach(edgeFade);
+    const b = $('ucard').hidden ? null : $('ucard').querySelector('.ucb');
+    if (b) { const y = b.scrollHeight - b.clientHeight - b.scrollTop > 2; if (b.classList.contains('ovy') !== y) b.classList.toggle('ovy', y); }
+  }
+  ['selbar', 'ucard'].forEach((id) => $(id).addEventListener('scroll', edgeFades, { capture: true, passive: true }));
+  function renderInfo0() {
     // 고른 대상이 바뀌면 상세 카드·해산 확인을 닫는다
     const vp0 = laneOn() && !inBoss() ? viewedPeer() : null, l0 = vp0 || !laneOn() || inBoss() ? [] : selUnits();
     const uk = vp0 ? (S.rsel && S.rsel.peer === vp0.id ? 'r' + vp0.id + S.rsel.d.id : '') : l0.length === 1 && !S.dropSel ? 'u' + l0[0].id : '';
@@ -67,8 +80,10 @@
     const pos = [sb.offsetLeft, sb.offsetWidth, sb.offsetTop, ph].join();
     if (c.dataset.pos !== pos) {
       c.dataset.pos = pos;
-      c.style.left = sb.offsetLeft + 'px'; c.style.width = Math.min(sb.offsetWidth, 560) + 'px';
-      c.style.bottom = (ph - sb.offsetTop + 8) + 'px'; c.style.maxHeight = Math.max(120, Math.min(sb.offsetTop - 8 - 8, ph * 0.6)) + 'px';
+      // 카드는 바와 같은 폭·같은 왼쪽 끝(태블릿에서 바만 넓고 카드는 560px로 왼쪽에 붙어 어긋나 보이던 것).
+      // 바 위 22px 띄움: 바 왼쪽 위 모서리 밖으로 16px 나온 선택 해제 X(#selx)가 카드 아래 테를 덮지 않게
+      c.style.left = sb.offsetLeft + 'px'; c.style.width = sb.offsetWidth + 'px'; c.classList.toggle('wide', sb.offsetWidth >= 720); // 넓은 화면(태블릿)은 두 단
+      c.style.bottom = (ph - sb.offsetTop + 22) + 'px'; c.style.maxHeight = Math.max(120, Math.min(sb.offsetTop - 22 - 8, ph * 0.6)) + 'px';
     }
   }
   document.addEventListener('pointerdown', (e) => {
@@ -364,6 +379,7 @@
         + `<small style="grid-column:2">${x.on ? esc([d.lane, d.boss].filter(Boolean).join(' / ')) : esc(s.desc)}</small></div>`;
     }).join('');
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
+    synMarkBuild(p);
     }
     renderSynBar(vis);
     if (S.synAll) renderSynAll();
@@ -374,3 +390,56 @@
       mb.innerHTML = `<div style="display:grid;gap:4px;padding:4px 6px 8px">${g.muts.map((m, i) => mutCard(m.id, i)).join('')}</div>`;
     }
   }
+  // ---- 전장 유닛 발밑 인연 표식(2026-11-25): 별 그림(gfx/pic_star, 물들임)을 원판 아래에 작게 늘어놓는다. ----
+  // 켜진 인연 = 그 등급색 별, 다음 단계까지 1명 남은 인연(core 조건 충족) = 흐린 회색 별. 나머지는 표시하지 않는다(지저분해지지 않게). 한 유닛에 최대 3개.
+  // 인연 줄·인연 창·선택 바의 인연 칩을 누르면(마우스는 올리면) 그 인연 구성원 발밑에 등급색 고리가 깔리고 나머지 내 유닛은 흐려진다(05-lane).
+  const SYN_MARK_MAX = 3, SYN_NEAR_COL = '#9a9080';
+  function synMarkBuild(p) {
+    const m = {};
+    (T.synergies || []).forEach((s) => {
+      const x = synProg(s, p);
+      const near = !x.on && !s.hidden && x.gap === 1 && synCoreOk(x, p);
+      if (!x.on && !near) return;
+      s.units.forEach((id) => { if (g.has(p, id)) (m[id] = m[id] || []).push({ on: x.on, g: x.g, col: x.on ? GRADE_COL[x.g] : SYN_NEAR_COL }); });
+    });
+    Object.keys(m).forEach((id) => { m[id] = m[id].sort((a, b) => b.on - a.on || b.g - a.g).slice(0, SYN_MARK_MAX); m[id].key = m[id].map((x) => x.col + (x.on ? 1 : 0)).join(); });
+    S.synMark = m;
+  }
+  // 별 줄 한 장(모양별로 한 번 만든다). 별 하나 STAR_PX, 그림자(검게 물들인 같은 별)를 살짝 크게 깔아 밝은 땅에서도 보이게.
+  const SYN_MARK_CV = new Map(), STAR_PX = 32;
+  function synMarkSprite(list) {
+    let cv = SYN_MARK_CV.get(list.key);
+    if (cv) return cv;
+    const sh = Art.picTint('pic_star', '#140c06');
+    if (!sh) return null; // 그림을 아직 못 받았다
+    const gap = STAR_PX * 0.12, pad = 3;
+    cv = document.createElement('canvas'); cv.width = Math.ceil(list.length * STAR_PX + (list.length - 1) * gap + pad * 2); cv.height = STAR_PX + pad * 2;
+    const x = cv.getContext('2d');
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i], im = Art.picTint('pic_star', it.col), cx = pad + i * (STAR_PX + gap);
+      if (!im) return null;
+      x.globalAlpha = 0.85; x.drawImage(sh, cx - 2, pad - 1, STAR_PX + 4, STAR_PX + 4);
+      x.globalAlpha = it.on ? 1 : 0.75; x.drawImage(im, cx, pad, STAR_PX, STAR_PX);
+    }
+    if (SYN_MARK_CV.size > 40) SYN_MARK_CV.clear();
+    SYN_MARK_CV.set(list.key, cv);
+    return cv;
+  }
+  // 라인에서 내 유닛 하나의 표식. y는 발밑 원판 아래. size = 별 하나의 화면 크기(월드 단위, uiS를 곱해 받는다)
+  function drawSynMark(c, u, x, y, size) {
+    const list = S.synMark && S.synMark[u.def.id];
+    if (!list || !list.length) return;
+    const cv = synMarkSprite(list); if (!cv) return;
+    const k = size / STAR_PX, w = cv.width * k, h = cv.height * k;
+    c.drawImage(cv, x - w / 2, y - h / 2, w, h);
+  }
+  // 인연 창이 열려 있으면 그 인연의 구성원 장수 id 묶음(05-lane 강조용). 없으면 null
+  const SYN_SETS = new WeakMap();
+  function synFocus() {
+    if (!S.synPop) return null;
+    const s = (T.synergies || []).find((x) => x.id === S.synPop);
+    if (!s) return null;
+    let set = SYN_SETS.get(s); if (!set) SYN_SETS.set(s, (set = new Set(s.units)));
+    return { set, col: GRADE_COL[synProg(s, g.me).g] || '#ffd86a' };
+  }
+

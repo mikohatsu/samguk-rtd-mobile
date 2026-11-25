@@ -35,6 +35,7 @@
     return { x: c.x + (A.dx / len) * Math.max(r, info.shape === 'circle' ? 0 : 30), y: c.y + (A.dy / len) * Math.max(r, info.shape === 'circle' ? 0 : 30) };
   }
   function castAt(c, k, x, y) {
+    if (S.stay) return;
     if (k === 'dash') g.dash(c, x, y);
     else g.useSkill(c, +k, x, y);
   }
@@ -198,7 +199,7 @@
     padInit();
     g.manual = !!c;
     // 라인에서는 터치 기기에서 유닛을 고르면 조이스틱과 공격 버튼만 띄운다(스킬 없음). 공격 버튼을 안 눌러도 유닛은 사거리 안의 적을 알아서 친다
-    const lane = !c && !!S.coarse && laneOn() && !viewedPeer() && !g.over && S.sel.length > 0;
+    const lane = !c && !!S.coarse && laneOn() && !viewedPeer() && (!g.over || !!S.stay) && S.sel.length > 0;
     PAD.lane = lane;
     $('stage').classList.toggle('lanejoy', lane);
     if (!c) {
@@ -217,7 +218,8 @@
       if (joy.hidden === lane) { joy.hidden = !lane; if (!lane) joyReset(); }
       return;
     }
-    const sk = c.def.sk || [], heal = g.healLeft(), dash = c.def.tier >= g.R.dashMinTier;
+    // 게임에 남기(17-loop): 끝난 판이라 스킬·이동기·치료 없이 공격 버튼만
+    const sk = S.stay ? [] : c.def.sk || [], heal = S.stay ? null : g.healLeft(), dash = !S.stay && c.def.tier >= g.R.dashMinTier;
     const key = c.uid + ':' + sk.length + ':' + dash + ':' + (heal == null ? 'n' : 'h');
     if (bar.dataset.k !== key) {
       bar.dataset.k = key;

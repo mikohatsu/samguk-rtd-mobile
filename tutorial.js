@@ -209,6 +209,8 @@
       if (!ctx || !ctx.g) return;
       // 판이 끝났는데 안내가 남았으면 마친 것으로 친다(첫 신화와 연출은 로비로 돌아갔을 때)
       if (ctx.g.over) { if (steps.length) { mark(); steps = []; cur = null; } tip = null; hide(); return; }
+      // 보스 처치 연출(S.kill, 07-arena) 중에는 안내 단계·팁을 띄우지 않고 미룬다(연출 위로 겹쳐 떴다). 떠 있던 팁은 본 것으로 치지 않고 접는다
+      if (ctx.S.kill) { if (box && !box.hidden) hide(); return; }
     }
     if (!tip) {
       const st = steps.length ? pick() : null;
@@ -225,7 +227,7 @@
       // 팁: 안내 단계가 보이지 않을 때만, 판 안에서
       // 보스전(라운드 진행 중이 아닐 때)에는 팁을 띄우지 않는다: 경기장 가운데를 가린다
       // 악몽 +N 규칙 등장 연출(S.mutHold, 17b-mutintro) 중에도 띄우지 않는다: 연출 막 위로 올라온다
-      if (mode === 'game' && !ctx.g.over && ctx.g.phase === 'wave' && !ctx.S.mutHold && !((ctx.S.vicUntil || 0) > performance.now())) tip = TIPS.find((x) => get(x.key) !== '1' && x.when(ctx)) || null;
+      if (mode === 'game' && !ctx.g.over && ctx.g.phase === 'wave' && !ctx.S.mutHold && !ctx.S.kill && !ctx.S.vicOn && !((ctx.S.vicUntil || 0) > performance.now())) tip = TIPS.find((x) => get(x.key) !== '1' && x.when(ctx)) || null;
     }
     if (tip && tip.tab && mode === 'game' && !tip.when(ctx)) { set(tip.key, '1'); tip = null; hide(); return; }
     // 떠 있던 팁도 보스전에 들어가면 접어 둔다(본 것으로 치지 않으므로 라운드로 돌아오면 다시 뜬다)

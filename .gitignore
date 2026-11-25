@@ -35,3 +35,4 @@ store/
 
 # 서버 실행 데이터(판 표 서명 키 ticket.key, JSON 저장소 등). 비밀값이라 저장소에 넣지 않는다(SEC-103). 운영은 DATA_DIR=/var/lib/rtd-online
 server/data/
+art_src/hires_tmp/

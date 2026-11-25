@@ -24,6 +24,7 @@
     padTick();
     const dt = Math.max(0, Math.min(cap, (now - last) / 1000)) || 0; last = now; // 시계가 거꾸로 가거나 값이 깨져도 계산이 멈추지 않게
     if (!(acc >= 0)) acc = 0;
+    if (S.stay) { stayStep(dt); drainEvents(); return; } // 게임에 남기: 판 계산·통신·AI는 돌리지 않고 내 유닛·장수만 움직인다
     // 신화·불멸 컷신 동안은 시간이 멈추고, 보스전은 항상 1배속이다
     const held = net && (net.clock.pz || net.kicked);
     if (S.freeze > 0) { S.freeze -= dt; acc = 0; }
@@ -98,7 +99,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 쉬는 화면: 일시정지(창은 DOM이라 캔버스가 멈춰도 보인다), 또는 판이 끝나고 승리·등장 연출과 경험치 연출이 다 끝난 결과 화면.
     // 이때는 초당 5번만 그린다(발열·배터리). 글자판을 고칠 일이 있으면(needs) 바로 돈다. 튜토리얼 설명 중에는 그대로 그린다.
     // 패배 연출 중(performance.now() < S.endHoldUntil)은 쉬는 화면에서 빼서 연출이 끊기지 않게 한다
-    const idle = !S.tutHold && ((S.paused && !g.over) || (g.over && !S.pop && !popQ.length && !S.xpPlaying && now >= (S.endHoldUntil || 0)));
+    const idle = !S.tutHold && ((S.paused && !g.over) || (g.over && !S.stay && !S.pop && !popQ.length && !S.xpPlaying && now >= (S.endHoldUntil || 0) && !S.kill));
     if (idle && !needs && now - lastDraw < 200) return;
     lastDraw = now;
     const p0 = Q.perf ? performance.now() : 0;
@@ -110,6 +111,72 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     if (now - lastDom > 180 || needs) {
       lastDom = now; needs = false;
       renderPane(); renderInfo(); renderTimers(); renderOverlay();
+    }
+  }
+  // ---- 게임에 남기(2026-11-25): 결과창을 닫고 끝난 판의 전장에 남아 내 유닛·장수를 보고 움직이며 논다 ----
+  // 판은 이미 끝났으므로(g.over 그대로) 엔진 계산(g.step)·라운드·결과 보고·전적은 다시 돌지 않는다. 결과·보상·기록은 'over' 때 한 번 보낸 것으로 확정이다.
+  // - 라인: 남은 적·상자·아이템은 치운다(유닛이 적을 쳐 금화·처치 수가 늘거나 상자를 열지 않게). 유닛 선택·이동·정보 보기만.
+  // - 보스전 화면: 이 판의 마지막 결투장에 내 출전 장수를 되살려 세운다(보스·장판·동료 장수는 없음). 조이스틱 이동·공격 동작만, 스킬·이동기·치료는 없다.
+  // - 협동: 통신을 판에서 떼어(net.attach(null)) 동료 신호를 받지도 보내지도 않는다. 각자 따로 남는다.
+  // 되는 행동은 11-actions의 STAY_OK. 합성·해산·뽑기·강화·선택권·명사·자동·배속은 막는다.
+  function stayFight(F) {
+    if (!F || !F.def || !F.boss) return null;
+    const mine = F.champs.filter((c) => c.owner === g.me.idx);
+    if (!mine.length) return null;
+    const champs = mine.map((c, i) => {
+      const y = Math.max(ARENA.y0 + 40, Math.min(ARENA.y1 - 40, 310 + i * 300));
+      return Object.assign({}, c, { dead: false, bench: false, hp: c.mhp, x: 340, y, tx: 340, ty: y, move: false, chase: false, joy: null, tgt: null, atkHold: 0, atkLock: 0, kt: 0, cd: 0, atkT: 0, moveT: 0, inv: 0, hurt: 0, ai: false, skillCd: (c.skillCd || []).map(() => 0), dashCd: 0 });
+    });
+    return Object.assign({}, F, { champs, hazards: [], ghosts: {}, sel: 0, t: 0, picked: true, mech: Object.assign({}, F.mech, { hide: true, objs: [], cast: null, charmT: 0, ctr: 0, gr: 0, ampT: 0 }), boss: Object.assign({}, F.boss, { hp: 0, charge: null, burnT: 0, stun: 0 }) });
+  }
+  function stayEnter() {
+    if (!g || !g.over || S.stay || !(S.es && S.es.open)) return;
+    if (net) { try { net.attach(null); } catch (e) { /* 이미 끊김 */ } }
+    S.stay = { arena: false, fight: stayFight(g.fight || S.lastArena) };
+    g.enemies = []; g.drops = []; g.laneJoy = null; g.fight = null; g.phase = 'wave';
+    S.view = null; S.drawer = null; S.ticket = null; S.combineAsk = null; S.dropSel = null; S.rsel = null; S.cmdMode = null; S.drag = null;
+    S.kill = null; S.lastFight = null; S.pattern = null; S.banner = null; S.laneView = false; S.allyOpen = false;
+    setSel([]);
+    $('stage').classList.add('stay');
+    $('overlay').dataset.key = '';
+    last = performance.now();
+  }
+  function stayView() {
+    const st = S.stay;
+    if (!st || !st.fight) return;
+    st.arena = !st.arena;
+    if (st.arena) { g.fight = st.fight; g.phase = 'boss'; st.fight.sel = 0; }
+    else { g.fight = null; g.phase = 'wave'; S.lastFight = null; S.kill = null; } // 07-arena watchKill이 처치 연출로 착각하지 않게
+    setSel([]); S.cmdMode = null; S.drag = null; S.dropSel = null;
+    $('stage').classList.toggle('stayarena', st.arena);
+  }
+  // 남은 동안의 계산: 라인은 유닛 이동(조이스틱·이동 명령. 적이 없으니 치지 않는다), 보스전 화면은 내 장수 이동과 빈 공격 동작
+  function stayStep(dt) {
+    if (g.phase === 'boss' && g.fight) g.localChamps().forEach((c) => stayChamp(c, dt));
+    else g.stepUnits(dt);
+    g.stepFx(dt);
+  }
+  function stayChamp(c, dt) {
+    const sp = 250;
+    c.cd -= dt; c.atkT = Math.max(0, (c.atkT || 0) - dt); c.moveT = Math.max(0, (c.moveT || 0) - dt);
+    if (c.atkHold > 0) c.atkHold -= dt;
+    const j = c.joy, jm = j ? Math.hypot(j.x, j.y) : 0;
+    if (jm > 0.1) {
+      c.move = false;
+      const s = sp * Math.min(1, jm / 0.5) * dt;
+      c.x = Math.max(ARENA.x0, Math.min(ARENA.x1, c.x + (j.x / jm) * s)); c.y = Math.max(ARENA.y0, Math.min(ARENA.y1, c.y + (j.y / jm) * s));
+      c.face = Math.atan2(j.y, j.x); c.moveT = 0.12;
+    } else if (c.move) {
+      const m = Math.hypot(c.tx - c.x, c.ty - c.y);
+      if (m < 6) c.move = false;
+      else { const s = Math.min(m, sp * dt); c.x += ((c.tx - c.x) / m) * s; c.y += ((c.ty - c.y) / m) * s; c.face = Math.atan2(c.ty - c.y, c.tx - c.x); c.moveT = 0.12; }
+    }
+    // 공격 버튼: 보는 방향으로 한 번 휘두르거나 쏜다(맞을 것은 없다)
+    if (c.atkHold > 0 && c.cd <= 0 && jm <= 0.1) {
+      c.cd = g.attackTime(c.def); c.atkT = 0.24;
+      const a = c.face || 0, wp = g.weapon(c.def), col = g.shotColor(c.def);
+      g.fx.push({ k: 'shot', wp, big: true, x0: c.x, y0: c.y, x1: c.x + Math.cos(a) * 140, y1: c.y + Math.sin(a) * 140, t: 0, life: 0.26, c: col });
+      Snd.play(wp, 70);
     }
   }
   // 판 표를 못 받았을 때 다시 받는 간격(ms)
@@ -161,6 +228,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       }
     }
     S.everSel = false; S.frontWarned = false; S.fromSnap = !!opt.snap; S.endHoldUntil = 0; S.toastHoldUntil = 0; S.toastQ = []; S.vicUntil = 0;
+    arenaFree(S.arenaUsed); S.arenaUsed = null; // 지난 판의 결투장 캔버스(07-arena)
+    S.es = null; S.stay = null; S.lastArena = null; S.repDone = false; S.xpFrom = null; $('stage').classList.remove('stay');
     S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.coinGained = 0; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;
     if (opt.net) { net = opt.net; net.onLobby = null; net.attach(g); speed = 1; }
     Snd.init();

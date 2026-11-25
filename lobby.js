@@ -921,5 +921,5 @@
   const mapTheme = () => { const me = C && C.ACC.me, p = me && me.mapSkin && SHOP.MAP_SKINS[me.mapSkin]; return p && p.theme ? p.theme : null; };
   // 테마 그림이 뒤늦게 도착하면 상점의 지도 미리보기를 다시 그린다
   if (typeof window !== 'undefined') window.addEventListener('rtd-maptheme', () => { if (panel === 'shop' && ptab === 'maps') renderPanel(); });
-  root.RTD_LOBBY = { shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), close: () => { closeWizard(true); closePanel(); } };
+  root.RTD_LOBBY = { shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, missions: () => ms, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), close: () => { closeWizard(true); closePanel(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

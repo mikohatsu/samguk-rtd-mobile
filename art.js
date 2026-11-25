@@ -302,17 +302,72 @@
   }
   const lookOf = (id) => (T.looks[id] ? { w: T.looks[id][0], h: T.looks[id][1], b: T.looks[id][2], s: T.looks[id][3], c: T.looks[id][4], f: T.looks[id][5] } : { w: 'spear', h: 'guard' });
   const unitSprite = (d, v, frame) => { const f = T.factions[d.fac]; return gfxSprite(d.id, v) || sprite(`u${d.id}_${v || 0}_${frame || 0}`, Object.assign(lookOf(d.id), { v, frame }), f.color, f.dark); };
-  const namedSprite = (key, unitId, col, v, frame) => gfxSprite(unitId, v) || sprite(`n${key}_${v || 0}_${frame || 0}`, Object.assign(lookOf(unitId), { v, frame }), col, '#1b130c');
+  // 보스전 고해상도 그림(gfx/hb_<장수>[_s|_b].png, 보스 10명): 같은 장수 그림을 Real-ESRGAN으로 2배 키우고 흰 테두리를 지운 것(art_src/build-boss-hires.py).
+  // 보스는 클로즈업에서 152칸 그림이 3~4배로 늘어나 흐렸다. 456칸(3배)에 외곽선 9px로 만든다. 받기 전·실패하면 아틀라스 그림.
+  const HB = {}, HB_K = 3;
+  function hbSprite(id, v) {
+    const key = v >= 3 && GFX[id + '_b'] ? id + '_b' : v === 2 && GFX[id + '_s'] ? id + '_s' : id;
+    let o = HB[key];
+    if (!o) {
+      if (typeof Image === 'undefined' || !GFX[key]) return null;
+      o = HB[key] = { im: new Image(), ok: false, cv: null };
+      o.im.onload = () => { o.ok = true; }; o.im.src = 'gfx/hb_' + key + '.png?v=1';
+    }
+    if (!o.ok || !o.im.width) return null;
+    if (o.cv) return o.cv;
+    const N = 152 * HB_K, cv = document.createElement('canvas'); cv.width = N; cv.height = N;
+    const c = cv.getContext('2d'), w = o.im.width, h = o.im.height, s = Math.min((GFX_H * HB_K) / h, (144 * HB_K) / w);
+    const dw = w * s, dh = h * s, dx = N / 2 - dw / 2, dy = GFX_FOOT * HB_K - dh;
+    const sil = document.createElement('canvas'); sil.width = N; sil.height = N;
+    const sc = sil.getContext('2d');
+    sc.drawImage(o.im, dx, dy, dw, dh); sc.globalCompositeOperation = 'source-in'; sc.fillStyle = '#140c06'; sc.fillRect(0, 0, N, N);
+    for (let a = 0; a < 8; a++) c.drawImage(sil, Math.cos((a * Math.PI) / 4) * 3 * HB_K, Math.sin((a * Math.PI) / 4) * 3 * HB_K);
+    c.drawImage(o.im, dx, dy, dw, dh);
+    sil.width = sil.height = 0;
+    return (o.cv = cv);
+  }
+  // 보스전이 끝나면 만든 456칸 그림과 그 실루엣(흰 번쩍임)을 비운다(07-arena arenaFree). 받은 원본(o.im)은 두어 다음 보스전에 바로 다시 만든다.
+  function hbFree() {
+    for (const k in HB) {
+      const o = HB[k];
+      if (!o.cv) continue;
+      const m = SIL.get(o.cv);
+      if (m) { for (const c in m) m[c].width = m[c].height = 0; SIL.delete(o.cv); }
+      o.cv.width = o.cv.height = 0; o.cv = null;
+    }
+  }
+  const namedSprite = (key, unitId, col, v, frame) => (typeof key === 'string' && key.startsWith('b_') && hbSprite(unitId, v)) || gfxSprite(unitId, v) || sprite(`n${key}_${v || 0}_${frame || 0}`, Object.assign(lookOf(unitId), { v, frame }), col, '#1b130c');
   const soldierSprite = (w, v, frame) => gfxSprite('wave' + T.waves.indexOf(w), v) || sprite(`w${w.name}_${v || 0}_${frame || 0}`, { w: w.weapon || 'spear', h: w.hat || 'guard', c: '#2a1c14', v, frame }, w.color, '#1b130c');
   const urls = {};
   // 생성 이미지가 아직 안 불러졌으면 초상화를 저장해 두지 않는다
   // (그림판이 아직 안 불러졌을 때 옛 도형 그림이 저장돼 계속 보이던 문제: 생성 그림이 있는 장수는 불러진 뒤에만 저장)
   const portrait = (d) => urls[d.id] || ((GFX[d.id] && !ok(gimg[d.id])) ? unitSprite(d).toDataURL() : (urls[d.id] = unitSprite(d).toDataURL()));
+  // 그림 실루엣(같은 모양을 한 색으로 채운 것): 맞았을 때 하얗게(보스)·빨갛게(장수) 번쩍이는 데 쓴다.
+  // ctx.filter는 휴대폰에서 매우 느려서 그림·색마다 한 번 만들어 그림에 묶어 둔다(그림이 버려지면 같이 버려진다).
+  const SIL = new WeakMap();
+  function silhouette(im, col) {
+    let m = SIL.get(im);
+    if (!m) SIL.set(im, (m = {}));
+    let cv = m[col];
+    if (cv) return cv;
+    cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height;
+    const x = cv.getContext('2d'); x.drawImage(im, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, cv.width, cv.height);
+    return (m[col] = cv);
+  }
+  // setTint(색, 세기): 켜 두는 동안 drawSprite가 그림 위에 그 색 실루엣을 덮는다(장수 그리기 piece처럼 안에서 drawSprite를 부르는 함수에 씌울 때). 끝나면 setTint(null).
+  let TINT = null;
+  function setTint(col, a) { TINT = col && a > 0.01 ? { col, a: Math.min(1, a) } : null; }
   function drawSprite(c, img, x, y, size, flip, rot, sy) {
+    const tn = TINT;
     // 돌리기·뒤집기·찌그러뜨리기가 없으면 변환 없이 바로 찍는다(같은 결과)
-    if (!rot && !flip && !sy) { c.drawImage(img, x - size / 2, y - size * 0.6, size, size); return; }
+    if (!rot && !flip && !sy) {
+      c.drawImage(img, x - size / 2, y - size * 0.6, size, size);
+      if (tn) { const ga = c.globalAlpha; c.globalAlpha = ga * tn.a; c.drawImage(silhouette(img, tn.col), x - size / 2, y - size * 0.6, size, size); c.globalAlpha = ga; }
+      return;
+    }
     c.save(); c.translate(x, y); if (rot) c.rotate(rot); if (flip) c.scale(-1, 1); if (sy) c.scale(1 / sy, sy);
     c.drawImage(img, -size / 2, -size * 0.6, size, size);
+    if (tn) { c.globalAlpha *= tn.a; c.drawImage(silhouette(img, tn.col), -size / 2, -size * 0.6, size, size); }
     c.restore();
   }
 
@@ -386,5 +441,5 @@
     const o = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
     return [{ v: 2 }, { v: 1 }, { v: 0 }, { v: 1, flip: true }, { v: 2, flip: true }, { v: 3, flip: true }, { v: 4 }, { v: 3 }][o];
   }
-  root.RTD_ART = { facing, unitSprite, namedSprite, soldierSprite, portrait, drawSprite, shot, fxImg, fxAnim, fxPic, img, ready, pic, picTint, nine, floorTex, floorUnit };
+  root.RTD_ART = { setTint, silhouette, hbFree, facing, unitSprite, namedSprite, soldierSprite, portrait, drawSprite, shot, fxImg, fxAnim, fxPic, img, ready, pic, picTint, nine, floorTex, floorUnit };
 })(typeof window !== 'undefined' ? window : globalThis);
