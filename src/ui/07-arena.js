@@ -429,6 +429,7 @@
       const red = kb > 0.05 ? kb * 0.6 : 0;
       if (red) { rs.tint = '#ff2a1a'; rs.tintA = red; Art.setTint('#ff2a1a', red); }
       piece(c, kx, ky, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf(u, t, CHAMP_R), rig: rs });
+      tierStars(c, kx, ky + CHAMP_R * 1.15, u.def.tier, 10 * uiS()); // 원판 아래 등급 별(라인과 같은 규칙, 03-unit)
       if (red) Art.setTint(null);
       // 체력 막대: 맞은 뒤 0.45초 동안 흰색·빨간색으로 깜빡인다
       const blink = u._hurtT != null && t - u._hurtT >= 0 && t - u._hurtT < 0.45;
@@ -576,7 +577,7 @@
   // 시간은 '연출 시간' K.t(0→KILL_LEN)로 재고, 앞부분은 느리게 흐른다(슬로모션): 0~0.12 ×0.3(번쩍이며 멎음) · 0.12~1.0 ×0.5(비틀거리며 연쇄 폭발) · 그 뒤 ×1.
   //   1.0 부서짐: 조각 애니메이션 보스는 무기·빈손 조각이 튕겨 나가고 몸이 넘어지며 흐려진다(rig.js drawBreak). 조각이 없으면 그림이 발끝 기준으로 넘어진다.
   //   1.0~3.0 「撃破!」 글자(i18n bossDown), 1.55 땅에 닿는 충격파·흙먼지.
-  // 혼자 할 때는 그동안 계산을 멈추고(히트스톱과 같은 방식), 협동은 시계를 맞춰야 해서 멈추지 않는다(화면만 붙잡는다).
+  // 그동안 라인은 엔진 규칙으로 멈춰 있다(engine.js KILL_HOLD = KILL_REAL, applyBossEnd가 g.killHold를 세운다). 혼자·AI 동맹·방 협동 모두 같다(2026-11-25 실기 소감 「처치 연출 뒤에서 라인이 돈다」).
   // 판의 마지막 보스면 결과 창을 연출이 끝날 때까지 미룬다(S.endHoldUntil: 16-hud가 결과 창을, 17-loop가 쉬는 화면 전환을 이 시각까지 미룬다).
   const KILL_LEN = 3.0, KILL_REAL = 4.3;
   const killSpeed = (k) => (k < 0.12 ? 0.3 : k < 1 ? 0.5 : 1);
@@ -597,7 +598,6 @@
     S.kill = { f, t: 0, flip: ac ? ac.x > f.boss.x : false, hit: 0, boom: 0, brk: 0 };
     S.shake = Math.max(S.shake || 0, 1);
     Snd.play('hit');
-    if (!net) S.hitStop = Math.max(S.hitStop || 0, KILL_REAL);
     if (g.over) S.endHoldUntil = Math.max(S.endHoldUntil || 0, performance.now() + KILL_REAL * 1000);
     if (navigator.vibrate) { try { navigator.vibrate(30); } catch (e) { /* 진동 없음 */ } }
   }
@@ -608,7 +608,7 @@
     const k = K.t;
     arenaFloor(c, f.def.arena, f.def.id); arenaRim(c, f, 1);
     // 이긴 장수들은 보스 쪽을 보고 선다
-    f.champs.forEach((u) => { if (u.dead || u.bench) return; piece(c, u.x, u.y, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf({ face: Math.atan2(b.y - u.y, b.x - u.x), def: u.def, id: 1 }, t, CHAMP_R), rig: { state: 'idle', t } }); });
+    f.champs.forEach((u) => { if (u.dead || u.bench) return; piece(c, u.x, u.y, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf({ face: Math.atan2(b.y - u.y, b.x - u.x), def: u.def, id: 1 }, t, CHAMP_R), rig: { state: 'idle', t } }); tierStars(c, u.x, u.y + CHAMP_R * 1.15, u.def.tier, 10 * uiS()); });
     Object.values(f.ghosts || {}).forEach((o) => { if (o.def) piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf({ face: Math.atan2(b.y - o.y, b.x - o.x), def: o.def, id: 1 }, t, CHAMP_R) }); });
     const by = b.y - 56 * (BOSS_S - 1), sc = 200 * BOSS_S, RG = window.RTD_RIG;
     const rv = RG && (RG.has(f.def.id, 'f') ? 'f' : RG.has(f.def.id, 's') ? 's' : null);

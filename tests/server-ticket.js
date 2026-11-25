@@ -63,7 +63,7 @@ function forge(uid, diff, mut, agoSec, key, k) {
     // 정상: 1시간 전에 받은 쉬움 표(온라인 2인 판 = 배율 ×1.0)로 70라운드 클리어
     const t1 = forge(uid, 'easy', 0, 3600, null, 2);
     r = await api('/api/result', { ticket: t1, round: 70, win: true, time: 3200, diff: 'nightmare', mutLv: 5 }, tok);
-    ok(r.gained === 131 && r.coins === 46 && r.me.prog.clr === 0, `정상 판(쉬움 70R 클리어): 경험치 131·동전 46, 보통이 열림. 보고에 적은 난이도(악몽+5)는 무시 (받은 값 ${r.gained}/${r.coins})`);
+    ok(r.gained === 85 && r.coins === 46 && r.me.prog.clr === 0, `정상 판(쉬움 70R 클리어): 경험치 85·동전 46, 보통이 열림. 보고에 적은 난이도(악몽+5)는 무시 (받은 값 ${r.gained}/${r.coins})`);
     r = await api('/api/result', { ticket: t1, round: 70, win: true, time: 3200 }, tok);
     ok(r.gained === 0, '같은 표를 두 번 내면 두 번째는 0');
     let rk = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy`)).json();
@@ -77,13 +77,13 @@ function forge(uid, diff, mut, agoSec, key, k) {
     await new Promise((x) => setTimeout(x, 30));
     const t2 = forge(uid, 'nightmare', 5, 0.01);
     r = await api('/api/result', { ticket: t2, round: 1, win: false, time: 30 }, tok);
-    // 판 인원이 안 적힌 표 = 오프라인 배율(×0.5): 기본 21 → 11, 동전 4 → 2
-    ok(r.gained === Math.round(Math.round((15 + 0.8) * 1.3) * 0.5) && r.coins === 2, `안 열린 악몽 +5 표: 보통 배율로만 쳐 줌(오프라인 ×0.5) (받은 값 ${r.gained}/${r.coins})`);
+    // 판 인원이 안 적힌 표 = 오프라인 배율(×0.5): 경험치 기본 26(=(10 + 0.5) × 보통 2.5) → 13, 동전 4 → 2 (2026-11-25 economy-v2)
+    ok(r.gained === Math.round(Math.round((10 + 0.5) * 2.5) * 0.5) && r.coins === 2, `안 열린 악몽 +5 표: 보통 배율로만 쳐 줌(오프라인 ×0.5) (받은 값 ${r.gained}/${r.coins})`);
 
     // 이긴 척: 마지막 라운드가 아닌데 win
     await new Promise((x) => setTimeout(x, 30));
     r = await api('/api/result', { ticket: forge(other.me.id, 'easy', 0, 0.01), round: 1, win: true, time: 30 }, other.token);
-    ok(r.me.prog.clr === -1 && r.me.wins === 0 && r.gained === 8, '1라운드에서 이겼다는 보고: 승리로 치지 않음(난이도 진행·승수 그대로, 경험치는 진 판만큼 = 기본 16 × 오프라인 0.5)');
+    ok(r.me.prog.clr === -1 && r.me.wins === 0 && r.gained === 6, '1라운드에서 이겼다는 보고: 승리로 치지 않음(난이도 진행·승수 그대로, 경험치는 진 판만큼 = 기본 11 × 오프라인 0.5)');
 
     // 전적(오프라인 판)
     r = await api('/api/history', { diff: 'hard', round: 100, win: true, time: 5000 }, tok);

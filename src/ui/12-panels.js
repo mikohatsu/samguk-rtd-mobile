@@ -29,7 +29,7 @@
     const chips = st.parts.map((x) => `<span class="chip ${x.have >= x.need ? 'have' : 'miss'}">${esc(defOf[x.id].name)} ${rankTag(defOf[x.id].tier)} ${Math.min(x.have, x.need)}/${x.need}</span>`).join('');
     const it = st.item ? `<span class="chip ${st.hasItem ? 'have' : 'miss'}">${esc(T.items.find((i) => i.id === st.item).name)}</span>` : '';
     // 잠긴 신화·불멸: 재료가 다 있어도 조합할 수 없으므로 버튼 대신 까닭(상점에서 해금)을 적는다
-    if (g.isLocked && g.isLocked(id)) return `<div class="row"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div><small class="lockn">🔒 ${I.t('lockedInShop')}</small></div></div>`;
+    if (g.isLocked && g.isLocked(id)) return `<div class="row"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div><small class="lockn">${I.t('lockedInShop')}</small></div></div>`;
     return `<div class="row ${st.ok ? 'ok' : ''}"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div></div><button class="btn ${st.ok ? 'go' : ''}" data-act="craft" data-arg="${id}" type="button" ${st.ok ? '' : 'disabled'}>${I.t('combineBtn')}</button></div>`;
   }
   // 소리 크기 줄(판 안 설정 탭과 로비 설정 창이 같이 쓴다): − 값 ＋
@@ -52,7 +52,9 @@
   // 도감: 줄을 누르면 능력치와 스킬, 조합식이 펼쳐진다
   function bookRow(d) {
     const open = S.book === d.id, f = T.factions[d.fac];
-    const row = `<div class="row" data-act="book" data-arg="${d.id}"><img alt="" src="${Art.portrait(d)}"><div><span style="color:${f.color}">${esc(f.name)}</span> ${esc(d.name)}${d.title ? `<small>${esc(d.title)}</small>` : ''}</div></div>`;
+    // 잠긴 신화·불멸(2026-11-25 실기 소감): 자물쇠 글자 대신 상점과 같은 규칙 — 흑백 초상 + 이름 옆 짧은 「잠김」
+    const lk = !!(g.isLocked && g.isLocked(d.id));
+    const row = `<div class="row${lk ? ' lk' : ''}" data-act="book" data-arg="${d.id}"><img alt="" src="${Art.portrait(d)}"><div><span style="color:${f.color}">${esc(f.name)}</span> ${esc(d.name)}${lk ? ` <em class="lkt">${I.t('lockedTag')}</em>` : ''}${d.title ? `<small>${esc(d.title)}</small>` : ''}</div></div>`;
     if (!open) return row;
     const stats = d.tier ? `${I.t('atk')} ${fmt(g.baseAtk(g.me, d))} · ${I.t('hp')} ${fmt(g.rankOf[d.tier].hp)} · ${I.t('range')} ${g.range(d)} · ${I.t('interval')} ${I.t('sec', { n: g.attackTime(d).toFixed(2) })}` : I.t('hireCost', { c: T.currency, n: fmt(d.cost) });
     const pass = (d.p || []).map((x) => `<div><span class="tag">${t('passive')}</span>${esc(x.name)}: ${esc(x.desc)}</div>`).join('');

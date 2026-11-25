@@ -8,6 +8,9 @@
   const dist = (a, b, c, d) => Math.hypot(a - c, b - d);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  // 보스 처치 연출 시간(초): 보스를 이긴 뒤 이만큼 라인 진행(적 생성·이동·라운드 시간·유닛 공격·중간보스 대기)을 멈춘다.
+  // 화면의 처치 연출(src/ui/07-arena KILL_REAL 4.3초)과 같다. 협동은 모두가 bossEnd를 받아 같은 규칙으로 멈추고, 방장의 라운드 시간도 멈춰 다음 라운드가 같이 밀린다.
+  const KILL_HOLD = 4.3;
   // 인연 라인 효과가 없는 유닛(주인 없는 유닛·시너지 없음)이 받는 빈 값
   const SYN0 = Object.freeze({ atk: 0, haste: 0, range: 0, splashR: 0, burn: 0, grantBurn: 0, burnSlow: 0, pierce: 0, multi: 0, slowAdd: 0, stunAdd: 0, auraR: 0, auraPct: 0, crit: [] });
 
@@ -748,6 +751,8 @@
       if (this.achDirty) { this.achDirty = false; if (!this.trial) this.checkAchievements(); } // 체험은 업적 없음
     }
     stepWave(dt) {
+      // 보스 처치 연출 동안(applyBossEnd가 세운다) 라인은 멈춰 있다. 탈락한 사람도 같은 시간만큼 멈춰야 라운드 시간이 어긋나지 않는다
+      if (this.killHold > 0) { this.killHold = Math.max(0, this.killHold - dt); return; }
       this.roundT += dt;
       // 탈락한 사람: 적·유닛은 움직이지 않고 라운드 시간만 흐른다(다음 라운드는 방장의 신호로)
       if (this.out) {
@@ -1791,6 +1796,7 @@
       this.endRound();
       if (round >= this.diff.rounds) { this.finish(true); if (this.net) this.net.send('phase', { p: 'over', win: true }); return; }
       this.phase = 'wave';
+      this.killHold = this.R.killHold != null ? this.R.killHold : KILL_HOLD;
       if (this.isAuthority) this.nextRound();
     }
 

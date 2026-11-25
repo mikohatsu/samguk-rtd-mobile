@@ -332,6 +332,8 @@
     rk_civ9: ['승상', '丞相', 'Chancellor', '丞相'],
     rk_civ10: ['군주', '君主', 'Sovereign', '君主'],
     rankPum: ['{n}품', '{n}品', 'Grade {n}', '{n}品'],
+    // 관직 표기 "계급명 등급"(2026-11-25 economy-v2: 계급마다 등급 1~5, progression.js label)
+    rankStep: ['{a} {n}', '{a} {n}', '{a} {n}', '{a} {n}'],
     // 협동 입장 대기 화면(src/ui/18b-match.js)
     mt_wait: ['모든 플레이어를 기다리는 중…', '全プレイヤーを待っています…', 'Waiting for all players…', '正在等待所有玩家…'],
     mt_loading: ['불러오는 중…', '読み込み中…', 'Loading…', '加载中…'],
@@ -344,7 +346,7 @@
     mt_tip3: ['가장 높은 계급은 군주입니다', '最高の官職は君主です', 'The highest rank is Sovereign', '最高官职是君主'],
     treeHead: ['관직 표', '官職一覧', 'Rank table', '官职表'],
     treeStage: ['품계', '品階', 'Grade', '品阶'],
-    treeLv: ['레벨', 'レベル', 'Level', '等级'],
+    treeSteps: ['신병부터 대장군까지 관직마다 1~5 등급이 있고, 5등급을 넘기면 다음 관직에 오릅니다. 높은 난이도를 깰수록 경험치가 많습니다.', '新兵から大将軍まで、官職ごとに1〜5の等級があり、5等級を越えると次の官職に上がります。高い難易度をクリアするほど経験値が多くなります。', 'Each rank from Recruit to Grand General has grades 1-5. Pass grade 5 to reach the next rank. Higher difficulties give much more XP.', '从新兵到大将军，每个官职有1~5级，超过5级即晋升下一官职。难度越高，经验越多。'],
     treeXp: ['필요 경험치', '必要経験値', 'XP needed', '所需经验'],
     treeNote: ['필요 경험치는 처음부터 쌓은 합계입니다. 지금 내 경험치: {xp}', '必要経験値は最初からの累計です。現在の経験値：{xp}', 'XP needed is the running total from the start. Your XP: {xp}', '所需经验为从头累计的总量。当前经验：{xp}'],
     trackHead: ['관직 갈래', '官職の系統', 'Career path', '官职路线'],
@@ -458,6 +460,7 @@
     langLater: ['로비로 돌아가면 바뀝니다', 'ロビーへ戻ると切り替わります', 'Applies when you return to the lobby', '返回大厅后生效'],
     sendingResult: ['결과를 보내는 중…', '結果を送信中…', 'Sending result…', '正在提交结果…'],
     overwriteSave: ['이어하기 기록이 지워집니다 · 한 번 더', '「続きから」の記録が消えます・もう一度', 'Saved game will be erased · tap again', '将清除“继续游戏”的存档 · 再按一次'],
+    lockedTag: ['잠김', 'ロック中', 'Locked', '未解锁'],
     lockedInShop: ['잠김 · 상점 › 장수 해금에서 열 수 있습니다', 'ロック中・ショップ › 武将解放で開けます', 'Locked · open it in Shop › Unlock generals', '未解锁 · 可在商店 › 解锁武将中开启'],
     goalHead: ['다음 목표', '次の目標', 'Next goals', '下一个目标'],
     goalDiff: ['{a} 난이도가 열렸습니다', '難易度「{a}」が開放されました', '{a} difficulty unlocked', '已开放“{a}”难度'],

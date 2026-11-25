@@ -82,15 +82,16 @@
     const rw = S.xpFrom != null ? esRewards().map((h, i) => `<span class="esr seq ${E && (E.open || i < E.shown) ? 'on' : ''}">${h}</span>`).join('') : '';
     return `${row}<div class="es-rw">${coin}${rw}</div>`;
   }
-  // 막대 그리기: 경험치 xp일 때 계급·레벨·막대·숫자. 계급이 바뀌면 문양(지금·다음)을 바꾸고 한 번 튀게 한다.
-  // 이전 몫(.p) = 이 판 전 경험치가 지금 계급 안에서 찬 만큼(계급을 넘었으면 0), 이번 판 몫(.n) = 지금까지
+  // 막대 그리기: 경험치 xp일 때 "계급명 등급"·막대·숫자. 막대는 지금 등급 → 다음 등급 한 칸(2026-11-25 economy-v2: 계급마다 등급 1~5).
+  // 등급·계급이 바뀌면 문양(지금·다음 등급의 계급)을 바꾸고 한 번 튀게 한다.
+  // 이전 몫(.p) = 이 판 전 경험치가 지금 등급 안에서 찬 만큼(등급을 넘었으면 0), 이번 판 몫(.n) = 지금까지
   function esDrawXp(root, xp) {
     const el = root.querySelector('.es-xp:not(.guest)');
     if (!el || !ACC.me) return;
-    const trk = ACC.me.track === 'civ' ? 'civ' : 'mil', lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = rankSpan(r), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
+    const trk = ACC.me.track === 'civ' ? 'civ' : 'mil', lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = lvSpan(lv), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
     S.es.xpNow = xp;
-    if (+el.dataset.r !== r) { el.dataset.r = r; el.querySelector('.esx-mk').innerHTML = rankMark(r); el.querySelector('.esx-nx').innerHTML = r < 10 ? rankMark(r + 1) : ''; el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); }
-    const rn = el.querySelector('.esx-rn'), lt = el.querySelector('.esx-lv'), nm = t('rk_' + trk + r), lvs = t('level', { n: lv });
+    if (el.dataset.lv !== String(lv)) { const first = el.dataset.lv == null; el.dataset.lv = lv; el.dataset.r = r; el.querySelector('.esx-mk').innerHTML = rankMark(r); el.querySelector('.esx-nx').innerHTML = r < 10 ? rankMark(rkOfLv(lv + 1)) : ''; if (!first) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } }
+    const rn = el.querySelector('.esx-rn'), lt = el.querySelector('.esx-lv'), nm = window.RTD_PROG.label(t, 'rk_' + trk + r, lv), lvs = '';
     if (rn.textContent !== nm) rn.textContent = nm;
     if (lt.textContent !== lvs) lt.textContent = lvs;
     const pf = S.xpFrom != null && r < 10 ? Math.max(0, Math.min(k, (S.xpFrom - lo) / (hi - lo))) : k;
@@ -211,17 +212,20 @@
   const rkOfLv = window.RTD_PROG.rankOf;
   const xpAt = window.RTD_PROG.xpAt;
   const rankSpan = (r) => [xpAt(RANK_LV[r]), r < 10 ? xpAt(RANK_LV[r + 1]) : xpAt(RANK_LV[r]) + 1];
+  // 등급 한 칸(레벨 lv → lv+1)의 경험치 범위. 군주는 끝
+  const lvSpan = (lv) => [xpAt(lv), lv < window.RTD_PROG.MAX_LV ? xpAt(lv + 1) : xpAt(lv) + 1];
   const rankMark = (r) => `<span class="xpm"><img alt="" src="gfx/rank_${r}.png" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${r}'}))"></span>`;
   function playXp(from, to, coins, done) {
-    const track = ACC.me && ACC.me.track === 'civ' ? 'civ' : 'mil', nm = (r) => t('rk_' + track + r);
+    const track = ACC.me && ACC.me.track === 'civ' ? 'civ' : 'mil';
     const el = document.createElement('div'); el.id = 'xpfx';
     el.innerHTML = `<div class="xpbox"><div class="xpside l"></div><div class="xpmid"><div class="xpbar"><i></i></div><div class="xpnum"></div><div class="xpgain">+${fmt(to - from)} XP</div><div class="xpcoin">+${fmt(coins || 0)} ${t('lb_coin')}</div></div><div class="xpside r"></div></div>`;
     $('app').appendChild(el);
-    const side = (r) => `${rankMark(r)}<small>${esc(nm(r))}</small>`;
-    let shownR = -1;
+    // 양옆: 지금 등급과 다음 등급("백인대장 3" → "백인대장 4"). 막대는 등급 한 칸(2026-11-25 economy-v2)
+    const side = (lv) => `${rankMark(rkOfLv(lv))}<small>${esc(window.RTD_PROG.label(t, 'rk_' + track + rkOfLv(lv), lv))}</small>`;
+    let shownLv = -1;
     const draw = (xp) => {
-      const r = rkOfLv(lvOfXp(xp)), [lo, hi] = rankSpan(r), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
-      if (r !== shownR) { el.querySelector('.l').innerHTML = side(r); el.querySelector('.r').innerHTML = r < 10 ? side(r + 1) : ''; if (shownR >= 0) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } shownR = r; }
+      const lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = lvSpan(lv), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
+      if (lv !== shownLv) { el.querySelector('.l').innerHTML = side(lv); el.querySelector('.r').innerHTML = r < 10 ? side(lv + 1) : ''; if (shownLv >= 0) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } shownLv = lv; }
       el.querySelector('.xpbar i').style.width = (k * 100).toFixed(1) + '%';
       el.querySelector('.xpnum').textContent = r >= 10 ? 'MAX' : `${fmt(Math.round(xp - lo))} / ${fmt(hi - lo)}`;
     };

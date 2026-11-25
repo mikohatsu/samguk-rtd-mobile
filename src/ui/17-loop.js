@@ -32,7 +32,8 @@
     else if (held || S.mutHold) acc = 0; // mutHold: 악몽 +N 규칙 등장 연출 중(17b-mutintro). 통신 상태 알림은 아래에서 계속 보낸다
     else {
       // 보스전은 1배속. 협동 배속은 방장이 정한 값(모두 켰을 때만 2배 이상)을 쓴다.
-      acc += dt * (g.phase !== 'wave' ? 1 : net ? net.clock.sp : speed);
+      // 보스 처치 연출 동안(g.killHold, 엔진이 라인을 멈춘다)도 1배속: 멈추는 시간이 실제 연출 시간(07-arena KILL_REAL)과 같게
+      acc += dt * (g.phase !== 'wave' || g.killHold > 0 ? 1 : net ? net.clock.sp : speed);
       // 혼자(또는 AI와) 하는 보스전은 계산을 초당 60번으로 한다: 30번이면 조이스틱을 민 뒤 최대 한 프레임 늦게 움직여 굼떠 보인다.
       // 협동은 서로 같은 간격으로 계산해야 하므로 30번 그대로.
       const h = !net && g.phase === 'boss' ? 1 / 60 : 1 / 30;

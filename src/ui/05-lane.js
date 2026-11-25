@@ -1,6 +1,7 @@
   // 잠긴 장수의 아이템 표시용 자물쇠(로비·상점과 같은 gfx/ic_lock.png). 못 불러오면 width 0이라 그리지 않는다
   const LOCK_IM = typeof Image !== 'undefined' ? new Image() : { width: 0 };
   if (LOCK_IM.src !== undefined) LOCK_IM.src = 'gfx/ic_lock.png';
+  const TSTAR_SZ = 10; // 유닛 발밑 등급 별 하나의 크기(전장 단위, 휴대폰 배율 uiS를 곱한다). 불멸 10개 = 두 줄 × 5개라 폭이 원판과 비슷하다
   function drawLane(t) {
     const c = ctx;
     blitBg(c, mapCv, 'map', mapVer);
@@ -82,7 +83,7 @@
       if (away) c.globalAlpha = 0.35;
       else if (fo && !foIn) c.globalAlpha = 0.45;
       piece(c, u.x, u.y + (u.def.tier ? 0 : Math.sin(t * 3 + u.x) * 3), u.def.tier ? r : 30, u.def, t, u.owner === 1, { pose: poseOf(u, t, r) });
-      if (mine) drawSynMark(c, u, u.x, u.y + r * 1.3, 13 * us * (foIn ? 1.2 : 1)); // 발밑 인연 표식(13-info-timers)
+      if (u.def.tier) tierStars(c, u.x, u.y + r * 1.15, u.def.tier, TSTAR_SZ * us); // 원판 아래 등급 별(03-unit)
       if (fo && !foIn && !away) c.globalAlpha = 1;
       if (away) { c.globalAlpha = 1; c.save(); c.translate(u.x, u.y - r - 10); c.scale(us, us); c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,12,6,.9)'; c.lineWidth = 4; c.lineJoin = 'round'; c.font = '700 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.strokeText(I.t('deployed'), 0, 0); c.fillText(I.t('deployed'), 0, 0); c.restore(); }
       if (!u.def.tier) { c.fillStyle = '#ffe9a8'; c.strokeStyle = 'rgba(32,21,12,.85)'; c.lineWidth = 4; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.strokeText(u.def.name, u.x, u.y + 46); c.fillText(u.def.name, u.x, u.y + 46); }
@@ -143,6 +144,7 @@
       const r = d.tier ? (15 + Math.min(d.tier, 10) * 0.8) * 1.3 : 30;
       if (rs && rs.id === id) { found = true; rs.atk = atk; selMark(c, x, y + r * 0.72, r, t, '#ffd86a'); }
       piece(c, x, y, r, d, t, false, { pose: poseOf({ face: f / 10, moveT: m ? 0.1 : 0, atkT: a ? 0.1 : 0, id, def: d }, t, r) });
+      if (d.tier) tierStars(c, x, y + r * 1.15, d.tier, TSTAR_SZ * uiS());
       hits.push({ id, x, y, d, atk });
     });
     S.remoteHits = hits;

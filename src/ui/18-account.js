@@ -33,7 +33,7 @@
     if (r.token && r.guest) { saveGuest(r.guest); r.fresh = true; }
     return r;
   }
-  const gradeTag = (st) => (st && st.gr ? `<span class="gr">${esc(t(st.gr))} ${t('level', { n: st.lv })}</span>` : '');
+  const gradeTag = (st) => (st && st.gr ? `<span class="gr">${esc(window.RTD_PROG.label(t, st.gr, st.lv | 0))}</span>` : ''); // "계급명 등급"(2026-11-25 economy-v2)
   // 판이 끝나면 판 결과를 서버에 보내 경험치·동전을 받는다(같은 판은 한 번만). 온라인 판은 /api/result, 오프라인 판(혼자·AI 동맹)은 /api/history.
   // 보상 배율은 서버가 판 표에 적어 둔 판 종류(인원)로 정한다. 오프라인 판은 표가 있을 때만 보낸다(표가 없으면 서버가 받지 않는다)
   // 서버에 닿지 못하면(끊김·5xx) 보낼 내용을 기기에 남겨 두고 다음에 앱을 켤 때·로비로 돌아올 때 다시 보낸다(lobby.js queueSend·flushPending)

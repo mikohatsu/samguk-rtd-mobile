@@ -71,6 +71,7 @@
 - gfx/madae.png(마대, 2026-11-17): Canva AI generate-image, 기존 gfx/macho.png를 참고 그림으로 올려 그림체를 맞추고 Canva 배경 제거. Canva 미디어 ID MAHbLX9tjGA(원본)·MAHbLVsnPuA(배경 제거). 원본 art_src/madae_canva.png.
 - gfx/masok.png·masok_s.png·hb_masok*.png·rig_b_masok_*.png(체험 보스 마속): Canva AI 생성(2026-11-25), 마속. 기존 gfx/jegal.png를 4배 키운 그림을 화풍 참고로 올려 생성. 원본 art_src/masok_f_canva_trim.png(앞, 투명 배경)·art_src/masok_s_canva_cut.png(옆, 흰 배경을 가장자리 채우기로 지움). 게임용은 art_src/build-masok.py로 자르고 줄이기만 했다(새로 그리지 않음).
 - gfx/vs_jian·vs_guandao·vs_fangtian·vs_shemao(스킬 연출 무기: 의천검·청룡언월도·방천화극·장팔사모), vs_seal·vs_lamp·vs_chain·vs_petal(옥새·칠성 등불·사슬·꽃잎): Canva AI generate-image(2026-11-25, 글만으로 생성, 미디어 ID MAHb69r9LK8·MAHb6zP0NRY), 흰 배경은 코드로 제거하고 잘라 크기 맞춤. 원본 art_src/canva_weapons42.png·canva_props42.png.
+- gfx/il_macho.jpg·ilt_macho.jpg(마초 원화, 2026-11-25): Canva AI generate-image, 기존 gfx/il_joun.jpg(화풍)와 gfx/macho.png(SD 외형)를 참고 그림으로 올려 생성. 미디어 ID MAHb7Yh4fc0, 원본 art_src/il_macho_canva.jpg.
 - 상업 이용: 가능. Canva AI Product Terms(https://www.canva.com/policies/ai-product-terms/)에 따르면 생성물은 사용자 소유이고 판매를 포함한 상업적 이용이 허용된다. 표기 의무 없음.
 - 한계: AI 생성물은 나라에 따라 저작권 보호를 못 받을 수 있고(남이 베껴도 막기 어려움), 독점권도 보장되지 않는다. 알아볼 수 있는 실존 인물·타사 캐릭터·상표가 들어가면 Canva가 권리를 보장해 주지 않는다.
 

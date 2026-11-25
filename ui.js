@@ -551,6 +551,68 @@
     x.globalAlpha = 1; x.strokeStyle = 'rgba(14,8,4,.9)'; x.lineWidth = thick ? 4 : 2.8; x.stroke();
     return (DISC[key] = cv);
   }
+  // ---- 그림을 발밑 원판 가운데에 세우기(2026-11-25 실기 소감 「원판 위 유닛이 정중앙이 아니다」) ----
+  // 그림 칸(152)의 발끝 기준선(134)이 원판 가운데(y + r·0.72)보다 r·0.32 아래라 유닛이 원판 앞 가장자리에 서 있었고,
+  // 그림마다 무기·자세가 달라 몸(다리) 가운데가 칸 가운데에서 좌우로 최대 r·0.4 비켜 있었다.
+  // 그림 한 장마다 한 번 불투명 화소를 재서(아래 끝 줄, 키의 55~95% 높이 띠의 가로 무게중심 = 다리·옷자락) 그만큼 그림을 옮겨 그린다.
+  // 원판·선택 문양·버프 장판·사거리는 그대로(위치 판정과 같은 자리). 조각 애니메이션(rig)은 같은 그림에서 잘라 만들어 옆·앞 그림의 값을 쓴다.
+  const FOOT = new WeakMap(), FOOT_Y = 0.8, FOOT_DX_MAX = 0.1; // 발끝 = 원판 가운데보다 r·0.08 아래(발바닥 두께), 가로 보정은 그림 폭의 10%까지
+  let footCv = null;
+  function footOf(im) {
+    if (!im || !im.width) return null;
+    let f = FOOT.get(im);
+    if (f !== undefined) return f;
+    f = null;
+    try {
+      const w = im.width, h = im.height;
+      if (!footCv) footCv = document.createElement('canvas');
+      if (footCv.width < w || footCv.height < h) { footCv.width = Math.max(w, footCv.width); footCv.height = Math.max(h, footCv.height); }
+      const x = footCv.getContext('2d', { willReadFrequently: true });
+      x.clearRect(0, 0, footCv.width, footCv.height); x.drawImage(im, 0, 0);
+      const px = x.getImageData(0, 0, w, h).data;
+      let y0 = -1, y1 = -1;
+      for (let y = 0; y < h && y0 < 0; y++) for (let i = 0; i < w; i++) if (px[(y * w + i) * 4 + 3] > 100) { y0 = y; break; }
+      for (let y = h - 1; y >= 0 && y1 < 0; y--) for (let i = 0; i < w; i++) if (px[(y * w + i) * 4 + 3] > 100) { y1 = y; break; }
+      if (y0 >= 0 && y1 > y0) {
+        let sx = 0, n = 0;
+        for (let y = Math.floor(y0 + (y1 - y0) * 0.55); y <= y0 + (y1 - y0) * 0.95; y++) for (let i = 0; i < w; i++) if (px[(y * w + i) * 4 + 3] > 100) { sx += i; n++; }
+        const dx = n ? (sx / n + 0.5) / w - 0.5 : 0;
+        f = { dx: Math.max(-FOOT_DX_MAX, Math.min(FOOT_DX_MAX, dx)), by: (y1 + 1) / h };
+      }
+    } catch (e) { f = null; } // 읽을 수 없는 그림이면 보정 없이
+    FOOT.set(im, f);
+    return f;
+  }
+  // 그림(크기 S, 칸 기준 drawSprite·rig 배치)을 옮길 양: 발끝을 y + r·FOOT_Y에, 다리 가운데를 x에
+  function footShift(im, r, S, flip) {
+    const f = footOf(im);
+    if (!f) return { x: 0, y: 0 };
+    return { x: -f.dx * S * (flip ? -1 : 1), y: r * FOOT_Y - (f.by - 0.6) * S };
+  }
+  // ---- 유닛 발밑 등급 별(2026-11-25 실기 소감 「1성이면 1개, 7성이면 7개」) ----
+  // 등급(1~10)만큼 별 그림(gfx/pic_star, CC0)을 등급색으로 물들여 원판 아래에 늘어놓는다. 한 줄에 5개까지, 6성부터 두 줄(위 5 + 아래 나머지)이라 세기 쉽다.
+  // 검게 물들인 같은 별을 살짝 크게 깔아 밝은 땅에서도 보이게. 등급별로 한 장을 미리 만들어 두고 유닛마다 drawImage 한 번만 한다.
+  const TSTAR = {}, TS_PX = 32, TS_ROW = 5;
+  function tierStarSprite(tier) {
+    if (TSTAR[tier]) return TSTAR[tier];
+    const im = Art.picTint('pic_star', tierColor(tier)), sh = Art.picTint('pic_star', '#140c06');
+    if (!im || !sh) return null; // 그림을 아직 못 받았다
+    const n1 = Math.min(TS_ROW, tier), n2 = tier - n1, step = TS_PX * 0.92, rowH = TS_PX * 0.84, pad = 3;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(TS_PX + (n1 - 1) * step + pad * 2); cv.height = Math.ceil(TS_PX + (n2 ? rowH : 0) + pad * 2);
+    const x = cv.getContext('2d');
+    const row = (n, y) => { const x0 = (cv.width - (TS_PX + (n - 1) * step)) / 2; for (let i = 0; i < n; i++) { const cx = x0 + i * step; x.globalAlpha = 0.9; x.drawImage(sh, cx - 2, y - 1, TS_PX + 4, TS_PX + 4); x.globalAlpha = 1; x.drawImage(im, cx, y, TS_PX, TS_PX); } };
+    row(n1, pad); if (n2) row(n2, pad + rowH);
+    return (TSTAR[tier] = cv);
+  }
+  // y = 별 묶음의 위 끝, size = 별 하나의 크기(전장 단위)
+  function tierStars(c, x, y, tier, size) {
+    if (!(tier >= 1)) return;
+    const sp = tierStarSprite(Math.min(10, tier));
+    if (!sp) return;
+    const k = size / TS_PX;
+    c.drawImage(sp, x - (sp.width * k) / 2, y, sp.width * k, sp.height * k);
+  }
   function piece(c, x, y, r, d, t, ownerAI, opt) {
     const tier = d.tier, col = tierColor(tier), seed = (x * 7 + y * 13) % 6.28;
     opt = opt || {};
@@ -577,11 +639,15 @@
     // 조각 애니메이션이 있는 장수는 조각으로 그린다(동작 상태는 보스전이 넘겨 주고, 라인에서는 옆모습일 때만 걷기·대기 + 기존 자세 흔들림)
     const RG = window.RTD_RIG;
     // 화질 '낮음'에서는 라인의 조각 그리기를 끈다(유닛이 많을 때 느려지는 기기 보호. 보스전은 그대로)
+    const SZ = r * 3.7 * (p.bornS || 1);
     if (RG && (opt.rig || (p.v === 2 && Q.level !== 'low')) && RG.has(d.id)) {
-      const st = opt.rig || { state: p.frame ? 'walk' : 'idle', t };
-      c.save(); c.translate(x + (opt.rig ? 0 : p.x), y + (opt.rig ? 0 : p.y)); if (!opt.rig && p.rot) c.rotate(p.rot);
-      RG.draw(c, d.id, 0, 0, r * 3.7 * (p.bornS || 1), p.flip, st); c.restore();
-    } else Art.drawSprite(c, Art.unitSprite(d, p.v, p.frame), x + p.x, y + p.y + Math.sin(t * 3 + x) * 0.6, r * 3.7 * (p.bornS || 1), p.flip, p.rot, p.sy);
+      const st = opt.rig || { state: p.frame ? 'walk' : 'idle', t }, fs = footShift(Art.unitSprite(d, st.view === 'f' ? 0 : 2, 0), r, SZ, p.flip);
+      c.save(); c.translate(x + fs.x + (opt.rig ? 0 : p.x), y + fs.y + (opt.rig ? 0 : p.y)); if (!opt.rig && p.rot) c.rotate(p.rot);
+      RG.draw(c, d.id, 0, 0, SZ, p.flip, st); c.restore();
+    } else {
+      const im = Art.unitSprite(d, p.v, p.frame), fs = footShift(im, r, SZ, p.flip);
+      Art.drawSprite(c, im, x + fs.x + p.x, y + fs.y + p.y + Math.sin(t * 3 + x) * 0.6, SZ, p.flip, p.rot, p.sy);
+    }
     if (pb) birthFx(c, x, y, r, tier, col, pb.born, true);
   }
   // Kenney 고리 그림에서 고리가 지나는 반지름(그림 폭의 절반에 대한 비율). 고리를 반지름 R에 맞춰 그릴 때 쓴다.
@@ -1034,6 +1100,7 @@
   // 잠긴 장수의 아이템 표시용 자물쇠(로비·상점과 같은 gfx/ic_lock.png). 못 불러오면 width 0이라 그리지 않는다
   const LOCK_IM = typeof Image !== 'undefined' ? new Image() : { width: 0 };
   if (LOCK_IM.src !== undefined) LOCK_IM.src = 'gfx/ic_lock.png';
+  const TSTAR_SZ = 10; // 유닛 발밑 등급 별 하나의 크기(전장 단위, 휴대폰 배율 uiS를 곱한다). 불멸 10개 = 두 줄 × 5개라 폭이 원판과 비슷하다
   function drawLane(t) {
     const c = ctx;
     blitBg(c, mapCv, 'map', mapVer);
@@ -1115,7 +1182,7 @@
       if (away) c.globalAlpha = 0.35;
       else if (fo && !foIn) c.globalAlpha = 0.45;
       piece(c, u.x, u.y + (u.def.tier ? 0 : Math.sin(t * 3 + u.x) * 3), u.def.tier ? r : 30, u.def, t, u.owner === 1, { pose: poseOf(u, t, r) });
-      if (mine) drawSynMark(c, u, u.x, u.y + r * 1.3, 13 * us * (foIn ? 1.2 : 1)); // 발밑 인연 표식(13-info-timers)
+      if (u.def.tier) tierStars(c, u.x, u.y + r * 1.15, u.def.tier, TSTAR_SZ * us); // 원판 아래 등급 별(03-unit)
       if (fo && !foIn && !away) c.globalAlpha = 1;
       if (away) { c.globalAlpha = 1; c.save(); c.translate(u.x, u.y - r - 10); c.scale(us, us); c.fillStyle = '#ffd86a'; c.strokeStyle = 'rgba(20,12,6,.9)'; c.lineWidth = 4; c.lineJoin = 'round'; c.font = '700 14px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.strokeText(I.t('deployed'), 0, 0); c.fillText(I.t('deployed'), 0, 0); c.restore(); }
       if (!u.def.tier) { c.fillStyle = '#ffe9a8'; c.strokeStyle = 'rgba(32,21,12,.85)'; c.lineWidth = 4; c.font = '700 17px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.strokeText(u.def.name, u.x, u.y + 46); c.fillText(u.def.name, u.x, u.y + 46); }
@@ -1176,6 +1243,7 @@
       const r = d.tier ? (15 + Math.min(d.tier, 10) * 0.8) * 1.3 : 30;
       if (rs && rs.id === id) { found = true; rs.atk = atk; selMark(c, x, y + r * 0.72, r, t, '#ffd86a'); }
       piece(c, x, y, r, d, t, false, { pose: poseOf({ face: f / 10, moveT: m ? 0.1 : 0, atkT: a ? 0.1 : 0, id, def: d }, t, r) });
+      if (d.tier) tierStars(c, x, y + r * 1.15, d.tier, TSTAR_SZ * uiS());
       hits.push({ id, x, y, d, atk });
     });
     S.remoteHits = hits;
@@ -2250,6 +2318,7 @@
       const red = kb > 0.05 ? kb * 0.6 : 0;
       if (red) { rs.tint = '#ff2a1a'; rs.tintA = red; Art.setTint('#ff2a1a', red); }
       piece(c, kx, ky, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf(u, t, CHAMP_R), rig: rs });
+      tierStars(c, kx, ky + CHAMP_R * 1.15, u.def.tier, 10 * uiS()); // 원판 아래 등급 별(라인과 같은 규칙, 03-unit)
       if (red) Art.setTint(null);
       // 체력 막대: 맞은 뒤 0.45초 동안 흰색·빨간색으로 깜빡인다
       const blink = u._hurtT != null && t - u._hurtT >= 0 && t - u._hurtT < 0.45;
@@ -2397,7 +2466,7 @@
   // 시간은 '연출 시간' K.t(0→KILL_LEN)로 재고, 앞부분은 느리게 흐른다(슬로모션): 0~0.12 ×0.3(번쩍이며 멎음) · 0.12~1.0 ×0.5(비틀거리며 연쇄 폭발) · 그 뒤 ×1.
   //   1.0 부서짐: 조각 애니메이션 보스는 무기·빈손 조각이 튕겨 나가고 몸이 넘어지며 흐려진다(rig.js drawBreak). 조각이 없으면 그림이 발끝 기준으로 넘어진다.
   //   1.0~3.0 「撃破!」 글자(i18n bossDown), 1.55 땅에 닿는 충격파·흙먼지.
-  // 혼자 할 때는 그동안 계산을 멈추고(히트스톱과 같은 방식), 협동은 시계를 맞춰야 해서 멈추지 않는다(화면만 붙잡는다).
+  // 그동안 라인은 엔진 규칙으로 멈춰 있다(engine.js KILL_HOLD = KILL_REAL, applyBossEnd가 g.killHold를 세운다). 혼자·AI 동맹·방 협동 모두 같다(2026-11-25 실기 소감 「처치 연출 뒤에서 라인이 돈다」).
   // 판의 마지막 보스면 결과 창을 연출이 끝날 때까지 미룬다(S.endHoldUntil: 16-hud가 결과 창을, 17-loop가 쉬는 화면 전환을 이 시각까지 미룬다).
   const KILL_LEN = 3.0, KILL_REAL = 4.3;
   const killSpeed = (k) => (k < 0.12 ? 0.3 : k < 1 ? 0.5 : 1);
@@ -2418,7 +2487,6 @@
     S.kill = { f, t: 0, flip: ac ? ac.x > f.boss.x : false, hit: 0, boom: 0, brk: 0 };
     S.shake = Math.max(S.shake || 0, 1);
     Snd.play('hit');
-    if (!net) S.hitStop = Math.max(S.hitStop || 0, KILL_REAL);
     if (g.over) S.endHoldUntil = Math.max(S.endHoldUntil || 0, performance.now() + KILL_REAL * 1000);
     if (navigator.vibrate) { try { navigator.vibrate(30); } catch (e) { /* 진동 없음 */ } }
   }
@@ -2429,7 +2497,7 @@
     const k = K.t;
     arenaFloor(c, f.def.arena, f.def.id); arenaRim(c, f, 1);
     // 이긴 장수들은 보스 쪽을 보고 선다
-    f.champs.forEach((u) => { if (u.dead || u.bench) return; piece(c, u.x, u.y, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf({ face: Math.atan2(b.y - u.y, b.x - u.x), def: u.def, id: 1 }, t, CHAMP_R), rig: { state: 'idle', t } }); });
+    f.champs.forEach((u) => { if (u.dead || u.bench) return; piece(c, u.x, u.y, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf({ face: Math.atan2(b.y - u.y, b.x - u.x), def: u.def, id: 1 }, t, CHAMP_R), rig: { state: 'idle', t } }); tierStars(c, u.x, u.y + CHAMP_R * 1.15, u.def.tier, 10 * uiS()); });
     Object.values(f.ghosts || {}).forEach((o) => { if (o.def) piece(c, o.x, o.y, CHAMP_R, o.def, t, true, { pose: poseOf({ face: Math.atan2(b.y - o.y, b.x - o.x), def: o.def, id: 1 }, t, CHAMP_R) }); });
     const by = b.y - 56 * (BOSS_S - 1), sc = 200 * BOSS_S, RG = window.RTD_RIG;
     const rv = RG && (RG.has(f.def.id, 'f') ? 'f' : RG.has(f.def.id, 's') ? 's' : null);
@@ -3364,7 +3432,7 @@
     return best;
   };
   // 터치에서 손가락이 이만큼(화면 px) 움직이기 전까지는 탭으로 본다
-  const TOUCH_SLOP = 18, MOUSE_SLOP = 10;
+  const TOUCH_SLOP = 18, MOUSE_SLOP = 10, JOY_SLOP = 8; // JOY_SLOP: 라인 떠 있는 조이스틱이 생기는 끌기 거리(짧게 — 누르자마자 밀어도 방향이 살게)
   const enemyAt = (x, y) => g.enemies.find((e) => dist(e.x, e.y, x, y) < e.r + 12);
   // 보스전 중에도 Tab으로 내 라인 화면에 와서 선택권·조합·강화를 할 수 있다. 그동안 결투 시간은 그대로 흐른다.
   const inBoss = () => g && g.phase === 'boss' && !S.laneView;
@@ -3435,9 +3503,11 @@
     }
     const f = g.phase === 'wave' ? flagAt(e) : null;
     if (f) { showFlag(f, e); return; } // 다른 곳을 누를 때까지 띄워 둔다(아래 pointerdown에서 닫는다)
-    // 빈 곳: 고른 게 있으면 그리로 '공격하며 이동'(가는 길에 사거리 안의 적이 있으면 멈춰서 때린다), 없으면 아무것도 안 함
-    // 터치: 유닛은 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
+    // 빈 곳: 터치는 유닛을 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
+    // 유닛을 고른 상태면 선택을 풀고 선택 바·상세 카드를 내린다(2026-11-25 실기 소감: X 버튼으로만 닫히던 것. 마우스 클릭은 원래 풀렸다).
+    // 끌기와는 손가락이 TOUCH_SLOP 안에서 떨어졌을 때만 여기로 오는 것으로 가른다(아래 pointermove).
     if (S.dropSel && !S.sel.length) rightClick(m, 'amove');
+    else if (S.sel.length) { setSel([]); S.ucard = false; }
   }
   function boxSelect(d) {
     const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
@@ -3474,7 +3544,10 @@
     // 마우스 가운데 버튼: 지도 끌기
     if (e.button === 1) { e.preventDefault(); S.pan = { x: e.clientX, y: e.clientY, cx: S.cam.x, cy: S.cam.y }; return; }
     if (e.pointerType === 'touch') {
-      touch = { id: e.pointerId, x: e.clientX, y: e.clientY, m, mode: null, cx: S.cam.x, cy: S.cam.y };
+      // 라인 떠 있는 조이스틱(2026-11-25): 유닛을 골라 조이스틱이 보이는 동안 왼쪽 아래 영역(15-pad JOY_ZONE)의 빈 땅을 누르고 끌면
+      // 누른 자리에 조이스틱이 생긴다(아래 pointermove). 끌지 않고 떼면 빈 곳 탭(선택 해제). 유닛·상자 위를 누르면 원래대로 고르기.
+      const jz = PAD.lane && !S.cmdMode && !viewedPeer() && !spect() && joyZone(e) && !unitAt(m.x, m.y) && !dropAt(m.x, m.y);
+      touch = { id: e.pointerId, x: e.clientX, y: e.clientY, m, mode: null, cx: S.cam.x, cy: S.cam.y, joy: jz };
       // 꾹 누르고 있으면 범위 선택으로 바뀐다
       if (laneOn() && !viewedPeer() && !spect() && !S.cmdMode) touch.lp = setTimeout(() => {
         if (touch && !touch.mode) { touch.mode = 'box'; S.drag = { x0: m.x, y0: m.y, x1: m.x, y1: m.y, moved: true, add: false }; if (navigator.vibrate) navigator.vibrate(12); }
@@ -3514,6 +3587,12 @@
     if (touch && e.pointerId === touch.id) {
       const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
       if (touch.mode === 'box') { S.drag.x1 = m.x; S.drag.y1 = m.y; return; }
+      // 떠 있는 조이스틱: 처음 누른 자리를 중심으로 받침을 세우고 이 손가락을 조이스틱에 넘긴다(이 뒤 움직임·뗌은 15-pad가 창에서 받는다)
+      if (!touch.mode && touch.joy && Math.hypot(dx, dy) > JOY_SLOP) {
+        const t0 = touch; cancelTouch(); ptrs.delete(e.pointerId);
+        joyStart({ pointerId: e.pointerId, clientX: t0.x, clientY: t0.y }, true); joyMove(e);
+        return;
+      }
       if (!touch.mode && Math.hypot(dx, dy) > (S.coarse ? TOUCH_SLOP : MOUSE_SLOP)) { touch.mode = 'pan'; if (touch.lp) clearTimeout(touch.lp); }
       if (touch.mode === 'pan') panBy(touch.cx, touch.cy, dx, dy);
       return;
@@ -3747,7 +3826,7 @@
     const chips = st.parts.map((x) => `<span class="chip ${x.have >= x.need ? 'have' : 'miss'}">${esc(defOf[x.id].name)} ${rankTag(defOf[x.id].tier)} ${Math.min(x.have, x.need)}/${x.need}</span>`).join('');
     const it = st.item ? `<span class="chip ${st.hasItem ? 'have' : 'miss'}">${esc(T.items.find((i) => i.id === st.item).name)}</span>` : '';
     // 잠긴 신화·불멸: 재료가 다 있어도 조합할 수 없으므로 버튼 대신 까닭(상점에서 해금)을 적는다
-    if (g.isLocked && g.isLocked(id)) return `<div class="row"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div><small class="lockn">🔒 ${I.t('lockedInShop')}</small></div></div>`;
+    if (g.isLocked && g.isLocked(id)) return `<div class="row"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div><small class="lockn">${I.t('lockedInShop')}</small></div></div>`;
     return `<div class="row ${st.ok ? 'ok' : ''}"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div></div><button class="btn ${st.ok ? 'go' : ''}" data-act="craft" data-arg="${id}" type="button" ${st.ok ? '' : 'disabled'}>${I.t('combineBtn')}</button></div>`;
   }
   // 소리 크기 줄(판 안 설정 탭과 로비 설정 창이 같이 쓴다): − 값 ＋
@@ -3770,7 +3849,9 @@
   // 도감: 줄을 누르면 능력치와 스킬, 조합식이 펼쳐진다
   function bookRow(d) {
     const open = S.book === d.id, f = T.factions[d.fac];
-    const row = `<div class="row" data-act="book" data-arg="${d.id}"><img alt="" src="${Art.portrait(d)}"><div><span style="color:${f.color}">${esc(f.name)}</span> ${esc(d.name)}${d.title ? `<small>${esc(d.title)}</small>` : ''}</div></div>`;
+    // 잠긴 신화·불멸(2026-11-25 실기 소감): 자물쇠 글자 대신 상점과 같은 규칙 — 흑백 초상 + 이름 옆 짧은 「잠김」
+    const lk = !!(g.isLocked && g.isLocked(d.id));
+    const row = `<div class="row${lk ? ' lk' : ''}" data-act="book" data-arg="${d.id}"><img alt="" src="${Art.portrait(d)}"><div><span style="color:${f.color}">${esc(f.name)}</span> ${esc(d.name)}${lk ? ` <em class="lkt">${I.t('lockedTag')}</em>` : ''}${d.title ? `<small>${esc(d.title)}</small>` : ''}</div></div>`;
     if (!open) return row;
     const stats = d.tier ? `${I.t('atk')} ${fmt(g.baseAtk(g.me, d))} · ${I.t('hp')} ${fmt(g.rankOf[d.tier].hp)} · ${I.t('range')} ${g.range(d)} · ${I.t('interval')} ${I.t('sec', { n: g.attackTime(d).toFixed(2) })}` : I.t('hireCost', { c: T.currency, n: fmt(d.cost) });
     const pass = (d.p || []).map((x) => `<div><span class="tag">${t('passive')}</span>${esc(x.name)}: ${esc(x.desc)}</div>`).join('');
@@ -4490,7 +4571,6 @@
         + `<small style="grid-column:2">${x.on ? esc([d.lane, d.boss].filter(Boolean).join(' / ')) : esc(s.desc)}</small></div>`;
     }).join('');
     if (box.dataset.html !== h) { box.innerHTML = h; box.dataset.html = h; }
-    synMarkBuild(p);
     }
     renderSynBar(vis);
     if (S.synAll) renderSynAll();
@@ -4501,49 +4581,8 @@
       mb.innerHTML = `<div style="display:grid;gap:4px;padding:4px 6px 8px">${g.muts.map((m, i) => mutCard(m.id, i)).join('')}</div>`;
     }
   }
-  // ---- 전장 유닛 발밑 인연 표식(2026-11-25): 별 그림(gfx/pic_star, 물들임)을 원판 아래에 작게 늘어놓는다. ----
-  // 켜진 인연 = 그 등급색 별, 다음 단계까지 1명 남은 인연(core 조건 충족) = 흐린 회색 별. 나머지는 표시하지 않는다(지저분해지지 않게). 한 유닛에 최대 3개.
+  // 전장 유닛 발밑의 인연 별 표식(v0.4.0)은 뺐다(2026-11-25 실기 소감: 유닛 아래 별은 등급 수만큼 — 03-unit tierStars).
   // 인연 줄·인연 창·선택 바의 인연 칩을 누르면(마우스는 올리면) 그 인연 구성원 발밑에 등급색 고리가 깔리고 나머지 내 유닛은 흐려진다(05-lane).
-  const SYN_MARK_MAX = 3, SYN_NEAR_COL = '#9a9080';
-  function synMarkBuild(p) {
-    const m = {};
-    (T.synergies || []).forEach((s) => {
-      const x = synProg(s, p);
-      const near = !x.on && !s.hidden && x.gap === 1 && synCoreOk(x, p);
-      if (!x.on && !near) return;
-      s.units.forEach((id) => { if (g.has(p, id)) (m[id] = m[id] || []).push({ on: x.on, g: x.g, col: x.on ? GRADE_COL[x.g] : SYN_NEAR_COL }); });
-    });
-    Object.keys(m).forEach((id) => { m[id] = m[id].sort((a, b) => b.on - a.on || b.g - a.g).slice(0, SYN_MARK_MAX); m[id].key = m[id].map((x) => x.col + (x.on ? 1 : 0)).join(); });
-    S.synMark = m;
-  }
-  // 별 줄 한 장(모양별로 한 번 만든다). 별 하나 STAR_PX, 그림자(검게 물들인 같은 별)를 살짝 크게 깔아 밝은 땅에서도 보이게.
-  const SYN_MARK_CV = new Map(), STAR_PX = 32;
-  function synMarkSprite(list) {
-    let cv = SYN_MARK_CV.get(list.key);
-    if (cv) return cv;
-    const sh = Art.picTint('pic_star', '#140c06');
-    if (!sh) return null; // 그림을 아직 못 받았다
-    const gap = STAR_PX * 0.12, pad = 3;
-    cv = document.createElement('canvas'); cv.width = Math.ceil(list.length * STAR_PX + (list.length - 1) * gap + pad * 2); cv.height = STAR_PX + pad * 2;
-    const x = cv.getContext('2d');
-    for (let i = 0; i < list.length; i++) {
-      const it = list[i], im = Art.picTint('pic_star', it.col), cx = pad + i * (STAR_PX + gap);
-      if (!im) return null;
-      x.globalAlpha = 0.85; x.drawImage(sh, cx - 2, pad - 1, STAR_PX + 4, STAR_PX + 4);
-      x.globalAlpha = it.on ? 1 : 0.75; x.drawImage(im, cx, pad, STAR_PX, STAR_PX);
-    }
-    if (SYN_MARK_CV.size > 40) SYN_MARK_CV.clear();
-    SYN_MARK_CV.set(list.key, cv);
-    return cv;
-  }
-  // 라인에서 내 유닛 하나의 표식. y는 발밑 원판 아래. size = 별 하나의 화면 크기(월드 단위, uiS를 곱해 받는다)
-  function drawSynMark(c, u, x, y, size) {
-    const list = S.synMark && S.synMark[u.def.id];
-    if (!list || !list.length) return;
-    const cv = synMarkSprite(list); if (!cv) return;
-    const k = size / STAR_PX, w = cv.width * k, h = cv.height * k;
-    c.drawImage(cv, x - w / 2, y - h / 2, w, h);
-  }
   // 인연 창이 열려 있으면 그 인연의 구성원 장수 id 묶음(05-lane 강조용). 없으면 null
   const SYN_SETS = new WeakMap();
   function synFocus() {
@@ -4638,15 +4677,16 @@
     const rw = S.xpFrom != null ? esRewards().map((h, i) => `<span class="esr seq ${E && (E.open || i < E.shown) ? 'on' : ''}">${h}</span>`).join('') : '';
     return `${row}<div class="es-rw">${coin}${rw}</div>`;
   }
-  // 막대 그리기: 경험치 xp일 때 계급·레벨·막대·숫자. 계급이 바뀌면 문양(지금·다음)을 바꾸고 한 번 튀게 한다.
-  // 이전 몫(.p) = 이 판 전 경험치가 지금 계급 안에서 찬 만큼(계급을 넘었으면 0), 이번 판 몫(.n) = 지금까지
+  // 막대 그리기: 경험치 xp일 때 "계급명 등급"·막대·숫자. 막대는 지금 등급 → 다음 등급 한 칸(2026-11-25 economy-v2: 계급마다 등급 1~5).
+  // 등급·계급이 바뀌면 문양(지금·다음 등급의 계급)을 바꾸고 한 번 튀게 한다.
+  // 이전 몫(.p) = 이 판 전 경험치가 지금 등급 안에서 찬 만큼(등급을 넘었으면 0), 이번 판 몫(.n) = 지금까지
   function esDrawXp(root, xp) {
     const el = root.querySelector('.es-xp:not(.guest)');
     if (!el || !ACC.me) return;
-    const trk = ACC.me.track === 'civ' ? 'civ' : 'mil', lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = rankSpan(r), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
+    const trk = ACC.me.track === 'civ' ? 'civ' : 'mil', lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = lvSpan(lv), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
     S.es.xpNow = xp;
-    if (+el.dataset.r !== r) { el.dataset.r = r; el.querySelector('.esx-mk').innerHTML = rankMark(r); el.querySelector('.esx-nx').innerHTML = r < 10 ? rankMark(r + 1) : ''; el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); }
-    const rn = el.querySelector('.esx-rn'), lt = el.querySelector('.esx-lv'), nm = t('rk_' + trk + r), lvs = t('level', { n: lv });
+    if (el.dataset.lv !== String(lv)) { const first = el.dataset.lv == null; el.dataset.lv = lv; el.dataset.r = r; el.querySelector('.esx-mk').innerHTML = rankMark(r); el.querySelector('.esx-nx').innerHTML = r < 10 ? rankMark(rkOfLv(lv + 1)) : ''; if (!first) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } }
+    const rn = el.querySelector('.esx-rn'), lt = el.querySelector('.esx-lv'), nm = window.RTD_PROG.label(t, 'rk_' + trk + r, lv), lvs = '';
     if (rn.textContent !== nm) rn.textContent = nm;
     if (lt.textContent !== lvs) lt.textContent = lvs;
     const pf = S.xpFrom != null && r < 10 ? Math.max(0, Math.min(k, (S.xpFrom - lo) / (hi - lo))) : k;
@@ -4767,17 +4807,20 @@
   const rkOfLv = window.RTD_PROG.rankOf;
   const xpAt = window.RTD_PROG.xpAt;
   const rankSpan = (r) => [xpAt(RANK_LV[r]), r < 10 ? xpAt(RANK_LV[r + 1]) : xpAt(RANK_LV[r]) + 1];
+  // 등급 한 칸(레벨 lv → lv+1)의 경험치 범위. 군주는 끝
+  const lvSpan = (lv) => [xpAt(lv), lv < window.RTD_PROG.MAX_LV ? xpAt(lv + 1) : xpAt(lv) + 1];
   const rankMark = (r) => `<span class="xpm"><img alt="" src="gfx/rank_${r}.png" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${r}'}))"></span>`;
   function playXp(from, to, coins, done) {
-    const track = ACC.me && ACC.me.track === 'civ' ? 'civ' : 'mil', nm = (r) => t('rk_' + track + r);
+    const track = ACC.me && ACC.me.track === 'civ' ? 'civ' : 'mil';
     const el = document.createElement('div'); el.id = 'xpfx';
     el.innerHTML = `<div class="xpbox"><div class="xpside l"></div><div class="xpmid"><div class="xpbar"><i></i></div><div class="xpnum"></div><div class="xpgain">+${fmt(to - from)} XP</div><div class="xpcoin">+${fmt(coins || 0)} ${t('lb_coin')}</div></div><div class="xpside r"></div></div>`;
     $('app').appendChild(el);
-    const side = (r) => `${rankMark(r)}<small>${esc(nm(r))}</small>`;
-    let shownR = -1;
+    // 양옆: 지금 등급과 다음 등급("백인대장 3" → "백인대장 4"). 막대는 등급 한 칸(2026-11-25 economy-v2)
+    const side = (lv) => `${rankMark(rkOfLv(lv))}<small>${esc(window.RTD_PROG.label(t, 'rk_' + track + rkOfLv(lv), lv))}</small>`;
+    let shownLv = -1;
     const draw = (xp) => {
-      const r = rkOfLv(lvOfXp(xp)), [lo, hi] = rankSpan(r), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
-      if (r !== shownR) { el.querySelector('.l').innerHTML = side(r); el.querySelector('.r').innerHTML = r < 10 ? side(r + 1) : ''; if (shownR >= 0) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } shownR = r; }
+      const lv = lvOfXp(xp), r = rkOfLv(lv), [lo, hi] = lvSpan(lv), k = r >= 10 ? 1 : Math.max(0, Math.min(1, (xp - lo) / (hi - lo)));
+      if (lv !== shownLv) { el.querySelector('.l').innerHTML = side(lv); el.querySelector('.r').innerHTML = r < 10 ? side(lv + 1) : ''; if (shownLv >= 0) { el.classList.remove('up'); void el.offsetWidth; el.classList.add('up'); } shownLv = lv; }
       el.querySelector('.xpbar i').style.width = (k * 100).toFixed(1) + '%';
       el.querySelector('.xpnum').textContent = r >= 10 ? 'MAX' : `${fmt(Math.round(xp - lo))} / ${fmt(hi - lo)}`;
     };
@@ -4816,7 +4859,8 @@
   // ---- 보스전 직접 조작(모바일 MOBA식) ----
   // 왼쪽 조이스틱으로 이동, 오른쪽 아래 공격 버튼을 누르고 있는 동안 공격(자동 공격 없음).
   // 조이스틱은 떠 있는 방식: 보스전에서 화면 왼쪽 아래 영역(JOY_ZONE) 어디든 누르면 그 자리에 받침이 생기고,
-  // 끄는 거리(JOY_R)를 넘어가면 받침이 손가락을 따라온다. 손을 떼면 기본 자리(CSS)로 돌아간다. 라인의 조이스틱은 고정.
+  // 끄는 거리(JOY_R)를 넘어가면 받침이 손가락을 따라온다. 손을 떼면 기본 자리(CSS, 희미하게)로 돌아간다.
+  // 라인(유닛을 고르면 뜨는 조이스틱)도 같다(2026-11-25): 영역의 빈 땅을 누르고 끌면 그 자리에 생긴다(탭은 선택 해제라 끌 때 생긴다, 10-input).
   // 스킬·이동기는 공격 버튼을 둘러싼 '고양이 발' 배치. 짧게 톡 = 사거리 안의 적에게 자동 조준(밖이면 보는 방향),
   // 꾹 누르고 끌면 장수 둘레에 사거리와 범위가 보이고 끈 방향·거리로 조준해 손을 떼면 쓴다.
   const PAD = { atk: null, aim: null, joy: null, jv: null, buf: null };
@@ -4929,10 +4973,10 @@
       dirty();
     };
     bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
-    // 조이스틱 받침을 직접 누름: 보스전의 터치는 누른 자리가 중심(떠 있는 방식), 라인·마우스는 받침 가운데가 중심
+    // 조이스틱 받침을 직접 누름: 터치는 누른 자리가 중심(떠 있는 방식), 마우스는 받침 가운데가 중심
     joy.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
-      joyStart(e, !PAD.lane && e.pointerType === 'touch');
+      joyStart(e, e.pointerType === 'touch');
     });
     // 움직임·뗌은 창에서 받는다(전장을 눌러 시작한 손가락도 같은 길로 온다)
     window.addEventListener('pointermove', joyMove);
@@ -4941,10 +4985,10 @@
   // ---- 조이스틱 ----
   const JOY_R = 42, JOY_ZONE = { w: 0.45, h: 0.7 }; // 끌 수 있는 거리(px), 누르면 조이스틱이 생기는 영역(화면 왼쪽 45% × 아래 70%)
   const joyK = () => (typeof zoom === 'number' && zoom > 0 ? zoom : 1); // #app 확대(큰 화면)만큼 화면 px과 CSS px이 다르다
-  // 전장(캔버스)을 누른 자리가 떠 있는 조이스틱 영역인가. 10-input이 보스전 터치에서 묻는다.
+  // 전장(캔버스)을 누른 자리가 떠 있는 조이스틱 영역인가. 10-input이 보스전·라인(유닛을 고른 동안) 터치에서 묻는다.
   function joyZone(e) {
     const joy = $('joy');
-    if (!joy || joy.hidden || PAD.lane || !g || !g.active()) return false;
+    if (!joy || joy.hidden || !g || (!PAD.lane && !g.active())) return false;
     const r = $('stage').getBoundingClientRect();
     return e.clientX < r.left + r.width * JOY_ZONE.w && e.clientY > r.top + r.height * (1 - JOY_ZONE.h);
   }
@@ -5029,7 +5073,7 @@
         const sb = $('selbar'), sh = sb && !sb.hidden ? sb.offsetHeight : 0;
         if (sh && bar._selh !== sh) { bar._selh = sh; $('stage').style.setProperty('--selh', sh + 'px'); }
       } else if (!bar.hidden) { bar.hidden = true; bar.dataset.k = ''; PAD.atk = null; PAD.aim = null; }
-      if (PAD.joy && PAD.joy.float) joyReset(); // 보스전이 끝났거나 라인 보기로 넘어갔다: 떠 있던 받침을 제자리로
+      if (!lane && PAD.joy && PAD.joy.float) joyReset(); // 보스전이 끝났거나 라인 보기로 넘어갔다: 떠 있던 받침을 제자리로(라인 조이스틱을 쓰는 중이면 그대로)
       if (joy.hidden === lane) { joy.hidden = !lane; if (!lane) joyReset(); }
       return;
     }
@@ -5350,7 +5394,8 @@
     else if (held || S.mutHold) acc = 0; // mutHold: 악몽 +N 규칙 등장 연출 중(17b-mutintro). 통신 상태 알림은 아래에서 계속 보낸다
     else {
       // 보스전은 1배속. 협동 배속은 방장이 정한 값(모두 켰을 때만 2배 이상)을 쓴다.
-      acc += dt * (g.phase !== 'wave' ? 1 : net ? net.clock.sp : speed);
+      // 보스 처치 연출 동안(g.killHold, 엔진이 라인을 멈춘다)도 1배속: 멈추는 시간이 실제 연출 시간(07-arena KILL_REAL)과 같게
+      acc += dt * (g.phase !== 'wave' || g.killHold > 0 ? 1 : net ? net.clock.sp : speed);
       // 혼자(또는 AI와) 하는 보스전은 계산을 초당 60번으로 한다: 30번이면 조이스틱을 민 뒤 최대 한 프레임 늦게 움직여 굼떠 보인다.
       // 협동은 서로 같은 간격으로 계산해야 하므로 30번 그대로.
       const h = !net && g.phase === 'boss' ? 1 / 60 : 1 / 30;
@@ -5657,7 +5702,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     if (r.token && r.guest) { saveGuest(r.guest); r.fresh = true; }
     return r;
   }
-  const gradeTag = (st) => (st && st.gr ? `<span class="gr">${esc(t(st.gr))} ${t('level', { n: st.lv })}</span>` : '');
+  const gradeTag = (st) => (st && st.gr ? `<span class="gr">${esc(window.RTD_PROG.label(t, st.gr, st.lv | 0))}</span>` : ''); // "계급명 등급"(2026-11-25 economy-v2)
   // 판이 끝나면 판 결과를 서버에 보내 경험치·동전을 받는다(같은 판은 한 번만). 온라인 판은 /api/result, 오프라인 판(혼자·AI 동맹)은 /api/history.
   // 보상 배율은 서버가 판 표에 적어 둔 판 종류(인원)로 정한다. 오프라인 판은 표가 있을 때만 보낸다(표가 없으면 서버가 받지 않는다)
   // 서버에 닿지 못하면(끊김·5xx) 보낼 내용을 기기에 남겨 두고 다음에 앱을 켤 때·로비로 돌아올 때 다시 보낸다(lobby.js queueSend·flushPending)
@@ -5712,8 +5757,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   // 연출은 있는 그림만 움직인다: 빛살(ray_sun), 별(pic_star), 고리·터짐 프레임 시트(fxa_ring 5×4칸, fxa_burst 6×5칸 — art.js FXA_META와 같다. 칸 수는 CSS에 적혀 있다).
   // 수치 표(코드에 흩지 않는다)
   const MT_CFG = { selfMinMs: 1000, artMaxMs: 8000, showMinMs: 4000, hostMaxMs: 12000, guestMaxMs: 15000, stepS: 0.25, tips: 4, tickMs: 200 };
-  // 계급(0 신병 ~ 10 군주)에 필요한 레벨. 서버(app.js)의 RANK_LV, 19-title.js의 관직 표와 같다
-  const MT_RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];
+  // 계급(0 신병 ~ 10 군주)이 시작되는 레벨. progression.js(서버·19-title.js 관직 표와 같다, 2026-11-25 economy-v2: 계급마다 등급 1~5)
+  const MT_RANK_LV = window.RTD_PROG.RANK_LV;
   // 연출 단계: 0~2 수수 / 3~5 금테 + 빛살 / 6~8 큰 빛살 + 별 / 9 고리 / 10 군주(전부 + 등장 터짐)
   const mtTier = (r) => (r >= 10 ? 4 : r >= 9 ? 3 : r >= 6 ? 2 : r >= 3 ? 1 : 0);
   const mtRank = (gr) => { const m = /(\d+)$/.exec(gr || ''); return m ? Math.max(0, Math.min(10, +m[1])) : 0; };
@@ -5727,7 +5772,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   function mtCardHtml(p, i, ord, host) {
     const st = p.state || {}, r = mtRank(st.gr), tier = mtTier(r), low = Q.level === 'low';
     const d = T.units.find((u) => u.id === st.ic) || T.units.find((u) => u.id === 'cav');
-    const gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
+    const gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? (st.lv ? window.RTD_PROG.label(t, st.gr, st.lv | 0) : t(st.gr)) : '';
     const pum = r >= 1 && r <= 9 ? t('rankPum', { n: 10 - r }) : '';
     let glow = '', over = '';
     if (tier >= 1) glow += '<i class="mt-ray"></i>';
@@ -5741,9 +5786,9 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     return `<div class="mt-slot t${tier}${p.me ? ' me' : ''}" style="grid-column:${i + 1};--d:${(ord * MT_CFG.stepS).toFixed(2)}s">${tier >= 3 ? '<i class="mt-aura"></i>' : ''}<div class="mt-card"><div class="mt-glow">${glow}</div>`
       + `${host ? `<span class="mt-tag host">${t('host')}</span>` : ''}${p.me ? `<span class="mt-tag mine">${t('me')}</span>` : ''}`
       + `<div class="mt-emb">${over}<img class="mt-rk" alt="" src="gfx/rank_${r}.png" onerror="this.style.visibility='hidden'">${d ? `<img class="mt-ic" alt="" src="${Art.portrait(d)}">` : ''}</div>`
-      + `<b class="mt-nm">${esc(st.name || '?')}</b><span class="mt-gr">${esc(gr)}${gr && pum ? ' · ' : ''}${pum}</span><span class="mt-lv">${st.lv ? t('level', { n: st.lv | 0 }) : ''}</span><span class="mt-st" data-st="${i}"></span></div></div>`;
+      + `<b class="mt-nm">${esc(st.name || '?')}</b><span class="mt-gr">${esc(gr)}${gr && pum ? ' · ' : ''}${pum}</span><span class="mt-lv"></span><span class="mt-st" data-st="${i}"></span></div></div>`;
   }
-  // 내 카드 아래 한 줄: 다음 계급까지 남은 경험치(레벨 L의 누적 경험치 = 40·(L-1)², 18-account.js xpLv)
+  // 내 카드 아래 한 줄: 다음 계급까지 남은 경험치(레벨 L의 누적 경험치 = progression.js xpAt, 18-account.js xpLv)
   function mtNextHtml(a) {
     if (!a || typeof a.rank !== 'number') return '';
     if (a.rank >= 10) return t('mt_max');
@@ -5838,7 +5883,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     if (MT) { const pv = MT.preview; if (pv) mtStop(MT); return false; } // 진짜 대기 화면은 건드리지 않는다
     const rs = (Array.isArray(ranks) && ranks.length ? ranks : [0, 3, 6, 9, 10]).slice(0, 5).map((r) => Math.max(0, Math.min(10, r | 0)));
     const mi = Math.min(rs.length - 1, 1), us = T.units, step = Math.max(1, Math.floor(us.length / 5));
-    const ros = rs.map((r, i) => { const u = us[(i * step + 3) % us.length]; return { id: 'v' + i, me: i === mi, at: 900 + i * 600, state: { name: u.name, lv: MT_RANK_LV[r] + (r < 10 ? 2 : 9), gr: 'rk_' + (i % 2 ? 'civ' : 'mil') + r, ic: u.id } }; });
+    const ros = rs.map((r, i) => { const u = us[(i * step + 3) % us.length]; return { id: 'v' + i, me: i === mi, at: 900 + i * 600, state: { name: u.name, lv: MT_RANK_LV[r] + (r < 10 ? 2 : 0), gr: 'rk_' + (i % 2 ? 'civ' : 'mil') + r, ic: u.id } }; });
     const me = ros[mi], m = MT = {
       preview: true, seed: 1, at: Date.now(), done: false, key: '', iv: 0, tip: (Math.random() * MT_CFG.tips) | 0, diff: 'nightmare', mutLv: 3,
       roster: () => ros, host: () => 'v0', acc: () => ({ rank: rs[mi], xp: xpLv(me.state.lv) + 120, track: mi % 2 ? 'civ' : 'mil' }),
@@ -5904,7 +5949,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const m = ACC.me, lv = m.level, max = m.rank >= 10, f = max ? 1 : Math.max(0, Math.min(1, (m.xp - xpLv(lv)) / Math.max(1, xpLv(lv + 1) - xpLv(lv))));
       const guest = m.provider === 'guest', prov = m.provider === 'apple' ? 'Apple' : m.provider === 'google' ? 'Google' : guest ? t('provGuest') : '';
       const trk = m.track === 'civ' ? 'civ' : 'mil', nextR = !max && m.rank >= 0 && m.rank < 10 ? t('goalRank', { a: esc(t('rk_' + trk + (m.rank + 1))), n: fmt(Math.max(0, xpLv(RANK_LV[m.rank + 1]) - (m.xp || 0))) }) : '';
-      return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${m.rank | 0}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(t(m.grade))}${pum(m.rank)} · ${t('level', { n: lv })}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
+      return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${m.rank | 0}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(window.RTD_PROG.label(t, m.grade, lv))}${pum(m.rank)}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
         <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })}・XP ${fmt(m.xp)}</div>
         <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button><button class="btn acc-q" id="acc-treebtn" type="button" aria-label="${esc(t('treeHead'))}">?</button></div>
         <div class="acc-tree" id="acc-tree" ${S.accTree ? '' : 'hidden'}>${treeHtml(m)}</div>
@@ -5967,7 +6012,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const st = p.state || {}, r = mtRank(st.gr), gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
       return `<div class="lb-slot in${p.me ? ' me' : ''}${i === 0 ? ' host' : ''}" data-id="${esc(String(p.id))}">${i === 0 ? `<span class="lb-tag host">${t('host')}</span>` : ''}${p.me ? `<span class="lb-tag mine">${t('me')}</span>` : ''}`
         + `<div class="lb-pt"><img class="av" alt="" src="${Art.portrait(defOf[st.ic] || defOf.cav)}"><img class="lb-ring" alt="" src="gfx/ui_select.png"><img class="lb-rk" alt="" src="gfx/rank_${r}.png" onerror="this.remove()"></div>`
-        + `<b class="lb-nm">${esc(st.name || '?')}</b><small class="lb-gr">${esc(gr)}${gr && st.lv ? ' · ' : ''}${st.lv ? t('level', { n: st.lv | 0 }) : ''}</small></div>`;
+        + `<b class="lb-nm">${esc(st.name || '?')}</b><small class="lb-gr">${esc(gr && st.lv ? window.RTD_PROG.label(t, st.gr, st.lv | 0) : gr)}</small></div>`;
     };
     const renderLobby = () => {
       const box = $('lobby');
@@ -5991,12 +6036,12 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const ch = hc ? `<span class="lb-cl">${t('hostCfg')}</span><b class="lb-dn" style="color:${DIFF_COL[hc.diff] || '#ffd86a'}">${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>` : '';
       if ($('lbcfg').dataset.h !== ch) { $('lbcfg').dataset.h = ch; $('lbcfg').innerHTML = ch; }
     };
-    // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 레벨·누적 경험치와 무관·문관 칭호. 서버(app.js)의 RANK_LV, 경험치 식(40·(레벨-1)²)과 같다
-    const RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];
+    // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 누적 경험치와 무관·문관 칭호. 계급마다 등급 1~5(군주 제외). 곡선은 progression.js(서버와 같다, 2026-11-25 economy-v2)
+    const RANK_LV = window.RTD_PROG.RANK_LV;
     function treeHtml(m) {
       const mine = m.track === 'civ' ? 'civ' : 'mil';
-      const rows = RANK_LV.map((lv, i) => `<tr class="${m.rank === i ? 'cur' : ''}"><td class="rk"><img alt="" src="gfx/rank_${i}.png" onerror="this.remove()">${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${lv}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
-      return `<table><thead><tr><th>${t('treeStage')}</th><th class="n">${t('treeLv')}</th><th class="n">${t('treeXp')}</th><th class="${mine === 'mil' ? 'me' : ''}">${t('trackMil')}</th><th class="${mine === 'civ' ? 'me' : ''}">${t('trackCiv')}</th></tr></thead><tbody>${rows}</tbody></table><div class="note">${t('treeNote', { xp: Math.round(m.xp).toLocaleString() })}</div>`;
+      const rows = RANK_LV.map((lv, i) => `<tr class="${m.rank === i ? 'cur' : ''}"><td class="rk"><img alt="" src="gfx/rank_${i}.png" onerror="this.remove()">${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
+      return `<table><thead><tr><th>${t('treeStage')}</th><th class="n">${t('treeXp')}</th><th class="${mine === 'mil' ? 'me' : ''}">${t('trackMil')}</th><th class="${mine === 'civ' ? 'me' : ''}">${t('trackCiv')}</th></tr></thead><tbody>${rows}</tbody></table><div class="note">${t('treeSteps')}</div><div class="note">${t('treeNote', { xp: Math.round(m.xp).toLocaleString() })}</div>`;
     }
     const setErr = (e) => { const el = $('acc-err'); if (el) el.textContent = e ? errText(e) : ''; };
     const signedIn = (r) => { accNote = ''; ACC.token = r.token; ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); };
@@ -6045,7 +6090,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
         const lb = $('acc-ranklist');
         if (lb.innerHTML) { lb.innerHTML = ''; return; }
         const r = await api('/api/ranking');
-        lb.innerHTML = (r.top || []).slice(0, 20).map((p, i2) => `<div><span>${i2 + 1}</span><span>${esc(p.nick)} <span class="gr">${esc(t(p.grade))}</span></span><span>${t('level', { n: p.level })}</span></div>`).join('') || errText(r.error);
+        lb.innerHTML = (r.top || []).slice(0, 20).map((p, i2) => `<div><span>${i2 + 1}</span><span>${esc(p.nick)}</span><span class="gr">${esc(window.RTD_PROG.label(t, p.grade, p.level))}</span></div>`).join('') || errText(r.error);
       };
     }
     // 계정 알림은 계정 창 안(맨 위)에 적는다. 전에는 전투 시작 창의 #roster에 적혀 계정 창에서는 안 보였다
@@ -6287,6 +6332,27 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     };
     boot().catch(() => { const B = $('boot'); if (B) B.hidden = true; }).then(() => { if (startAgain()) return; if (window.RTD_LOBBY && window.RTD_LOBBY.trialBack && window.RTD_LOBBY.trialBack()) return; if (window.RTD_TUT && window.RTD_TUT.lobby) window.RTD_TUT.lobby({ t, T }); });
   }
+  // 로비 끌기 막기(2026-11-25 실기 소감: 로비에서 끌면 배경 그림이 고무줄처럼 늘어남 = 안드로이드 12+ WebView의 늘어나는 끝 효과·iOS 튕김).
+  // 로비(#title)와 시작 화면(#boot)에서 손가락을 움직일 때, 누른 자리에서 위로 올라가며 실제로 스크롤되는 상자(상점·랭킹·전적·미션·채팅 창 등)나
+  // 입력 칸이 없으면 기본 동작(문서 끌기·늘어남·튕김)을 막는다. 두 손가락(핀치 확대)은 늘 막는다.
+  // 판 화면(#app)에는 걸지 않는다(판의 터치가 이 처리를 기다리지 않게). 탭(click)은 막지 않는다.
+  (function lobbyNoDrag() {
+    const canScroll = (el, stop) => {
+      for (let e = el; e && e !== stop; e = e.parentElement) {
+        if (e.nodeType !== 1) continue;
+        if (e.tagName === 'INPUT' || e.tagName === 'TEXTAREA' || e.tagName === 'SELECT') return true;
+        const cs = getComputedStyle(e);
+        if ((/auto|scroll/.test(cs.overflowY) && e.scrollHeight > e.clientHeight + 1) || (/auto|scroll/.test(cs.overflowX) && e.scrollWidth > e.clientWidth + 1)) return true;
+      }
+      return false;
+    };
+    ['title', 'boot'].forEach((id) => {
+      const box = $(id); if (!box) return;
+      let free = false; // 이번 터치는 스크롤 상자 안에서 시작했다
+      box.addEventListener('touchstart', (e) => { free = e.touches.length === 1 && canScroll(e.target, box); }, { passive: true });
+      box.addEventListener('touchmove', (e) => { if ((e.touches.length > 1 || !free) && e.cancelable) e.preventDefault(); }, { passive: false });
+    });
+  })();
   setupTitle();
   requestAnimationFrame(loop);
 })();

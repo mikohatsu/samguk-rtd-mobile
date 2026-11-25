@@ -184,6 +184,9 @@
           const room = pr.left - SL - 8; // 작은 폰(640px)은 360px 말풍선이 왼쪽에 다 안 들어간다 → 들어갈 만큼 좁힌다(최소 240)
           if (room < bw && room >= 240) { box.style.width = room + 'px'; x = SL; } else x = Math.max(SL, pr.left - bw - 8);
         }
+        // 상점 창 안 안내(장수 해금 탭): 키 낮은 화면(폰·작은 폰·폴드 접힘)에서 가운데에 두면 탭 이름을 덮었다 → 탭 줄 아래로 내린다(2026-11-25)
+        const tb = $('#lptabs'), tr = vis(tb) ? tb.getBoundingClientRect() : null;
+        if (tr && y < tr.bottom && y + bh > tr.top && x < tr.right && x + bw > tr.left) y = Math.max(tr.bottom + 8, Math.min(H - bh - 8, y));
       }
       box.style.left = x + 'px'; box.style.top = y + 'px';
     } else {

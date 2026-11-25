@@ -5,8 +5,8 @@
   // 연출은 있는 그림만 움직인다: 빛살(ray_sun), 별(pic_star), 고리·터짐 프레임 시트(fxa_ring 5×4칸, fxa_burst 6×5칸 — art.js FXA_META와 같다. 칸 수는 CSS에 적혀 있다).
   // 수치 표(코드에 흩지 않는다)
   const MT_CFG = { selfMinMs: 1000, artMaxMs: 8000, showMinMs: 4000, hostMaxMs: 12000, guestMaxMs: 15000, stepS: 0.25, tips: 4, tickMs: 200 };
-  // 계급(0 신병 ~ 10 군주)에 필요한 레벨. 서버(app.js)의 RANK_LV, 19-title.js의 관직 표와 같다
-  const MT_RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];
+  // 계급(0 신병 ~ 10 군주)이 시작되는 레벨. progression.js(서버·19-title.js 관직 표와 같다, 2026-11-25 economy-v2: 계급마다 등급 1~5)
+  const MT_RANK_LV = window.RTD_PROG.RANK_LV;
   // 연출 단계: 0~2 수수 / 3~5 금테 + 빛살 / 6~8 큰 빛살 + 별 / 9 고리 / 10 군주(전부 + 등장 터짐)
   const mtTier = (r) => (r >= 10 ? 4 : r >= 9 ? 3 : r >= 6 ? 2 : r >= 3 ? 1 : 0);
   const mtRank = (gr) => { const m = /(\d+)$/.exec(gr || ''); return m ? Math.max(0, Math.min(10, +m[1])) : 0; };
@@ -20,7 +20,7 @@
   function mtCardHtml(p, i, ord, host) {
     const st = p.state || {}, r = mtRank(st.gr), tier = mtTier(r), low = Q.level === 'low';
     const d = T.units.find((u) => u.id === st.ic) || T.units.find((u) => u.id === 'cav');
-    const gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
+    const gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? (st.lv ? window.RTD_PROG.label(t, st.gr, st.lv | 0) : t(st.gr)) : '';
     const pum = r >= 1 && r <= 9 ? t('rankPum', { n: 10 - r }) : '';
     let glow = '', over = '';
     if (tier >= 1) glow += '<i class="mt-ray"></i>';
@@ -34,9 +34,9 @@
     return `<div class="mt-slot t${tier}${p.me ? ' me' : ''}" style="grid-column:${i + 1};--d:${(ord * MT_CFG.stepS).toFixed(2)}s">${tier >= 3 ? '<i class="mt-aura"></i>' : ''}<div class="mt-card"><div class="mt-glow">${glow}</div>`
       + `${host ? `<span class="mt-tag host">${t('host')}</span>` : ''}${p.me ? `<span class="mt-tag mine">${t('me')}</span>` : ''}`
       + `<div class="mt-emb">${over}<img class="mt-rk" alt="" src="gfx/rank_${r}.png" onerror="this.style.visibility='hidden'">${d ? `<img class="mt-ic" alt="" src="${Art.portrait(d)}">` : ''}</div>`
-      + `<b class="mt-nm">${esc(st.name || '?')}</b><span class="mt-gr">${esc(gr)}${gr && pum ? ' · ' : ''}${pum}</span><span class="mt-lv">${st.lv ? t('level', { n: st.lv | 0 }) : ''}</span><span class="mt-st" data-st="${i}"></span></div></div>`;
+      + `<b class="mt-nm">${esc(st.name || '?')}</b><span class="mt-gr">${esc(gr)}${gr && pum ? ' · ' : ''}${pum}</span><span class="mt-lv"></span><span class="mt-st" data-st="${i}"></span></div></div>`;
   }
-  // 내 카드 아래 한 줄: 다음 계급까지 남은 경험치(레벨 L의 누적 경험치 = 40·(L-1)², 18-account.js xpLv)
+  // 내 카드 아래 한 줄: 다음 계급까지 남은 경험치(레벨 L의 누적 경험치 = progression.js xpAt, 18-account.js xpLv)
   function mtNextHtml(a) {
     if (!a || typeof a.rank !== 'number') return '';
     if (a.rank >= 10) return t('mt_max');
@@ -131,7 +131,7 @@
     if (MT) { const pv = MT.preview; if (pv) mtStop(MT); return false; } // 진짜 대기 화면은 건드리지 않는다
     const rs = (Array.isArray(ranks) && ranks.length ? ranks : [0, 3, 6, 9, 10]).slice(0, 5).map((r) => Math.max(0, Math.min(10, r | 0)));
     const mi = Math.min(rs.length - 1, 1), us = T.units, step = Math.max(1, Math.floor(us.length / 5));
-    const ros = rs.map((r, i) => { const u = us[(i * step + 3) % us.length]; return { id: 'v' + i, me: i === mi, at: 900 + i * 600, state: { name: u.name, lv: MT_RANK_LV[r] + (r < 10 ? 2 : 9), gr: 'rk_' + (i % 2 ? 'civ' : 'mil') + r, ic: u.id } }; });
+    const ros = rs.map((r, i) => { const u = us[(i * step + 3) % us.length]; return { id: 'v' + i, me: i === mi, at: 900 + i * 600, state: { name: u.name, lv: MT_RANK_LV[r] + (r < 10 ? 2 : 0), gr: 'rk_' + (i % 2 ? 'civ' : 'mil') + r, ic: u.id } }; });
     const me = ros[mi], m = MT = {
       preview: true, seed: 1, at: Date.now(), done: false, key: '', iv: 0, tip: (Math.random() * MT_CFG.tips) | 0, diff: 'nightmare', mutLv: 3,
       roster: () => ros, host: () => 'v0', acc: () => ({ rank: rs[mi], xp: xpLv(me.state.lv) + 120, track: mi % 2 ? 'civ' : 'mil' }),

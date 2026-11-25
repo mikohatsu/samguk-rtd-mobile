@@ -9,7 +9,7 @@
     return best;
   };
   // 터치에서 손가락이 이만큼(화면 px) 움직이기 전까지는 탭으로 본다
-  const TOUCH_SLOP = 18, MOUSE_SLOP = 10;
+  const TOUCH_SLOP = 18, MOUSE_SLOP = 10, JOY_SLOP = 8; // JOY_SLOP: 라인 떠 있는 조이스틱이 생기는 끌기 거리(짧게 — 누르자마자 밀어도 방향이 살게)
   const enemyAt = (x, y) => g.enemies.find((e) => dist(e.x, e.y, x, y) < e.r + 12);
   // 보스전 중에도 Tab으로 내 라인 화면에 와서 선택권·조합·강화를 할 수 있다. 그동안 결투 시간은 그대로 흐른다.
   const inBoss = () => g && g.phase === 'boss' && !S.laneView;
@@ -80,9 +80,11 @@
     }
     const f = g.phase === 'wave' ? flagAt(e) : null;
     if (f) { showFlag(f, e); return; } // 다른 곳을 누를 때까지 띄워 둔다(아래 pointerdown에서 닫는다)
-    // 빈 곳: 고른 게 있으면 그리로 '공격하며 이동'(가는 길에 사거리 안의 적이 있으면 멈춰서 때린다), 없으면 아무것도 안 함
-    // 터치: 유닛은 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
+    // 빈 곳: 터치는 유닛을 톡 쳐서 옮기지 않는다(고르면 뜨는 조이스틱으로 움직인다). 고른 상자·아이템만 빈 곳을 쳐서 옮긴다.
+    // 유닛을 고른 상태면 선택을 풀고 선택 바·상세 카드를 내린다(2026-11-25 실기 소감: X 버튼으로만 닫히던 것. 마우스 클릭은 원래 풀렸다).
+    // 끌기와는 손가락이 TOUCH_SLOP 안에서 떨어졌을 때만 여기로 오는 것으로 가른다(아래 pointermove).
     if (S.dropSel && !S.sel.length) rightClick(m, 'amove');
+    else if (S.sel.length) { setSel([]); S.ucard = false; }
   }
   function boxSelect(d) {
     const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
@@ -119,7 +121,10 @@
     // 마우스 가운데 버튼: 지도 끌기
     if (e.button === 1) { e.preventDefault(); S.pan = { x: e.clientX, y: e.clientY, cx: S.cam.x, cy: S.cam.y }; return; }
     if (e.pointerType === 'touch') {
-      touch = { id: e.pointerId, x: e.clientX, y: e.clientY, m, mode: null, cx: S.cam.x, cy: S.cam.y };
+      // 라인 떠 있는 조이스틱(2026-11-25): 유닛을 골라 조이스틱이 보이는 동안 왼쪽 아래 영역(15-pad JOY_ZONE)의 빈 땅을 누르고 끌면
+      // 누른 자리에 조이스틱이 생긴다(아래 pointermove). 끌지 않고 떼면 빈 곳 탭(선택 해제). 유닛·상자 위를 누르면 원래대로 고르기.
+      const jz = PAD.lane && !S.cmdMode && !viewedPeer() && !spect() && joyZone(e) && !unitAt(m.x, m.y) && !dropAt(m.x, m.y);
+      touch = { id: e.pointerId, x: e.clientX, y: e.clientY, m, mode: null, cx: S.cam.x, cy: S.cam.y, joy: jz };
       // 꾹 누르고 있으면 범위 선택으로 바뀐다
       if (laneOn() && !viewedPeer() && !spect() && !S.cmdMode) touch.lp = setTimeout(() => {
         if (touch && !touch.mode) { touch.mode = 'box'; S.drag = { x0: m.x, y0: m.y, x1: m.x, y1: m.y, moved: true, add: false }; if (navigator.vibrate) navigator.vibrate(12); }
@@ -159,6 +164,12 @@
     if (touch && e.pointerId === touch.id) {
       const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
       if (touch.mode === 'box') { S.drag.x1 = m.x; S.drag.y1 = m.y; return; }
+      // 떠 있는 조이스틱: 처음 누른 자리를 중심으로 받침을 세우고 이 손가락을 조이스틱에 넘긴다(이 뒤 움직임·뗌은 15-pad가 창에서 받는다)
+      if (!touch.mode && touch.joy && Math.hypot(dx, dy) > JOY_SLOP) {
+        const t0 = touch; cancelTouch(); ptrs.delete(e.pointerId);
+        joyStart({ pointerId: e.pointerId, clientX: t0.x, clientY: t0.y }, true); joyMove(e);
+        return;
+      }
       if (!touch.mode && Math.hypot(dx, dy) > (S.coarse ? TOUCH_SLOP : MOUSE_SLOP)) { touch.mode = 'pan'; if (touch.lp) clearTimeout(touch.lp); }
       if (touch.mode === 'pan') panBy(touch.cx, touch.cy, dx, dy);
       return;

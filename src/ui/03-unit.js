@@ -153,6 +153,68 @@
     x.globalAlpha = 1; x.strokeStyle = 'rgba(14,8,4,.9)'; x.lineWidth = thick ? 4 : 2.8; x.stroke();
     return (DISC[key] = cv);
   }
+  // ---- 그림을 발밑 원판 가운데에 세우기(2026-11-25 실기 소감 「원판 위 유닛이 정중앙이 아니다」) ----
+  // 그림 칸(152)의 발끝 기준선(134)이 원판 가운데(y + r·0.72)보다 r·0.32 아래라 유닛이 원판 앞 가장자리에 서 있었고,
+  // 그림마다 무기·자세가 달라 몸(다리) 가운데가 칸 가운데에서 좌우로 최대 r·0.4 비켜 있었다.
+  // 그림 한 장마다 한 번 불투명 화소를 재서(아래 끝 줄, 키의 55~95% 높이 띠의 가로 무게중심 = 다리·옷자락) 그만큼 그림을 옮겨 그린다.
+  // 원판·선택 문양·버프 장판·사거리는 그대로(위치 판정과 같은 자리). 조각 애니메이션(rig)은 같은 그림에서 잘라 만들어 옆·앞 그림의 값을 쓴다.
+  const FOOT = new WeakMap(), FOOT_Y = 0.8, FOOT_DX_MAX = 0.1; // 발끝 = 원판 가운데보다 r·0.08 아래(발바닥 두께), 가로 보정은 그림 폭의 10%까지
+  let footCv = null;
+  function footOf(im) {
+    if (!im || !im.width) return null;
+    let f = FOOT.get(im);
+    if (f !== undefined) return f;
+    f = null;
+    try {
+      const w = im.width, h = im.height;
+      if (!footCv) footCv = document.createElement('canvas');
+      if (footCv.width < w || footCv.height < h) { footCv.width = Math.max(w, footCv.width); footCv.height = Math.max(h, footCv.height); }
+      const x = footCv.getContext('2d', { willReadFrequently: true });
+      x.clearRect(0, 0, footCv.width, footCv.height); x.drawImage(im, 0, 0);
+      const px = x.getImageData(0, 0, w, h).data;
+      let y0 = -1, y1 = -1;
+      for (let y = 0; y < h && y0 < 0; y++) for (let i = 0; i < w; i++) if (px[(y * w + i) * 4 + 3] > 100) { y0 = y; break; }
+      for (let y = h - 1; y >= 0 && y1 < 0; y--) for (let i = 0; i < w; i++) if (px[(y * w + i) * 4 + 3] > 100) { y1 = y; break; }
+      if (y0 >= 0 && y1 > y0) {
+        let sx = 0, n = 0;
+        for (let y = Math.floor(y0 + (y1 - y0) * 0.55); y <= y0 + (y1 - y0) * 0.95; y++) for (let i = 0; i < w; i++) if (px[(y * w + i) * 4 + 3] > 100) { sx += i; n++; }
+        const dx = n ? (sx / n + 0.5) / w - 0.5 : 0;
+        f = { dx: Math.max(-FOOT_DX_MAX, Math.min(FOOT_DX_MAX, dx)), by: (y1 + 1) / h };
+      }
+    } catch (e) { f = null; } // 읽을 수 없는 그림이면 보정 없이
+    FOOT.set(im, f);
+    return f;
+  }
+  // 그림(크기 S, 칸 기준 drawSprite·rig 배치)을 옮길 양: 발끝을 y + r·FOOT_Y에, 다리 가운데를 x에
+  function footShift(im, r, S, flip) {
+    const f = footOf(im);
+    if (!f) return { x: 0, y: 0 };
+    return { x: -f.dx * S * (flip ? -1 : 1), y: r * FOOT_Y - (f.by - 0.6) * S };
+  }
+  // ---- 유닛 발밑 등급 별(2026-11-25 실기 소감 「1성이면 1개, 7성이면 7개」) ----
+  // 등급(1~10)만큼 별 그림(gfx/pic_star, CC0)을 등급색으로 물들여 원판 아래에 늘어놓는다. 한 줄에 5개까지, 6성부터 두 줄(위 5 + 아래 나머지)이라 세기 쉽다.
+  // 검게 물들인 같은 별을 살짝 크게 깔아 밝은 땅에서도 보이게. 등급별로 한 장을 미리 만들어 두고 유닛마다 drawImage 한 번만 한다.
+  const TSTAR = {}, TS_PX = 32, TS_ROW = 5;
+  function tierStarSprite(tier) {
+    if (TSTAR[tier]) return TSTAR[tier];
+    const im = Art.picTint('pic_star', tierColor(tier)), sh = Art.picTint('pic_star', '#140c06');
+    if (!im || !sh) return null; // 그림을 아직 못 받았다
+    const n1 = Math.min(TS_ROW, tier), n2 = tier - n1, step = TS_PX * 0.92, rowH = TS_PX * 0.84, pad = 3;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(TS_PX + (n1 - 1) * step + pad * 2); cv.height = Math.ceil(TS_PX + (n2 ? rowH : 0) + pad * 2);
+    const x = cv.getContext('2d');
+    const row = (n, y) => { const x0 = (cv.width - (TS_PX + (n - 1) * step)) / 2; for (let i = 0; i < n; i++) { const cx = x0 + i * step; x.globalAlpha = 0.9; x.drawImage(sh, cx - 2, y - 1, TS_PX + 4, TS_PX + 4); x.globalAlpha = 1; x.drawImage(im, cx, y, TS_PX, TS_PX); } };
+    row(n1, pad); if (n2) row(n2, pad + rowH);
+    return (TSTAR[tier] = cv);
+  }
+  // y = 별 묶음의 위 끝, size = 별 하나의 크기(전장 단위)
+  function tierStars(c, x, y, tier, size) {
+    if (!(tier >= 1)) return;
+    const sp = tierStarSprite(Math.min(10, tier));
+    if (!sp) return;
+    const k = size / TS_PX;
+    c.drawImage(sp, x - (sp.width * k) / 2, y, sp.width * k, sp.height * k);
+  }
   function piece(c, x, y, r, d, t, ownerAI, opt) {
     const tier = d.tier, col = tierColor(tier), seed = (x * 7 + y * 13) % 6.28;
     opt = opt || {};
@@ -179,11 +241,15 @@
     // 조각 애니메이션이 있는 장수는 조각으로 그린다(동작 상태는 보스전이 넘겨 주고, 라인에서는 옆모습일 때만 걷기·대기 + 기존 자세 흔들림)
     const RG = window.RTD_RIG;
     // 화질 '낮음'에서는 라인의 조각 그리기를 끈다(유닛이 많을 때 느려지는 기기 보호. 보스전은 그대로)
+    const SZ = r * 3.7 * (p.bornS || 1);
     if (RG && (opt.rig || (p.v === 2 && Q.level !== 'low')) && RG.has(d.id)) {
-      const st = opt.rig || { state: p.frame ? 'walk' : 'idle', t };
-      c.save(); c.translate(x + (opt.rig ? 0 : p.x), y + (opt.rig ? 0 : p.y)); if (!opt.rig && p.rot) c.rotate(p.rot);
-      RG.draw(c, d.id, 0, 0, r * 3.7 * (p.bornS || 1), p.flip, st); c.restore();
-    } else Art.drawSprite(c, Art.unitSprite(d, p.v, p.frame), x + p.x, y + p.y + Math.sin(t * 3 + x) * 0.6, r * 3.7 * (p.bornS || 1), p.flip, p.rot, p.sy);
+      const st = opt.rig || { state: p.frame ? 'walk' : 'idle', t }, fs = footShift(Art.unitSprite(d, st.view === 'f' ? 0 : 2, 0), r, SZ, p.flip);
+      c.save(); c.translate(x + fs.x + (opt.rig ? 0 : p.x), y + fs.y + (opt.rig ? 0 : p.y)); if (!opt.rig && p.rot) c.rotate(p.rot);
+      RG.draw(c, d.id, 0, 0, SZ, p.flip, st); c.restore();
+    } else {
+      const im = Art.unitSprite(d, p.v, p.frame), fs = footShift(im, r, SZ, p.flip);
+      Art.drawSprite(c, im, x + fs.x + p.x, y + fs.y + p.y + Math.sin(t * 3 + x) * 0.6, SZ, p.flip, p.rot, p.sy);
+    }
     if (pb) birthFx(c, x, y, r, tier, col, pb.born, true);
   }
   // Kenney 고리 그림에서 고리가 지나는 반지름(그림 폭의 절반에 대한 비율). 고리를 반지름 R에 맞춰 그릴 때 쓴다.

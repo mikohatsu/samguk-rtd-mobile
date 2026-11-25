@@ -102,6 +102,8 @@
   };
   const L = (k, v) => { let s = nm(S[k] || [k]); if (v) Object.keys(v).forEach((x) => (s = s.split('{' + x + '}').join(v[x]))); return s; };
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // 관직 표기 "계급명 등급"(예: 百人隊長 3, 2026-11-25 economy-v2). progression.js가 없으면 계급명만
+  const rkLabel = (key, lv) => (root.RTD_PROG ? root.RTD_PROG.label(C.t, key, lv | 0) : C.t(key));
 
   // ---------- 색 바꾸기(스킨) ----------
   // 그림의 색상(hue)을 돌리고 채도·밝기를 바꾼 새 캔버스. 한 번 만든 것은 다시 쓴다.
@@ -398,12 +400,12 @@
   // 설정 창의 구매 복원 줄(상점은 쉬움을 깨야 열리므로 설정에도 둔다). 앱이고 결제가 켜져 있을 때만 보이고, 로그인 전에는 버튼 대신 안내만
   const restoreRow = () => (iapReady() ? `<div class="setlist"><div class="h">${L('restore')}</div><div class="row"><div><small>${L('restoreHint')}</small></div>${C.ACC.me && C.ACC.token ? `<button type="button" class="toggle" data-iaprestore="1">${L('restore')}</button>` : `<small>${L('needLogin')}</small>`}</div></div>` : '');
   // ---------- 상점 카드(2026-11-25 다듬기: 글 대신 그림·배지) ----------
-  // 카드 = 그림(주인공) + 이름 한 줄 + 아래 버튼 한 줄. 등급(신화·불멸)은 카드 틀 색, 상태는 배지(잠김 자물쇠·장착 ✓·부족 금액).
+  // 카드 = 그림(주인공) + 이름 한 줄 + 아래 버튼 한 줄. 등급(신화·불멸)은 카드 틀 색, 상태는 배지(장착 ✓·부족 금액). 잠긴 장수는 원화를 흑백으로(자물쇠 그림 없음, 2026-11-25 실기 소감) — 해금되면 컬러.
   // 동전 가격 버튼 = 동사(구매·해금) + 동전 + 숫자. 셋을 한 줄 글(.sh-pr)로 묶어 기준선이 맞게 한다(정렬 점검 2026-11-25). 체험 버튼 옆(좁음)에서는 동사가 윗줄.
   const coinTag = (n) => `<i class="ico coin" aria-hidden="true"></i><b>${(n || 0).toLocaleString()}</b>`;
   const priceBtn = (attr, cost, verb, me) => `<button class="sh-buy${me.coins < cost ? ' short' : ''}" type="button" ${attr} ${me.coins < cost ? 'disabled' : ''} aria-label="${esc(verb)} ${cost}" title="${esc(verb)}"><span class="sh-pr"><span class="sh-vb">${esc(verb)}</span>${coinTag(cost)}</span></button>`;
-  // o: { cls, id(체험 반짝임용 data-card), art(그림 html), rk(등급·기본 표시), st('lock'|'on'), short(부족 금액), name, foot(버튼 html) }
-  const shCard = (o) => `<div class="sh-card ${o.cls || ''}"${o.id ? ` data-card="${o.id}"` : ''}><div class="sh-art">${o.art}${o.rk ? `<span class="sh-rk">${o.rk}</span>` : ''}${o.st === 'lock' ? '<i class="sh-st lock ico lock" aria-hidden="true"></i>' : o.st === 'on' ? '<i class="sh-st on" aria-hidden="true">✓</i>' : ''}${o.short ? `<span class="sh-short">${L('short', { n: o.short.toLocaleString() })}</span>` : ''}</div><span class="sh-nm">${o.name}</span><div class="sh-ft">${o.foot}</div></div>`;
+  // o: { cls, id(체험 반짝임용 data-card), art(그림 html), rk(등급·기본 표시), st('on' = 장착 배지), short(부족 금액), name, foot(버튼 html) }
+  const shCard = (o) => `<div class="sh-card ${o.cls || ''}"${o.id ? ` data-card="${o.id}"` : ''}><div class="sh-art">${o.art}${o.rk ? `<span class="sh-rk">${o.rk}</span>` : ''}${o.st === 'on' ? '<i class="sh-st on" aria-hidden="true">✓</i>' : ''}${o.short ? `<span class="sh-short">${L('short', { n: o.short.toLocaleString() })}</span>` : ''}</div><span class="sh-nm">${o.name}</span><div class="sh-ft">${o.foot}</div></div>`;
   // 장수 해금 카드 그림: 원화 축소본(gfx/ilt_*, 원본 il_*에서 잘라 줄임). 원화가 없는 장수는 SD 초상
   const heroArt = (d) => { const v = (C.T.illusts || {})[d.id]; return v ? `<img class="il" alt="" loading="lazy" decoding="async" src="gfx/ilt_${d.id}.jpg?v=${v}">` : `<img class="sd" alt="" src="${Art.portrait(d)}">`; };
   function unlockHtml(me) {
@@ -420,7 +422,7 @@
       // 체험(2026-11-25): 잠긴 카드마다. 무료·무제한, 확인 창 없음(잃는 것이 없다)
       const foot = own ? `<span class="sh-done">✓ ${L('unlocked')}</span>`
         : `<button class="sh-try" type="button" data-trial="${id}">${esc(C.t('trialBtn'))}</button>${priceBtn(`data-unl="${id}"`, cost, L('unlockBtn'), me)}` + (iap && ip ? `<button class="sh-yen" type="button" data-iap="${ip[0] + id}" aria-label="${L('iapBtn', { y: ip[1].toLocaleString('en-US') })}">¥${ip[1].toLocaleString('en-US')}</button>` : '');
-      return shCard({ cls: (imm ? 'r10' : 'r9') + (own ? ' own' : ' lock') + (iap && ip && !own ? ' iap' : ''), id, art: heroArt(d), rk: L(imm ? 'tImm' : 'tMyth'), st: own ? '' : 'lock', short: !own && me.coins < cost ? cost - me.coins : 0, name: esc(d.name || id), foot });
+      return shCard({ cls: (imm ? 'r10' : 'r9') + (own ? ' own' : ' lock') + (iap && ip && !own ? ' iap' : ''), id, art: heroArt(d), rk: L(imm ? 'tImm' : 'tMyth'), short: !own && me.coins < cost ? cost - me.coins : 0, name: esc(d.name || id), foot });
     }).join('')}</div>`;
     // 결제 버튼이 보일 때만: 특정상거래법 표시·이용약관
     if (iap) h += `<div class="sh-legal">${legalLink('tokushoho', L('tokusho'))} · ${legalLink('terms', C.t('terms'))}</div>`;
@@ -439,7 +441,7 @@
     $('lico').src = iconSrc(me ? me.icon : 'cav');
     // 로그인하지 않았으면 이름 자리에 '로그인 안 함 · 눌러서 로그인'. 인터넷이 끊겨 있으면 등급 옆에 '오프라인'
     $('lnick').textContent = me ? me.nick : L('profGuest');
-    $('lrank').textContent = me ? `${C.t(me.grade)} · ${C.t('level', { n: me.level })}${root.navigator && root.navigator.onLine === false ? ' · ' + L('offlineTag') : ''}` : L('profTap');
+    $('lrank').textContent = me ? `${rkLabel(me.grade, me.level)}${root.navigator && root.navigator.onLine === false ? ' · ' + L('offlineTag') : ''}` : L('profTap');
     $('lcur').hidden = !me;
     if (me) { $('lcoins').textContent = (me.coins || 0).toLocaleString(); $('lgems').textContent = (me.gems || 0).toLocaleString(); }
     // #lcur .cur 은 CSS가 display:flex 라 hidden 속성이 안 먹는다 → style로 숨긴다
@@ -526,14 +528,42 @@
     if (kind === 'shop') iapFlush(); // 서버 확인을 못 한 결제가 남아 있으면 다시 보낸다
     renderPanel();
   }
-  function closePanel() { panel = null; wizBack = false; $('lpanel').hidden = true; $('lhold').appendChild($('accbox')); if (C && C.clearAccNote) C.clearAccNote(); }
+  function closePanel() { shTipClose(); panel = null; wizBack = false; $('lpanel').hidden = true; $('lhold').appendChild($('accbox')); if (C && C.clearAccNote) C.clearAccNote(); }
   // rseq = 창을 그릴 때마다 오르는 번호(서버 답을 기다리는 사이 다른 탭·창으로 바꿨으면 늦게 온 답을 버린다)
   // wizBack = 전투 시작 창의 '계정 열기'로 계정 창에 왔다(로그인하면 전투 시작 창을 온라인이 골라진 채로 다시 연다)
-  let rseq = 0, wizBack = false, shHint = false; // shHint = 상점 ⓘ 설명을 펼쳤다
+  let rseq = 0, wizBack = false;
+  // 상점 ⓘ 설명 = 말풍선(2026-11-25 실기 소감: 본문에 펼쳐 카드를 밀지 않게 떠 있는 층). ⓘ 아래에 꼬리를 달고, 창(#lpanel) 안전 영역 밖으로 안 나가게 놓는다.
+  // 닫기: ⓘ를 다시 누름 · 바깥을 누름(그 누름은 다른 버튼에 전달하지 않음 — 닫으려다 체험·구매가 눌리지 않게) · 탭 바꿈·창 다시 그림·창 닫기·화면 크기 바뀜
+  function shTipClose() {
+    const t = $('shtip'); if (t) t.remove();
+    const b = document.querySelector('#lptabs [data-shinfo]'); if (b) { b.classList.remove('on'); b.setAttribute('aria-expanded', 'false'); }
+  }
+  let shTipTab = null;
+  function shTipOpen(btn) {
+    shTipClose(); shTipTab = ptab;
+    const host = $('lpanel'), t = document.createElement('div');
+    t.id = 'shtip'; t.className = 'sh-tip'; t.setAttribute('role', 'note');
+    t.innerHTML = `<div class="sh-tipb">${L('coinHint')}${ptab === 'unlock' ? '<br>' + L('unlockHint') : ''}</div><i class="sh-tail" aria-hidden="true"></i>`;
+    host.appendChild(t);
+    btn.classList.add('on'); btn.setAttribute('aria-expanded', 'true');
+    const hr = host.getBoundingClientRect(), br = btn.getBoundingClientRect(), cs = getComputedStyle(host);
+    const ml = Math.max(8, parseFloat(cs.paddingLeft) || 0), mr = Math.max(8, parseFloat(cs.paddingRight) || 0), mb = Math.max(8, parseFloat(cs.paddingBottom) || 0);
+    const w = Math.min(380, hr.width - ml - mr), cx = br.left + br.width / 2 - hr.left;
+    const left = Math.max(ml, Math.min(hr.width - mr - w, cx - w + 30)), top = br.bottom - hr.top + 9;
+    Object.assign(t.style, { width: w + 'px', left: left + 'px', top: top + 'px', maxHeight: Math.max(60, hr.height - top - mb) + 'px' });
+    t.style.setProperty('--ax', Math.max(14, Math.min(w - 14, cx - left)) + 'px');
+  }
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    // 바깥 누름: 다른 클릭 처리보다 먼저(잡기 단계) 닫고 그 누름은 멈춘다. 안드로이드 뒤로 가기(native.js가 닫기 버튼을 대신 누름)도 말풍선부터 닫는다
+    document.addEventListener('click', (e) => { const t = $('shtip'); if (!t || t.contains(e.target) || (e.target.closest && e.target.closest('[data-shinfo]'))) return; shTipClose(); e.preventDefault(); e.stopPropagation(); }, true);
+    window.addEventListener('resize', () => { if ($('shtip')) shTipClose(); });
+  }
   const loadingHtml = () => `<div class="lp-note lp-wait">${L('loading')}</div>`;
   const failHtml = () => `<div class="lp-note lp-fail">${L('loadFail')} <button class="btn" type="button" data-retry="1">${L('retry')}</button></div>`;
   const tabs = (list) => { if (!ptab || !list.some(([k]) => k === ptab)) ptab = list[0][0]; $('lptabs').innerHTML = list.map(([k, l]) => `<button type="button" class="${ptab === k ? 'on' : ''}" data-ptab="${k}">${l}</button>`).join(''); };
   async function renderPanel() {
+    const keepTip = $('shtip') && panel === 'shop' ? shTipTab : null; // 같은 탭을 다시 그릴 때(동전·결제 상태가 와서)는 말풍선을 새 ⓘ에 다시 띄운다
+    shTipClose();
     if (!panel) return;
     const my = ++rseq;
     if (panel === 'lchat') { renderLchat(); return; }
@@ -607,15 +637,16 @@
     if (panel === 'shop') {
       tabs([['unlock', L('unlockTab')], ['icons', L('icons')], ['skins', L('skins')], ['maps', L('maps')]].concat(GEMS_ON ? [['gems', L('gems')]] : []));
       if (!me) { body.innerHTML = `<div class="sh-empty"><img alt="" src="gfx/ic_shop.png"><p>${L('needLogin')}</p><button class="btn go" type="button" data-lp="account">${L('openAcc')}</button></div>`; return; }
-      // 탭 줄 오른쪽 = 재화 바(창 안에서 스크롤해도 늘 보인다) + ⓘ(동전 얻는 법·해금 설명은 눌러야 펼친다)
-      $('lptabs').insertAdjacentHTML('beforeend', `<div class="sh-wallet"><span class="sh-coins" role="status" aria-label="${L('balance', { n: (me.coins || 0).toLocaleString() })}">${coinTag(me.coins)}</span><button class="sh-ib${shHint ? ' on' : ''}" type="button" data-shinfo="1" aria-expanded="${shHint}" aria-label="${L('shInfo')}">i</button></div>`);
+      // 탭 줄 오른쪽 = 재화 바(창 안에서 스크롤해도 늘 보인다) + ⓘ(동전 얻는 법·해금 설명은 눌러야 말풍선으로 뜬다)
+      $('lptabs').insertAdjacentHTML('beforeend', `<div class="sh-wallet"><span class="sh-coins" role="status" aria-label="${L('balance', { n: (me.coins || 0).toLocaleString() })}">${coinTag(me.coins)}</span><button class="sh-ib" type="button" data-shinfo="1" aria-expanded="false" aria-controls="shtip" aria-label="${L('shInfo')}">i</button></div>`);
+      if (keepTip && keepTip === ptab) shTipOpen($('lptabs').querySelector('[data-shinfo]'));
       const has = (id) => SHOP.free(id) || me.owned.includes(id);
       // 아래 버튼: 가진 것은 장착(장착 중이면 ✓ 표시, 외형은 해제), 없는 것은 동전 가격 버튼
       const foot = (id, cost, on, kind, unit) => (has(id)
         ? `<button class="sh-eq${on ? ' on' : ''}" type="button" data-equip="${kind}" data-id="${id}" ${unit ? `data-unit="${unit}"` : ''} ${on && kind !== 'skin' ? 'disabled' : ''}>${on ? (kind === 'skin' ? L('unequip') : '✓ ' + L('equipped')) : L('equip')}</button>`
         : priceBtn(`data-buy="${id}"`, cost, L('buy'), me));
       const card = (id, cost, on, kind, unit, art, name, cls) => shCard({ cls: (cls || '') + (on ? ' on' : has(id) ? ' own' : ''), art, rk: SHOP.free(id) ? L('free') : '', st: on ? 'on' : '', short: !has(id) && me.coins < cost ? cost - me.coins : 0, name, foot: foot(id, cost, on, kind, unit) });
-      let h = `<div class="sh-hint" ${shHint ? '' : 'hidden'}>${L('coinHint')}${ptab === 'unlock' ? '<br>' + L('unlockHint') : ''}</div>`;
+      let h = '';
       if (ptab === 'unlock') {
         h += unlockHtml(me);
       } else if (ptab === 'icons') {
@@ -650,7 +681,7 @@
         if (r.status !== 200 || r.error) { body.innerHTML = h + failHtml(); return null; }
         return r;
       };
-      const row = (i, p, val, extra) => `<div class="lp-row"><span class="no">${i + 1}</span><img alt="" src="${iconSrc(p.icon)}"><span class="who">${extra || esc(p.nick)}<small>${p.grade ? esc(C.t(p.grade)) : ''}${p.level && ptab !== 'level' ? (p.grade ? ' · ' : '') + C.t('level', { n: p.level }) : ''}</small></span><span class="val">${val}</span></div>`;
+      const row = (i, p, val, extra) => `<div class="lp-row"><span class="no">${i + 1}</span><img alt="" src="${iconSrc(p.icon)}"><span class="who">${extra || esc(p.nick)}<small>${p.grade && ptab !== 'level' ? esc(rkLabel(p.grade, p.level)) : ''}</small></span><span class="val">${val}</span></div>`;
       if (ptab === 'clear') {
         h += `<div class="lp-sel">${[['coop', L('rCoop')], ['solo', L('rSolo')]].map(([k, n]) => `<button type="button" class="${rmode === k ? 'on' : ''}" data-rmode="${k}">${n}</button>`).join('')}</div>`;
         h += `<div class="lp-sel">${C.T.difficulties.map((d) => `<button type="button" class="${rdiff === d.id ? 'on' : ''}" data-rdiff="${d.id}">${esc(d.name)}</button>`).join('')}</div>`;
@@ -663,7 +694,7 @@
         h += list.map((p, i) => row(i, p, L('times', { n: p.n }))).join('');
       } else {
         const r = await ask('/api/rank?type=level'); if (!r) return; list = r.list || [];
-        h += list.map((p, i) => row(i, p, C.t('level', { n: p.level }))).join('');
+        h += list.map((p, i) => row(i, p, p.grade ? esc(rkLabel(p.grade, p.level)) : C.t('level', { n: p.level }))).join('');
       }
       if (!list.length) h += `<div class="lp-note lp-empty">${L('empty')}</div>`;
       if (panel === 'rank') body.innerHTML = h;
@@ -882,7 +913,7 @@
       if (e.target.id === 'lbleave') { back(); return; }
       if (e.target.id === 'mretry') { startMatch(); return; }
       const pt = e.target.closest('[data-ptab]'); if (pt) { ptab = pt.dataset.ptab; renderPanel(); return; }
-      const si = e.target.closest('[data-shinfo]'); if (si) { shHint = !shHint; si.classList.toggle('on', shHint); si.setAttribute('aria-expanded', String(shHint)); const hn = $('lpbody').querySelector('.sh-hint'); if (hn) hn.hidden = !shHint; return; }
+      const si = e.target.closest('[data-shinfo]'); if (si) { if ($('shtip')) shTipClose(); else shTipOpen(si); return; }
       const rm = e.target.closest('[data-rmode]'); if (rm) { rmode = rm.dataset.rmode; renderPanel(); return; }
       const rd = e.target.closest('[data-rdiff]'); if (rd) { rdiff = rd.dataset.rdiff; rdiffSet = true; renderPanel(); return; }
       const ri = e.target.closest('[data-rimm]'); if (ri) { rimm = ri.dataset.rimm; renderPanel(); return; }

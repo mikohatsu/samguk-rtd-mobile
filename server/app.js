@@ -50,8 +50,9 @@ function ipOf(req) {
   return viaProxy ? (String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || ra) : ra;
 }
 const termsOf = (b) => Math.min(1000000, Math.max(1, b.termsVer | 0)) || 1;
-// 등급: 경험치로 레벨, 레벨 구간으로 계급. 곡선은 progression.js(앱과 같이 쓴다, 2026-11-24 관직 곡선 수정)
-// 레벨은 51(군주)에서 멈춘다. 경험치 10만이면 군주. 저장된 경험치는 그대로 두고 단계만 새 곡선으로 계산한다(옛 곡선보다 늘 같거나 높은 단계).
+// 등급: 경험치로 레벨, 레벨 구간으로 계급. 곡선은 progression.js(앱과 같이 쓴다, 2026-11-25 economy-v2)
+// 레벨 1 ~ 51 = 계급×5 + 등급(1~5), 51 = 군주(경험치 17만 5천). 저장된 경험치는 그대로 두고 레벨만 새 곡선으로 계산한다
+// (v2 곡선은 앞 곡선보다 가팔라 표시 계급이 내려가는 계정이 있다. 이미 받은 승급 보상은 그대로, 같은 계급을 다시 올라도 다시 주지 않는다).
 // 계급: 0 신병, 1~9 = 9품~1품, 10 군주. 문관(civ)·무관(mil) 중 고른 쪽 칭호로 보인다(화면에서 rk_<갈래><단계>로 번역).
 const PROG = require('../progression.js');
 const levelOf = PROG.levelOf, rankOf = PROG.rankOf;
@@ -333,17 +334,10 @@ function limited(ip, key, max, perMs) {
 }
 setInterval(() => { const now = Date.now(); hits.forEach((h, k) => { if (now - h.t > 600000) hits.delete(k); }); }, 600000);
 
-// 판 결과 → 기본 경험치. 난이도·도달 라운드·승리에 따라 준다. 여기에 판 종류 배율(SEAT_MUL)을 곱한다(rewardOf).
-const DIFF_MUL = { easy: 1, normal: 1.3, hard: 1.6, nightmare: 2 };
-function xpFor(r) {
-  const mul = (DIFF_MUL[r.diff] || 1) * (1 + Math.min(5, Math.max(0, r.mutLv | 0)) * 0.15);
-  return Math.round((15 + Math.min(120, Math.max(0, r.round | 0)) * 0.8 + (r.win ? 60 : 0)) * mul);
-}
-
-// 판 보상 = 기본 식 × 판 종류 배율(경험치·동전 모두). 동전 기본 = 경험치/5 + 클리어 20
+// 판 보상 = 기본 식(난이도·도달 라운드·승리·악몽 +N) × 판 종류 배율(SEAT_MUL, 경험치·동전 모두).
+// 식과 수치는 progression.js REWARD·gameReward(2026-11-25 economy-v2: 경험치는 난이도 배율 쉬움 1·보통 2.5·어려움 4·악몽 6, 동전은 v1과 같음)
 function rewardOf(b, seats) {
-  const mul = SEAT_MUL[seats] || SEAT_MUL[0], xp = xpFor(b);
-  return { xp: Math.round(xp * mul), coins: Math.round((Math.round(xp / 5) + (b.win ? 20 : 0)) * mul) };
+  return PROG.gameReward(b, SEAT_MUL[seats] || SEAT_MUL[0]);
 }
 
 // ---------- 미션: 일일 미션 + 난이도 첫 클리어 보상 (spec-rewards-missions.md 2·3절, 일일 미션 목록은 2026-11-24 fix-progression.md) ----------
@@ -363,10 +357,7 @@ const DAILY_GAIN = {
 };
 const MISSIONS = {
   daily: PROG.DAILY.map((m) => Object.assign({}, m, { gain: (j, b) => Math.min(m.need, DAILY_GAIN[m.stat](j, b)) })),
-  firsts: [
-    { id: 'f_normal', coins: 700, diff: 'normal' }, { id: 'f_hard', coins: 700, diff: 'hard' }, { id: 'f_nightmare', coins: 700, diff: 'nightmare' },
-    { id: 'f_nm1', coins: 200, mut: 1 }, { id: 'f_nm2', coins: 200, mut: 2 }, { id: 'f_nm3', coins: 200, mut: 3 }, { id: 'f_nm4', coins: 200, mut: 4 }, { id: 'f_nm5', coins: 200, mut: 5 },
-  ],
+  firsts: PROG.FIRSTS, // 난이도 첫 클리어(2026-11-25 economy-v2: 보통 300·어려움 500·악몽 700·악몽 +N 200)
 };
 const DAY_MS = 86400000;
 // 일본 시간 날짜 글자('2026-11-18'): 저장소가 일일 미션의 날을 가르는 열쇠

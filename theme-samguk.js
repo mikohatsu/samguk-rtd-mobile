@@ -324,13 +324,13 @@
   //   조인(위, 7성 1기) · 장비·조운(촉, 일본에서 가장 이름난 둘) · 육손(오, 전설 불필요) · 초선(그 외, 7성 1기)
   // 잠긴 신화: 곽가·순욱(7성 2기), 손책(전설 손견 필요), 동탁(7성 2기)
   // 열쇠: 계정 보유 목록(owned)에 'unl_<장수 id>'. 가격: 동전(coins), 결제 상품(iap: [상품 ID, 엔]).
-  // 동전 기준: 보통 클리어 1판 = 동전 58(서버 xpFor). 신화 150 ≒ 2~4판, 불멸 700 ≒ 12~20판.
+  // 동전 기준(2026-11-25 economy-v2): 혼자 보통 클리어 1판 = 동전 29, 하루 3판+일일 미션 ≒ 160(광고 보면 +150). 신화 200 ≒ 1~2일, 불멸 1000 ≒ 일주일(광고 보면 3~4일).
   const unlock = {
     // 2026-11-17 사용자 결정: 신화도 처음엔 전부 잠김. 첫 튜토리얼(로비 안내 + 첫 판)을 마치거나 건너뛰면 신화 2명을 랜덤으로 연다(starterMyth).
     freeMyth: [],
     starterMyth: 2, starterKey: 'starter',
     tiers: [9, 10], // 이 등급에서 freeMyth에 없는 장수는 잠근다
-    coins: { 9: 150, 10: 700 },
+    coins: { 9: 200, 10: 1000 }, // v2: 150 → 200, 700 → 1000
     ad: { coins: 30, daily: 5 }, // 보상형 광고 1회 = 동전 30, 하루 5회(서버가 막는다)
     iap: { 9: ['unlock_myth_', 160], 10: ['unlock_imm_', 320], all10: ['unlock_imm_all', 1200], noads: ['remove_ads', 480] },
     noAdsKey: 'noads', // 광고 제거: 판 끝 전면 광고를 없애고, 동전 광고는 보지 않고 바로 받는다(하루 횟수 상한은 같음)
@@ -950,7 +950,7 @@
     id: 'samguk', title: '삼국지 랜덤 디펜스', subtitle: '천하를 다투는 협동 전략 디펜스',
     currency: '금화', chestName: '전리품 상자',
     // 등장 연출용 고해상도 일러스트가 있는 장수(gfx/il_<id>.jpg). 값은 그림 버전(바꾸면 브라우저가 새로 받는다).
-    illusts: { jojo: 3, gwanu: 1, yeopo: 1, jegal: 1, yubi: 1, samaui: 1, juyu: 1, songwon: 1, taesaja: 1, janggak: 1, jangbi: 1, joun: 1, choseon: 1, gwakga: 1, join: 1, sunuk: 1, sonchaek: 1, yukson: 1, dongtak: 1 },
+    illusts: { jojo: 3, gwanu: 1, yeopo: 1, jegal: 1, yubi: 1, samaui: 1, juyu: 1, songwon: 1, taesaja: 1, janggak: 1, jangbi: 1, joun: 1, choseon: 1, gwakga: 1, join: 1, sunuk: 1, sonchaek: 1, yukson: 1, dongtak: 1, macho: 1 },
     factions, ranks, combineNeed, units, sageMax, roles, synergies, mutators, recipes, items, consumables, chestMark, itemMark, chestTable, unlock, difficulties, upgrades,
     waves, bosses, midbosses, bossRewards, fastClearRemain, achievements, trial, trialBoss,
     rules: {

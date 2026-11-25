@@ -55,7 +55,7 @@
       const m = ACC.me, lv = m.level, max = m.rank >= 10, f = max ? 1 : Math.max(0, Math.min(1, (m.xp - xpLv(lv)) / Math.max(1, xpLv(lv + 1) - xpLv(lv))));
       const guest = m.provider === 'guest', prov = m.provider === 'apple' ? 'Apple' : m.provider === 'google' ? 'Google' : guest ? t('provGuest') : '';
       const trk = m.track === 'civ' ? 'civ' : 'mil', nextR = !max && m.rank >= 0 && m.rank < 10 ? t('goalRank', { a: esc(t('rk_' + trk + (m.rank + 1))), n: fmt(Math.max(0, xpLv(RANK_LV[m.rank + 1]) - (m.xp || 0))) }) : '';
-      return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${m.rank | 0}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(t(m.grade))}${pum(m.rank)} · ${t('level', { n: lv })}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
+      return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${m.rank | 0}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(window.RTD_PROG.label(t, m.grade, lv))}${pum(m.rank)}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
         <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })}・XP ${fmt(m.xp)}</div>
         <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button><button class="btn acc-q" id="acc-treebtn" type="button" aria-label="${esc(t('treeHead'))}">?</button></div>
         <div class="acc-tree" id="acc-tree" ${S.accTree ? '' : 'hidden'}>${treeHtml(m)}</div>
@@ -118,7 +118,7 @@
       const st = p.state || {}, r = mtRank(st.gr), gr = /^rk_(mil|civ)\d+$/.test(st.gr || '') ? t(st.gr) : '';
       return `<div class="lb-slot in${p.me ? ' me' : ''}${i === 0 ? ' host' : ''}" data-id="${esc(String(p.id))}">${i === 0 ? `<span class="lb-tag host">${t('host')}</span>` : ''}${p.me ? `<span class="lb-tag mine">${t('me')}</span>` : ''}`
         + `<div class="lb-pt"><img class="av" alt="" src="${Art.portrait(defOf[st.ic] || defOf.cav)}"><img class="lb-ring" alt="" src="gfx/ui_select.png"><img class="lb-rk" alt="" src="gfx/rank_${r}.png" onerror="this.remove()"></div>`
-        + `<b class="lb-nm">${esc(st.name || '?')}</b><small class="lb-gr">${esc(gr)}${gr && st.lv ? ' · ' : ''}${st.lv ? t('level', { n: st.lv | 0 }) : ''}</small></div>`;
+        + `<b class="lb-nm">${esc(st.name || '?')}</b><small class="lb-gr">${esc(gr && st.lv ? window.RTD_PROG.label(t, st.gr, st.lv | 0) : gr)}</small></div>`;
     };
     const renderLobby = () => {
       const box = $('lobby');
@@ -142,12 +142,12 @@
       const ch = hc ? `<span class="lb-cl">${t('hostCfg')}</span><b class="lb-dn" style="color:${DIFF_COL[hc.diff] || '#ffd86a'}">${esc(dn || '')}${hc.mutLv | 0 ? ` +${hc.mutLv | 0}` : ''}</b>` : '';
       if ($('lbcfg').dataset.h !== ch) { $('lbcfg').dataset.h = ch; $('lbcfg').innerHTML = ch; }
     };
-    // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 레벨·누적 경험치와 무관·문관 칭호. 서버(app.js)의 RANK_LV, 경험치 식(40·(레벨-1)²)과 같다
-    const RANK_LV = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 51];
+    // 관직 표: 단계(0 신병 ~ 10 군주)마다 필요한 누적 경험치와 무관·문관 칭호. 계급마다 등급 1~5(군주 제외). 곡선은 progression.js(서버와 같다, 2026-11-25 economy-v2)
+    const RANK_LV = window.RTD_PROG.RANK_LV;
     function treeHtml(m) {
       const mine = m.track === 'civ' ? 'civ' : 'mil';
-      const rows = RANK_LV.map((lv, i) => `<tr class="${m.rank === i ? 'cur' : ''}"><td class="rk"><img alt="" src="gfx/rank_${i}.png" onerror="this.remove()">${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${lv}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
-      return `<table><thead><tr><th>${t('treeStage')}</th><th class="n">${t('treeLv')}</th><th class="n">${t('treeXp')}</th><th class="${mine === 'mil' ? 'me' : ''}">${t('trackMil')}</th><th class="${mine === 'civ' ? 'me' : ''}">${t('trackCiv')}</th></tr></thead><tbody>${rows}</tbody></table><div class="note">${t('treeNote', { xp: Math.round(m.xp).toLocaleString() })}</div>`;
+      const rows = RANK_LV.map((lv, i) => `<tr class="${m.rank === i ? 'cur' : ''}"><td class="rk"><img alt="" src="gfx/rank_${i}.png" onerror="this.remove()">${i >= 1 && i <= 9 ? t('rankPum', { n: 10 - i }) : '—'}</td><td class="n">${xpLv(lv).toLocaleString()}</td><td class="${mine === 'mil' ? 'me' : ''}">${esc(t('rk_mil' + i))}</td><td class="${mine === 'civ' ? 'me' : ''}">${esc(t('rk_civ' + i))}</td></tr>`).join('');
+      return `<table><thead><tr><th>${t('treeStage')}</th><th class="n">${t('treeXp')}</th><th class="${mine === 'mil' ? 'me' : ''}">${t('trackMil')}</th><th class="${mine === 'civ' ? 'me' : ''}">${t('trackCiv')}</th></tr></thead><tbody>${rows}</tbody></table><div class="note">${t('treeSteps')}</div><div class="note">${t('treeNote', { xp: Math.round(m.xp).toLocaleString() })}</div>`;
     }
     const setErr = (e) => { const el = $('acc-err'); if (el) el.textContent = e ? errText(e) : ''; };
     const signedIn = (r) => { accNote = ''; ACC.token = r.token; ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); };
@@ -196,7 +196,7 @@
         const lb = $('acc-ranklist');
         if (lb.innerHTML) { lb.innerHTML = ''; return; }
         const r = await api('/api/ranking');
-        lb.innerHTML = (r.top || []).slice(0, 20).map((p, i2) => `<div><span>${i2 + 1}</span><span>${esc(p.nick)} <span class="gr">${esc(t(p.grade))}</span></span><span>${t('level', { n: p.level })}</span></div>`).join('') || errText(r.error);
+        lb.innerHTML = (r.top || []).slice(0, 20).map((p, i2) => `<div><span>${i2 + 1}</span><span>${esc(p.nick)}</span><span class="gr">${esc(window.RTD_PROG.label(t, p.grade, p.level))}</span></div>`).join('') || errText(r.error);
       };
     }
     // 계정 알림은 계정 창 안(맨 위)에 적는다. 전에는 전투 시작 창의 #roster에 적혀 계정 창에서는 안 보였다
@@ -438,6 +438,27 @@
     };
     boot().catch(() => { const B = $('boot'); if (B) B.hidden = true; }).then(() => { if (startAgain()) return; if (window.RTD_LOBBY && window.RTD_LOBBY.trialBack && window.RTD_LOBBY.trialBack()) return; if (window.RTD_TUT && window.RTD_TUT.lobby) window.RTD_TUT.lobby({ t, T }); });
   }
+  // 로비 끌기 막기(2026-11-25 실기 소감: 로비에서 끌면 배경 그림이 고무줄처럼 늘어남 = 안드로이드 12+ WebView의 늘어나는 끝 효과·iOS 튕김).
+  // 로비(#title)와 시작 화면(#boot)에서 손가락을 움직일 때, 누른 자리에서 위로 올라가며 실제로 스크롤되는 상자(상점·랭킹·전적·미션·채팅 창 등)나
+  // 입력 칸이 없으면 기본 동작(문서 끌기·늘어남·튕김)을 막는다. 두 손가락(핀치 확대)은 늘 막는다.
+  // 판 화면(#app)에는 걸지 않는다(판의 터치가 이 처리를 기다리지 않게). 탭(click)은 막지 않는다.
+  (function lobbyNoDrag() {
+    const canScroll = (el, stop) => {
+      for (let e = el; e && e !== stop; e = e.parentElement) {
+        if (e.nodeType !== 1) continue;
+        if (e.tagName === 'INPUT' || e.tagName === 'TEXTAREA' || e.tagName === 'SELECT') return true;
+        const cs = getComputedStyle(e);
+        if ((/auto|scroll/.test(cs.overflowY) && e.scrollHeight > e.clientHeight + 1) || (/auto|scroll/.test(cs.overflowX) && e.scrollWidth > e.clientWidth + 1)) return true;
+      }
+      return false;
+    };
+    ['title', 'boot'].forEach((id) => {
+      const box = $(id); if (!box) return;
+      let free = false; // 이번 터치는 스크롤 상자 안에서 시작했다
+      box.addEventListener('touchstart', (e) => { free = e.touches.length === 1 && canScroll(e.target, box); }, { passive: true });
+      box.addEventListener('touchmove', (e) => { if ((e.touches.length > 1 || !free) && e.cancelable) e.preventDefault(); }, { passive: false });
+    });
+  })();
   setupTitle();
   requestAnimationFrame(loop);
 })();
