@@ -343,7 +343,7 @@
       if (obj(d.o)) Object.keys(d.o).slice(0, G.objMax).forEach((id) => { if (/^\d{1,9}$/.test(id) && fin(d.o[id]) && d.o[id] > 0) o[id] = Math.min(d.o[id], mhp); });
       const cm = Array.isArray(d.cm) && fin(d.cm[0]) && fin(d.cm[2]) ? [clampN(d.cm[0], 0, G.charmDurMax), clampN(d.cm[1], 0, G.ampMax), clampN(d.cm[2], G.charmCdMin, G.charmCdMax)] : null;
       return {
-        v, stun: clampN(d.stun, 0, G.stunMax), o, ctr: clampN(d.ctr, 0, G.ctrMax) | 0, sg: clampN(d.sg, 0, 3 * v),
+        v, stun: clampN(d.stun, 0, G.stunMax), o, ctr: clampN(d.ctr, 0, G.ctrMax) | 0, cb: clampN(d.cb, 0, G.ctrMax) | 0, sg: clampN(d.sg, 0, 3 * v),
         amp: pair(d.amp, G.ampMax, G.effDurMax), ad: pair(d.ad, G.adMax, G.effDurMax), sa: pair(d.sa, 0.5, 10), cm: cm && cm[0] > 0 ? cm : null, gp: clampN(d.gp, 0, G.gapMax),
       };
     }
@@ -490,10 +490,10 @@
       if (f.flushT <= 0) {
         f.flushT = 0.25;
         const po = Object.keys(f.pendObj).length ? f.pendObj : null;
-        // ctr: 정면 피해(반격 게이지), sg: 디버퍼가 무력화 게이지에 더 넣는 양, amp: 보스 약화
+        // ctr: 정면 몫·cb: 뒤·옆 몫(반격 게이지, 방장이 뒤·옆 몫 상한을 건다), sg: 디버퍼가 무력화 게이지에 더 넣는 양, amp: 보스 약화
         // sa: 인연 팀 보스 약화(samp) [값, 시간]
-        if ((f.pending > 0 || po || f.pendCtr || f.pendAmp || f.pendCharm || f.pendAd || f.pendGap || f.pendSamp) && !this.isHost()) this.send('dmg', { sa: f.pendSamp || null, ad: f.pendAd || null, gp: f.pendGap || 0, v: Math.round(f.pending), stun: f.pendStun || 0, o: po, ctr: Math.round(f.pendCtr || 0), sg: Math.round(f.pendSg || 0), amp: f.pendAmp || null, cm: f.pendCharm || null });
-        f.pending = 0; f.pendStun = 0; f.pendObj = {}; f.pendCtr = 0; f.pendSg = 0; f.pendAmp = null; f.pendCharm = null; f.pendAd = null; f.pendGap = 0; f.pendSamp = null;
+        if ((f.pending > 0 || po || f.pendCtr || f.pendCtrB || f.pendAmp || f.pendCharm || f.pendAd || f.pendGap || f.pendSamp) && !this.isHost()) this.send('dmg', { sa: f.pendSamp || null, ad: f.pendAd || null, gp: f.pendGap || 0, v: Math.round(f.pending), stun: f.pendStun || 0, o: po, ctr: Math.round(f.pendCtr || 0), cb: Math.round(f.pendCtrB || 0), sg: Math.round(f.pendSg || 0), amp: f.pendAmp || null, cm: f.pendCharm || null });
+        f.pending = 0; f.pendStun = 0; f.pendObj = {}; f.pendCtr = 0; f.pendCtrB = 0; f.pendSg = 0; f.pendAmp = null; f.pendCharm = null; f.pendAd = null; f.pendGap = 0; f.pendSamp = null;
       }
       if (this.isHost() && f.syncT <= 0) {
         f.syncT = 0.2;

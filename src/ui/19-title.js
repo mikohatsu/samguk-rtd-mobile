@@ -57,11 +57,10 @@
       const trk = m.track === 'civ' ? 'civ' : 'mil', nextR = !max && m.rank >= 0 && m.rank < 10 ? t('goalRank', { a: esc(t('rk_' + trk + (m.rank + 1))), n: fmt(Math.max(0, xpLv(RANK_LV[m.rank + 1]) - (m.xp || 0))) }) : '';
       return `${note}<div class="acc-card"><span class="badge"><img alt="" src="gfx/rank_${m.rank | 0}.png" onerror="this.replaceWith(document.createTextNode('${lv}'))"></span><div class="acc-nm"><b>${esc(m.nick)}</b><small class="prov">${esc(prov)}</small></div><div class="gr">${esc(window.RTD_PROG.label(t, m.grade, lv))}${pum(m.rank)}</div><div class="xpbar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="acc-nx">${nextR}</div></div>
         <div class="hint2">${t('gamesWins', { g: m.games, w: m.wins })}・XP ${fmt(m.xp)}</div>
-        <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button><button class="btn acc-q" id="acc-treebtn" type="button" aria-label="${esc(t('treeHead'))}">?</button></div>
-        <div class="acc-tree" id="acc-tree" ${S.accTree ? '' : 'hidden'}>${treeHtml(m)}</div>
+        <div class="acc-track"><span>${t('trackHead')}</span><button class="${m.track !== 'civ' ? 'on' : ''}" data-track="mil" type="button">${t('trackMil')}</button><button class="${m.track === 'civ' ? 'on' : ''}" data-track="civ" type="button">${t('trackCiv')}</button><button class="btn acc-q" id="acc-treebtn" type="button" aria-label="${esc(t('treeHead'))}" aria-controls="shtip" aria-expanded="false">?</button></div>
         ${guest && (!app || N.ssoHas('apple') || N.ssoHas('google')) ? `<div class="acc-link"><b>${t('linkHead')}</b><div class="hint2">${t('linkHint')}</div><div class="acc-btns">${(app ? N.ssoHas('apple') : apple) ? `<button class="btn sso apple" data-sso="apple" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginApple')}</button>` : ''}${!app || N.ssoHas('google') ? `<button class="btn sso google" data-sso="google" data-link="1" type="button" ${app ? '' : 'disabled'}>${t('loginGoogle')}</button>` : ''}</div></div>` : ''}
-        <div class="acc-btns"><button class="btn" id="acc-nickbtn" type="button">${t('nickEdit')}</button><button class="btn" id="acc-out" type="button">${t('logout')}</button></div>
-        <div id="acc-nickbox" hidden><div class="inline"><input id="acc-nick2" maxlength="12" value="${esc(m.nick)}"><button class="btn" id="acc-nicksave" type="button">${t('save')}</button></div></div>
+        <div class="acc-btns" id="acc-btnrow"><button class="btn" id="acc-nickbtn" type="button">${t('nickEdit')}</button><button class="btn" id="acc-out" type="button">${t('logout')}</button></div>
+        <div id="acc-nickbox" hidden><div class="inline"><input id="acc-nick2" maxlength="12" value="${esc(m.nick)}"><button class="btn" id="acc-nicksave" type="button">${t('save')}</button><button class="btn acc-nickx" id="acc-nickx" type="button" aria-label="${esc(t('close'))}"><i class="ico close" aria-hidden="true"></i></button></div></div>
         <div class="acc-danger"><button class="btn warn" id="acc-del" type="button">${t('deleteAcc')}</button></div>
         <div id="acc-delbox" hidden><div class="hint2">${t('delConfirmSso')}</div><div class="inline">${m.provider === 'password' ? `<input id="acc-delpw" type="password" placeholder="${esc(t('accPw'))}">` : ''}<button class="btn warn" id="acc-delgo" type="button">${t('delYes')}</button></div></div>
         <div class="err" id="acc-err"></div><div class="rank-list" id="acc-ranklist"></div>`;
@@ -178,8 +177,12 @@
         if (r.linked || (link && r.existed)) toastTitle(t(r.linked ? 'linked' : 'existed'));
       }));
       box.querySelectorAll('[data-track]').forEach((bt) => (bt.onclick = async () => { const r = await api('/api/track', { track: bt.dataset.track }); if (r.me) { ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); } else setErr(r.error); }));
-      const tb = $('acc-treebtn'); if (tb) tb.onclick = () => { S.accTree = !S.accTree; $('acc-tree').hidden = !S.accTree; };
-      const nb = $('acc-nickbtn'); if (nb) nb.onclick = () => { $('acc-nickbox').hidden = !$('acc-nickbox').hidden; };
+      // 관직 표: 본문에 펼치지 않고 ? 아래(자리가 모자라면 위)에 말풍선으로 띄운다(lobby.js tipOpen, 2026-11-26 layout-shift — 펼치면 아래 칸이 밀리고 창 제목 줄이 눌렸다)
+      const tb = $('acc-treebtn'); if (tb) tb.onclick = () => { if (window.RTD_LOBBY && window.RTD_LOBBY.tip && ACC.me) window.RTD_LOBBY.tip(tb, `<div class="acc-tree">${treeHtml(ACC.me)}</div>`, { w: 460, cls: 'acc-tip' }); };
+      // 닉네임 바꾸기: 버튼 줄 자리에 입력 줄이 들어선다(같은 높이라 아래 칸이 밀리지 않는다). ✕로 버튼 줄로 돌아간다
+      const nickEdit = (on) => { $('acc-btnrow').hidden = on; $('acc-nickbox').hidden = !on; if (on) { const i = $('acc-nick2'); i.value = (ACC.me && ACC.me.nick) || i.value; i.focus({ preventScroll: true }); } else $('acc-nickbtn').focus({ preventScroll: true }); };
+      const nb = $('acc-nickbtn'); if (nb) nb.onclick = () => nickEdit(true);
+      const nx = $('acc-nickx'); if (nx) nx.onclick = () => nickEdit(false);
       const ns = $('acc-nicksave'); if (ns) ns.onclick = async () => { const r = await api('/api/nick', { nick: $('acc-nick2').value.trim() }); if (r.me) { ACC.me = r.me; saveAcc(); $('accbox').dataset.html = ''; dr(); } else setErr(r.error); };
       const out = $('acc-out');
       if (out) out.onclick = async () => { const pv = ACC.me && ACC.me.provider; await api('/api/logout', {}); if (window.RTD_NATIVE && (pv === 'apple' || pv === 'google')) window.RTD_NATIVE.signOut(pv); ACC.token = null; ACC.me = null; saveAcc(); if (lobby) { lobby.leave(); lobby = null; } $('accbox').dataset.html = ''; dr(); };

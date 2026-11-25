@@ -36,7 +36,11 @@
   let pinch = null, touch = null;
   const cancelTouch = () => { if (touch && touch.lp) clearTimeout(touch.lp); touch = null; };
   // 터치 한 번(움직이지 않고 뗌): 선택·이동·상자 열기
+  // 오른쪽 서랍이 열린 채 전장을 탭하면(끌기·범위 선택이 아닌 짧은 탭·클릭) 서랍을 닫는다(2026-11-26 실기 소감).
+  // 탭은 원래 할 일(고르기·선택 해제·상자 열기)도 그대로 한다 — 선택권 창 바깥 누름(12-panels)과 같은 규칙. 서랍 안은 DOM이라 여기로 오지 않는다.
+  const drawerTapClose = () => { if (S.drawer) { S.drawer = null; dirty(); } };
   function tapAt(m, e) {
+    drawerTapClose();
     if (inBoss()) {
       const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 50);
       if (i >= 0) g.selectChamp(i);
@@ -139,6 +143,7 @@
       else {
         const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 40);
         if (i >= 0) g.selectChamp(i); else g.selectChamp(null);
+        drawerTapClose();
         dirty();
       }
       return;
@@ -196,6 +201,7 @@
     const d = S.drag; S.drag = null;
     if (!d) return;
     if (d.moved) { boxSelect(d); return; }
+    drawerTapClose(); // 마우스 클릭(끌지 않음)
     const drop = dropAt(d.x0, d.y0);
     if (drop) {
       if (drop.kind === 'chest') { const out = g.openChest(g.me, drop); S.dropSel = out ? out.id : null; S.sel = []; dirty(); }

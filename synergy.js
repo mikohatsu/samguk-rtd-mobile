@@ -331,7 +331,7 @@
             this.synHit(c, a.m * S);
             this.fx.push({ k: 'blast', x: b.x, y: b.y, r: 140, t: 0, life: 0.6, c: '#ff7a2a', vx: 'fireblast' });
             this.fx.push({ k: 'synAnim', name: 'boom', x: b.x, y: b.y - 30, r: 170, t: 0, life: 0.55 });
-            if (c.owner === this.me.idx) { this.log('dmgtext', { x: b.x, y: b.y - 110, v: Math.round(a.m * S), big: true }); this.log('sfx', { s: 'boom', gap: 110 }); }
+            if (c.owner === this.me.idx) { this.log('dmgtext', { x: b.x, y: b.y - 110, v: Math.round(a.m * S), big: true }); this.log('sfx', { s: 'skb', vx: 'fireblast', tier: 7, hit: true, gap: 110 }); }
           });
         }
         break;
@@ -480,7 +480,7 @@
     if (h.own || h.raid || !this.isBig(h)) return;
     this.localChamps().forEach((c) => {
       if (c.dead || c.bench || !c.syR || !c.syR.length) return;
-      if (this.hazardHits(h, c.x, c.y, 16)) return;
+      if (this.champHit(h, c)) return; // 맞았는지는 피격 판정과 같은 몸통 사각형으로(engine.js champHit)
       const near = h.k === 'safe' || h.k === 'all' || h.k === 'band' || h.k === 'los' || (h.k === 'line' ? inLine(c.x, c.y, h.x, h.y, h.a, h.len, (h.w || 0) + 400, 0) : dist(c.x, c.y, h.x, h.y) <= (h.r || h.r1 || 0) + 400);
       if (near) { this.synFire(c, 'bigDodge', {}); this.fx.push({ k: 'synAnim', name: 'ring', x: c.x, y: c.y, r: 90, t: 0, life: 0.5, col: '#a8ffb8' }); }
     });

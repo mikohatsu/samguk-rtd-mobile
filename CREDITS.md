@@ -51,7 +51,12 @@
 ## 글꼴 — SIL Open Font License 1.1 (저작권 문구와 라이선스를 함께 배포해야 함)
 - Google Fonts에서 받은 부분 파일(fonts/*.woff2). 저작권 문구와 라이선스 전문은 fonts/OFL.txt와 게임 안 크레딧 화면에 있다.
   - Black Han Sans, East Sea Dokdo, Gowun Batang, IBM Plex Sans KR, Noto Serif KR, Yuji Boku
-  - 일본어용(fonts/ja-display.woff2, ja-serif.woff2): Dela Gothic One, Zen Antique — 게임에 쓰는 글자만 남긴 부분 파일(scripts/build-jafont.py)
+  - 일본어용(fonts/ja-display.woff2, ja-serif.woff2): Dela Gothic One, Zen Antique — 게임에 쓰는 글자만 남긴 부분 파일(scripts/build-jafont.py).
+    원본에 없는 글자(郃·傕·瓚·褚·詡·龐 등 장수 이름)는 Noto Sans JP(Black)·Noto Serif JP(Medium)의 글자로 채웠다(OFL 글꼴끼리 합침, 2026-11-26)
+  - 중국어용(fonts/zh-display.woff2 = Noto Sans SC Black, zh-serif.woff2·zh-serif-b.woff2 = Noto Serif SC Regular·Bold, zh-brush.woff2 = Ma Shan Zheng) — 같은 방식의 부분 파일(2026-11-26)
+  - Noto Serif KR 보충(fonts/kr-serif-x7.woff2·kr-serif-x9.woff2 = Noto Serif TC Bold·Black): 구글 사본 Noto Serif KR에 없는 한자 12자(兔·教·為·瘁·褚·詡·郃 등, 2026-11-26)
+  - Noto Sans JP·SC, Noto Serif JP·SC·TC: Copyright Adobe(Reserved Font Name 'Source'는 Sans만). Ma Shan Zheng: Copyright 2018 The Ma Shan Zheng Project Authors
+  - 원본: github.com/google/fonts의 ofl/ 폴더(art_src/fonts_src에 둠, git에는 없음)
 - 일본어 붓글씨(fonts/ja-brush.woff2): **衡山毛筆フォント**(青柳衡山 作) — OFL 아님. 배포처 안내: 무료, 상업 이용 가능·제한 없음(https://opentype.jp/kouzanmouhitufont.htm, 2026-11-11 확인). 크레딧 화면에 감사 표시.
 - 글꼴 파일만 따로 팔 수 없다(게임에 넣어 배포·판매하는 것은 허용).
 
@@ -72,6 +77,7 @@
 - gfx/masok.png·masok_s.png·hb_masok*.png·rig_b_masok_*.png(체험 보스 마속): Canva AI 생성(2026-11-25), 마속. 기존 gfx/jegal.png를 4배 키운 그림을 화풍 참고로 올려 생성. 원본 art_src/masok_f_canva_trim.png(앞, 투명 배경)·art_src/masok_s_canva_cut.png(옆, 흰 배경을 가장자리 채우기로 지움). 게임용은 art_src/build-masok.py로 자르고 줄이기만 했다(새로 그리지 않음).
 - gfx/vs_jian·vs_guandao·vs_fangtian·vs_shemao(스킬 연출 무기: 의천검·청룡언월도·방천화극·장팔사모), vs_seal·vs_lamp·vs_chain·vs_petal(옥새·칠성 등불·사슬·꽃잎): Canva AI generate-image(2026-11-25, 글만으로 생성, 미디어 ID MAHb69r9LK8·MAHb6zP0NRY), 흰 배경은 코드로 제거하고 잘라 크기 맞춤. 원본 art_src/canva_weapons42.png·canva_props42.png.
 - gfx/il_macho.jpg·ilt_macho.jpg(마초 원화, 2026-11-25): Canva AI generate-image, 기존 gfx/il_joun.jpg(화풍)와 gfx/macho.png(SD 외형)를 참고 그림으로 올려 생성. 미디어 ID MAHb7Yh4fc0, 원본 art_src/il_macho_canva.jpg.
+- gfx/vs_guard.png(빛 방패 문양)·vs_spike.png(빛 가시, 2026-11-26): Canva AI generate-image(글만으로, 검정 바탕), 밝기를 투명도로 바꿔 흰 그림으로 가공. 미디어 ID MAHb8Wdvack, 원본 art_src/canva_guard_spike.png.
 - 상업 이용: 가능. Canva AI Product Terms(https://www.canva.com/policies/ai-product-terms/)에 따르면 생성물은 사용자 소유이고 판매를 포함한 상업적 이용이 허용된다. 표기 의무 없음.
 - 한계: AI 생성물은 나라에 따라 저작권 보호를 못 받을 수 있고(남이 베껴도 막기 어려움), 독점권도 보장되지 않는다. 알아볼 수 있는 실존 인물·타사 캐릭터·상표가 들어가면 Canva가 권리를 보장해 주지 않는다.
 

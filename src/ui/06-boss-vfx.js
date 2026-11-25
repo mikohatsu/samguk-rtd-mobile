@@ -31,6 +31,7 @@
   function addVfx(o) {
     // 불꽃·파편 같은 잔조각은 화질에 따라 줄인다(큰 모양은 그대로)
     if ((o.k === 'spark' || o.k === 'debris' || o.k === 'ember') && Math.random() > qPart()) return;
+    if (o.k === 'puff' && Q.level === 'low' && Math.random() < 0.5) return; // 흙먼지 연기는 낮음 화질에서 절반
     if (S.vfx.length < (Q.level === 'high' ? 600 : 300)) S.vfx.push(Object.assign({ t: 0 }, o));
   }
   // 장판이 터질 때 한 번 부른다
@@ -43,17 +44,34 @@
       if (fx === 'bolt' || fx === 'thunder') {
         addVfx({ k: 'bolt', x: h.x, y: h.y, life: 0.32, r: h.r, c: col });
         for (let i = 0; i < 10; i++) addVfx({ k: 'spark', x: h.x, y: h.y, a: rnd(0, 7), s: rnd(160, 420), life: rnd(0.2, 0.4), c: '#fff6a0' });
+        // 맞은 땅: 그을린 균열 + 피어오르는 잿빛 연기 + 튀는 흙(2026-11-26)
+        addVfx({ k: 'decal', x: h.x, y: h.y, r: h.r * 0.9, life: 1.2 });
+        addVfx({ k: 'puff', x: h.x, y: h.y, r: h.r * 0.9, life: 1.0, lag: 0.05, c: '#5a5a66' });
+        for (let i = 0; i < 6; i++) addVfx({ k: 'debris', x: h.x, y: h.y, a: rnd(0, 6.28), s: rnd(80, 200), z: rnd(60, 150), life: rnd(0.45, 0.65), sz: rnd(5, 9), c: '#6a5a4a' });
       } else if (fx === 'rock' || fx === 'quake') {
         for (let i = 0; i < 14; i++) addVfx({ k: 'debris', x: h.x, y: h.y, a: rnd(0, 7), s: rnd(120, 340), z: rnd(120, 300), life: rnd(0.5, 0.8), sz: rnd(6, 14), c: i % 3 ? '#8a6a4a' : '#c9a27a' });
         addVfx({ k: 'crack', x: h.x, y: h.y, r: h.r, life: 1.2, seed: Math.random() * 99 }); addVfx({ k: 'decal', x: h.x, y: h.y, r: h.r * 1.1, life: 1.3 });
         addVfx({ k: 'dust', x: h.x, y: h.y, r: h.r * 1.3, life: 0.7 });
+        addVfx({ k: 'puff', x: h.x, y: h.y, r: h.r * 1.1, life: 1.0, c: '#8a7458' }); // 부서진 돌가루 연기가 피어오른다(2026-11-26)
       } else if (fire) {
         addVfx({ k: 'img', img: 'fire', x: h.x, y: h.y - h.r * 0.3, r: h.r * 2.4, life: 0.5 });
         for (let i = 0; i < 16; i++) addVfx({ k: 'ember', x: h.x + rnd(-h.r, h.r) * 0.7, y: h.y + rnd(-h.r, h.r) * 0.5, vy: rnd(-180, -60), vx: rnd(-40, 40), life: rnd(0.5, 1), sz: rnd(3, 6) });
+        // 불탄 자리: 검은 그을음 연기 기둥 둘 + 그을린 균열 + 폭발 프레임(2026-11-26). 불배는 부서진 판자(돌조각 그림을 작게)도 튄다
+        addVfx({ k: 'img', img: 'boom', x: h.x, y: h.y - 10, r: h.r * 1.6, life: 0.45 });
+        addVfx({ k: 'decal', x: h.x, y: h.y, r: h.r, life: 1.3 });
+        for (let i = 0; i < 2; i++) addVfx({ k: 'puff', x: h.x + rnd(-h.r, h.r) * 0.4, y: h.y - 20, r: h.r * (0.8 + i * 0.3), life: 1.2 + i * 0.15, lag: 0.08 + i * 0.1, c: '#3a2a20' });
+        if (fx === 'fireship') for (let i = 0; i < 8; i++) addVfx({ k: 'debris', x: h.x, y: h.y, a: rnd(0, 6.28), s: rnd(120, 280), z: rnd(100, 220), life: rnd(0.5, 0.8), sz: rnd(6, 11), c: '#5a3a22' });
       } else if (fx === 'roar') {
         for (let i = 0; i < 3; i++) addVfx({ k: 'shock', x: h.x, y: h.y, r: h.r * (1 + i * 0.25), life: 0.5 + i * 0.15, c: col, w: 10 - i * 3 });
         addVfx({ k: 'dust', x: h.x, y: h.y, r: h.r, life: 0.8 });
-      } else { addVfx({ k: 'img', img: 'boom', x: h.x, y: h.y, r: h.r * 2.3, life: 0.4 }); addVfx({ k: 'decal', x: h.x, y: h.y, r: h.r, life: 1.1 }); }
+        // 호통의 기세에 바닥이 들려 돌조각이 사방으로 튀고 둘레에 흙먼지가 피어오른다(2026-11-26)
+        for (let i = 0; i < 10; i++) addVfx({ k: 'debris', x: h.x, y: h.y, a: i * 0.63 + rnd(-0.2, 0.2), s: rnd(h.r * 0.6, h.r * 1.2), z: rnd(60, 160), life: rnd(0.5, 0.75), sz: rnd(7, 13), c: '#8a6a4a' });
+        for (let i = 0; i < 6; i++) { const a = i * 1.047 + 0.3; addVfx({ k: 'puff', x: h.x + Math.cos(a) * h.r * 0.85, y: h.y + Math.sin(a) * h.r * 0.5, r: h.r * 0.45, life: 0.95, lag: 0.06, c: '#9a8468' }); }
+      } else {
+        addVfx({ k: 'img', img: 'boom', x: h.x, y: h.y, r: h.r * 2.3, life: 0.4 }); addVfx({ k: 'decal', x: h.x, y: h.y, r: h.r, life: 1.1 });
+        // 그 밖의 원형(요기·팔진 등): 기술 색 연기와 튀는 흙(2026-11-26)
+        if (!h.own) { addVfx({ k: 'puff', x: h.x, y: h.y, r: h.r * 0.9, life: 1.0, lag: 0.06, c: '#6a5a50' }); for (let i = 0; i < 6; i++) addVfx({ k: 'debris', x: h.x, y: h.y, a: rnd(0, 6.28), s: rnd(80, 220), z: rnd(60, 160), life: rnd(0.45, 0.7), sz: rnd(5, 10), c: '#7a6a5a' }); }
+      }
     } else if (h.k === 'line') {
       // 직선 기술: 무엇이 실제로 날아가거나 달려 나간다
       const kind = fx === 'talisman' ? 'talisman' : fx === 'arrow' || fx === 'firearrow' ? 'arrow' : fx === 'wind' ? 'gust' : fx === 'army' || fx === 'ox' ? 'troop' : fx === 'shadow' ? 'wisp' : fx === 'halberd' || fx === 'blade' ? 'slashline' : fx === 'charge' || fx === 'redhare' ? 'dustline' : 'streak';
@@ -61,29 +79,119 @@
       // 초당 약 1400px로 날아가 눈으로 따라갈 수 있게 한다
       const life = Math.min(1.4, Math.max(0.6, h.len / 1400));
       for (let i = 0; i < n; i++) addVfx({ k: kind, x: h.x, y: h.y, a: h.a, len: h.len, w: h.w, off: n > 1 ? (i / (n - 1) - 0.5) * h.w * 0.8 : 0, lag: i * 0.06, life: life + i * 0.06, c: col });
-      // 지나간 자리에 남는 잔광(베기·돌진·기본 직선). 끝에서는 땅이 터진다.
+      // 지나간 자리에 남는 잔광(베기·돌진·기본 직선). 끝에서는 땅이 터진다(돌진은 rushFx가 실제로 멈추는 자리에서 터뜨린다).
       if (kind === 'slashline' || kind === 'streak' || kind === 'dustline') {
         addVfx({ k: 'scar', x: h.x, y: h.y, a: h.a, len: h.len, w: h.w, life: 0.55, c: col });
-        addVfx({ k: 'decal', x: h.x + Math.cos(h.a) * h.len * 0.92, y: h.y + Math.sin(h.a) * h.len * 0.92, r: h.w * 0.9, life: 1.0, lag: life * 0.7 });
+        if (kind !== 'dustline') addVfx({ k: 'decal', x: h.x + Math.cos(h.a) * h.len * 0.92, y: h.y + Math.sin(h.a) * h.len * 0.92, r: h.w * 0.9, life: 1.0, lag: life * 0.7 });
       }
+      if (kind === 'dustline') rushFx(h, col);
+      else if (kind === 'troop') trailDust(h, life);
+      else lineMarks(h, kind, life, col);
     } else if (h.k === 'cone') {
       // 칼·극 휘두르기: 오른쪽·왼쪽 번갈아 휘두른다
       S.swingDir = -(S.swingDir || 1);
       addVfx({ k: 'swing', x: h.x, y: h.y, a: h.a, r: h.r, arc: h.arc, life: 0.42, c: col, dir: S.swingDir, pole: h.fx === 'halberd' });
+      // 칼끝이 땅을 긁고 지나간 자리: 흙먼지 셋·돌조각·칼끝 불똥(칼끝이 지나는 시각에 맞춰, 2026-11-26)
+      if (h.fx === 'blade' || h.fx === 'halberd') for (let i = 0; i < 3; i++) {
+        const u = (i + 0.5) / 3, ag = h.a - S.swingDir * h.arc / 2 + S.swingDir * h.arc * u, rr = h.r * 0.85, x = h.x + Math.cos(ag) * rr, y = h.y + Math.sin(ag) * rr, lag = 0.42 * 0.38 * (1 - Math.pow(1 - u, 1 / 3));
+        addVfx({ k: 'puff', x, y, r: h.r * 0.22, life: lag + 0.8, lag, c: '#9a8468' });
+        for (let j = 0; j < 2; j++) addVfx({ k: 'debris', x, y, a: ag + S.swingDir * (Math.PI / 2) + rnd(-0.5, 0.5), s: rnd(60, 160), z: rnd(40, 110), life: lag + rnd(0.45, 0.6), lag, sz: rnd(6, 11), c: '#8a6a4a' });
+        for (let j = 0; j < 2; j++) addVfx({ k: 'spark', x, y: y - 10, a: ag + rnd(-1, 1), s: rnd(120, 260), life: lag + rnd(0.2, 0.3), lag, c: '#fff0c0' });
+      }
     } else if (h.k === 'donut') {
       addVfx({ k: 'ringwave', x: h.x, y: h.y, r0: h.r0, r1: h.r1, life: 0.45, c: col, fx });
+      // 고리를 따라 흙먼지(군대·호통)·검은 연기(불길)가 피고, 호통은 돌조각이 튄다(2026-11-26). 고리가 여럿 차례로 터지므로 고리마다 6~8곳
+      if (S.vfx.length < 260) {
+        const rr = (h.r0 + h.r1) / 2, n = Math.min(8, Math.max(5, Math.round(rr / 90))), fire = fx === 'flame';
+        for (let i = 0; i < n; i++) {
+          const a = (i + 0.5) / n * Math.PI * 2 + rnd(-0.2, 0.2), x = h.x + Math.cos(a) * rr, y = h.y + Math.sin(a) * rr;
+          if (x < ARENA.x0 - 40 || x > ARENA.x1 + 40 || y < ARENA.y0 - 40 || y > ARENA.y1 + 40) continue;
+          addVfx({ k: 'puff', x, y, r: (h.r1 - h.r0) * 0.55, life: 0.9, lag: 0.04, c: fire ? '#3a2a20' : '#9a8468' });
+          if (fx === 'roar' || fx === 'army') addVfx({ k: 'debris', x, y, a: a + rnd(-0.4, 0.4), s: rnd(60, 160), z: rnd(50, 130), life: rnd(0.45, 0.6), sz: rnd(6, 11), c: '#8a6a4a' });
+          if (fire) addVfx({ k: 'ember', x, y, vy: rnd(-160, -60), vx: rnd(-30, 30), life: rnd(0.4, 0.8), sz: rnd(3, 6) });
+        }
+      }
     } else if (h.k === 'rect') {
       addVfx({ k: 'flash', x: h.x + h.rw / 2, y: h.y + h.rh / 2, rect: [h.x, h.y, h.rw, h.rh], life: 0.25, c: col });
       // 구획 전체가 터진다: 넓이에 맞춰 폭발과 균열을 흩뿌린다
-      { const nb = Math.max(2, Math.min(7, Math.round((h.rw * h.rh) / 60000))), rr = Math.min(h.rw, h.rh) * 0.34;
-        for (let i = 0; i < nb; i++) { const bx = h.x + h.rw * ((i + 0.5) / nb) + rnd(-20, 20), by = h.y + h.rh * rnd(0.25, 0.75); addVfx({ k: 'img', img: 'boom', x: bx, y: by, r: rr * 2.2, life: 0.45, lag: i * 0.04 }); addVfx({ k: 'decal', x: bx, y: by, r: rr, life: 1.0, lag: i * 0.04 }); } }
+      if (h.fx === 'flame') { const nb = Math.max(2, Math.min(7, Math.round((h.rw * h.rh) / 60000))), rr = Math.min(h.rw, h.rh) * 0.34;
+        for (let i = 0; i < nb; i++) { const bx = h.x + h.rw * ((i + 0.5) / nb) + rnd(-20, 20), by = h.y + h.rh * rnd(0.25, 0.75); addVfx({ k: 'img', img: 'boom', x: bx, y: by, r: rr * 2.2, life: 0.45, lag: i * 0.04 }); addVfx({ k: 'decal', x: bx, y: by, r: rr, life: 1.0, lag: i * 0.04 }); addVfx({ k: 'puff', x: bx, y: by - 20, r: rr * 1.2, life: 1.2, lag: 0.1 + i * 0.04, c: '#3a2a20' }); } }
+      else stripFx(h, col);
     } else if (h.k === 'all') {
       addVfx({ k: 'flash', x: W / 2, y: H / 2, rect: [-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2], life: 0.5, c: '#ffffff' });
-      for (let i = 0; i < 9; i++) { const bx = rnd(ARENA.x0 + 80, ARENA.x1 - 80), by = rnd(ARENA.y0 + 60, ARENA.y1 - 60); addVfx({ k: 'img', img: 'boom', x: bx, y: by, r: 260, life: 0.5, lag: i * 0.05 }); addVfx({ k: 'decal', x: bx, y: by, r: 120, life: 1.2, lag: i * 0.05 }); }
+      for (let i = 0; i < 9; i++) { const bx = rnd(ARENA.x0 + 80, ARENA.x1 - 80), by = rnd(ARENA.y0 + 60, ARENA.y1 - 60); addVfx({ k: 'img', img: 'boom', x: bx, y: by, r: 260, life: 0.5, lag: i * 0.05 }); addVfx({ k: 'decal', x: bx, y: by, r: 120, life: 1.2, lag: i * 0.05 }); addVfx({ k: 'puff', x: bx, y: by, r: 110, life: 1.1, lag: 0.1 + i * 0.05, c: '#7a6a5a' }); for (let j = 0; j < 3; j++) addVfx({ k: 'debris', x: bx, y: by, a: rnd(0, 6.28), s: rnd(100, 260), z: rnd(100, 220), life: 0.05 * i + rnd(0.5, 0.75), lag: i * 0.05, sz: rnd(7, 14), c: '#8a6a4a' }); }
+      addVfx({ k: 'quake', v: 1, life: 0.5, lag: 0.45 });
     } else if (h.k === 'push') {
       for (let i = 0; i < 2; i++) addVfx({ k: 'shock', x: h.x, y: h.y, r: h.r * (1 + i * 0.2), life: 0.5 + i * 0.2, c: col, w: 8 });
     }
     if (h.k === 'circle' || h.k === 'line' || h.k === 'cone' || h.k === 'donut' || h.k === 'all') S.shake = Math.max(S.shake || 0, h.k === 'all' ? 1 : 0.35);
+  }
+  // ---- 직선 기술 착탄 흔적(2026-11-26, 보스 10명 전원 품질): 날아가는 물체가 지나가는 시각에 맞춰 길 위 몇 곳에 종류별 흔적 ----
+  // 화살 = 흙 튐, 부적 = 노란 불똥, 바람 = 옅은 바람 먼지, 혼령 = 보랏빛 연기, 검기·빛줄기 = 바닥 베인 자국과 불똥. 줄이 많은 기술(부채·십자 7~11줄)이라 줄마다 3곳, 붐비면 생략
+  function lineMarks(h, kind, life, col) {
+    if (S.vfx.length > 260) return;
+    const L = Math.min(h.len, rushLen(h)), ca = Math.cos(h.a), sa = Math.sin(h.a);
+    for (let i = 0; i < 3; i++) {
+      const d = L * (0.35 + i * 0.25), lag = Math.min(life * 0.9, (d / h.len) * life / 1.25), x = h.x + ca * d, y = h.y + sa * d;
+      if (kind === 'arrow') { addVfx({ k: 'puff', x, y: y + 6, r: 30, life: lag + 0.6, lag, c: '#a89070' }); addVfx({ k: 'debris', x, y, a: h.a + Math.PI + rnd(-0.6, 0.6), s: rnd(40, 100), z: rnd(30, 70), life: lag + 0.4, lag, sz: rnd(4, 7), c: '#8a6a4a' }); }
+      else if (kind === 'talisman') for (let j = 0; j < 3; j++) addVfx({ k: 'spark', x, y, a: rnd(0, 6.28), s: rnd(80, 180), life: lag + rnd(0.2, 0.35), lag, c: '#ffe27a' });
+      else if (kind === 'gust') addVfx({ k: 'puff', x, y, r: h.w * 0.8, life: lag + 0.7, lag, c: '#cfe4ee' });
+      else if (kind === 'wisp') addVfx({ k: 'puff', x, y, r: 60, life: lag + 0.8, lag, c: '#5a3a7a' });
+      else { addVfx({ k: 'decal', x, y, r: h.w * 0.5, life: lag + 0.9, lag }); for (let j = 0; j < 2; j++) addVfx({ k: 'spark', x, y, a: h.a + rnd(-1.2, 1.2), s: rnd(100, 220), life: lag + rnd(0.2, 0.3), lag, c: col }); }
+    }
+  }
+  // ---- 일자 구획(결투장을 세로·가로로 가르는 긴 띠, 화웅 사수관 낙석·붕괴 등 rect, 2026-11-26 사용자 요청 「맵 전체를 감싸는 1자 공격」) ----
+  // 띠의 긴 쪽을 따라 돌(vs_rock)이 위에서 떨어져 박히고, 박힌 자리마다 돌조각이 튀고 흙먼지가 줄지어 피며 바닥이 갈라진다. 위에서 아래로(가로면 왼쪽부터) 차례로.
+  // 끝에 흙빛 충격파와 흔들림. 예고(붉은 채움)가 끝나고 터진 뒤의 연출이다.
+  function stripFx(h, col) {
+    const vert = h.rh >= h.rw, L = vert ? h.rh : h.rw, Wd = vert ? h.rw : h.rh, step = Q.level === 'high' ? 110 : 160, n = Math.max(2, Math.round(L / step));
+    const cx = h.x + h.rw / 2, cy = h.y + h.rh / 2;
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n, lag = i * 0.035, j = rnd(-0.25, 0.25) * Wd;
+      const x = vert ? cx + j : h.x + u * h.rw, y = vert ? h.y + u * h.rh : cy + j;
+      addVfx({ k: 'fall', x, y, sz: Math.min(110, Wd * 0.5) * rnd(0.8, 1.1), life: lag + 0.22, lag, rot: rnd(0, 6.28) });
+      const lg = lag + 0.2;
+      for (let k = 0; k < 2; k++) addVfx({ k: 'debris', x, y, a: rnd(0, 6.28), s: rnd(80, 220), z: rnd(80, 180), life: lg + rnd(0.45, 0.7), lag: lg, sz: rnd(7, 14), c: k ? '#8a6a4a' : '#c9a27a' });
+      addVfx({ k: 'puff', x, y, r: Wd * 0.42, life: lg + 1.0, lag: lg, c: '#9a8468' });
+      if (i % 2 === 0) addVfx({ k: 'decal', x, y, r: Wd * 0.38, life: lg + 1.2, lag: lg });
+    }
+    addVfx({ k: 'gwave', x: cx, y: cy, r: Math.max(Wd, 160), life: 0.6, lag: 0.15, c: '#e0c8a0' });
+    addVfx({ k: 'quake', v: 0.55, life: 0.25, lag: 0.2 });
+  }
+  // ---- 돌진(관문 돌격·철기 짓밟기·호표기·면죽관 돌파·적토 돌진, 2026-11-26 사용자 요청 「화웅의 일자 패턴도 돌이 날리면서 먼지가 핀다던지」) ----
+  // 보스가 실제로 지나가는 시각(초속 1300, engine bossBrain)에 맞춰 길을 따라 돌조각(vs_rock)이 옆으로 튀고 흙먼지 연기(fxa_smoke)가 피어오르며 바닥이 패인다(vs_crack).
+  // 멈추는 자리(경기장 끝 또는 길 끝)에서는 큰 충돌: 폭발 프레임·돌조각 사방·흙먼지 고리·충격파·흔들림. 여포 적토는 붉은 흙먼지와 불씨.
+  // 모두 터진 뒤의 연출이라 예고(붉은 장판)와 섞이지 않는다. 잔조각은 화질 배율(qPart)·S.vfx 상한(300/600)을 따른다.
+  const RUSH_V = 1300;
+  function rushLen(h) {
+    const ca = Math.cos(h.a), sa = Math.sin(h.a);
+    let d = 0;
+    while (d < h.len) { const x = h.x + ca * (d + 20), y = h.y + sa * (d + 20); if (x < ARENA.x0 || x > ARENA.x1 || y < ARENA.y0 || y > ARENA.y1) break; d += 20; }
+    return Math.max(40, d);
+  }
+  function rushFx(h, col) {
+    const ca = Math.cos(h.a), sa = Math.sin(h.a), L = rushLen(h), red = h.fx === 'redhare', dc = red ? '#8a4a3a' : '#9a8468', step = Q.level === 'high' ? 100 : 140;
+    for (let d = 60, i = 0; d < L; d += step, i++) {
+      const x = h.x + ca * d, y = h.y + sa * d, lag = d / RUSH_V;
+      // 돌조각: 길 양옆으로 튄다(진행 방향에서 비스듬히 뒤쪽)
+      for (let j = 0; j < 2; j++) { const sd = (i + j) % 2 ? 1 : -1; if (j && Q.level !== 'high') break; addVfx({ k: 'debris', x, y, a: h.a + sd * rnd(1.6, 2.4), s: rnd(90, 220), z: rnd(70, 170), life: lag + rnd(0.5, 0.75), lag, sz: rnd(8, 16), c: j ? '#8a6a4a' : '#c9a27a' }); }
+      addVfx({ k: 'puff', x: x - ca * 30, y: y - sa * 30, r: h.w * (0.75 + (i % 2) * 0.2), life: lag + 1.0, lag, c: dc });
+      if (i % 2 === 0) addVfx({ k: 'decal', x, y, r: h.w * 0.42, life: lag + 1.1, lag });
+      if (red) addVfx({ k: 'ember', x, y, vy: rnd(-160, -60), vx: rnd(-40, 40), life: lag + rnd(0.4, 0.7), lag, sz: rnd(3, 6) });
+    }
+    const ex = h.x + ca * L, ey = h.y + sa * L, le = L / RUSH_V;
+    addVfx({ k: 'gwave', x: ex, y: ey, r: h.w * 1.6, life: le + 0.5, lag: le, c: '#e0c8a0' }); // 흙빛 충격파(파란 고리 그림 ring 대신)
+    addVfx({ k: 'dust', x: ex, y: ey, r: h.w * 1.7, life: le + 0.85, lag: le });
+    addVfx({ k: 'decal', x: ex, y: ey, r: h.w * 1.1, life: le + 1.3, lag: le });
+    addVfx({ k: 'quake', v: 0.6, life: le + 0.05, lag: le });
+    for (let i = 0; i < 12; i++) addVfx({ k: 'debris', x: ex, y: ey, a: rnd(0, 6.28), s: rnd(120, 320), z: rnd(120, 260), life: le + rnd(0.55, 0.85), lag: le, sz: rnd(8, 18), c: i % 3 ? '#8a6a4a' : '#c9a27a' });
+    for (let i = 0; i < 3; i++) addVfx({ k: 'puff', x: ex + rnd(-40, 40), y: ey + rnd(-20, 20), r: h.w * 1.1, life: le + 1.1, lag: le + i * 0.05, c: dc });
+  }
+  // 진격하는 대열(대군 진격·목우유마·성도 함락): 지나간 길에 흙먼지(대열이 지나가는 시각에 맞춰). 줄이 많은 기술이라 줄마다 5개, 화면이 붐비면 생략
+  function trailDust(h, life) {
+    if (S.vfx.length > 250) return;
+    const L = Math.min(h.len, rushLen(h)), ca = Math.cos(h.a), sa = Math.sin(h.a);
+    for (let i = 0; i < 5; i++) { const d = L * (i + 0.5) / 5, lag = (d / h.len) * life / 1.25; addVfx({ k: 'puff', x: h.x + ca * d, y: h.y + sa * d + 10, r: h.w * 0.6, life: lag + 0.8, lag, c: '#a89070' }); }
   }
   // 떨어지는 물체(바위·불배·불화살 등): 터지기 0.5초 전부터 위에서 내려온다
   function drawFalling(c, h, q) {
@@ -211,8 +319,20 @@
       const o = { cx: (ARENA.x0 + ARENA.x1) / 2, cy: (ARENA.y0 + ARENA.y1) / 2, R: Math.hypot(AW, ARENA.y1 - ARENA.y0) / 2 + 8, lim: () => arenaRect(c),
         shape: (off) => { c.rect(ARENA.x0 - off, ARENA.y0 - off, AW + off * 2, top + off * 2); c.rect(ARENA.x0 - off, h.y1 - off, AW + off * 2, bot + off * 2); },
         prog: (pp, off) => { const t1 = top * pp + off, b1 = bot * pp + off; if (t1 > 0) c.rect(ARENA.x0, ARENA.y0, AW, t1); if (b1 > 0) c.rect(ARENA.x0, ARENA.y1 - b1, AW, b1); } };
-      tele(c, o, p, em, after, q);
-      if (!fired) safeEdge(c, () => { c.rect(ARENA.x0, h.y0, AW, TELE.edgeW); c.rect(ARENA.x0, h.y1 - TELE.edgeW, AW, TELE.edgeW); }, o.cx, o.cy, o.R, 0.95);
+      if (live && h.fx === 'flame') {
+        // 조조 화용도 불판(raid.js huarong, 2026-11-26): 길 위·아래가 타는 동안 연환선 갑판 불(위 rect flame)과 같은 그림을 띠 크기로 깐다. 안전한 길 경계(초록)는 계속 보인다
+        [[ARENA.y0, top], [h.y1, bot]].forEach(([sy, sh]) => {
+          if (sh <= 0) return;
+          if (window.RTD_SKFX) window.RTD_SKFX.spr(c, 'light_02', '#ff5a1a', ARENA.x0 + AW / 2, sy + sh / 2, AW * 1.1, sh * 1.25, 0, 0.45);
+          const nx = 12, ny = Math.max(1, Math.round(sh / 130)), cw = AW / nx, ch = sh / ny, s = Math.min(cw, ch) * 1.35;
+          for (let ix = 0; ix < nx; ix++) for (let iy = 0; iy < ny; iy++) {
+            const fx = ARENA.x0 + (ix + 0.5) * cw, fy = sy + (iy + 0.6) * ch, fl = 0.8 + Math.sin(now * 9 + ix * 1.7 + iy * 2.3) * 0.2;
+            Art.fxImg(c, 'fire', fx, fy - s * 0.22, s * fl, UP + Math.sin(now * 6 + ix + iy) * 0.12, 0.75);
+          }
+        });
+        tele(c, Object.assign({}, o, { prog: null }), 1, 0.6, false);
+      } else tele(c, o, p, em, after, q);
+      if (!fired || live) safeEdge(c, () => { c.rect(ARENA.x0, h.y0, AW, TELE.edgeW); c.rect(ARENA.x0, h.y1 - TELE.edgeW, AW, TELE.edgeW); }, o.cx, o.cy, o.R, 0.95);
     } else if (h.k === 'all') {
       // 경기장 전체: 가운데에서 퍼지는 채움이 구석에 닿을 때 터진다(터지는 순간의 흰 섬광은 착탄 효과가 덮는다)
       tele(c, shArena(c, (ARENA.x0 + ARENA.x1) / 2, (ARENA.y0 + ARENA.y1) / 2), p, 1, after, q);
@@ -288,6 +408,7 @@
       if (!(fire && vs(c, 'streak', h.x + tx * tl * 0.45, h.y + ty * tl * 0.45, tl * 1.5, a, 0.9, true))) streak(c, col, h.x + tx * tl, h.y + ty * tl, h.x, h.y, h.r * 1.2, 0.9);
     }
     c.globalAlpha = 1;
+    if (S.vfx.length < 200 && Math.random() < 0.05 * qPart()) addVfx(fx === 'fireball' || fx === 'flame' ? { k: 'ember', x: h.x, y: h.y, vy: rnd(-90, -30), vx: rnd(-30, 30), life: rnd(0.3, 0.5), sz: rnd(3, 5) } : { k: 'puff', x: h.x, y: h.y, r: 26, life: 0.5, c: fx === 'spirit' || fx === 'shadow' ? '#5a3a7a' : '#cfe4ee' }); // 꼬리 잔조각(2026-11-26)
     if (fx === 'fireball') { Art.fxImg(c, 'fire', h.x - Math.cos(a) * h.r, h.y - Math.sin(a) * h.r, h.r * 3.6, a, 1); if (window.RTD_SKFX) window.RTD_SKFX.spr(c, 'light_01', '#fff4c8', h.x, h.y, h.r * 2.2, h.r * 2.2, 0, 0.95); }
     else if (fx === 'spirit' || fx === 'shadow') {
       // 혼령: 흐느적이는 반투명 불꽃
@@ -336,7 +457,8 @@
         // 충격파: 퍼지는 빛 고리 그림(바닥에 눕힘) + 고리 프레임 애니메이션
         ringSpr(c, 'circle_02', v.c, v.x, v.y, v.r * (0.3 + p * 0.8), 0, (1 - p) * 0.9, true, 0.75);
         // 충격파 고리 애니메이션(바닥에 눕힘)
-        Art.fxAnim(c, 'ring', p, v.x, v.y, v.r * 2.8, v.r * 2.1, 0, 0.9);
+        // (2026-11-26) 예전 고리 시트(fxa_ring)는 파란 흰색이라 불·흙 기술에서도 파란 고리가 떴다 → 흰 충격파 시트를 기술 색으로 물들인다
+        Art.fxAnim(c, 'wave', p, v.x, v.y, v.r * 2.8, v.r * 2.8, 0, 0.85, null, { col: v.c, sy: 0.75 });
       } else if (v.k === 'bolt') {
         // 하늘에서 내리꽂는 번개: 세로로 그린 번개 그림(Kenney spark_06·05, 원래 비율)을 두 줄기 겹치고, 0.05초마다 좌우를 바꿔 번쩍인다.
         // 위쪽은 화면 위 글자(남은 시간)를 가리지 않게 땅에서 470까지만.
@@ -372,10 +494,23 @@
         if (VS.dust) { for (let k = 0; k < 5; k++) { const a = k * 1.26 + v.x, rr = v.r * (0.35 + p * 0.6); vs(c, 'dust', v.x + Math.cos(a) * rr, v.y + Math.sin(a) * rr * 0.5 - p * 26, v.r * 0.9 * (0.7 + p * 0.6), a, 0.6 * (1 - p)); } }
         else { c.globalAlpha = 0.35 * (1 - p); c.fillStyle = '#b8a07a';
         for (let k = 0; k < 7; k++) { const a = k * 0.9, rr = v.r * (0.4 + p * 0.6); c.beginPath(); c.arc(v.x + Math.cos(a) * rr, v.y + Math.sin(a) * rr * 0.5 - p * 20, v.r * 0.25 * (1 + p), 0, 7); c.fill(); } }
+      } else if (v.k === 'puff') {
+        // 흙먼지 연기(fxa_smoke 프레임 애니메이션을 흙색으로, 일반 합성): 부풀며 떠오르다 사라진다. 프레임 시트가 없으면 vs_dust
+        const r2 = v.r * 2 * (0.6 + p * 0.8), al = Math.min(1, p * 6) * (1 - p) * 0.8;
+        if (!Art.fxAnim(c, 'smoke', Math.min(0.99, p), v.x, v.y - p * v.r * 0.5, r2, r2, (v.x * 3) % 6.28, al, null, { col: v.c || '#9a8468', op: 'source-over' })) vs(c, 'dust', v.x, v.y - p * v.r * 0.5, r2 * 0.8, v.x % 6.28, al * 0.8);
+      } else if (v.k === 'fall') {
+        // 떨어지는 돌: 위 420단위에서 가속하며 내려와 박힌다(박힌 뒤는 돌조각·흙먼지가 이어받는다). 그림자가 먼저 커진다
+        const e = p * p;
+        blobShadow(c, v.x, v.y + 4, v.sz * (0.4 + e * 0.8), 0.5 * p);
+        vs(c, 'rock', v.x, v.y - 420 * (1 - e), v.sz, v.rot + p * 3, 1);
+      } else if (v.k === 'gwave') {
+        Art.fxAnim(c, 'wave', p, v.x, v.y, v.r * 2.6, v.r * 2.6, 0, (1 - p) * 0.9, null, { col: v.c, sy: 0.45 });
+      } else if (v.k === 'quake') {
+        if (!v.done) { v.done = 1; S.shake = Math.max(S.shake || 0, v.v || 0.5); }
       } else if (v.k === 'ember') {
         // 불씨: 부드러운 빛 알갱이 그림
         const es = v.sz * (1 - p * 0.5) * 5;
-        if (SK) SK.spr(c, 'circle_05', p < 0.4 ? '#fff0a0' : '#ff7a2a', v.x + v.vx * v.t, v.y + v.vy * v.t, es, es, 0, 1 - p);
+        if (SK) { const et = v.t - (v.lag || 0); SK.spr(c, 'circle_05', p < 0.4 ? '#fff0a0' : '#ff7a2a', v.x + v.vx * et, v.y + v.vy * et, es, es, 0, 1 - p); }
       } else if (v.k === 'img') {
         // 폭발은 프레임 애니메이션, 불길은 기존 그림
         if (!(v.img === 'boom' && Art.fxAnim(c, 'boom2', p, v.x, v.y - v.r * 0.15, v.r * 1.5, v.r * 1.5, 0, 1)))

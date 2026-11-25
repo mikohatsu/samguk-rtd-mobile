@@ -116,6 +116,7 @@
     rwTicket: ['{r} 선택권 {n}장', '{r}選択券×{n}', '{r} ticket ×{n}', '{r}选择券×{n}'],
     rwRandT: ['랜덤 {r} {n}기', 'ランダム{r}×{n}', 'random {r} ×{n}', '随机{r}×{n}'],
     rwChest: ['상자 {n}개', '宝箱×{n}', 'chest ×{n}', '宝箱×{n}'],
+    rwGot: ['{r} {a}', '{r} {a}', '{r} {a}', '{r} {a}'], // 랜덤 장수 보상 알림: 실제로 들어온 장수 이름(engine grant)
     deployed: ['출전 중', '出陣中', 'Deployed', '出战中'],
     peerField: ['{a}의 전장', '{a}の戦場', '{a}\'s field', '{a}的战场'],
     meter: ['딜미터', 'ダメージ', 'Damage', '伤害统计'],
@@ -461,6 +462,7 @@
     sendingResult: ['결과를 보내는 중…', '結果を送信中…', 'Sending result…', '正在提交结果…'],
     overwriteSave: ['이어하기 기록이 지워집니다 · 한 번 더', '「続きから」の記録が消えます・もう一度', 'Saved game will be erased · tap again', '将清除“继续游戏”的存档 · 再按一次'],
     lockedTag: ['잠김', 'ロック中', 'Locked', '未解锁'],
+    needUnlock: ['해금 필요', '解放が必要', 'Unlock required', '需要解锁'], // 잠긴 신화·불멸 조합식 위 쇠사슬 표시(12-panels recipeRow)
     lockedInShop: ['잠김 · 상점 › 장수 해금에서 열 수 있습니다', 'ロック中・ショップ › 武将解放で開けます', 'Locked · open it in Shop › Unlock generals', '未解锁 · 可在商店 › 解锁武将中开启'],
     goalHead: ['다음 목표', '次の目標', 'Next goals', '下一个目标'],
     goalDiff: ['{a} 난이도가 열렸습니다', '難易度「{a}」が開放されました', '{a} difficulty unlocked', '已开放“{a}”难度'],
@@ -730,16 +732,21 @@
   }
   function setLang(k) { try { localStorage.setItem('rtd-lang', k); } catch (e) { /* 저장 불가 */ } location.reload(); }
   const skillText = lang !== 'ko' && root.RTD_I18N_DATA ? root.RTD_I18N_DATA.SK[lang] : null;
-  // 일본어: 한국어 글꼴에는 가나·일본 한자가 없어 밋밋한 기본 글꼴로 나온다. 같은 글꼴 이름에 일본어 글꼴(가나·한자 범위만)을 덧붙여
-  // 굵은 제목·붓글씨·명조가 일본어에서도 같은 분위기로 나오게 한다. 파일은 fonts/ja-*.woff2 (scripts/build-jafont.py, 모두 OFL).
-  if (lang === 'ja' && typeof document !== 'undefined') {
+  // 일본어·중국어: 한국어 글꼴에는 가나·일본 한자·간체자가 없어 기기 글꼴과 섞여 나온다(예: 甘宁의 宁만 다른 모양). 같은 글꼴 이름에
+  // 그 언어 글꼴(가나·한자 범위만)을 덧붙여 굵은 제목·붓글씨·명조가 같은 분위기로 나오게 한다.
+  // 파일은 fonts/ja-*.woff2·zh-*.woff2 (scripts/build-jafont.py가 문구에 쓰인 글자로 만든다. 문구에 새 한자가 생기면 다시 돌린다).
+  const CJK_FONTS = {
+    ja: [['Black Han Sans', 'ja-display', 400], ['East Sea Dokdo', 'ja-brush', 400], ['Gowun Batang', 'ja-serif', 400], ['Gowun Batang', 'ja-serif', 700], ['Noto Serif KR', 'ja-serif', 700], ['Noto Serif KR', 'ja-serif', 900]],
+    zh: [['Black Han Sans', 'zh-display', 400], ['East Sea Dokdo', 'zh-brush', 400], ['Gowun Batang', 'zh-serif', 400], ['Gowun Batang', 'zh-serif-b', 700], ['Noto Serif KR', 'zh-serif-b', 700], ['Noto Serif KR', 'zh-serif-b', 900]],
+  };
+  if (CJK_FONTS[lang] && typeof document !== 'undefined') {
     // 굵기는 원래 글꼴에 있는 굵기와 똑같이 적어야 한다(범위로 적으면 브라우저가 원래 글꼴만 골라 덧붙인 쪽을 안 쓴다)
-    const map = [['Black Han Sans', 'ja-display', 400], ['East Sea Dokdo', 'ja-brush', 400], ['Gowun Batang', 'ja-serif', 400], ['Gowun Batang', 'ja-serif', 700], ['Noto Serif KR', 'ja-serif', 700], ['Noto Serif KR', 'ja-serif', 900]];
+    const map = CJK_FONTS[lang];
     const st = document.createElement('style');
     st.textContent = map.map(([fam, f, w]) => `@font-face{font-family:"${fam}";src:url(fonts/${f}.woff2) format("woff2");font-weight:${w};font-display:swap;unicode-range:U+3000-30FF,U+4E00-9FFF,U+FF00-FFEF}`).join('');
     document.head.appendChild(st);
     // 캔버스는 글꼴을 기다려 주지 않으므로 미리 불러 둔다
-    if (document.fonts && document.fonts.load) map.forEach(([fam, f, w]) => document.fonts.load(`${w} 20px "${fam}"`, 'あ三').catch(() => {}));
+    if (document.fonts && document.fonts.load) map.forEach(([fam, f, w]) => document.fonts.load(`${w} 20px "${fam}"`, lang === 'ja' ? 'あ三' : '三国').catch(() => {}));
   }
   root.RTD_I18N = { lang, LANGS, t, localizeTheme, applyDom, setLang, skillText, synTierText };
   if (root.RTD_THEME) localizeTheme(root.RTD_THEME);

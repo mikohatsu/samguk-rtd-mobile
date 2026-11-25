@@ -7230,3 +7230,22 @@
   font-display: swap;
   src: url(yuji-boku.woff2) format('woff2');
 }
+
+/* kr-serif-x: build-jafont.py가 만든다 — 구글 사본 Noto Serif KR에 없는 한자를 Noto Serif TC/JP(OFL)로 채움. 손으로 고치지 않는다 */
+@font-face {
+  font-family: 'Noto Serif KR';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(kr-serif-x7.woff2) format('woff2');
+  unicode-range: U+4f53, U+4f57, U+5095, U+5154, U+6559, U+6c5c, U+6dbc, U+70ba, U+7601, U+891a, U+8a61, U+90c3;
+}
+@font-face {
+  font-family: 'Noto Serif KR';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url(kr-serif-x9.woff2) format('woff2');
+  unicode-range: U+4f53, U+4f57, U+5095, U+5154, U+6559, U+6c5c, U+6dbc, U+70ba, U+7601, U+891a, U+8a61, U+90c3;
+}
+/* /kr-serif-x */

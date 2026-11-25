@@ -22,7 +22,8 @@
     if (q <= 0 || q >= 1) return;
     Art.fxAnim(c, 'burst', q, x, y, s, s, rot || 0, a, null, { col });
   }
-  // 다음 알림 꺼내기: 신화·불멸을 먼저(시간 멈춤과 어긋나지 않게), 이어 쌓인 7성 이하 알림은 하나로 묶어 가장 높은 것을 보여 주고 나머지는 +N
+  // 다음 알림 꺼내기: 신화·불멸을 먼저(시간 멈춤과 어긋나지 않게), 이어 쌓인 7성 이하 알림은 하나로 묶어 가장 높은 것만 보여 준다
+  // (묶인 수 「+N」 글자는 2026-11-26에 뺐다: 강화 단계(+N)처럼 읽혔다. p.more는 수만 남긴다)
   function nextPop() {
     let i = popQ.findIndex((q) => q.def && q.def.tier >= 9);
     if (i < 0) i = 0;
@@ -68,8 +69,6 @@
     c.fillStyle = '#fff'; c.font = `400 ${size}px "Black Han Sans", sans-serif`;
     c.fillText(I.t('appears', { a: (p.who ? I.t('whose', { w: p.who }) : '') + p.def.name }), W / 2, y); c.globalAlpha = 1;
   }
-  // 묶인 알림 수(+N): 등급 색 작은 글자
-  function popMore(c, txt, y, col, a) { c.globalAlpha = a; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = col; c.font = '400 30px "Black Han Sans", sans-serif'; c.fillText(txt, W / 2, y); c.globalAlpha = 1; }
   const glowCache = {};
   function softGlow(rgb) {
     if (glowCache[rgb]) return glowCache[rgb];
@@ -527,7 +526,7 @@
     if (d.tier >= 9) return drawCutscene(c, p, t, dt);
     c.save();
     if (p.shake > 0) c.translate((Math.random() - 0.5) * 22 * p.shake, (Math.random() - 0.5) * 22 * p.shake);
-    const T0 = p.t, more = p.more ? '+' + p.more : '';
+    const T0 = p.t;
     if (d.tier <= 5) {
       // 4·5성: 가볍고 빠르게. 별이 0.05초 간격으로 톡톡 튀어나온다.
       popBand(c, 150, 200, a);
@@ -537,13 +536,11 @@
         starPic(c, W / 2 + (i - (d.tier - 1) / 2) * 62, 220, 25 * s, col, a);
       }
       c.globalAlpha = 1; popName(c, p, 292, 46, a);
-      if (more) popMore(c, more, 330, col, a);
     } else if (d.tier === 6) {
       // 6성: 별 여섯이 음을 올리며 빠르게 박힌다
       popBand(c, 150, 340, a);
       for (let i = 0; i < 6; i++) slamStar(c, p, i, W / 2 + (i - 2.5) * 96, 260, 40, col, 0.08 + i * 0.12);
       popName(c, p, 390, 62, Math.min(1, Math.max(0, (T0 - 0.95) * 4)) * a);
-      if (more) popMore(c, more, 440, col, a);
     } else if (d.tier === 7) {
       // 7성: 별 여섯 → 큰 별이 떨어져 쾅(빛살·섬광·멈칫)
       popBand(c, 90, 420, a);
@@ -560,7 +557,6 @@
       if (T0 > land && T0 < land + 0.18) { c.globalAlpha = a * (1 - (T0 - land) / 0.18) * 0.45; c.fillStyle = '#fff'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); }
       c.globalAlpha = 1;
       popName(c, p, 420, 66, Math.min(1, Math.max(0, (T0 - 1.35) * 4)) * a);
-      if (more) popMore(c, more, 470, col, a);
     } else {
       // 전설: 금빛이 모여들고(뜸 0.35초) → 이름이 쾅 박히며 섬광·빛살·흔들림·멈칫 → 광택이 훑는다
       const HIT = 0.35, cy = 300;

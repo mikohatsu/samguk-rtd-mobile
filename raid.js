@@ -3,7 +3,7 @@
 // 장판(hazard)은 기존처럼 방장이 만들어 hz로 보내고, 각자 자기 출전 유닛에게 적용한다.
 (function (root) {
   const E = root.RTD_ENGINE || (typeof require !== 'undefined' ? require('./engine.js') : null);
-  const { Game, ARENA, dist, clamp, inLine, inCone, angDiff } = E;
+  const { Game, ARENA, dist, clamp, inLine, inCone, angDiff, boxDist } = E;
   const P = Game.prototype;
   const CX = (ARENA.x0 + ARENA.x1) / 2, CY = (ARENA.y0 + ARENA.y1) / 2;
   const AW = ARENA.x1 - ARENA.x0, AH = ARENA.y1 - ARENA.y0;
@@ -19,7 +19,7 @@
     f.boss.speed = f.def.speed || 120;
     // 기믹을 푸는 동안 보스를 못 치는 시간만큼 체력을 덜어 준다
     f.boss.hp = f.boss.mhp = f.boss.mhp * 0.92;
-    f.pendObj = {}; f.pendCtr = 0;
+    f.pendObj = {}; f.pendCtr = 0; f.pendCtrB = 0;
   };
   P.pace = function () { return Math.max(0.55, 1.05 - this.diff.level * 0.08); };
   P.nearestTo = function (x, y) {
@@ -129,16 +129,23 @@
   // damageBoss 안에서 호출: 피해 배율(그로기·약점)
   // samp(인연 팀 보스 약화)는 디버퍼 약점 간파(amp)와 따로 곱한다(둘 다 max라 한 채널이면 덮여 없어진다)
   P.raidMul = function () { const M = this.fight.mech; return (1 + M.vuln) * (M.gr > 0 ? 1.3 : 1) * (1 + (M.ampT > 0 ? M.amp : 0)) * (1 + (M.sampT > 0 ? M.sampV : 0)); };
-  // 반격도 한두 대가 아니라 정면에서 일정 피해를 넣어야 성공한다
-  P.addCounter = function (v) {
-    const M = this.fight.mech;
-    M.ctrGot = (M.ctrGot || 0) + v;
-    if (M.ctrGot >= (M.ctrNeed || 1)) this.counterHit();
+  // 반격 게이지(2026-11-26 사용자 결정): 한 대마다 정면이면 R.ctrFront(2), 뒤·옆이면 1을 쌓는다.
+  // 뒤·옆에서 쌓인 몫(M.ctrBack)은 게이지의 R.ctrBackCap(50%)까지만 들어간다 → 뒤에서만 때리면 절반에서 멈추고 그로기가 안 된다.
+  // front: 정면 몫(이미 배율 적용), back: 뒤·옆 몫. 방장만 판정한다(손님은 피해와 함께 둘을 따로 보낸다).
+  P.addCounter = function (front, back) {
+    const M = this.fight.mech, need = M.ctrNeed || 1;
+    M.ctrGot = (M.ctrGot || 0) + Math.max(0, front || 0);
+    if (back > 0) {
+      const cap = need * (this.R.ctrBackCap != null ? this.R.ctrBackCap : 0.5), add = Math.max(0, Math.min(back, cap - (M.ctrBack || 0)));
+      M.ctrBack = (M.ctrBack || 0) + add; M.ctrGot += add;
+    }
+    if (M.ctrGot >= need) this.counterHit();
   };
   P.raidOnBossDmg = function (d, c) {
-    const f = this.fight, M = f.mech, bd = this.breakDmg(d, c), hit = M.ctr > 0 && c ? (this.inFront(c) ? 2 : 1) : 0;
-    if (this.isAuthority) { if (M.cast) M.cast.got += bd; if (hit) this.addCounter(hit); }
-    else { f.pendSg = (f.pendSg || 0) + bd - d; if (hit) f.pendCtr = (f.pendCtr || 0) + hit; }
+    const f = this.fight, M = f.mech, bd = this.breakDmg(d, c), on = M.ctr > 0 && c, front = on && this.inFront(c);
+    const fv = front ? (this.R.ctrFront || 2) : 0, bv = on && !front ? 1 : 0;
+    if (this.isAuthority) { if (M.cast) M.cast.got += bd; if (on) this.addCounter(fv, bv); }
+    else { f.pendSg = (f.pendSg || 0) + bd - d; if (fv) f.pendCtr = (f.pendCtr || 0) + fv; if (bv) f.pendCtrB = (f.pendCtrB || 0) + bv; }
   };
   // 방장: 다른 사람이 보낸 피해
   P.remoteDamage = function (d) {
@@ -148,7 +155,7 @@
     if (d.stun > 0) b.stun = Math.max(b.stun, num(d.stun, 0));
     if (M.cast) M.cast.got += v + Math.max(0, num(d.sg, 0));
     Object.keys(d.o || {}).forEach((id) => { const o = M.objs.find((x) => x.id === +id); if (o && o.hp > 0) this.damageObj(o, d.o[id]); });
-    if (d.ctr && M.ctr > 0) this.addCounter(d.ctr);
+    if ((d.ctr || d.cb) && M.ctr > 0) this.addCounter(d.ctr || 0, d.cb || 0); // cb: 뒤·옆 몫(옛 버전 손님은 보내지 않는다 → 전부 정면으로 셈)
     if (d.amp) { if (!(M.ampT > 0) || d.amp[0] >= M.amp) M.amp = d.amp[0]; M.ampT = Math.max(M.ampT || 0, d.amp[1]); }
     if (d.cm && !(M.charmCd > 1)) this.charmBoss(d.cm[0], d.cm[1], d.cm[2]); // 팀 공유 재사용 중이면 받지 않는다
     if (d.ad) { if (!(M.adT > 0) || d.ad[0] >= M.adV) M.adV = d.ad[0]; M.adT = Math.max(M.adT || 0, d.ad[1]); }
@@ -189,7 +196,8 @@
       if (o.life != null) { o.life -= dt; if (o.life <= 0) { M.objs = M.objs.filter((x) => x !== o); continue; } }
       if (o.k === 'tower' && o.cd <= 0) {
         o.cd = 3.4; const t = this.nearestTo(o.x, o.y);
-        if (t) { const a0 = Math.atan2(t.y - o.y, t.x - o.x); this.addHazards([-0.25, 0, 0.25].map((da) => ({ k: 'line', x: o.x, y: o.y, a: a0 + da, len: 1500, w: 40, delay: 1 * pace, dmg: b.hit * 0.28, fx: 'arrow' }))); }
+        // 세 줄 간격: 표적 거리에서 줄 사이 틈이 몸통 + 여유 이상(최소 0.25, 2026-11-26)
+        if (t) { const a0 = Math.atan2(t.y - o.y, t.x - o.x), st = this.fanStep(0.25, 40, dist(t.x, t.y, o.x, o.y), a0); this.addHazards([-st, 0, st].map((da) => ({ k: 'line', x: o.x, y: o.y, a: a0 + da, len: 1500, w: 40, delay: 1 * pace, dmg: b.hit * 0.28, fx: 'arrow' }))); }
       } else if (o.k === 'amb' && o.cd <= 0) {
         o.cd = 2.6; const t = this.nearestTo(o.x, o.y);
         if (t) this.addHazards([{ k: 'proj', x: o.x, y: o.y, a: Math.atan2(t.y - o.y, t.x - o.x), v: 360, r: 15, delay: 0.5, dmg: b.hit * 0.22, fx: 'arrow' }]);
@@ -225,34 +233,38 @@
       return dist(bx + dx * t, by + dy * t, p.x, p.y) < p.r * 0.8 && dist(x, y, p.x, p.y) < 260;
     });
   };
-  const baseHits = P.hazardHits;
-  P.hazardHits = function (h, x, y, pad) {
-    if (h.k === 'rect') return x >= h.x - pad && x <= h.x + h.rw + pad && y >= h.y - pad && y <= h.y + h.rh + pad;
-    if (h.k === 'band') return y < h.y0 + pad || y > h.y1 - pad;
+  // 몸통 사각형 판정(engine.js hazardBox)에 레이드 장판 모양을 더한다. b는 이미 테두리·여유만큼 늘린 몸통 [x0, y0, x1, y1]
+  const baseBox = P.hazardBox;
+  P.hazardBox = function (h, b) {
+    if (h.k === 'rect') return b[2] >= h.x && b[0] <= h.x + h.rw && b[3] >= h.y && b[1] <= h.y + h.rh;
+    if (h.k === 'band') return b[1] < h.y0 || b[3] > h.y1; // 길 밖이 위험: 몸통이 길 위·아래 선을 넘으면
     if (h.k === 'all') return true;
-    if (h.k === 'los') return this.exposed(h.x, h.y, x, y);
+    if (h.k === 'los') return this.exposed(h.x, h.y, (b[0] + b[2]) / 2, (b[1] + b[3]) / 2); // 돌기둥 그림자: 몸통 가운데가 가려지면 안전
     if (PASSIVE[h.k]) return false;
-    return baseHits.call(this, h, x, y, pad);
+    return baseBox.call(this, h, b);
   };
   // 인공지능과 비조작 유닛의 회피용 위험도
+  // 피격 판정과 같은 몸통 사각형을 회피 여유(R.dangerPad)만큼 늘려 본다(engine.js danger와 같음)
   P.danger = function (x, y) {
     let v = 0;
-    const f = this.fight, M = f.mech;
+    // 안쪽이 안전한 장판(안전지대·생문 95, 화용도 길 190)은 몸통 + 테두리 + 6만: 여유를 다 붙이면 몸통이 안전 원·길에 다 안 들어가 갈 곳이 없어진다
+    const f = this.fight, e = this.hitEdge(), bx = this.bodyBox(x, y, e + this.dangerPad()), bi = this.bodyBox(x, y, e + 6);
     for (const h of f.hazards) {
       if (h.own || PASSIVE[h.k]) continue;
-      if (h.k === 'proj') { if (dist(x, y, h.x, h.y) < h.r + 60 || inLine(x, y, h.x, h.y, h.a, h.v * 0.7, h.r * 2 + 50, 0)) v += 2; continue; }
+      if (h.k === 'proj') { if (this.projDanger(h, bx)) v += 2; continue; }
       if (h.dur && h.fired && h.t > h.delay + h.dur - 0.2) continue;
-      if (this.hazardHits(h, x, y, 34)) v += 3;
+      if (this.hazardBox(h, h.k === 'safe' || h.k === 'band' ? bi : bx)) v += 3;
     }
     return v;
   };
-  // 피할 때 함께 따져 볼 자리: 돌기둥 그림자, 안전지대·생문 한가운데
+  // 피할 때 함께 따져 볼 자리: 돌기둥 그림자, 안전지대·생문 한가운데. 안전지대·길은 몸통(그림) 가운데가 한가운데 오게 장수 위치를 내린다(bodyMid)
+  P.bodyMid = function () { const B = this.R.hitBox || { top: -87, bot: 32 }; return (B.top + B.bot) / 2; };
   P.raidSpots = function () {
-    const f = this.fight, out = [];
+    const f = this.fight, out = [], my = this.bodyMid();
     f.hazards.forEach((h) => {
       if (h.k === 'los' && !h.fired) f.mech.objs.forEach((p) => { if (p.k === 'pillar') { const a = Math.atan2(p.y - h.y, p.x - h.x); out.push([p.x + Math.cos(a) * (p.r + 46), p.y + Math.sin(a) * (p.r + 46)]); } });
-      if (h.k === 'safe' && !h.fired) h.spots.forEach((s) => out.push([s[0], s[1]]));
-      if (h.k === 'band' && !h.fired) out.push([f.boss.x, (h.y0 + h.y1) / 2], [CX, (h.y0 + h.y1) / 2]);
+      if (h.k === 'safe' && !h.fired) h.spots.forEach((s) => out.push([s[0], s[1] - my]));
+      if (h.k === 'band' && h.t < h.delay + (h.dur || 0)) out.push([f.boss.x, (h.y0 + h.y1) / 2 - my], [CX, (h.y0 + h.y1) / 2 - my]);
     });
     return out;
   };
@@ -270,12 +282,12 @@
       if (h.k !== 'wind' && h.k !== 'gaze') this.log('sfx', { s: 'boom', gap: 110 });
       if (h.k === 'push') {
         own.forEach((c) => {
-          if (dist(c.x, c.y, h.x, h.y) > h.r) return;
+          if (boxDist(this.bodyBox(c.x, c.y, this.hitEdge()), h.x, h.y) > h.r) return; // 몸통이 충격파 원에 닿으면 밀린다
           const a = Math.atan2(c.y - h.y, c.x - h.x);
           c.kx = (Math.cos(a) * h.pw) / 0.35; c.ky = (Math.sin(a) * h.pw) / 0.35; c.kt = 0.35; c.move = false;
         });
       } else if (h.k === 'all') own.forEach((c) => this.hurtChamp(c, h.kill ? c.hp + 1e6 : h.frac ? c.mhp * h.frac : h.dmg));
-      else if (h.dmg && h.k !== 'wind' && h.k !== 'gaze') own.forEach((c) => { if (this.hazardHits(h, c.x, c.y, 16)) this.hurtChamp(c, h.kill ? c.hp + 1e6 : h.dmg); });
+      else if (h.dmg && h.k !== 'wind' && h.k !== 'gaze') own.forEach((c) => { if (this.champHit(h, c)) this.hurtChamp(c, h.kill ? c.hp + 1e6 : h.dmg); });
     }
     if (h.fired && h.t < end) {
       if (h.k === 'wind') own.forEach((c) => { c.x = clamp(c.x + h.vx * dt, ARENA.x0, ARENA.x1); c.y = clamp(c.y + h.vy * dt, ARENA.y0, ARENA.y1); });
@@ -283,7 +295,7 @@
         h.pulse = (h.pulse || 0) - dt;
         if (h.pulse <= 0) {
           h.pulse = 0.5;
-          own.forEach((c) => { if (h.k === 'gaze' ? this.gazeHit(c) : this.hazardHits(h, c.x, c.y, 6)) this.hurtChamp(c, h.tick * 0.5); });
+          own.forEach((c) => { if (h.k === 'gaze' ? this.gazeHit(c) : this.champHit(h, c)) this.hurtChamp(c, h.tick * 0.5); });
         }
       }
     }
@@ -304,7 +316,7 @@
     // 무력화 실패 대비 안전지대: 시전 끝 3.5초 전부터
     if (M.cast && M.cast.spots && M.cast.t > M.cast.dur - 3.5) {
       const s = M.cast.spots.slice().sort((p, q) => dist(c.x, c.y, p[0], p[1]) - dist(c.x, c.y, q[0], q[1]))[0];
-      return [s[0], s[1]];
+      return [s[0], s[1] - this.bodyMid()];
     }
     // 반격: 보스 정면으로
     if (M.ctr > 0 && !this.inFront(c)) { const r = Math.min(200, this.range(c.def) * 0.8); return [clamp(b.x + Math.cos(M.face) * r, ARENA.x0, ARENA.x1), clamp(b.y + Math.sin(M.face) * r, ARENA.y0, ARENA.y1)]; }
@@ -366,10 +378,10 @@
     // 화웅: 사수관 낙석이 한 줄씩 차례로 떨어진다(두 번, 방향 반대)
     domino: {
       start(f, b) {
-        const n = 8, w = AW / n, dir = this.rand() < 0.5 ? 1 : -1, pace = this.pace(), list = [];
+        const n = this.R.dominoN || 8, w = AW / n, dir = this.rand() < 0.5 ? 1 : -1, pace = this.pace(), list = [];
         for (let wave = 0; wave < 2; wave++) for (let i = 0; i < n; i++) {
           const col = (dir * (wave ? -1 : 1)) > 0 ? i : n - 1 - i;
-          list.push({ k: 'rect', raid: 1, x: ARENA.x0 + col * w, y: ARENA.y0, rw: w, rh: AH, delay: (2 + i * 0.85 + wave * 9) * pace, dmg: b.hit * 0.5 });
+          list.push({ k: 'rect', raid: 1, x: ARENA.x0 + col * w, y: ARENA.y0, rw: w, rh: AH, delay: (2 + i * (this.R.dominoStep || 0.85) + wave * 9) * pace, dmg: b.hit * 0.5 }); // dominoStep: 줄 사이 시간(2026-11-26 0.85→1.05: 몸통 폭만큼 더 건너야 한다)
         }
         this.addHazards(list);
       },
@@ -398,12 +410,16 @@
       },
     },
     // 조조: 화용도. 좁은 길만 안전하고 동남풍이 길 밖으로 민다.
+    // 2026-11-26 사용자 결정(모든 난이도): 길 위·아래는 예고 없이 바로 불판이 깔리고, 바람이 부는 동안(+after초) 닿아 있으면 계속 탄다(초당 b.hit × fire.tick,
+    // b.hit에 난이도 bossAtk가 들어 있다). 예고 뒤 한 번 터지던 장판은 바람에 밀리기 전에 길로 들어가면 거의 안 맞았다.
     huarong: {
-      start(f, b) {
-        const h = 190, y0 = ARENA.y0 + 140 + this.rand() * (AH - 280 - h), pace = this.pace(), vy = (this.rand() < 0.5 ? -1 : 1) * 110;
+      start(f, b, p) {
+        const HUARONG = Object.assign({ delay: 0.3, tick: 0.25, after: 0.5, road: 190 }, p && p.fire); // 값은 theme 조조 phases의 fire
+        const h = HUARONG.road, y0 = ARENA.y0 + 140 + this.rand() * (AH - 280 - h), pace = this.pace(), vy = (this.rand() < 0.5 ? -1 : 1) * 110;
+        const wind0 = 0.8, windDur = 4.4 * pace, fire0 = HUARONG.delay;
         this.addHazards([
-          { k: 'band', raid: 1, x: 0, y: 0, y0, y1: y0 + h, delay: 3.6 * pace, dmg: b.hit * 1.2 },
-          { k: 'wind', raid: 1, x: 0, y: 0, vx: 0, vy, delay: 0.8, dur: 4.4 * pace, dmg: 0 },
+          { k: 'band', raid: 1, x: 0, y: 0, y0, y1: y0 + h, delay: fire0, dur: wind0 + windDur + HUARONG.after - fire0, tick: b.hit * HUARONG.tick, dmg: 0, fx: 'flame' },
+          { k: 'wind', raid: 1, x: 0, y: 0, vx: 0, vy, delay: wind0, dur: windDur, dmg: 0 },
         ]);
       },
     },
@@ -457,7 +473,7 @@
   G.charge = function (f, b, t, p, pace, all) {
     if (p.ctr && !p.now) {
       const M = f.mech;
-      M.ctr = 3; M.ctrGot = 0; M.ctrNeed = 4 + 2 * this.party; M.face = Math.atan2(t.y - b.y, t.x - b.x); M.ctrGo = { gen: 'charge', t, p, v: f.vis };
+      M.ctr = 3; M.ctrGot = 0; M.ctrBack = 0; M.ctrNeed = 4 + 2 * this.party; M.face = Math.atan2(t.y - b.y, t.x - b.x); M.ctrGo = { gen: 'charge', t, p, v: f.vis };
       return;
     }
     baseCharge.call(this, f, b, t, p, pace, all);
@@ -508,10 +524,11 @@
       for (let i = 7; i > 0; i--) { const j = (this.rand() * (i + 1)) | 0; [syms[i], syms[j]] = [syms[j], syms[i]]; }
       const delay = 5.6 * pace, pos = ring(8, 470, 330, this.rand());
       M.objs = M.objs.filter((o) => o.k !== 'gate');
-      pos.forEach(([x, y], i) => this.addObj('gate', x, y, 95, 0, { s: syms[i], life: delay + 0.4 }));
+      const gr = this.R.gateR || 95; // 생문 크기(2026-11-26 95→120: 몸통 전체가 들어가야 안전하다)
+      pos.forEach(([x, y], i) => this.addObj('gate', x, y, gr, 0, { s: syms[i], life: delay + 0.4 }));
       M.sym = syms[(this.rand() * 8) | 0];
       const g = pos[syms.indexOf(M.sym)];
-      this.addHazards([{ k: 'safe', hide: 1, spots: [[g[0] | 0, g[1] | 0, 95]], x: 0, y: 0, delay, dmg: b.hit * 1.1 }]);
+      this.addHazards([{ k: 'safe', hide: 1, spots: [[g[0] | 0, g[1] | 0, gr]], x: 0, y: 0, delay, dmg: b.hit * 1.1 }]);
     },
     // 등애: 땅을 파고 숨어 표적 발밑을 쫓다가 튀어나온다(세 번)
     burrow(f, b, t, p, pace, all) {
@@ -547,7 +564,8 @@
     const f = this.fight, M = f.mech, busy = M.busy ? Object.assign({}, M.busy) : null;
     if (busy) delete busy.tgt; // 표적은 객체 참조라 보내지 않는다(받는 쪽이 가까운 대상으로 다시 잡는다)
     return {
-      g: r1(M.gr), v: M.vuln, c: r1(M.ctr), cp: M.ctr > 0 ? r2((M.ctrGot || 0) / (M.ctrNeed || 1)) : 0, a: M.ampT > 0 ? [r2(M.amp), r1(M.ampT)] : null, f: r2(M.face), h: M.hide ? 1 : 0, y: M.sym,
+      // cq: 반격 게이지 중 뒤·옆 몫 비율(표시·방장 교체용, 옛 버전은 읽지 않는다)
+      g: r1(M.gr), v: M.vuln, c: r1(M.ctr), cp: M.ctr > 0 ? r2((M.ctrGot || 0) / (M.ctrNeed || 1)) : 0, cq: M.ctr > 0 ? r2((M.ctrBack || 0) / (M.ctrNeed || 1)) : 0, a: M.ampT > 0 ? [r2(M.amp), r1(M.ampT)] : null, f: r2(M.face), h: M.hide ? 1 : 0, y: M.sym,
       // 미인계: [팀 공유 재사용 남은 시간, 매혹 남은 시간]
       sa: M.sampT > 0 ? [r2(M.sampV), r1(M.sampT)] : null, // 인연 팀 보스 약화(옛 버전은 읽지 않는다)
       cm: M.charmT > 0 || M.charmCd > 0 ? [r1(Math.max(0, M.charmCd || 0)), r1(Math.max(0, M.charmT || 0))] : null,
@@ -582,7 +600,7 @@
       this.charmShare();
     }
     const kn = x && x.kn > 0 ? x.kn : 1;
-    M.ctrGot = (m.cp || 0) * kn; M.ctrNeed = kn;
+    M.ctrGot = num(m.cp, 0) * kn; M.ctrBack = Math.min(num(m.cq, 0), num(m.cp, 0)) * kn; M.ctrNeed = kn;
     if (x) M.ctrGo = M.ctr > 0 && x.cg && this.patternGen[x.cg.gen] ? { gen: x.cg.gen, p: x.cg.p || {}, v: x.cg.v || null, t: null } : null;
     if (m.a) { M.amp = m.a[0]; M.ampT = m.a[1]; } else M.ampT = 0;
     if (Array.isArray(m.sa)) { M.sampV = Math.min(0.5, +m.sa[0] || 0); M.sampT = +m.sa[1] || 0; } else if ('sa' in m) M.sampT = 0;

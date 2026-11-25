@@ -137,6 +137,51 @@
       c.restore();
     }
   }
+  // ---- 몸 위 버프 덧씌움(2026-11-26 사용자 요청 「버프가 걸려 있으면 머리에만 뜨지 말고 몸에도 방패가 반투명하게」) ----
+  // 장수 그림 다음에 그린다(07-arena). 종류마다 모양이 다르다:
+  //   피해 감소(진영 사수·엄호·반사 중 도발) = 몸 앞 반투명 빛 방패(vs_guard를 버프 색으로, 없으면 vs_shield 원본) / 보호(무적) = 몸을 감싼 빛 막 /
+  //   방진(장판 막기) = 몸 둘레에 도는 법진 막 / 반사 = 몸 둘레 바깥으로 솟는 가시 / 공격력 = 어깨 위로 솟는 불꽃 / 공격 속도 = 뒤로 흐르는 바람 줄 /
+  //   인연 보호막(syShd) = 옅은 금빛 막. 끝나기 0.4초 전부터 옅어진다. 맞은 순간(hurt)에는 방패·막이 밝게 번쩍여 '막았다'가 보인다.
+  // 그림 몇 장만(드로우 2~4개/버프), 화질 낮음에서는 장식(반짝임·불꽃)을 뺀다. 머리 위 글자판·발밑 장판(drawBuffs)은 그대로.
+  function drawBuffOver(c, u, t) {
+    const SK = window.RTD_SKFX;
+    if (!SK || u.dead) return;
+    const lo = Q.level === 'low', hit = Math.max(0, (u.hurt || 0) / 0.2), fa = (left) => Math.min(1, left / 0.4), bx = u.x, by = u.y - 18;
+    if (u.shieldT > 0) { // 보호: 빛 막
+      const a = fa(u.shieldT), L = BUFF_LOOK.shield.c, R = 124;
+      SK.spr(c, 'circle_05', L, bx, by, R, R, 0, a * (0.32 + hit * 0.3));
+      SK.spr(c, 'circle_03', L, bx, by, R, R, t * 0.7, a * (0.85 + Math.sin(t * 5) * 0.1 + hit * 0.4));
+      if (!lo) { const ag = t * 2.4; SK.spr(c, 'star_04', '#ffffff', bx + Math.cos(ag) * R * 0.46, by + Math.sin(ag) * R * 0.46, 26, 26, 0, a * 0.8); }
+    }
+    if (u.pshT > 0) { // 방진: 몸 둘레를 도는 법진 막(빛 막과 구별되게 무늬가 보인다)
+      const a = fa(u.pshT), L = BUFF_LOOK.psh.c;
+      SK.spr(c, 'magic_02', '#9fd0ff', bx, by + 4, 136, 136, t * 0.9, a * (0.75 + hit * 0.3));
+      if (!lo) SK.spr(c, 'circle_03', L, bx, by + 4, 128, 128, 0, a * 0.5);
+      if (!lo && SK.guard) SK.guard(c, '#9fd0ff', bx, by + 2, 70, a * (0.3 + hit * 0.4), 0); // 방진: 법진 가운데 옅은 빛 방패 문양
+    }
+    if (u.syShd > 0) SK.spr(c, 'circle_03', '#ffe9a6', bx, by, 116, 116, -t * 0.5, 0.5 + hit * 0.3); // 인연 보호막
+    if (u.reflT > 0) { // 반사: 가시
+      const a = fa(u.reflT), n = lo ? 4 : 6;
+      for (let i = 0; i < n; i++) { const ag = i * (6.283 / n) + t * 0.6, d = 50 + Math.sin(t * 6 + i) * 4, h = 62 + hit * 30; const px = bx + Math.cos(ag) * d, py = by + Math.sin(ag) * d * 0.8;
+        if (!(SK.spike && SK.spike(c, '#ff7050', px, py, 18, h * 1.1, ag + Math.PI / 2, a * (0.85 + hit * 0.15)))) { SK.spr(c, 'muzzle_01', '#ff7050', px, py, 30, h, ag + Math.PI / 2, a); SK.spr(c, 'muzzle_01', '#ffe0c0', px, py, 14, h * 0.7, ag + Math.PI / 2, a * (0.6 + hit * 0.4)); } }
+    }
+    if (u.tauntT > 0 || u.coverT > 0) { // 피해 감소: 몸 앞 반투명 방패
+      const left = Math.max(u.tauntT || 0, u.coverT || 0), a = fa(left), L = (u.tauntT > 0 ? BUFF_LOOK.taunt : BUFF_LOOK.cover).c;
+      const sx = bx + 10, sy = by + 16 + Math.sin(t * 3) * 2, S = 84;
+      // 빛 방패(vs_guard)를 버프 색으로 물들여 반투명하게. 없으면 나무 방패 원본
+      if (!(SK.guard && SK.guard(c, L, sx, sy - 4, S * 1.1, a * (0.6 + hit * 0.4), 0.4))) {
+        SK.spr(c, 'vs_shield', L, sx, sy, S * 1.2, S * 1.18, 0, a * (0.5 + hit * 0.5));
+        SK.spr(c, 'vs_shield', null, sx, sy, S, S * 0.98, 0, a * (0.58 + hit * 0.35), false);
+      }
+    }
+    if (!lo && ((u.buffT > 0 && u.buff > 0) || u.pbuffT > 0)) { // 공격력: 어깨 위로 솟는 불꽃
+      const L = (u.buffT > 0 && u.buff > 0 ? BUFF_LOOK.buff : BUFF_LOOK.rally).c;
+      for (let i = 0; i < 2; i++) { const k = (t * 1.4 + i * 0.5) % 1; SK.spr(c, 'muzzle_04', L, bx + (i ? 22 : -22), by - 20 - k * 34, 22, 46, 0, Math.sin(k * Math.PI) * 0.6); }
+    }
+    if (!lo && u.hasteT > 0) { // 공격 속도: 뒤로 흐르는 바람 줄
+      for (let i = 0; i < 2; i++) { const k = (t * 1.8 + i * 0.5) % 1; SK.spr(c, 'trace_03', BUFF_LOOK.haste.c, bx + (i ? 26 : -26), by + 10 - k * 50, 10, 56, 0, Math.sin(k * Math.PI) * 0.55); }
+    }
+  }
   // 그 버프를 건 스킬의 원래 지속 시간(남은 시간 비율 계산용)
   function buffMax(u, k) {
     const s = (u.def.sk || []).find((x) => (k === 'buff' ? x.k === 'buff' : k === 'taunt' ? x.k === 'taunt' : x.k === 'shield'));

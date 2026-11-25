@@ -74,7 +74,9 @@
     const st = wait ? esc(t('sendingResult')) : S.repDone && S.xpFrom == null && E && E.want ? esc(t('noServer')) : '';
     const xp = E && E.xpNow != null ? E.xpNow : S.xpFrom != null ? S.xpFrom : me.xp || 0, r = rkOfLv(lvOfXp(xp));
     const gain = S.xpGained ? `+${fmt(S.xpGained)} XP` : '';
-    const row = `<div class="es-xp ${st ? 'st' : ''}" data-r="${r}"><span class="esx-mk">${rankMark(r)}</span><span class="esx-id"><b class="esx-rn"></b><small class="esx-lv"></small></span>`
+    // want = 경험치 답을 기다리거나 받은 줄: 숫자 칸 폭과 +XP 자리를 처음부터 잡아 둔다('보내는 중…' → 숫자·+XP로 바뀔 때 막대가 78px 줄던 것, 2026-11-26 layout-shift)
+    const want = !!(E && E.want) && !(S.repDone && S.xpFrom == null);
+    const row = `<div class="es-xp ${st ? 'st' : ''}${want ? ' want' : ''}" data-r="${r}"><span class="esx-mk">${rankMark(r)}</span><span class="esx-id"><b class="esx-rn"></b><small class="esx-lv"></small></span>`
       + `<span class="esx-bar"><i class="n"></i><i class="p"></i></span><span class="esx-num">${st}</span><span class="esx-gain ${E && E.xpT0 && performance.now() >= E.xpT0 ? 'on' : ''}">${gain}</span><span class="esx-nx">${r < 10 ? rankMark(r + 1) : ''}</span></div>`;
     // 보상 줄: 서버 답을 기다리는 동안과 답을 받은 뒤만 자리를 잡는다(보내지 않은 판·답이 없는 판은 받을 것이 없다)
     if (!(E && E.want && !S.repDone) && S.xpFrom == null) return row;

@@ -534,29 +534,46 @@
   let rseq = 0, wizBack = false;
   // 상점 ⓘ 설명 = 말풍선(2026-11-25 실기 소감: 본문에 펼쳐 카드를 밀지 않게 떠 있는 층). ⓘ 아래에 꼬리를 달고, 창(#lpanel) 안전 영역 밖으로 안 나가게 놓는다.
   // 닫기: ⓘ를 다시 누름 · 바깥을 누름(그 누름은 다른 버튼에 전달하지 않음 — 닫으려다 체험·구매가 눌리지 않게) · 탭 바꿈·창 다시 그림·창 닫기·화면 크기 바뀜
+  // 계정 창 관직 ?(관직 표)도 같은 말풍선을 쓴다(2026-11-26 layout-shift: 표를 본문에 펼치면 아래 칸이 380px 밀렸다). 단추는 aria-controls="shtip"으로 표시한다.
+  let tipBtn = null;
   function shTipClose() {
     const t = $('shtip'); if (t) t.remove();
-    const b = document.querySelector('#lptabs [data-shinfo]'); if (b) { b.classList.remove('on'); b.setAttribute('aria-expanded', 'false'); }
+    tipBtn = null;
+    document.querySelectorAll('[aria-controls="shtip"]').forEach((b) => { b.classList.remove('on'); b.setAttribute('aria-expanded', 'false'); });
+  }
+  // btn 아래(아래 자리가 모자라고 위가 더 넓으면 위)에 html을 띄운다. o.w = 최대 폭(기본 380), o.cls = 덧붙일 클래스
+  function tipOpen(btn, html, o) {
+    o = o || {};
+    shTipClose(); tipBtn = btn;
+    const host = $('lpanel'), t = document.createElement('div');
+    t.id = 'shtip'; t.className = 'sh-tip' + (o.cls ? ' ' + o.cls : ''); t.setAttribute('role', 'note');
+    t.innerHTML = `<div class="sh-tipb">${html}</div><i class="sh-tail" aria-hidden="true"></i>`;
+    host.appendChild(t);
+    btn.classList.add('on'); btn.setAttribute('aria-expanded', 'true');
+    // 자리 계산은 #lpanel 기준, 넘지 않을 테두리는 창 상자(.lp-box) 안쪽 8px(태블릿에서 창 밖 어두운 곳까지 나가지 않게)
+    const hr = host.getBoundingClientRect(), br = btn.getBoundingClientRect(), bx = (host.querySelector('.lp-box') || host).getBoundingClientRect();
+    const ml = bx.left - hr.left + 8, mr = hr.right - bx.right + 8, mb = hr.bottom - bx.bottom + 8, mt = bx.top - hr.top + 8;
+    const w = Math.min(o.w || 380, hr.width - ml - mr), cx = br.left + br.width / 2 - hr.left;
+    const left = Math.max(ml, Math.min(hr.width - mr - w, cx - w + 30)), top = br.bottom - hr.top + 9;
+    Object.assign(t.style, { width: w + 'px', left: left + 'px' });
+    const need = t.offsetHeight, below = hr.height - top - mb, above = br.top - hr.top - 9 - mt;
+    if (need > below && above > below) { t.classList.add('up'); Object.assign(t.style, { bottom: (hr.bottom - br.top + 9) + 'px', maxHeight: Math.max(60, above) + 'px' }); }
+    else Object.assign(t.style, { top: top + 'px', maxHeight: Math.max(60, below) + 'px' });
+    t.style.setProperty('--ax', Math.max(14, Math.min(w - 14, cx - left)) + 'px');
   }
   let shTipTab = null;
   function shTipOpen(btn) {
-    shTipClose(); shTipTab = ptab;
-    const host = $('lpanel'), t = document.createElement('div');
-    t.id = 'shtip'; t.className = 'sh-tip'; t.setAttribute('role', 'note');
-    t.innerHTML = `<div class="sh-tipb">${L('coinHint')}${ptab === 'unlock' ? '<br>' + L('unlockHint') : ''}</div><i class="sh-tail" aria-hidden="true"></i>`;
-    host.appendChild(t);
-    btn.classList.add('on'); btn.setAttribute('aria-expanded', 'true');
-    const hr = host.getBoundingClientRect(), br = btn.getBoundingClientRect(), cs = getComputedStyle(host);
-    const ml = Math.max(8, parseFloat(cs.paddingLeft) || 0), mr = Math.max(8, parseFloat(cs.paddingRight) || 0), mb = Math.max(8, parseFloat(cs.paddingBottom) || 0);
-    const w = Math.min(380, hr.width - ml - mr), cx = br.left + br.width / 2 - hr.left;
-    const left = Math.max(ml, Math.min(hr.width - mr - w, cx - w + 30)), top = br.bottom - hr.top + 9;
-    Object.assign(t.style, { width: w + 'px', left: left + 'px', top: top + 'px', maxHeight: Math.max(60, hr.height - top - mb) + 'px' });
-    t.style.setProperty('--ax', Math.max(14, Math.min(w - 14, cx - left)) + 'px');
+    shTipTab = ptab;
+    tipOpen(btn, `${L('coinHint')}${ptab === 'unlock' ? '<br>' + L('unlockHint') : ''}`);
   }
+  // 바깥(19-title 계정 상자 등)에서 쓰는 말풍선: 같은 단추를 다시 누르면 닫는다
+  function tipToggle(btn, html, o) { if ($('shtip') && tipBtn === btn) shTipClose(); else tipOpen(btn, html, o); }
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     // 바깥 누름: 다른 클릭 처리보다 먼저(잡기 단계) 닫고 그 누름은 멈춘다. 안드로이드 뒤로 가기(native.js가 닫기 버튼을 대신 누름)도 말풍선부터 닫는다
-    document.addEventListener('click', (e) => { const t = $('shtip'); if (!t || t.contains(e.target) || (e.target.closest && e.target.closest('[data-shinfo]'))) return; shTipClose(); e.preventDefault(); e.stopPropagation(); }, true);
+    document.addEventListener('click', (e) => { const t = $('shtip'); if (!t || t.contains(e.target) || (e.target.closest && e.target.closest('[aria-controls="shtip"]'))) return; shTipClose(); e.preventDefault(); e.stopPropagation(); }, true);
     window.addEventListener('resize', () => { if ($('shtip')) shTipClose(); });
+    // 본문 안의 단추에 달린 말풍선은 본문을 스크롤하면 닫는다(단추만 움직이고 말풍선이 제자리에 남지 않게)
+    document.addEventListener('scroll', (e) => { if (tipBtn && e.target && e.target.id === 'lpbody' && e.target.contains(tipBtn)) shTipClose(); }, true);
   }
   const loadingHtml = () => `<div class="lp-note lp-wait">${L('loading')}</div>`;
   const failHtml = () => `<div class="lp-note lp-fail">${L('loadFail')} <button class="btn" type="button" data-retry="1">${L('retry')}</button></div>`;
@@ -985,5 +1002,5 @@
   const mapTheme = () => { const me = C && C.ACC.me, p = me && me.mapSkin && SHOP.MAP_SKINS[me.mapSkin]; return p && p.theme ? p.theme : null; };
   // 테마 그림이 뒤늦게 도착하면 상점의 지도 미리보기를 다시 그린다
   if (typeof window !== 'undefined') window.addEventListener('rtd-maptheme', () => { if (panel === 'shop' && ptab === 'maps') renderPanel(); });
-  root.RTD_LOBBY = { trialBack, shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, missions: () => ms, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), close: () => { closeWizard(true); closePanel(); } };
+  root.RTD_LOBBY = { trialBack, shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, missions: () => ms, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), tip: tipToggle, close: () => { closeWizard(true); closePanel(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

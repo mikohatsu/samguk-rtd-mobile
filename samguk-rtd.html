@@ -143,7 +143,8 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 .rt { flex: none; padding: 0 4px; font: 700 10px/14px var(--ui); color: #14100d; border-radius: 2px; }
 .chip .rt { margin-left: 3px; }
 .rc .rn { flex: none; font-weight: 700; }
-.rc .rp { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #7a6a52; }
+.rc .rp { flex: 1; min-width: 0; padding: 3px 0; line-height: 1.4; overflow-wrap: anywhere; color: #7a6a52; } /* 말줄임 없이 줄바꿈(2026-11-26) */
+.rc .rpi { white-space: nowrap; } /* 재료 하나(이름 등급 ×n)는 한 줄에 */
 .rc .rp b { color: #1f6b33; font-weight: 700; }
 .rc .btn { flex: none; padding: 0 7px; line-height: 20px; color: var(--paper); }
 .rc .sub, .rc .rp .sub { color: inherit; }
@@ -447,7 +448,7 @@ html:not([lang=ko]) .urk { font: 900 15px/1 "Hiragino Mincho ProN", "Yu Mincho",
 .ubig:disabled { opacity: .55; cursor: default; }
 .ubig .ico.coin, .usellb .ico.coin { width: 14px; height: 14px; vertical-align: -3px; }
 html[lang="en"] .ubig b { font-size: 14px; }
-.umore { flex: none; min-height: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(201, 164, 92, .5); background: rgba(20, 12, 8, .8); color: #e6d6b0; font: 600 12px var(--ui); white-space: nowrap; }
+.umore { flex: none; min-height: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(201, 164, 92, .5); background: rgba(20, 12, 8, .8); color: #e6d6b0; font: 600 12px var(--ui); white-space: nowrap; min-width: 6.4em; text-align: center; } /* 상세↔닫기 글자 폭이 달라 옆 조합식 줄이 줄었다 늘었다 하지 않게 */
 .umore.on { border-color: var(--gold-hi); background: rgba(120, 84, 30, .7); color: #fff3dc; }
 /* 선택 해제: 바 왼쪽 위 모서리의 둥근 단추(그림 ic_close). 오른쪽 큰 행동(해산)과 바 폭만큼 떨어뜨린다. 누르는 자리는 ::after로 44px */
 #selx { position: absolute; top: -16px; left: -10px; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid rgba(201, 164, 92, .6); background: rgba(20, 13, 8, .95); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); }
@@ -648,6 +649,8 @@ html[lang="ja"] .boot-brand h1 { font-size: clamp(28px, 4.8vw, 56px); }
 @media (max-height: 400px) { #boot { gap: 5px; } .boot-card { gap: 5px; border-width: 14px; } .boot-card .btn { min-height: 38px; } #boot.form .boot-brand { display: none; } }
 /* ===== 시작 화면: 오프라인/온라인, 계정, 언어 ===== */
 :root { --ui: "IBM Plex Sans KR", "Hiragino Sans", "Noto Sans JP", "PingFang SC", "Microsoft YaHei", "Malgun Gothic", sans-serif; }
+/* 중국어는 기기 글꼴도 간체 자형을 먼저(iOS에서 Hiragino가 앞서면 일본어 자형으로 나온다) */
+html[lang="zh"] { --ui: "IBM Plex Sans KR", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans", sans-serif; }
 .langrow { display: flex; justify-content: flex-end; }
 #contbtn { padding: 12px; font: 400 19px var(--display); border-color: #ffd86a; background: linear-gradient(180deg, #4a3520, #2b1f15); }
 #contbtn[hidden] { display: none; }
@@ -1167,6 +1170,15 @@ html[lang="ja"] #battlebtn::after { display: none; } html[lang="ja"] #battlebtn 
 .lockn { display: block; margin-top: 3px; color: #ffcf8a; }
 /* 도감의 잠긴 신화·불멸 줄(2026-11-25): 상점과 같은 규칙 — 흑백 초상 + 이름 옆 「잠김」(자물쇠 글자 없음). 정적 그림 30px라 필터가 가볍다 */
 .row.lk[data-act] img { filter: grayscale(1) brightness(.82); }
+.row.rlk { position: relative; overflow: hidden; min-height: 76px; }
+.row.rlk > div:first-child { filter: grayscale(1) brightness(.62); }
+.rlkx { position: absolute; inset: 0; pointer-events: none; }
+.rlkx .ch { position: absolute; left: -6%; top: 50%; width: 112%; height: 44px; margin-top: -22px; background: url(gfx/vs_chain.png) center / 100% 100% no-repeat; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .75)); }
+.rlkx .ch.a { transform: rotate(13deg); } .rlkx .ch.b { transform: rotate(-13deg) scaleX(-1); }
+.rlkb { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 1px; pointer-events: none; }
+.rlkb .ico.lock { width: 52px; height: 31px; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .8)); }
+.rlkb b { padding: 1px 8px; border-radius: 3px; background: rgba(14, 9, 6, .82); color: #ffd98a; font: 700 12px/1.35 var(--ui); white-space: nowrap; }
+.row.rlk + .lockn { margin-top: -1px; }
 .row .lkt { font: 700 11px/1 var(--ui); font-style: normal; color: #c9b48f; margin-left: 3px; padding: 2px 5px; border-radius: 3px; background: rgba(0,0,0,.32); vertical-align: 1px; }
 /* ---- 협동 입장 대기 화면(#match, src/ui/18b-match.js) ----
    참가자 카드가 나란히 서고, 계급이 높을수록 화려하다(.t0 ~ .t4). 연출은 있는 그림만 움직인다:
@@ -1931,6 +1943,28 @@ html[lang="ko"] .sh-nm { word-break: keep-all; }
 .lp-head b, .wz-head b { position: absolute; left: 56px; right: 56px; top: 50%; transform: translateY(-50%); text-align: center !important; padding: 0; pointer-events: none; }
 .wz-head b { left: 112px; right: 112px; }
 #lpclose, #wzsteps { margin-left: auto; }
+/* ---- 레이아웃 밀림 막기(2026-11-26 production/team/2026-11-26/layout-shift.md) ---- */
+/* 창 머리·탭 줄·바닥 줄은 본문 길이와 상관없이 제 높이. 본문이 창보다 길어지면 머리가 눌려 제목 줄이 2~14px 줄었다(계정 관직 ?, 상점·랭킹 탭 바꿈). 줄어드는 것은 본문(스크롤)만 */
+.lp-box > .lp-head, .lp-box > #lptabs, .wz-box > .wz-head, .wz-box > .wz-foot { flex-shrink: 0; }
+/* 말풍선(lobby.js tipOpen)이 단추 위로 뜰 때 꼬리는 아래 */
+.sh-tip.up .sh-tail { top: auto; bottom: -6px; transform: rotate(225deg); }
+/* 계정 창 관직 표 말풍선: 표가 말풍선 안에서 스크롤 */
+.sh-tip.acc-tip .sh-tipb { padding: 6px; line-height: 1.4; }
+.sh-tip .acc-tree { margin: 0; border: 0; border-radius: 0; }
+#lpanel .acc-track .acc-q.on { background: var(--gold-line); border-color: var(--gold-line); color: #23130a; }
+/* 닉네임 바꾸기: 입력 줄이 버튼 줄 자리에 같은 높이로 들어선다 */
+#acc-nickbox { margin-top: 8px; }
+#acc-nickbox[hidden], #acc-btnrow[hidden] { display: none; }
+#acc-nickbox .inline { align-items: stretch; min-height: 44px; }
+#acc-nickbox input { flex: 1 1 auto; min-width: 0; }
+#acc-nickbox .btn { flex: none; min-height: 44px; }
+#acc-nickbox .acc-nickx { width: 44px; padding: 0; display: grid; place-items: center; }
+/* 로그인 안 함(동전 칸 없음)일 때도 새소식·설정은 오른쪽 끝에(로그인·로그아웃 때 새소식 단추가 화면을 가로질러 뛰었다) */
+#lcur[hidden] ~ #lnews { margin-left: auto; }
+#lcur[hidden] ~ #lgear { margin-left: 0; }
+/* 결과창 경험치 줄: 답을 기다리는 동안에도 숫자 칸 폭과 +XP 자리를 잡아 둔다('보내는 중…' → '12 / 39 · +6 XP'에서 막대가 78px 줄었다) */
+#end .es-xp.want .esx-num { width: 100px; min-width: 100px; max-width: 100px; }
+#end .es-xp.want .esx-gain:empty { min-width: 84px; }
 </style>
 
 <div id="app" hidden>

@@ -12,7 +12,7 @@
   // 물들여 '기운으로 된 무기 그림자'로 쓰고(보스 연출의 칠한 그림과 구별), Kenney 폭발 프레임(kn_exp*)·연기 불길(kn_flame_02·04)도 쓴다.
   // 이것들은 없어도 연출이 깨지지 않게(그림이 아직 없으면 그 겹만 빠진다) 준비 확인(ready)에는 넣지 않는다.
   const EXTRA = ('vs_dagger vs_dao vs_ji vs_spear vs_spears vs_chev vs_shield vs_arrow vs_wisp vs_talisman vs_fireship vs_ring flame_02 flame_04 '
-    + 'vs_streak vs_wind vs_crack vs_jian vs_guandao vs_fangtian vs_shemao vs_seal vs_lamp vs_chain vs_petal exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8').split(' ');
+    + 'vs_streak vs_wind vs_crack vs_jian vs_guandao vs_fangtian vs_shemao vs_seal vs_lamp vs_chain vs_petal vs_dust vs_guard vs_spike exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8').split(' ');
   const BASE = new Set(NAMES);
   let loaded = 0;
   function img(n) {
@@ -722,7 +722,7 @@
     },
     melody(c, f, p) { // 주유 곡조 비기: 바람 리본(vs_wind 원본) 세 줄이 박자(0·0.25·0.5초)마다 물결치며 떠오르고 불티가 오른다(검토 1-9·4-1)
       spr(c, 'light_02', f.c, f.x, f.y + 20, f.r * 2.2, f.r * 2.2, p, bell(cl(p * 1.1)), true, 0.45); // 바닥
-      const T = (f.life || 0.8) + (IMM() ? 0.2 : 0);
+      const T = SPAN || (f.life || 0.8) + (IMM() ? 0.2 : 0); // 전체 그리는 길이(초): 리본 박자를 0·0.25·0.5초에 맞춘다
       for (let i = 0; i < 3; i++) {
         const q = cl((p * T - i * 0.25) / 0.5); if (q <= 0 || q >= 1) continue;
         weap(c, 'vs_wind', f.c, f.x + Math.sin(q * 6 + i) * f.r * 0.25, f.y - 10 - q * f.r * 0.9 - i * f.r * 0.15, f.r * 3 * (0.7 + q * 0.3), null, Math.sin(q * 5 + i) * 0.12, bell(q));
@@ -826,17 +826,142 @@
   // 불멸 강화류(aura)는 반지름 1.5배(엔진의 r은 그대로, 그리는 사본만). 연출 길이 +0.2초는 그리는 쪽(04-fx-text drawFx)이 extra()로 늘린다.
   const BIGR = new WeakMap();
   function bigR(f) { let o = BIGR.get(f); if (!o) { o = Object.create(f); o.r = (f.r || 100) * 1.5; BIGR.set(f, o); } return o; }
-  const extra = (f, tier) => (f.k === 'aura' && tier >= 10 ? 0.2 : 0);
-  // g.fx 한 개를 그린다(그렸으면 true)
+  // ---- 연출 길이(2026-11-26 전투 이펙트 개편): 시전 → 발동 → 여운 ----
+  // 엔진의 판정·피해 숫자·연출 수명(life)과 소리 박자(audio.js HIT_AT·BLAST_AT)는 그대로 두고, 그리는 쪽만 늘린다.
+  //  - 강화·보호·치료류(aura): 연출 전체를 AURA_EX초 늘여 천천히 그린다(소리는 0초 시전음뿐이라 박자 영향 없음). 불멸은 +0.2초 더.
+  //  - 직선·부채꼴·폭발: 본 연출(움직임·명중 박자)은 그대로, 끝난 뒤 LINGER초 동안 스킬 색 '여운'(잔광·떠오르는 빛 알갱이·바닥 자국)을 더한다.
+  //    직선·부채꼴은 누르는 순간 장수 발밑에 스킬 색 '시전' 법진이 0.3초 번진다.
+  // 여운·시전은 스킬 연출(vx가 있는 것)에만. 평타 강타 폭발(vx 없음)에는 붙이지 않는다(화면이 덮이지 않게).
+  const AURA_EX = 0.5, LINGER = 0.45, LINGER_HI = 0.6;
+  const extra = (f, tier) => (!f.vx ? (f.k === 'aura' && tier >= 10 ? 0.2 : 0) : f.k === 'aura' ? AURA_EX + (tier >= 10 ? 0.2 : 0) : f.k === 'beam' || f.k === 'cone' || f.k === 'blast' ? (tier >= 9 ? LINGER_HI : LINGER) : 0);
+  // 지금 그리는 연출의 전체 길이(초). 강화류 안에서 박자를 초로 계산할 때 쓴다(곡조 비기 등).
+  let SPAN = 0;
+  // 스킬 이름 → 종류(k): 방어·지원 스킬의 '뙇' 연출을 고른다. theme-samguk.js의 장수 스킬 표에서 한 번 만든다.
+  let VXK = null;
+  function vxK(vx) {
+    if (!VXK) { VXK = {}; const T = root.RTD_THEME; if (T && T.units) T.units.forEach((d) => (d.sk || []).forEach((s) => { if (s.vx && !VXK[s.vx]) VXK[s.vx] = s.k; })); }
+    return VXK[vx];
+  }
+  // 바닥 먼지(vs_dust 원본, 일반 합성). 그림이 없으면 Kenney 연기
+  function dust(c, x, y, s, rot, a) { if (!spr(c, 'vs_dust', null, x, y, s, s, rot, a, false)) spr(c, 'smoke_04', '#b8a07a', x, y, s, s, rot, a * 0.8, false); }
+  const backOut = (k) => { const s = 1.7; k = cl(k) - 1; return 1 + k * k * ((s + 1) * k + s); };
+  // ---- 방어·지원 스킬 시전 '뙇'(2026-11-26 사용자 요청 「방패가 뙇 하고 나와야 알기 쉽다」) ----
+  // 종류마다 다르게: 피해 감소(진영 사수·엄호) = 큰 방패가 떨어져 박힘 / 보호(무적) = 빛 막이 부풀어 감쌈 / 방진(장판 막기) = 바닥 법진에서 빛 막이 솟음 /
+  // 반사(합비 사수) = 붉은 방패 + 사방으로 솟는 가시. 각 장수 고유 연출(vx 함수) 위에 덧그린다. s = 시전 뒤 지난 초.
+  // 칠한 원본 방패(vs_shield)는 앞에, 스킬 색 빛은 뒤에(weap). 흰 섬광은 쓰지 않는다(검토 원칙: 같은 흰 섬광 남발 금지).
+  // 빛 방패(vs_guard 426×512): 스킬 색으로 물들여 더하기, glow = 1.25배 번짐 투명도 비율. 흰 심은 작게(0.35)만. 그렸으면 true
+  function guard(c, col, x, y, h, a, glow) {
+    if (!img('vs_guard') || !(a > 0.01)) return !!img('vs_guard');
+    const w = h * 426 / 512;
+    if (glow) spr(c, 'vs_guard', col, x, y, w * 1.25, h * 1.25, 0, a * glow);
+    spr(c, 'vs_guard', col, x, y, w, h, 0, a);
+    spr(c, 'vs_guard', WHITE, x, y, w * 0.8, h * 0.8, 0, a * 0.35);
+    return true;
+  }
+  // 빛 가시(vs_spike 72×384, 위로 솟음): 스킬 색 + 가는 흰 심. rot은 위쪽이 가리킬 방향(+π/2 규칙). 그렸으면 true
+  function spike(c, col, x, y, w, h, rot, a) {
+    if (!img('vs_spike') || !(a > 0.01)) return !!img('vs_spike');
+    spr(c, 'vs_spike', col, x, y, w, h, rot, a);
+    spr(c, 'vs_spike', WHITE, x, y, w * 0.5, h * 0.8, rot, a * 0.6);
+    return true;
+  }
+  const POP_SKIP = { bulwark: 1, eightlock: 1 }; // 이미 방패 원본이 크게 나오는 연출(엄호·팔문금쇄진)은 방패를 겹치지 않는다
+  function guardPop(c, f, s, K) {
+    const x = f.x, y = f.y, col = f.c || '#d8ecff', k1 = cl(s / 0.14), out = 1 - cl((s - 0.75) / 0.35), q = cl((s - 0.12) / 0.55);
+    if (out <= 0) return;
+    // 착지 충격: 바닥 충격파(스킬 색) + 양옆으로 퍼지는 흙먼지
+    if (s >= 0.12 && q < 1) {
+      wave(c, col, x, y + 26, K === 'pshield' ? 380 : 300, q, 0.9, 0.42);
+      if (K !== 'shield') for (let i = 0; i < N(4); i++) { const sd = i % 2 ? 1 : -1, d = 40 + q * (70 + (i >> 1) * 40); dust(c, x + sd * d, y + 24 - q * 18 - (i >> 1) * 8, 90 * (0.6 + q * 0.7), i, (1 - q) * 0.6); }
+    }
+    if (K === 'shield' || K === 'pshield') {
+      // 빛 막: 몸을 감싸는 둥근 막이 부풀었다가(1.25배 → 1) 자리 잡는다. 방진은 바닥 법진에서 솟는다
+      const R = K === 'pshield' ? 120 : 100, sc = K === 'pshield' ? 0.4 + 0.6 * ease(k1) : 1.25 - 0.25 * backOut(k1), a = Math.min(1, k1 * 2) * out;
+      if (K === 'pshield') rune(c, 2, col, x, y + 26, 260 * (0.6 + 0.4 * ease(k1)), s * 1.5, a * 0.85, 0.42, 'magic_03');
+      spr(c, 'circle_05', col, x, y - 16, R * 2 * sc, R * 2 * sc, 0, a * 0.28);
+      if (K === 'pshield') guard(c, col, x, y - 16, R * 1.3 * sc, a * 0.7, 0.3); // 방진: 막 가운데 빛 방패 문양
+      spr(c, 'circle_03', col, x, y - 16, R * 2 * sc, R * 2 * sc, s * 0.8, a * 0.95);
+      for (let i = 0; i < N(3); i++) { const ag = s * 3 + i * 2.09; spr(c, 'star_04', col, x + Math.cos(ag) * R * 0.92 * sc, y - 16 + Math.sin(ag) * R * 0.92 * sc, 36, 36, 0, a * 0.9); }
+      return;
+    }
+    // 방패: 위에서 떨어지며 커졌다(1.9배) 박히고, 0.45초부터 몸 크기로 줄며 옅어진다(몸 위 덧씌움으로 넘겨준다). 몸이 비치게 반투명(최고 0.85)
+    const sh = cl((s - 0.45) / 0.4), SH = 150, sc = (1.9 - 0.9 * backOut(k1)) * (1 - 0.5 * sh), a = Math.min(1, k1 * 1.6) * out * (0.85 - 0.35 * sh);
+    const sy = y - 18 - (1 - ease(k1)) * 70, sCol = K === 'reflect' ? '#ff6a50' : col;
+    if (K === 'reflect') { // 가시: 몸 둘레에서 바깥으로 솟는 날(스킬 색 muzzle 그림 8개)
+      const g = ease(cl((s - 0.1) / 0.3));
+      for (let i = 0; i < N(8); i++) { const ag = i * 0.785 + 0.39, d = 60 + g * 50, px = x + Math.cos(ag) * d, py = y - 16 + Math.sin(ag) * d * 0.75; if (!spike(c, sCol, px, py, 28, 130 * g, ag + Math.PI / 2, a / 0.85)) { spr(c, 'muzzle_01', sCol, px, py, 48, 120 * g, ag + Math.PI / 2, a / 0.85); spr(c, 'muzzle_01', '#ffe0c0', px, py, 20, 80 * g, ag + Math.PI / 2, a * 0.7); } }
+    }
+    // 빛 방패(vs_guard, 2026-11-26 Canva: 흰 빛 문양을 스킬 색으로 물들여 더한다). 없으면 나무 방패 원본(vs_shield)
+    if (!guard(c, sCol, x, sy, SH * sc * 1.15, a, 0.45 * (1 - q * 0.6))) {
+      spr(c, 'vs_shield', sCol, x, sy, SH * sc * 1.3, SH * sc * 1.3, 0, a * 0.45 * (1 - q * 0.6)); // 박힐 때 스킬 색 빛이 번진다
+      weap(c, 'vs_shield', sCol, x, sy, SH * sc, SH * sc * 0.98, 0, a);
+    }
+  }
+  // 직선·부채꼴 시전: 장수 발밑에 스킬 색 법진이 번지고 몸에 빛이 맺힌다(0.3초)
+  function castFx(c, f, s) {
+    const k = cl(s / 0.3); if (k >= 1) return;
+    const a = (1 - k) * Math.min(1, s * 20);
+    rune(c, 3, f.c, f.x, f.y + 28, 170 * (0.6 + 0.4 * ease(k)), s * 4, a * 0.85, 0.42, 'magic_02');
+    spr(c, 'light_01', f.c, f.x, f.y - 10, 150, 150, 0, a * 0.55);
+  }
+  // 여운: 본 연출이 끝나 갈 때부터 스킬 색 잔광이 남았다가 떠오르는 빛 알갱이와 함께 사라진다. u = 0→1
+  // 신화·불멸(tier 9 이상)은 알갱이가 많고, 불멸은 착탄 자리에 바닥 균열(vs_crack 원본)이 남는다.
+  function linger(c, f, u, tier) {
+    const e = cl(u / 0.2) * (1 - cl((u - 0.3) / 0.7)); if (e <= 0.01) return;
+    const col = f.c, hi = tier >= 9, nm = N(hi ? 9 : 6), MOTE = '#fff4dc';
+    if (f.k === 'beam') {
+      const ca = Math.cos(f.a), sa = Math.sin(f.a), ex = f.x + ca * f.len, ey = f.y + sa * f.len;
+      c.save(); c.translate(f.x, f.y); c.rotate(f.a);
+      spr(c, 'trace_06', col, f.len / 2, 0, f.w * (0.9 - u * 0.5), f.len, Math.PI / 2, e * 0.4);
+      c.restore();
+      for (let i = 0; i < nm; i++) { const d = f.len * (i + 0.5) / nm, o = Math.sin(i * 2.3) * f.w * 0.3; spr(c, 'star_06', i % 3 ? col : MOTE, f.x + ca * d - sa * o, f.y + sa * d + ca * o - u * 60 - (i % 3) * 8, 24, 24, 0, e * 0.9); }
+      spr(c, 'light_02', col, ex, ey + 10, f.w * 2.4, f.w * 2.4, u, e * 0.55, true, 0.45);
+      if (tier >= 10) spr(c, 'vs_crack', null, ex, ey + 10, f.w * 2.2, f.w * 2.2, 0, e * 0.55, false, 0.5);
+    } else if (f.k === 'cone') {
+      const R = f.r * 0.62, ix = f.x + Math.cos(f.a) * R, iy = f.y + Math.sin(f.a) * R;
+      spr(c, 'slash_01', col, ix, iy, f.r * 1.1, f.r * 0.6, f.a - Math.PI / 2, e * 0.45);
+      for (let i = 0; i < nm; i++) { const ai = f.a - f.arc / 2 + f.arc * (i + 0.5) / nm, d = f.r * (0.5 + (i % 3) * 0.18); spr(c, 'star_06', i % 3 ? col : MOTE, f.x + Math.cos(ai) * d, f.y + Math.sin(ai) * d - u * 55, 24, 24, 0, e * 0.9); }
+      if (tier >= 10) spr(c, 'vs_crack', null, ix, iy + 10, f.r * 0.7, f.r * 0.7, 0, e * 0.5, false, 0.5);
+    } else if (f.k === 'blast') {
+      rune(c, 2, col, f.x, f.y + 10, f.r * 2.1, u * 1.5, e * 0.5, 0.45, 'magic_03');
+      for (let i = 0; i < nm; i++) { const ag = i * 2.4, d = f.r * (0.25 + (i % 4) * 0.2); spr(c, 'star_06', i % 3 ? col : MOTE, f.x + Math.cos(ag) * d, f.y + Math.sin(ag) * d * 0.5 - u * 80 - (i % 3) * 10, 26, 26, 0, e * 0.9); }
+      if (tier >= 10) spr(c, 'vs_crack', null, f.x, f.y + 10, f.r * 1.6, f.r * 1.6, 0, e * 0.5, false, 0.5);
+    }
+  }
+  // g.fx 한 개를 그린다(그렸으면 true). p = 0→1(본 연출 진행)
   function fx(c, f, p, tier) {
     const tab = f.k === 'beam' ? BEAM : f.k === 'cone' ? CONE : f.k === 'blast' ? BLAST : f.k === 'aura' ? AURA : null;
     const fn = tab && (tab[f.vx] || (f.k === 'blast' ? BLAST.burst : null));
     if (!fn || !ready(['circle_02', 'light_01', 'star_09'])) return false;
     TIER = tier || 0;
+    const own = !SPAN; if (own) SPAN = (f.life || 0.8) + extra(f, TIER);
     const ok = fn(c, f.k === 'aura' && TIER >= 10 ? bigR(f) : f, p) !== false;
     if (ok && TIER >= 9) heavy(c, f, p, TIER);
-    TIER = 0;
+    TIER = 0; if (own) SPAN = 0;
     return ok;
+  }
+  // 시간(초)으로 그린다: 늘인 길이(extra)·시전·여운·방어 '뙇'을 여기서 나눈다. t = 엔진 fx의 지난 초(엔진이 지운 뒤에도 그리는 쪽이 이어 센다)
+  // plain: 연출 이름 없이 기본 연출로 그리는 것(인연 지원 기운·평타 강타 폭발 등) — 늘이기·여운·'뙇' 없이 예전대로
+  function fxT(c, f, t, tier, plain) {
+    if (plain) return fx(c, f, Math.min(1, t / ((f.life || 0.5) + (f.k === 'aura' && tier >= 10 ? 0.2 : 0))), tier);
+    const life = f.life || 0.5, ex = extra(f, tier || 0);
+    if (f.k === 'aura') {
+      SPAN = life + ex;
+      const ok = fx(c, f, Math.min(1, t / SPAN), tier);
+      const K = f.vx && vxK(f.vx);
+      if (ok && (K === 'shield' || K === 'pshield' || K === 'taunt' || K === 'cover' || K === 'reflect') && !(POP_SKIP[f.vx] && (K === 'cover' || K === 'shield'))) guardPop(c, f, t, K);
+      SPAN = 0;
+      return ok;
+    }
+    let ok = true;
+    SPAN = life;
+    if (t < life) ok = fx(c, f, t / life, tier);
+    SPAN = 0;
+    if (!ok || !f.vx || !ex) return ok;
+    if ((f.k === 'beam' || f.k === 'cone') && t < 0.3) castFx(c, f, t);
+    const l0 = life * 0.55;
+    if (t > l0) linger(c, f, cl((t - l0) / (life - l0 + ex)), tier || 0);
+    return true;
   }
   // 원 스킬(내 장판)이 터지기 전 표시(검토 3-3a): 스킬 색과 상관없이 차가운 흰 파랑 법진 하나만 그린다.
   // 보스 장판 예고는 '가운데에서 붉은 채움이 차오름'이므로, 내 것은 채움 고리를 쓰지 않고 법진 회전이 빨라지는 것으로 터질 때를 알린다
@@ -883,5 +1008,5 @@
     return true;
   }
 
-  root.RTD_SKFX = { fx, extra, tele, tierAura, setQuality: (q) => (Q = q), spr, tint, ready: () => loaded >= NAMES.length };
+  root.RTD_SKFX = { fx, fxT, guard, spike, extra, tele, tierAura, setQuality: (q) => (Q = q), spr, tint, ready: () => loaded >= NAMES.length };
 })(typeof window !== 'undefined' ? window : globalThis);

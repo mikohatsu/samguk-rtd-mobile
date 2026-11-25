@@ -30,9 +30,10 @@
   // 게임 상태(g.fx)는 고치지 않고, 연출 이름을 붙인 사본을 이펙트마다 한 번 만들어 둔다
   const VXC = new WeakMap();
   function withVx(f, vx) { let o = VXC.get(f); if (!o) { o = Object.create(f); o.vx = vx; VXC.set(f, o); } return o; }
-  // 불멸 강화류 연출은 엔진 수명보다 0.2초 길게 그린다(skillfx extra, 2026-11-25 검토 4-1). 엔진이 g.fx에서 지운 뒤에도
-  // 화면 쪽 사본으로 남은 몫을 마저 그린다(게임 상태는 고치지 않는다).
-  const LING = new Map(); let fxFr = 0;
+  // 스킬 연출은 엔진 수명보다 길게 그린다(skillfx extra: 강화류는 +0.5초 늘여 천천히, 직선·부채꼴·폭발은 끝난 뒤 여운 +0.45~0.6초.
+  // 2026-11-26 전투 이펙트 개편, 불멸 강화류 +0.2초는 2026-11-25 검토 4-1). 엔진이 g.fx에서 지운 뒤에도
+  // 화면 쪽 사본으로 남은 몫을 마저 그린다(게임 상태는 고치지 않는다). 동시에 남는 여운은 LING_MAX개까지(오래된 것부터 버림).
+  const LING = new Map(), LING_MAX = 14; let fxFr = 0;
   function drawFx(c) {
     if (window.RTD_SKFX) window.RTD_SKFX.setQuality(Q.level === 'low' ? 0.5 : Q.level === 'mid' ? 0.75 : 1);
     fxFr++;
@@ -43,8 +44,8 @@
       const SK = window.RTD_SKFX, dvx = f.vx || defVx(f);
       if (dvx && SK) {
         const ff = f.vx ? f : withVx(f, dvx), tr = f.vx ? skillTier(f) : 0, ex = SK.extra ? SK.extra(f, tr) : 0;
-        if (ex) { p = f.t / (f.life + ex); LING.set(f, { f: ff, t: f.t, life: f.life + ex, tier: tr, fr: fxFr }); }
-        if (SK.fx(c, ff, p, tr)) { c.globalAlpha = 1; continue; }
+        if (ex) { LING.set(f, { f: ff, t: f.t, life: f.life + ex, tier: tr, fr: fxFr }); if (LING.size > LING_MAX) LING.delete(LING.keys().next().value); }
+        if (SK.fxT ? SK.fxT(c, ff, f.t, tr, !f.vx) : SK.fx(c, ff, ex ? f.t / (f.life + ex) : p, tr)) { c.globalAlpha = 1; continue; }
       }
       if (f.k === 'shot') { c.globalAlpha = Math.min(1, (1 - p) * 3); Art.shot(c, f); c.globalAlpha = 1; continue; }
       c.globalAlpha = 1 - p;
@@ -71,7 +72,7 @@
       o.t += S.fdt || 0;
       // 시간이 멈춘 동안(일시정지 등) 끝없이 남지 않게 40프레임이 지나면 버린다
       if (o.t >= o.life || fxFr - o.fr > 40 || !window.RTD_SKFX) { LING.delete(k); continue; }
-      window.RTD_SKFX.fx(c, o.f, o.t / o.life, o.tier);
+      if (window.RTD_SKFX.fxT) window.RTD_SKFX.fxT(c, o.f, o.t, o.tier); else window.RTD_SKFX.fx(c, o.f, o.t / o.life, o.tier);
     }
     c.globalAlpha = 1;
     drawSkFlash(c);
@@ -105,7 +106,7 @@
         c.font = `400 ${d.big ? 34 : 22}px "Black Han Sans", sans-serif`; c.lineJoin = 'round';
         c.strokeStyle = 'rgba(16,8,4,.95)'; c.lineWidth = d.big ? 7 : 5; const txt = typeof d.v === 'string' ? d.v : fmt(d.v); c.strokeText(txt, 0, 0);
         if (d.big) { c.shadowColor = '#ff9a2a'; c.shadowBlur = 16; }
-        c.fillStyle = d.big ? '#ffd24a' : '#fff4dc'; c.fillText(txt, 0, 0);
+        c.fillStyle = d.big ? '#ffd24a' : d.ally ? '#a8dcff' : '#fff4dc'; c.fillText(txt, 0, 0); // 동료(협동·AI 동맹) 타격 숫자는 하늘색(07-arena allyHit)
         c.restore();
         continue;
       }

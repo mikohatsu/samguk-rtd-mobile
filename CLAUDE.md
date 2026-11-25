@@ -14,7 +14,7 @@
 - 서버가 내주는 파일 규칙: 루트의 `*.js`, `gfx/이름.(png|jpg|js)`(하위 폴더 금지), `fonts/*.woff2`, `bgm/이름.mp3`. `server/app.js`를 고치면 VM에서 `sudo systemctl restart rtd-online`.
 - **버전**: `package.json`의 `version` 한 곳. 배포할 때마다 올린다(게임 설정 화면 표시와 APK 버전이 이 값을 쓴다. `npm run build`가 `version.js`를 만든다).
 - 시험용 APK 서명 키는 `android/app/debug.keystore`(저장소에 있음). 바꾸면 기존 앱 위에 업데이트가 안 되므로 바꾸지 않는다.
-- 일본어 글꼴은 `scripts/build-jafont.py`(문구에 새 한자가 생기면 다시 돌린다), 앱 아이콘은 `scripts/build-icons.py`.
+- 일본어·중국어 부분 글꼴과 Noto Serif KR 한자 보충은 `scripts/build-jafont.py`(문구에 새 한자가 생기면 다시 돌린다. 원본 글꼴은 art_src/fonts_src, git 제외), 앱 아이콘은 `scripts/build-icons.py`.
 - 변경은 git 커밋으로 남긴다(git은 F:\Git\cmd, PATH에 없으면 직접 경로).
 
 ## 파일 지도

@@ -29,7 +29,8 @@
     const chips = st.parts.map((x) => `<span class="chip ${x.have >= x.need ? 'have' : 'miss'}">${esc(defOf[x.id].name)} ${rankTag(defOf[x.id].tier)} ${Math.min(x.have, x.need)}/${x.need}</span>`).join('');
     const it = st.item ? `<span class="chip ${st.hasItem ? 'have' : 'miss'}">${esc(T.items.find((i) => i.id === st.item).name)}</span>` : '';
     // 잠긴 신화·불멸: 재료가 다 있어도 조합할 수 없으므로 버튼 대신 까닭(상점에서 해금)을 적는다
-    if (g.isLocked && g.isLocked(id)) return `<div class="row"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div><small class="lockn">${I.t('lockedInShop')}</small></div></div>`;
+    // 2026-11-26 실기 소감: 칸 전체를 흑백으로 누르고 그 위에 쇠사슬 X(gfx/vs_chain 두 장을 엇갈려 돌림) + 자물쇠(gfx/ic_lock) + 「해금 필요」. 어디서 여는지는 칸 아래 한 줄
+    if (g.isLocked && g.isLocked(id)) return `<div class="row rlk"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div></div><div class="rlkx" aria-hidden="true"><i class="ch a"></i><i class="ch b"></i></div><span class="rlkb"><i class="ico lock" aria-hidden="true"></i><b>${I.t('needUnlock')}</b></span></div><small class="lockn">${I.t('lockedInShop')}</small>`;
     return `<div class="row ${st.ok ? 'ok' : ''}"><div><strong style="color:${tierColor(d.tier)}">${esc(d.name)}</strong> ${rankBadge(d.tier)}<div class="chips">${chips}${it}</div></div><button class="btn ${st.ok ? 'go' : ''}" data-act="craft" data-arg="${id}" type="button" ${st.ok ? '' : 'disabled'}>${I.t('combineBtn')}</button></div>`;
   }
   // 소리 크기 줄(판 안 설정 탭과 로비 설정 창이 같이 쓴다): − 값 ＋
@@ -193,7 +194,8 @@
     const st = g.recipeStatus(g.me, id), d = defOf[id];
     const parts = st.parts.map((x) => { const n = `${defOf[x.id].name} ${rankTag(defOf[x.id].tier)}` + (x.need > 1 ? ' ×' + x.need : ''); return x.have >= x.need ? `<b>${esc(n)}</b>` : esc(n); });
     if (st.item) { const n = T.items.find((i) => i.id === st.item).name; parts.push(st.hasItem ? `<b>${esc(n)}</b>` : esc(n)); }
-    return `<div class="rc"><span class="rn">${esc(d.name)}</span>${rankBadge(d.tier)}<span class="rp" title="${parts.join(', ').replace(/<[^>]+>/g, '')}">${parts.join(' · ')}</span><button class="btn ${st.ok ? 'go' : ''}" data-act="craft" data-arg="${id}" type="button" ${st.ok ? '' : 'disabled'}>${I.t('combineBtn')}</button></div>`;
+    // 재료 하나는 줄이 바뀌어도 쪼개지지 않게 span.rpi로 묶는다. 가운뎃점은 뒤 재료 앞에 붙인다(줄 끝에 매달리지 않게)
+    return `<div class="rc"><span class="rn">${esc(d.name)}</span>${rankBadge(d.tier)}<span class="rp">${parts.map((x, i) => `<span class="rpi">${i ? '· ' : ''}${x}</span>`).join(' ')}</span><button class="btn ${st.ok ? 'go' : ''}" data-act="craft" data-arg="${id}" type="button" ${st.ok ? '' : 'disabled'}>${I.t('combineBtn')}</button></div>`;
   }
   function unitRecipes(u) {
     const d = u.def, need = T.combineNeed[d.tier], lines = [];
@@ -201,10 +203,7 @@
       const have = g.ownedOf(g.me, d.id).length;
       lines.push(`<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(have, need), b: need, r: rankName(d.tier + 1) })}</span><button class="btn ${have >= need ? 'go' : ''}" data-act="combine" type="button" ${have >= need ? '' : 'disabled'}>${I.t('combineBtn')}${S.coarse ? '' : ' R'}</button></div>`);
     }
-    const score = (id) => { const st = g.recipeStatus(g.me, id); return st.parts.filter((x) => x.have >= x.need).length / st.parts.length; };
-    const used = Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id) && !(g.isLocked && g.isLocked(id))) // 잠긴 장수의 조합식은 빼고 보인다
-      .sort((a, b) => score(b) - score(a)); // 완성에 가까운 조합식부터
-    const list = used, max = need ? 5 : 6; // 자기 자신의 조합식은 재료로 쓰이는 곳이 아니므로 뺀다
+    const list = recipesUsing(d).map((x) => x.id), max = need ? 5 : 6; // 자기 자신의 조합식은 재료로 쓰이는 곳이 아니므로 뺀다
     lines.push(...list.slice(0, max).map(recipeLine));
     if (list.length > max) lines.push(`<div class="sub line">${I.t('moreInBook', { n: list.length - max })}</div>`);
     if (!list.length && !need) lines.push(`<div class="sub line">${t('noRecipe')}</div>`);
@@ -214,10 +213,11 @@
   // 가운데 4줄: ① 등급 글자·이름·강화·진영·역할 ② 핵심 수치 3개(버프는 색+화살표) ③ 이 유닛이 속한 인연 칩(n/m, 누르면 인연 창) ④ 스킬·패시브 이름 알약(누르면 설명 고정).
   // 나머지(조합식 전체·인연 단계·해산·능력치 출처·기술 전문)는 바 위에 뜨는 상세 카드(#ucard, unitCard)에서 우선순위 순으로 본다.
   // atk를 주면 다른 사령관 유닛(읽기 전용): 행동·인연·강화 단계는 보이지 않는다.
-  const recipesUsing = (d) => {
-    const score = (id) => { const st = g.recipeStatus(g.me, id); return st.parts.filter((x) => x.have >= x.need).length / st.parts.length; };
-    return Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id) && !(g.isLocked && g.isLocked(id))).map((id) => ({ id, s: score(id) })).sort((a, b) => b.s - a.s);
-  };
+  // 이 유닛이 재료로 들어가는 조합식(잠긴 장수 것은 뺀다)을 완성에 가까운 순서로: 부족한 재료 수 m(×2면 2로 셈, 아이템이 없으면 +1)이 적은 것부터,
+  // 같으면 높은 등급, 그다음 채운 재료가 많은 것(2026-11-26 실기 소감: 지금 가진 유닛과 관련 있는 조합식이 먼저 나오게)
+  const recipeMiss = (id) => { const st = g.recipeStatus(g.me, id); return { m: st.parts.reduce((n, x) => n + Math.max(0, x.need - x.have), 0) + (st.item && !st.hasItem ? 1 : 0), h: st.parts.reduce((n, x) => n + Math.min(x.have, x.need), 0) }; };
+  const recipesUsing = (d) => Object.keys(T.recipes).filter((id) => g.recipeOf(id).parts.includes(d.id) && !(g.isLocked && g.isLocked(id)))
+    .map((id) => Object.assign({ id, t: defOf[id].tier }, recipeMiss(id))).sort((a, b) => a.m - b.m || b.t - a.t || b.h - a.h);
   // 이 유닛이 속한 인연(숨은 인연은 켜졌을 때만): 켜진 것(등급 높은 순) → 진행 많은 순
   function unitSyns(d) {
     const p = g.me; if (!p || !d.tier) return [];
@@ -276,9 +276,9 @@
   // 아래 줄: 완성에 가장 가까운 조합식 1줄(같은 유닛 합성 진행이 오른쪽 버튼에 안 보일 때는 그것도 후보) + 상세 카드 버튼
   function unitNear(u, prim) {
     const d = u.def, need = T.combineNeed[d.tier], used = recipesUsing(d);
-    const self = need && prim.k === 'sell' ? g.ownedOf(g.me, d.id).length / need : -1;
+    const self = need && prim.k === 'sell' ? Math.max(0, need - g.ownedOf(g.me, d.id).length) : -1; // 같은 유닛 합성까지 부족한 수
     let line;
-    if (self >= 0 && (!used.length || self >= used[0].s)) line = `<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(g.ownedOf(g.me, d.id).length, need), b: need, r: rankName(d.tier + 1) })}</span></div>`;
+    if (self >= 0 && (!used.length || self < used[0].m)) line = `<div class="rc"><span class="rp">${I.t('combineInto', { a: Math.min(g.ownedOf(g.me, d.id).length, need), b: need, r: rankName(d.tier + 1) })}</span></div>`;
     else if (used.length) line = recipeLine(used[0].id);
     else line = `<div class="rc none"><span class="rp">${t('noRecipeS')}</span></div>`;
     return line + ucardBtn();

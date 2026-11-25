@@ -14,7 +14,7 @@
   // 위 40(기둥 아래 끝이 발보다 50단위 위) / 아래 65(난간 위 끝이 발 바로 밑) / 좌우 56(기둥 안쪽 끝이 몸 옆).
   const RIM_K = 70 / 104, RIM_D = { t: 40, b: 65, l: 56, r: 56 };
   const qArena = () => Math.min(1.28, qMap() * 1.45);
-  let arenaCv = null, arenaKey = '';
+  let arenaCv = null, arenaKey = '', arenaBm = null, arenaTex = false, floorW = null;
   // 바닥 색(아트 디렉터 검수 2026-11-19): 경기장 색(theme의 ground·sky)의 색상은 살리되 채도는 28% 이하, 밝기는 가운데 32~38%로 맞춘다
   // (장수·보스 채도가 60~80%라 바닥이 탁해야 캐릭터가 뜬다). 색상은 보스별 지정값(FLOOR_HUE)을 쓴다.
   const hexHsl = (hex) => {
@@ -38,80 +38,139 @@
     const sm = FLOOR_SAT[id] || 0.28, s = Math.min(sm, G[1]), l = FLOOR_LUM[id] || Math.max(0.32, Math.min(0.38, G[2]));
     return { ground: hslCss(h, s, l), mark: hslCss(h, Math.min(0.35, s + 0.08), 0.22), sky: hslCss(h, Math.min(sm, K[1]), l * Math.max(0.5, Math.min(0.8, K[2] / Math.max(0.01, G[2])))) };
   }
-  function arenaFloor(c, a, id) {
+  // 바닥 저장본의 재료와 키(같은 키면 다시 그리지 않는다)
+  function floorSpec(a, id) {
     const flr = Art.floorTex(a.motif), old = !flr && Art.img('tex_' + a.motif), col = floorCols(a, id);
     const mark = flr && MARK_MOTIF[a.motif] ? Art.pic('arena_mark') : null;
-    const key = a.motif + col.ground + col.sky + qArena() + (flr ? 'f' : old ? 't' : '') + (mark ? 'm' : '');
-    if (arenaKey !== key) {
-      arenaKey = key;
-      if (!arenaCv) arenaCv = document.createElement('canvas');
-      const q = qArena(), w = AR.w, h = AR.h;
-      arenaCv.width = Math.round(w * q); arenaCv.height = Math.round(h * q);
-      const x = arenaCv.getContext('2d');
-      x.setTransform(q, 0, 0, q, -AR.x * q, -AR.y * q);
-      const gr = x.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 1300);
-      gr.addColorStop(0, col.ground); gr.addColorStop(1, col.sky);
-      x.fillStyle = gr; x.fillRect(AR.x, AR.y, w, h);
-      // 판마다 같은 배치가 되게 고정 난수
-      let sd = 0; for (let i = 0; i < a.motif.length; i++) sd = (sd * 31 + a.motif.charCodeAt(i)) >>> 0;
-      const rnd = () => ((sd = (sd * 1664525 + 1013904223) >>> 0) / 4294967296);
-      arenaCv._tex = !!(flr || old);
-      if (flr) {
-        // 바닥 무늬: 1024px 이음매 없는 타일(gfx/flr_*)을 재질별 크기(art.js floorUnit: 기본 800단위, 전돌 480단위)마다 그대로 반복한다(돌리거나 뒤집지 않는다).
-        // 타일은 평균 밝기 128인 밝기 무늬라 overlay 한 번이면 경기장 색은 그대로 두고 결만 얹힌다(예전: 반투명 + 색 덮기 + 곱하기 세 번).
-        const k = Art.floorUnit(a.motif) / flr.width;
-        x.save(); x.scale(k, k); x.globalCompositeOperation = 'overlay'; x.fillStyle = x.createPattern(flr, 'repeat');
-        x.fillRect(AR.x / k, AR.y / k, w / k, h / k); x.restore();
-      } else if (old) {
-        // 새 타일을 아직 못 받았을 때만: 예전 200px 무늬를 2배로(방향이 있는 무늬가 눕지 않게 돌리지 않는다)
-        const ts = old.width * 2.0;
-        x.save(); x.globalAlpha = 0.5;
-        for (let row = 0, ty = AR.y - ts / 2; ty < AR.y + h; row++, ty += ts) for (let tx = AR.x - ts + (row % 2 ? ts / 2 : 0); tx < AR.x + w; tx += ts) x.drawImage(old, tx - 0.5, ty - 0.5, ts + 1, ts + 1);
-        x.restore();
-        x.fillStyle = gr; x.globalAlpha = 0.35; x.fillRect(AR.x, AR.y, w, h);
-        x.globalAlpha = 1; x.globalCompositeOperation = 'multiply'; x.fillStyle = '#9a9288'; x.fillRect(AR.x, AR.y, w, h);
-        x.globalCompositeOperation = 'source-over';
-      }
-      // 가운데 팔괘 문양(gfx/arena_mark, 1024px 먹선, art_src/build-arena-mark.py): 무늬가 flr_slab인 경기장(altar·bagua·palace)에만,
-      // 지름 MARK_D단위로 경기장 가운데에 새김처럼 찍는다. 검정을 그대로 찍지 않고 이 경기장 바닥 색의 깊은 그늘색으로 물들여 곱하기로 얹어
-      // 먹선 자리가 바닥보다 약 40% 어두워진다(바닥 결은 그대로 비친다. 장판 예고보다 눈에 띄지 않게). 저장본에 한 번만 그린다.
-      if (mark) {
-        const mc = document.createElement('canvas'); mc.width = mark.width; mc.height = mark.height;
-        const m = mc.getContext('2d'); m.drawImage(mark, 0, 0);
-        m.globalCompositeOperation = 'source-in'; m.fillStyle = col.mark; m.fillRect(0, 0, mc.width, mc.height);
-        const mx = (ARENA.x0 + ARENA.x1) / 2, my = (ARENA.y0 + ARENA.y1) / 2;
-        x.save(); x.globalCompositeOperation = 'multiply'; x.globalAlpha = MARK_A;
-        x.drawImage(mc, mx - MARK_D / 2, my - MARK_D / 2, MARK_D, MARK_D); x.restore();
-        mc.width = mc.height = 0; // 한 번 쓰고 버리는 1024px 판: GC를 기다리지 않고 바로 놓는다
-      }
-      // 큰 명암 층: 무늬 몇 칸을 덮는 크기의 얼룩이라 같은 무늬가 같은 밝기로 반복되는 게 덜 보인다
-      const blobs = Q.level === 'low' ? 5 : 9;
-      for (let i = 0; i < blobs; i++) {
-        const bx = ARENA.x0 + rnd() * (ARENA.x1 - ARENA.x0), by = ARENA.y0 + rnd() * (ARENA.y1 - ARENA.y0), r = 260 + rnd() * 280, dark = i % 3 !== 2;
-        const bg = x.createRadialGradient(bx, by, 0, bx, by, r);
-        bg.addColorStop(0, dark ? 'rgba(20,14,8,.22)' : 'rgba(255,236,200,.07)'); bg.addColorStop(1, dark ? 'rgba(20,14,8,0)' : 'rgba(255,236,200,0)');
-        x.fillStyle = bg; x.fillRect(bx - r, by - r, r * 2, r * 2);
-      }
-      // 무대 조명: 경기장 가운데를 밝게(screen)
-      const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2, sr = Math.max(ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0) * 0.62;
-      const lg = x.createRadialGradient(cx, cy, 0, cx, cy, sr);
-      lg.addColorStop(0, 'rgba(255,235,190,.16)'); lg.addColorStop(0.55, 'rgba(255,235,190,.06)'); lg.addColorStop(1, 'rgba(255,235,190,0)');
-      x.globalCompositeOperation = 'screen'; x.fillStyle = lg; x.fillRect(cx - sr, cy - sr, sr * 2, sr * 2);
-      x.globalCompositeOperation = 'source-over';
-      // 난간 밖은 같은 바닥을 45% 어둡게(바닥 결은 그대로 보인다. 예전의 58% 덮개 + 흐린 경계가 아니라 난간 가운데 줄에서 딱 끊는다),
-      // 거기서 바깥으로 520단위에 걸쳐 50%까지 더 어두워진다(화면 가장자리 쪽이 가장 어둡다. 모서리는 두 변이 겹쳐 더 어둡다)
-      {
-        const X0 = ARENA.x0 - RIM_D.l, X1 = ARENA.x1 + RIM_D.r, Y0 = ARENA.y0 - RIM_D.t, Y1 = ARENA.y1 + RIM_D.b, V = 520, D0 = 'rgba(6,5,4,0)', D1 = 'rgba(6,5,4,.5)';
-        x.fillStyle = 'rgba(6,5,4,.45)'; x.beginPath(); x.rect(AR.x, AR.y, w, h); x.rect(X0, Y0, X1 - X0, Y1 - Y0); x.fill('evenodd');
-        const fade = (gx0, gy0, gx1, gy1, rx, ry, rw, rh) => { const eg = x.createLinearGradient(gx0, gy0, gx1, gy1); eg.addColorStop(0, D0); eg.addColorStop(1, D1); x.fillStyle = eg; x.fillRect(rx, ry, rw, rh); };
-        fade(0, Y0, 0, Y0 - V, AR.x, AR.y, w, Y0 - AR.y); fade(0, Y1, 0, Y1 + V, AR.x, Y1, w, AR.y + h - Y1);
-        fade(X0, 0, X0 - V, 0, AR.x, AR.y, X0 - AR.x, h); fade(X1, 0, X1 + V, 0, X1, AR.y, AR.x + w - X1, h);
+    return { a, flr, old, col, mark, key: a.motif + col.ground + col.sky + qArena() + (flr ? 'f' : old ? 't' : '') + (mark ? 'm' : '') };
+  }
+  function floorCanvas() {
+    if (arenaBm) { arenaBm.close(); arenaBm = null; }
+    if (!arenaCv) arenaCv = document.createElement('canvas');
+    const q = qArena();
+    arenaCv.width = Math.round(AR.w * q); arenaCv.height = Math.round(AR.h * q);
+    return arenaCv.getContext('2d');
+  }
+  function arenaFloor(c, a, id) {
+    const sp = floorSpec(a, id);
+    if (arenaKey !== sp.key) { floorW = null; floorPaint(floorCanvas(), sp, null); arenaKey = sp.key; }
+    // 화면이 저장 범위(AR) 밖까지 보이면 먼저 바깥 색으로 메운다: 아주 넓은 화면(32:9 등), 그리고 보스전 카메라가 경기장 가장자리에 선 내 장수를
+    // 가운데에 둘 때(09-render-camera applyCam, 2026-11-26). AR 끝의 바닥은 바깥 어둠(아래 fade)이 가장 짙은 자리라 이 색과 거의 같다
+    if (S.base) {
+      const s = S.base.s0 * S.cam.z, hw = S.base.sw / s / 2 + 8, hh = S.base.sh / s / 2 + 8, cx = S.cam.x, cy = S.cam.y;
+      if (cx - hw < AR.x || cx + hw > AR.x + AR.w || cy - hh < AR.y || cy + hh > AR.y + AR.h) {
+        // 바깥 색: 이 경기장 하늘색(hsl)의 밝기 32%(AR 끝 바닥 밝기와 맞춰 이음매가 덜 보이게). 하늘색을 못 읽으면 예전 어둠색
+        const m = /^hsl\((\d+),(\d+)%,(\d+)%\)$/.exec((sp.col && sp.col.sky) || '');
+        c.fillStyle = m ? `hsl(${m[1]},${m[2]}%,${(+m[3] * 0.32).toFixed(1)}%)` : '#0c0a08';
+        c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
       }
     }
-    // 아주 넓은 화면(32:9 등)에서 저장 범위 밖이 보이면 그 자리만 바깥 색으로 메운다
-    if (S.base) { const s = S.base.s0 * S.cam.z; if (S.base.sw / s > AR.w - 120 || S.base.sh / s > AR.h - 120) { c.fillStyle = '#0c0a08'; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2); } }
-    blitBg(c, arenaCv, 'arena', arenaKey, AR);
-    return arenaCv._tex;
+    blitBg(c, arenaBm || arenaCv, 'arena', arenaKey, AR);
+    return arenaTex;
+  }
+  // 바닥 저장본 그리기. strip = [y0, y1](저장본 화소 줄): 그 띠만 그린다(arenaWarm이 여러 프레임에 나눠 그린다. 무늬·얼룩 배치는 고정 난수라 띠마다 같다)
+  function floorPaint(x, sp, strip) {
+    const { a, flr, old, col, mark } = sp, q = qArena(), w = AR.w, h = AR.h;
+    x.save();
+    if (strip) { x.beginPath(); x.rect(0, strip[0], arenaCv.width, strip[1] - strip[0]); x.clip(); }
+    x.setTransform(q, 0, 0, q, -AR.x * q, -AR.y * q);
+    const gr = x.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 1300);
+    gr.addColorStop(0, col.ground); gr.addColorStop(1, col.sky);
+    x.fillStyle = gr; x.fillRect(AR.x, AR.y, w, h);
+    // 판마다 같은 배치가 되게 고정 난수
+    let sd = 0; for (let i = 0; i < a.motif.length; i++) sd = (sd * 31 + a.motif.charCodeAt(i)) >>> 0;
+    const rnd = () => ((sd = (sd * 1664525 + 1013904223) >>> 0) / 4294967296);
+    arenaTex = !!(flr || old);
+    if (flr) {
+      // 바닥 무늬: 1024px 이음매 없는 타일(gfx/flr_*)을 재질별 크기(art.js floorUnit: 기본 800단위, 전돌 480단위)마다 그대로 반복한다(돌리거나 뒤집지 않는다).
+      // 타일은 평균 밝기 128인 밝기 무늬라 overlay 한 번이면 경기장 색은 그대로 두고 결만 얹힌다(예전: 반투명 + 색 덮기 + 곱하기 세 번).
+      const k = Art.floorUnit(a.motif) / flr.width;
+      x.save(); x.scale(k, k); x.globalCompositeOperation = 'overlay'; x.fillStyle = x.createPattern(flr, 'repeat');
+      x.fillRect(AR.x / k, AR.y / k, w / k, h / k); x.restore();
+    } else if (old) {
+      // 새 타일을 아직 못 받았을 때만: 예전 200px 무늬를 2배로(방향이 있는 무늬가 눕지 않게 돌리지 않는다)
+      const ts = old.width * 2.0;
+      x.save(); x.globalAlpha = 0.5;
+      for (let row = 0, ty = AR.y - ts / 2; ty < AR.y + h; row++, ty += ts) for (let tx = AR.x - ts + (row % 2 ? ts / 2 : 0); tx < AR.x + w; tx += ts) x.drawImage(old, tx - 0.5, ty - 0.5, ts + 1, ts + 1);
+      x.restore();
+      x.fillStyle = gr; x.globalAlpha = 0.35; x.fillRect(AR.x, AR.y, w, h);
+      x.globalAlpha = 1; x.globalCompositeOperation = 'multiply'; x.fillStyle = '#9a9288'; x.fillRect(AR.x, AR.y, w, h);
+      x.globalCompositeOperation = 'source-over';
+    }
+    // 가운데 팔괘 문양(gfx/arena_mark, 1024px 먹선, art_src/build-arena-mark.py): 무늬가 flr_slab인 경기장(altar·bagua·palace)에만,
+    // 지름 MARK_D단위로 경기장 가운데에 새김처럼 찍는다. 검정을 그대로 찍지 않고 이 경기장 바닥 색의 깊은 그늘색으로 물들여 곱하기로 얹어
+    // 먹선 자리가 바닥보다 약 40% 어두워진다(바닥 결은 그대로 비친다. 장판 예고보다 눈에 띄지 않게). 저장본에 한 번만 그린다.
+    if (mark) {
+      let mc = sp.mc; // 띠로 나눠 그릴 때는 물들인 판을 한 번만 만든다(arenaWarm이 다 그린 뒤 놓는다)
+      if (!mc) {
+        mc = sp.mc = document.createElement('canvas'); mc.width = mark.width; mc.height = mark.height;
+        const m = mc.getContext('2d'); m.drawImage(mark, 0, 0);
+        m.globalCompositeOperation = 'source-in'; m.fillStyle = col.mark; m.fillRect(0, 0, mc.width, mc.height);
+      }
+      const mx = (ARENA.x0 + ARENA.x1) / 2, my = (ARENA.y0 + ARENA.y1) / 2;
+      x.save(); x.globalCompositeOperation = 'multiply'; x.globalAlpha = MARK_A;
+      x.drawImage(mc, mx - MARK_D / 2, my - MARK_D / 2, MARK_D, MARK_D); x.restore();
+      if (!strip) { mc.width = mc.height = 0; sp.mc = null; } // 한 번 쓰고 버리는 1024px 판: GC를 기다리지 않고 바로 놓는다
+    }
+    // 큰 명암 층: 무늬 몇 칸을 덮는 크기의 얼룩이라 같은 무늬가 같은 밝기로 반복되는 게 덜 보인다
+    const blobs = Q.level === 'low' ? 5 : 9;
+    for (let i = 0; i < blobs; i++) {
+      const bx = ARENA.x0 + rnd() * (ARENA.x1 - ARENA.x0), by = ARENA.y0 + rnd() * (ARENA.y1 - ARENA.y0), r = 260 + rnd() * 280, dark = i % 3 !== 2;
+      const bg = x.createRadialGradient(bx, by, 0, bx, by, r);
+      bg.addColorStop(0, dark ? 'rgba(20,14,8,.22)' : 'rgba(255,236,200,.07)'); bg.addColorStop(1, dark ? 'rgba(20,14,8,0)' : 'rgba(255,236,200,0)');
+      x.fillStyle = bg; x.fillRect(bx - r, by - r, r * 2, r * 2);
+    }
+    // 무대 조명: 경기장 가운데를 밝게(screen)
+    const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2, sr = Math.max(ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0) * 0.62;
+    const lg = x.createRadialGradient(cx, cy, 0, cx, cy, sr);
+    lg.addColorStop(0, 'rgba(255,235,190,.16)'); lg.addColorStop(0.55, 'rgba(255,235,190,.06)'); lg.addColorStop(1, 'rgba(255,235,190,0)');
+    x.globalCompositeOperation = 'screen'; x.fillStyle = lg; x.fillRect(cx - sr, cy - sr, sr * 2, sr * 2);
+    x.globalCompositeOperation = 'source-over';
+    // 난간 밖은 같은 바닥을 45% 어둡게(바닥 결은 그대로 보인다. 예전의 58% 덮개 + 흐린 경계가 아니라 난간 가운데 줄에서 딱 끊는다),
+    // 거기서 바깥으로 520단위에 걸쳐 50%까지 더 어두워진다(화면 가장자리 쪽이 가장 어둡다. 모서리는 두 변이 겹쳐 더 어둡다)
+    {
+      const X0 = ARENA.x0 - RIM_D.l, X1 = ARENA.x1 + RIM_D.r, Y0 = ARENA.y0 - RIM_D.t, Y1 = ARENA.y1 + RIM_D.b, V = 520, D0 = 'rgba(6,5,4,0)', D1 = 'rgba(6,5,4,.5)';
+      x.fillStyle = 'rgba(6,5,4,.45)'; x.beginPath(); x.rect(AR.x, AR.y, w, h); x.rect(X0, Y0, X1 - X0, Y1 - Y0); x.fill('evenodd');
+      const fade = (gx0, gy0, gx1, gy1, rx, ry, rw, rh) => { const eg = x.createLinearGradient(gx0, gy0, gx1, gy1); eg.addColorStop(0, D0); eg.addColorStop(1, D1); x.fillStyle = eg; x.fillRect(rx, ry, rw, rh); };
+      fade(0, Y0, 0, Y0 - V, AR.x, AR.y, w, Y0 - AR.y); fade(0, Y1, 0, Y1 + V, AR.x, Y1, w, AR.y + h - Y1);
+      fade(X0, 0, X0 - V, 0, AR.x, AR.y, X0 - AR.x, h); fade(X1, 0, X1 + V, 0, X1, AR.y, AR.x + w - X1, h);
+    }
+    x.restore();
+  }
+  // 경기장 바닥 미리 그리기(WebGL 층만). 등장 첫 프레임에 바닥 저장본(태블릿 수백만 화소)을 CPU로 그리고 통째로 올리느라 한 번 0.4~0.5초 멈췄다
+  // (production/team/2026-11-26/wonso-intro-perf.md). 보스 라운드 바로 앞 라인에서, 저장본을 띠 FLOOR_STRIPS개로 나눠 한가한 프레임마다 하나씩 그리고
+  // (getImageData 1화소로 그 띠의 그리기를 바로 끝낸다. 안 그러면 미뤄 둔 그리기가 다 모여 올리는 순간에 한꺼번에 돈다),
+  // 다 그리면 ImageBitmap으로 바꿔 둔다(캔버스를 그대로 올리면 60ms+, ImageBitmap은 수 ms). 등장 때 arenaFloor는 키가 같으니 그대로 찍는다.
+  // 2D 캔버스(PC·iOS)는 예전처럼 등장 때 한 번에 그린다. 09-render-camera가 라인 화면 프레임마다 부른다.
+  const FLOOR_STRIPS = 16;
+  function arenaWarm() {
+    if (!ctx.isGL || !g || g.phase !== 'wave' || g.fight || S.kill || S.arenaUsed || !g.bossByRound) return;
+    const nb = g.bossByRound[g.round + 1];
+    if (!nb || !nb.arena || (g.diff && g.diff.rounds && nb.round > g.diff.rounds)) return;
+    if (floorW && floorW.id !== nb.id) floorW = null;
+    if (!floorW) {
+      const sp = floorSpec(nb.arena, nb.id);
+      if (arenaKey === sp.key) return; // 이미 그려 둠
+      if (S.fdt > 1 / 45) return;
+      floorW = { id: nb.id, sp, i: 0, x: floorCanvas() }; arenaKey = '';
+      return;
+    }
+    if (floorW.done || S.fdt > 1 / 45) return; // 바쁜 프레임은 건너뛴다
+    const W0 = floorW, n = FLOOR_STRIPS, hh = arenaCv.height, y0 = Math.floor((W0.i * hh) / n), y1 = Math.floor(((W0.i + 1) * hh) / n);
+    floorPaint(W0.x, W0.sp, [y0, y1]);
+    W0.x.getImageData(0, y0, 1, 1);
+    if (++W0.i < n) return;
+    W0.done = true;
+    if (W0.sp.mc) { W0.sp.mc.width = W0.sp.mc.height = 0; W0.sp.mc = null; }
+    arenaKey = W0.sp.key;
+    const cv = arenaCv;
+    if (window.createImageBitmap) {
+      createImageBitmap(cv).then((bm) => {
+        // 그 사이 다시 그렸거나 비웠으면 버린다. 쓰게 되면 캔버스 화소는 놓는다(같은 그림을 두 벌 들고 있지 않게)
+        if (floorW !== W0 || arenaCv !== cv || arenaKey !== W0.sp.key || arenaBm) { bm.close(); return; }
+        arenaBm = bm; cv.width = cv.height = 0; floorW = null;
+      }, () => {});
+    }
   }
   // 경기장 경계 난간(gfx/arena_rim: 정사각 틀 그림, 한 변에 기둥 3개). 늘이지 않는다: 모서리 4개는 원본 비율 그대로,
   // 변은 "기둥 하나 + 양옆 난간 반 칸"(원본 167px)을 같은 배율로 되풀이해 깐다(칸 수를 반올림해 칸 폭만 몇 % 맞춘다).
@@ -159,7 +218,8 @@
   // 09-render-camera가 결투장 화면이 끝난 프레임에 한 번 부르고, 17-loop begin이 새 판을 시작할 때 부른다.
   function arenaFree(f) {
     if (arenaCv) { arenaCv.width = arenaCv.height = 0; arenaCv = null; }
-    arenaKey = '';
+    if (arenaBm) { arenaBm.close(); arenaBm = null; }
+    arenaKey = ''; floorW = null;
     if (rimCv) { rimCv.forEach((o) => { o.cv.width = o.cv.height = 0; }); rimCv = null; }
     rimKey = '';
     const bg = BGC.arena;
@@ -191,6 +251,39 @@
       dark: 0.62 * outCubic((e - 0.1) / 1.2) * out,
       lb: Math.min(1, outCubic(e / 0.5)) * (1 - outCubic((e - 3.7) / 0.5)),
     };
+  }
+  // 등장 연출의 둥근 어둠: 보스 둘레 r0까지는 그대로, 거기서 바깥으로 520단위에 걸쳐 dark까지 어두워지고 그 밖은 dark로 고르게.
+  // WebGL 층(c.isGL)에서는 그라디언트 채우기가 보조 2D 캔버스(CPU)로 화면 전체를 그려 올리는데, 반지름·투명도·확대가 매 프레임 달라 캐시가 안 맞아
+  // 등장 4.2초 내내 프레임마다 200만 화소·80ms였다(갤럭시 탭 S7 10fps, production/team/2026-11-26/wonso-intro-perf.md).
+  // 그래서 같은 그라디언트를 작은 그림(256px, r0를 4단위로 끊어 한 장씩)으로 한 번 그려 두고 늘여 찍고(투명도는 globalAlpha), 그림 밖은 단색 사각형 4장으로 채운다.
+  // 2D 캔버스(PC·iOS)는 예전 그대로 그린다(맞붙인 사각형 경계가 안티에일리어싱으로 비칠 수 있어서).
+  const SHADE_N = 256, shadeCv = {};
+  function introShade(c, x, y, r0, dark) {
+    const X0 = -OVER.x, Y0 = -OVER.y, X1 = W + OVER.x, Y1 = H + OVER.y;
+    if (!c.isGL) {
+      const sg = c.createRadialGradient(x, y, r0, x, y, r0 + 520);
+      sg.addColorStop(0, 'rgba(6,4,3,0)'); sg.addColorStop(1, `rgba(6,4,3,${dark.toFixed(3)})`);
+      c.fillStyle = sg; c.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+      return;
+    }
+    const q = Math.round(r0 / 4) * 4, R = q + 536, k = SHADE_N / (2 * R); // 그림이 덮는 반폭 R: 바깥 16단위는 완전히 어두운 칸(늘여 찍을 때 가장자리가 비치지 않게)
+    let cv = shadeCv[q];
+    if (!cv) {
+      cv = shadeCv[q] = document.createElement('canvas'); cv.width = cv.height = SHADE_N;
+      const h = SHADE_N / 2, x2 = cv.getContext('2d'), sg = x2.createRadialGradient(h, h, q * k, h, h, (q + 520) * k);
+      sg.addColorStop(0, 'rgba(6,4,3,0)'); sg.addColorStop(1, 'rgba(6,4,3,1)');
+      x2.fillStyle = sg; x2.fillRect(0, 0, SHADE_N, SHADE_N);
+    }
+    const cl = (v, a, b2) => Math.max(a, Math.min(b2, v));
+    const lx = cl(x - R, X0, X1), rx = cl(x + R, X0, X1), ty = cl(y - R, Y0, Y1), by = cl(y + R, Y0, Y1);
+    c.save(); c.globalAlpha *= dark;
+    if (rx > lx && by > ty) c.drawImage(cv, (lx - x + R) * k, (ty - y + R) * k, (rx - lx) * k, (by - ty) * k, lx, ty, rx - lx, by - ty);
+    c.fillStyle = '#060403';
+    if (ty > Y0) c.fillRect(X0, Y0, X1 - X0, ty - Y0);
+    if (Y1 > by) c.fillRect(X0, by, X1 - X0, Y1 - by);
+    if (by > ty && lx > X0) c.fillRect(X0, ty, lx - X0, by - ty);
+    if (by > ty && X1 > rx) c.fillRect(rx, ty, X1 - rx, by - ty);
+    c.restore();
   }
   // 09-render-camera에서 부른다: 펀치처럼 그리기 변환만 덧씌운다
   function introCam(c, s) {
@@ -274,12 +367,19 @@
     if (!net && mine) { const nowMs = performance.now(); if (nowMs - (S.hitStopAt || 0) > 140) { S.hitStop = Math.max(S.hitStop || 0, big ? 0.07 : 0.03); S.hitStopAt = nowMs; } }
   }
   // 내 장수 피격: 엔진이 이미 흔들림 0.5와 'hurt' 소리를 낸다. 여기서는 둔탁한 타격음(녹음 샘플)·짧은 진동·화면 가장자리 붉은 기운(S.phit, drawBossHud가 그림)을 더한다
+  // 2026-11-26 사용자 요청 「내 장수 피격 타격감을 더. 조금 더 흔들리고 빨갛게」: 세기 k(0.35~1)는 이번에 잃은 체력 비율(최대 체력의 15% = 1)로.
+  //  흔들림 0.75~1.05(엔진 0.5 위, 상한 1.05 — 멀미 방지로 짧게 감쇠는 그대로), 붉은 가장자리 0.75~1.0(drawBossHud), 진동 30~60ms.
+  //  큰 피해(k ≥ 0.6, 체력 9% 이상): 혼자 할 때 짧은 멈춤 0.05초 + 화면 전체 붉은 번쩍 0.12초(S.phit.big). 같은 번쩍은 0.35초에 한 번만.
   function champHurt(u, t) {
+    const hp = u.hp || 0, lost = Math.max(0, (u._hpSeen != null ? u._hpSeen : hp) - hp), k = Math.max(0.35, Math.min(1, lost / Math.max(1, u.mhp * 0.15)));
     u._hurtT = t;
-    S.phit = { t: 0 };
-    S.shake = Math.max(S.shake || 0, 0.65);
+    const now = performance.now(), big = k >= 0.6 && now - (S.phitBigAt || 0) > 350;
+    if (big) S.phitBigAt = now;
+    S.phit = { t: 0, k: Math.max(k, S.phit && S.phit.t < 0.2 ? S.phit.k || 0 : 0), big: big || !!(S.phit && S.phit.big && S.phit.t < 0.12) };
+    S.shake = Math.min(1.05, Math.max(S.shake || 0, 0.7 + 0.35 * k));
+    if (big && !net) S.hitStop = Math.max(S.hitStop || 0, 0.05);
     Snd.play('mace', 90);
-    if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) { /* 진동 없음 */ } }
+    if (navigator.vibrate) { try { navigator.vibrate(Math.round(30 + 30 * k)); } catch (e) { /* 진동 없음 */ } }
   }
   function drawBossHits(c) {
     const L = S.bhits;
@@ -291,6 +391,48 @@
       const p = h.t / BHIT_LEN, sz = (h.big ? 300 : 170) * (0.85 + p * 0.3);
       Art.fxAnim(c, h.big ? 'hit2' : h.n, p, h.x, h.y, sz, sz, h.r, 1);
       if (h.big && p < 0.7) Art.fxAnim(c, 'boom', p / 0.7, h.x, h.y, 220, 220, 0, 0.8);
+    }
+  }
+  // ---- 동료(협동 동료·AI 동맹) 공격 연출(2026-11-26 사용자 요청 「보스전에서 우리 팀이 때리는 이펙트도 같이 보여줘」) ----
+  // 동료 장수는 위치만 받으므로, 그 동료의 이번 보스전 피해 누계(presence dmg, 0.25초마다)가 늘어난 순간을 '친 순간'으로 본다.
+  // 그때 공격 동작(조각 애니메이션 attack)·무기 투사체(Art.shot, 내 장수 평타와 같은 그림)·보스 타격(fxa_hit2)·동료 피해 숫자(하늘색)를 그린다.
+  // 판정·피해에는 손대지 않는다(그리기만). 상한: 투사체 ALLY_MAX개(낮음 화질 6), 동료 한 명당 0.22초에 한 번.
+  const ALLY_MAX = 10;
+  function ghostRoster() {
+    if (!net || !net.roster) return null;
+    const m = {};
+    try { net.roster().forEach((p) => { if (!p.me && p.state && p.state.dmg != null) m[p.id] = p.state.dmg; }); } catch (e) { return null; }
+    return m;
+  }
+  const ghostDmg = (o, RD) => (o.dmg != null ? o.dmg : RD && o.id != null && RD[o.id] != null ? RD[o.id] : null);
+  function allyHit(pv, def, x, y, v, b, M) {
+    const now = performance.now(), D = S.allyDebt || (S.allyDebt = { v: 0, at: 0 });
+    D.v += v; D.at = now; // 보스 머리 위 합계 숫자에서 뺄 몫
+    if (M.hide) return;
+    const L = S.allyFx || (S.allyFx = []), cap = Q.level === 'low' ? 6 : ALLY_MAX;
+    // 숫자(글자 그리기는 비싸다)는 동료 한 명당 0.45초에 하나로 합친다. 투사체·타격은 0.22초에 하나
+    pv.numAcc = (pv.numAcc || 0) + v;
+    if (now - (pv.hitAt || 0) < 220) return;
+    pv.hitAt = now; pv.atkT = 0.24; pv.face = Math.atan2(b.y - y, b.x - x);
+    while (L.length >= cap) L.shift();
+    L.push({ pv, k: 'shot', wp: g.weapon(def), big: def.tier >= 9, x0: x, y0: y - 10, x1: b.x + (Math.random() - 0.5) * 40, y1: b.y - 30 + (Math.random() - 0.5) * 30, t: 0, life: 0.26, c: g.shotColor(def), tier: def.tier, a: Math.atan2(b.y - y, b.x - x) });
+  }
+  function drawAllyFx(c) {
+    const L = S.allyFx;
+    if (!L || !L.length) return;
+    const ga = c.globalAlpha;
+    for (let i = L.length - 1; i >= 0; i--) {
+      const o = L[i];
+      o.t += S.fdt;
+      if (o.t >= o.life + 0.32) { L.splice(i, 1); continue; }
+      if (o.t < o.life) { c.globalAlpha = Math.min(1, (1 - o.t / o.life) * 3); Art.shot(c, o); c.globalAlpha = ga; }
+      // 닿는 순간부터 0.32초: 타격 프레임(신화·불멸은 큰 타격) + 하늘색 피해 숫자 한 번
+      const q = (o.t - o.life * 0.85) / 0.32;
+      if (q > 0 && q < 1) { const sz = o.tier >= 9 ? 190 : 140; Art.fxAnim(c, o.tier >= 9 ? 'hit' : 'hit2', q, o.x1, o.y1, sz, sz, o.a, 0.95); }
+      if (!o.shown && o.t >= o.life) {
+        o.shown = true; const pv = o.pv, now = performance.now();
+        if (pv.numAcc >= 1 && now - (pv.numAt || 0) > 450 && S.dmg.length < 40) { S.dmg.push({ x: o.x1 + (o.x0 < o.x1 ? -30 : 30), y: o.y1 - 50, v: Math.round(pv.numAcc), t: 0, hit: true, ally: true }); pv.numAcc = 0; pv.numAt = now; }
+      }
     }
   }
   function drawArena(t) {
@@ -338,7 +480,13 @@
     const held = S.hitStop > 0;
     hr.hp = b.hp; if (!held) { hr.k *= Math.pow(0.8, S.f60); hr.fl = Math.max(0, (hr.fl || 0) - S.fdt / 0.13); }
     hr.numT += S.fdt;
-    if (hr.num > 0 && hr.numT > 0.14) { if (S.dmg.length < 50) S.dmg.push({ x: b.x + (Math.random() - 0.5) * 70, y: b.y - 96, v: Math.round(hr.num), t: 0, hit: true }); hr.num = 0; hr.numT = 0; }
+    if (hr.num > 0 && hr.numT > 0.14) {
+      // 동료 몫은 동료 타격 숫자(allyHit)가 따로 띄웠으므로 뺀다(같은 피해를 두 번 보이지 않게). 1.5초 안에 못 뺀 몫은 버린다
+      let v = hr.num; const D = S.allyDebt;
+      if (D && D.v > 0) { if (performance.now() - D.at > 1500) D.v = 0; const k = Math.min(v, D.v); v -= k; D.v -= k; }
+      if (v >= 1 && S.dmg.length < 50) S.dmg.push({ x: b.x + (Math.random() - 0.5) * 70, y: b.y - 96, v: Math.round(v), t: 0, hit: true });
+      hr.num = 0; hr.numT = 0;
+    }
     let wind = 0;
     f.hazards.forEach((h) => { if (!h.own && h.t < h.delay) wind = Math.max(wind, h.t / Math.max(0.01, h.delay)); });
     if (hr.wind > 0.85 && wind < 0.2) { hr.slam = 1; S.shake = Math.max(S.shake || 0, 0.55); }
@@ -387,8 +535,11 @@
     if (tags && M.gr > 0) bossTag(c, I.t('groggy'), b.x, b.y - 96, '400 30px "Black Han Sans", sans-serif', '#7fd4ff');
     if (tags && M.ctr > 0) {
       bossTag(c, I.t('counter'), b.x, b.y - 112, '400 28px "Black Han Sans", sans-serif', '#bfe2ff');
-      // 반격 게이지: 정면에서 넣은 피해
-      bar(c, b.x, b.y - 92, 150, 8, Math.min(1, (M.ctrGot || 0) / (M.ctrNeed || 1)), '#4aa8ff');
+      // 반격 게이지(raid.js addCounter): 왼쪽부터 뒤·옆 몫(어둡게), 그 뒤 정면 몫(밝게). 흰 눈금 = 뒤·옆 몫 상한(R.ctrBackCap, 절반)
+      const cn = M.ctrNeed || 1, cAll = Math.min(1, (M.ctrGot || 0) / cn), cBk = Math.min(cAll, (M.ctrBack || 0) / cn), cCap = g.R.ctrBackCap != null ? g.R.ctrBackCap : 0.5;
+      bar(c, b.x, b.y - 92, 150, 8, cAll, '#4aa8ff');
+      if (cBk > 0) { c.fillStyle = 'rgba(12,22,40,.5)'; c.fillRect(b.x - 75, b.y - 92, 150 * cBk, 8); }
+      c.fillStyle = '#fff'; c.fillRect(b.x - 75 + 150 * cCap - 1, b.y - 95, 2, 14);
     }
     if (tags && M.ampT > 0) bossTag(c, I.t('weakened', { n: Math.round(M.amp * 100) }), b.x, b.y + 98, '700 18px "IBM Plex Sans KR", sans-serif', '#d8b4ff');
     // 팔진도: 보스 머리 위 문양과 같은 문이 생문(어두운 금속 판 그림 위에)
@@ -418,7 +569,7 @@
       // 맞으면 보스 반대쪽으로 튕겨 밀린다(그림만, 위치는 그대로). 피격 빛은 붉은 빛 그림.
       // 내 장수가 맞은 순간(엔진이 hurt를 0.2로 세운다): 화면 가장자리 붉은 기운·흔들림·피격음·진동, 체력 막대 깜빡임(champHurt)
       if (u.owner === g.me.idx && (u.hurt || 0) > (u._hurtPrev || 0) + 0.05) champHurt(u, t);
-      u._hurtPrev = u.hurt || 0;
+      u._hurtPrev = u.hurt || 0; u._hpSeen = u.hp;
       const kb = Math.max(0, (u.hurt || 0) / 0.2), ka = Math.atan2(u.y - b.y, u.x - b.x), kx = u.x + Math.cos(ka) * kb * 24, ky = u.y + Math.sin(ka) * kb * 14;
       if (u.hurt > 0 && SKF0) SKF0.spr(c, 'light_01', '#ff3c28', kx, ky - 10, 130, 130, 0, 0.7 * kb);
       // 조각 애니메이션 동작 상태: 공격(atkT 0.24)·스킬(0.36 이상)은 시작할 때의 길이로 구분, 맞으면 피격, 움직이면 걷기
@@ -426,9 +577,10 @@
       u._atkPrev = u.atkT || 0;
       const rs = u.atkT > 0 ? { state: (u._atkMax || 0) >= 0.3 ? 'skill' : 'attack', p: 1 - u.atkT / (u._atkMax || 0.24), t } : kb > 0.05 ? { state: 'hurt', k: kb, t } : { state: u.move || u.moveT > 0 ? 'walk' : 'idle', t };
       // 맞으면 몸이 빨갛게 번쩍(빨간 실루엣: 조각 그림은 rig.js, 한 장 그림은 Art.setTint)
-      const red = kb > 0.05 ? kb * 0.6 : 0;
-      if (red) { rs.tint = '#ff2a1a'; rs.tintA = red; Art.setTint('#ff2a1a', red); }
+      const red = kb > 0.05 ? Math.min(0.85, kb * 0.85) : 0, hc = kb > 0.7 ? '#ffffff' : '#ff2a1a'; // 맞은 처음 0.06초 흰 번쩍 → 붉게(2026-11-26)
+      if (red) { rs.tint = hc; rs.tintA = red; Art.setTint(hc, red); }
       piece(c, kx, ky, CHAMP_R, u.def, t, u.owner === 1, { pose: poseOf(u, t, CHAMP_R), rig: rs });
+      drawBuffOver(c, u, t); // 몸 위 버프 덧씌움(방패·빛 막·가시 등, 03-unit)
       tierStars(c, kx, ky + CHAMP_R * 1.15, u.def.tier, 10 * uiS()); // 원판 아래 등급 별(라인과 같은 규칙, 03-unit)
       if (red) Art.setTint(null);
       // 체력 막대: 맞은 뒤 0.45초 동안 흰색·빨간색으로 깜빡인다
@@ -437,6 +589,7 @@
     });
     drawAim(c);
     drawSyn(c, t, f, b); // 인연 원군·화선·기병·표식
+    const RD = ghostRoster();
     Object.values(f.ghosts).forEach((o) => {
       if (!o.def) return;
       // 동료 장수는 받은 위치를 0.1초 늦게 이어 그린다(net.ghostAt). 판정 좌표 o.x, o.y는 그대로 둔다
@@ -449,21 +602,23 @@
         if (Math.hypot(gp.vx, gp.vy) > 0.02) { pv.face = Math.atan2(gp.vy, gp.vx); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
       } else if (Math.hypot(ox - pv.x, oy - pv.y) > 0.3) { pv.face = Math.atan2(oy - pv.y, ox - pv.x); pv.moveT = 0.15; } else pv.moveT = Math.max(0, pv.moveT - S.fdt);
       pv.x = ox; pv.y = oy; pv.def = o.def; S.ghostPos[key] = pv;
+      // 동료가 친 순간: 그 동료의 보스전 피해 누계(presence dmg)가 늘면 공격 동작·무기 투사체·타격·피해 숫자를 그린다(allyHit)
+      const gd = ghostDmg(o, RD);
+      if (gd != null) { if (pv.dmg == null || gd < pv.dmg) pv.dmg = gd; else if (gd > pv.dmg + 0.5) { allyHit(pv, o.def, ox, oy, gd - pv.dmg, b, M); pv.dmg = gd; } }
+      pv.atkT = Math.max(0, (pv.atkT || 0) - S.fdt);
+      // 공격 동작은 자세(poseOf: atkT 동안 무기 계열별 찌르기·휘두르기)로. 동료는 조각 애니메이션(rig)을 쓰지 않는다(GL에서 프레임마다 조각을 다시 그리는 비용, 예전과 같은 그림)
       c.globalAlpha = 0.85; piece(c, ox, oy, CHAMP_R, o.def, t, true, { pose: poseOf(pv, t, CHAMP_R) }); c.globalAlpha = 1;
       bar(c, ox, oy - 78, 72 * uiS(), 6 * uiS(), o.hpf, '#7fd4ff');
       bossTag(c, o.name || '', ox, oy + 52, '500 14px "IBM Plex Sans KR", sans-serif', '#d8f0ff');
     });
+    drawAllyFx(c);
     drawVfx(c);
     drawFx(c);
     if (g.mut.night) drawNight(c, true);
     // 기를 모으는 기술의 "서야 할 자리"는 전장 좌표라 여기서 그린다. 체력 막대·남은 시간·기술 이름·안내는 화면 고정이라 drawBossHud가 카메라를 풀고 그린다
     if (g.phase === 'boss' && !g.over && M.cast && M.cast.spots) M.cast.spots.forEach((s) => { Art.fxPic(c, 'mc_rune3', s[0], s[1], s[2] * 2.1, s[2] * 2.1, t * 0.6, 0.85, { col: '#a8ffb8' }); ringSpr(c, 'circle_02', '#a8ffb8', s[0], s[1], s[2], 0, 0.9); });
     // 등장 연출: 보스 주변만 밝게(바깥을 둥글게 누른다). 전장 좌표라 확대와 함께 움직인다
-    if (IS && IS.dark > 0.01) {
-      const r0 = 150 * IS.big, sg = c.createRadialGradient(b.x, b.y - 40, r0, b.x, b.y - 40, r0 + 520);
-      sg.addColorStop(0, 'rgba(6,4,3,0)'); sg.addColorStop(1, `rgba(6,4,3,${IS.dark.toFixed(3)})`);
-      c.fillStyle = sg; c.fillRect(-OVER.x, -OVER.y, W + OVER.x * 2, H + OVER.y * 2);
-    }
+    if (IS && IS.dark > 0.01) introShade(c, b.x, b.y - 40, 150 * IS.big, IS.dark);
   }
   // ---- 보스전 화면 고정 표시(09-render-camera가 카메라 변환을 풀고 부른다: hudCam). 카메라를 확대하거나 장수를 따라가도 제자리에 있다 ----
   // 좌표는 화면 위 가운데가 (W/2, top)이고 us배 한 칸 안. 위에서부터 고정 자리:
@@ -472,7 +627,15 @@
   function drawBossHud(c, t) {
     const f = g.fight, b = f.boss, M = f.mech, us = hudS(), top = hudTop();
     // 내 장수가 맞으면 화면 가장자리가 붉게(0.5초. 목숨 잃음과 같은 가장자리 판 그림을 09-render-camera drawEdge로)
-    if (S.phit) { const k = (S.phit.t += S.fdt); if (k >= 0.5 || g.over) S.phit = null; else drawEdge(c, '230,30,20', (k < 0.05 ? k / 0.05 : 1 - (k - 0.05) / 0.45) * 0.7); }
+    if (S.phit) {
+      const k = (S.phit.t += S.fdt), pk = S.phit.k || 0.5;
+      if (k >= 0.55 || g.over) S.phit = null;
+      else {
+        drawEdge(c, '230,30,20', (k < 0.04 ? k / 0.04 : 1 - (k - 0.04) / 0.51) * (0.75 + 0.3 * pk));
+        // 큰 피해: 화면 전체가 0.12초 붉게 번쩍(사각형 하나)
+        if (S.phit.big && k < 0.12) { c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 0.22 * (1 - k / 0.12); c.fillStyle = '#ff2010'; c.fillRect(0, 0, view.width, view.height); c.restore(); }
+      }
+    }
     c.save(); c.translate(W - 56, top + 66); c.scale(Math.min(us, 1.3), Math.min(us, 1.3)); c.translate(-(W - 56), -66);
     drawMeter(c, meterRows(f.dealt, f.total));
     c.restore();

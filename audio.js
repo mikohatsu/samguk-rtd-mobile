@@ -71,11 +71,12 @@
   }
   // opt: at(지연) rate(재생 속도) jit(속도 흔들기, 기본 ±7%) dur(이 길이에서 30ms 페이드로 자름 — 긴 꼬리 제거)
   //      off(앞부분 건너뛰기, 초) lp/hp(저역·고역 통과 Hz) key·max(동시 재생 상한을 이름 대신 이 키로) bus
+  //      pick(묶음 안의 몇 번째 녹음을 쓸지. 없으면 무작위 — 예: blunt 2 = 나무 찍는 소리 chop, shield 0 = 작은 나무 소리)
   function sample(name, vol, opt) {
     const list = buffers(name);
     if (!list || !list.length) return false;
     opt = opt || {};
-    const t = ac.currentTime + curAt + (opt.at || 0), buf = list[(Math.random() * list.length) | 0];
+    const t = ac.currentTime + curAt + (opt.at || 0), buf = list[opt.pick != null ? Math.min(opt.pick, list.length - 1) : (Math.random() * list.length) | 0];
     const j = opt.jit != null ? opt.jit : 0.07, rate = (opt.rate || 1) * (1 - j + Math.random() * j * 2);
     const off = Math.min(opt.off || 0, buf.duration * 0.5), len = Math.min(buf.duration - off, opt.dur || 99) / rate;
     if (voiceFull(opt.key || name, t + len, opt.max)) return true; // 건너뛰어도 true: 대신 합성음을 내지 않게
@@ -133,11 +134,24 @@
     axe() { if (!sample('blunt', 0.6)) noise(0.1, 500, 0.13); thump(150, 0.12); },
     mace() { if (!sample('blunt', 0.65, { rate: 0.88 })) noise(0.1, 500, 0.13); thump(120, 0.14); },
     shield() { if (!sample('shield', 0.5)) { tone(190, 0.08, 'square', 0.07, { to: 90 }); noise(0.05, 1200, 0.06); } thump(180, 0.08); },
-    // 책사: 주문 소리(부채는 바람, 벼락은 날카롭게, 불은 낮게)
-    fan() { if (!sample('magic', 0.32, { rate: 1.25 })) noise(0.2, 700, 0.09, { to: 1800 }); },
-    thunder() { if (!sample('magic', 0.34, { rate: 1.5 })) noise(0.16, 3500, 0.13, { to: 500 }); noise(0.1, 3500, 0.06, { to: 600 }); },
-    flame() { if (!sample('magic', 0.34, { rate: 0.8 })) noise(0.18, 500, 0.1, { to: 1400 }); },
-    staff() { if (!sample('magic', 0.3)) tone(780, 0.12, 'sine', 0.06, { to: 1100 }); },
+    // 책사·불 무기(2026-11-26 황개 소감 반영, skill-sfx.md 10절). 예전에는 넷 다 주문 녹음(magic1.wav 0.57초)을 속도만 바꿔 틀었다:
+    // 불 0.8배속 = 0.71초짜리 음정 있는 주문 소리가 1초마다, 무작위 높낮이(±7%)로 최대 4개 겹쳐 음이 어긋난 화음처럼 울렸다.
+    // 이제 다른 무기처럼 0.15초 안의 짧은 녹음(휘두름·나무)으로 만들고, 고역은 저역 통과로 깎는다. 동시 상한은 무기마다 따로(4개).
+    // 부채: 가벼운 바람(검 휘두름을 조금 느리게, 3.5kHz 아래)
+    // 렌더(2026-11-26): 0.4에서 −18.8dB → 창 평타(−13.8)에 맞춰 +4.5dB
+    fan() { if (!sample('sword', 0.67, { rate: 0.85, lp: 3500, key: 'wFan' })) noise(0.1, 700, 0.12, { to: 1400 }); },
+    // 벼락: 나무 '딱'(chop 녹음을 빠르게, 0.07초) + 짧게 내려가는 잡음(0.08초, 2kHz→600Hz)
+    // 렌더(2026-11-26): 0.36에서 −19.9dB → +5.5dB
+    thunder() { if (!sample('blunt', 0.68, { pick: 2, rate: 1.45, dur: 0.1, key: 'wThunder' })) noise(0.04, 2500, 0.15); noise(0.08, 2000, 0.09, { to: 600, q: 1 }); },
+    // 불: 확 붙는 '후'(무거운 휘두름을 느리게, 1.8kHz 아래) + 저역 불기운 0.1초 + 두 번에 한 번 작은 나무 터짐
+    flame() {
+      if (!sample('heavy', 0.42, { rate: 0.78, lp: 1800, key: 'wFlame' })) noise(0.12, 500, 0.08, { type: 'lowpass', to: 200 });
+      noise(0.1, 700, 0.05, { type: 'lowpass', to: 220, at: 0.01 });
+      if (Math.random() < 0.5) sample('blunt', 0.16, { pick: 2, rate: 1.6, dur: 0.06, lp: 3500, at: 0.05, key: 'wPop', max: 3 });
+    },
+    // 지팡이: 휘두름 + 작은 나무 '톡'(3kHz 아래)
+    // 렌더(2026-11-26): 0.42에서 −15.9dB → +1.5dB
+    staff() { if (!sample('spear', 0.5, { rate: 0.9, lp: 3000, key: 'wStaff' })) noise(0.1, 800, 0.08, { to: 1600 }); sample('shield', 0.21, { pick: 0, rate: 1.1, dur: 0.08, lp: 3000, at: 0.03, key: 'wTap', max: 3 }); },
     // 강타가 꽂힐 때: 쇠 부딪히는 소리 + 낮은 쿵
     hit() { if (!sample('clash', 0.5)) noise(0.06, 2600, 0.1); thump(110, 0.2); },
     round() { for (let i = 0; i < 3; i++) { tone(90, 0.18, 'sine', 0.3, { at: i * 0.16, to: 50 }); noise(0.05, 300, 0.1, { at: i * 0.16 }); } },
@@ -172,7 +186,8 @@
     shimmer() { sparkle(4, 1046, 0.05); },
     pillar() { swell(0.32, 200, 1400, 0.16, 'noise'); thump(90, 0.3, 0.3); sparkle(6, 1318, 0.05, 0.3); },
     // 예전 신화·불멸 스킬 무게(2026-11-25부터 호출하는 곳 없음 — 등급 무게는 아래 스킬 소리 L.body가 명중 순간에 싣는다). 비교 듣기용으로 남김
-    // 'skill'(주문 녹음 1.2초)도 같은 이유로 지금은 원형 스킬 시전의 앞 0.3초로만 쓴다
+    // 'skill'(주문 녹음 spell.wav)·'magic'(magic1.wav)은 2026-11-26부터 아무 데서도 안 쓴다(평타·스킬 모두 휘두름·나무 녹음으로 바꿈, skill-sfx.md 10절).
+    // 아래 skill()은 비교 듣기용으로만 남김. sfxdata.js에서 두 묶음을 빼면 약 100KB 줄어든다(build-sfx.py GROUPS — 사용자 확인 뒤)
     skillHi() { thump(85, 0.32); noise(0.22, 400, 0.18, { type: 'lowpass', to: 80 }); },
     skillMax() { SFX.skillHi(); tone(70, 0.5, 'sine', 0.25, { to: 35, at: 0.02 }); tone(1245, 0.5, 'sine', 0.03, { at: 0.03 }); tone(622, 0.6, 'triangle', 0.05, { at: 0.03 }); },
   };
@@ -208,11 +223,14 @@
     // 벼락 한 줄기: 아주 짧은 고역 '딱' + 찢어지며 내려가는 잡음
     crack(vol, at) { noise(0.025, 5000, vol, { type: 'highpass', at }); noise(0.14, 4200, vol * 0.7, { to: 700, at: at + 0.004 }); },
     rumble(dur, vol, at) { noise(dur, 160, vol, { type: 'lowpass', to: 45, at }); },
-    // 불길: 낮은 '화륵'(대역 잡음이 위로 열림) + 저역 불기둥 + 탁탁 튀는 불티
+    // 불길(2026-11-26 황개 소감 반영): 확 붙는 '화륵'(무거운 휘두름 녹음을 느리게·1.6kHz 아래) + 짧은 저역 불기운(0.3초 안)
+    // + 나무 터지는 '탁'(chop 녹음을 빠르게·3.5kHz 아래) 2~3번. 꼬리 0.35초 안.
+    // 예전: 380→1400Hz 대역 잡음을 dur(최대 0.6초) 내내 + 2.5~6kHz 좁은 대역 '틱' 5번(긴 쉿 소리와 날카로운 고역)
     fire(dur, vol, at) {
-      noise(dur, 380, vol, { to: 1400, at, q: 0.8 });
-      noise(dur * 0.8, 240, vol * 0.8, { type: 'lowpass', to: 110, at });
-      for (let i = 0; i < 5; i++) noise(0.012, 2500 + Math.random() * 3500, vol * 0.6, { at: at + 0.03 + Math.random() * dur * 0.8, q: 4 });
+      sample('heavy', Math.min(0.6, vol * 1.2), { at, rate: 0.62, lp: 1600, key: 'skF', max: 4 });
+      const span = Math.min(0.3, dur * 0.6), n = dur > 0.4 ? 3 : 2;
+      noise(span, 900, vol * 0.7, { type: 'lowpass', to: 180, at });
+      for (let i = 0; i < n; i++) sample('blunt', Math.min(0.32, vol * 0.9), { pick: 2, at: at + 0.04 + (i + Math.random() * 0.6) * span / n, rate: 1.35 + Math.random() * 0.35, dur: 0.07, lp: 3500, key: 'skC', max: 6, jit: 0.04 });
     },
     // 물: 덮치는 물살(대역 잡음이 아래로) + 튀는 물(위로) + 낮은 출렁임
     water(vol, at) { noise(0.4, 1800, vol, { to: 300, at, q: 1.2 }); noise(0.3, 700, vol * 0.6, { to: 1500, at: at + 0.05 }); tone(150 * J(), 0.3, 'sine', vol * 0.8, { to: 70, at }); },
@@ -222,7 +240,14 @@
     bell(f, vol, at, dur) { f *= J(); dur = dur || 0.5; tone(f, dur, 'sine', vol, { at }); tone(f * 2.76, dur * 0.55, 'sine', vol * 0.35, { at }); tone(f * 5.4, dur * 0.3, 'sine', vol * 0.15, { at }); },
     // 어두운 기운: 조금 어긋난 낮은 두 음이 미끄러져 내려가고 쉿 소리
     dark(vol, at, dur) { dur = dur || 0.45; tone(98, dur, 'triangle', vol, { to: 62, at }); tone(104, dur, 'triangle', vol * 0.8, { to: 58, at }); noise(dur * 0.8, 500, vol * 0.5, { to: 220, at }); },
-    magic(vol, at, rate, dur) { sample('magic', vol, { at, rate, dur: dur || 0.4, key: 'skM', max: 3 }); },
+    // 책사 기운(2026-11-26 황개 소감 반영). 예전: 주문 녹음(magic1.wav)을 0.6~1.3배속으로 0.4초(0.6배속이면 0.67초) — 평타 '불'과 같은 재료.
+    // 이제: 부드러운 휘감김(무거운 휘두름 녹음, 저역 통과) + 밝은 쪽(rate ≥ 0.85)은 맑은 종 한 번(G4 또는 D5), 어두운 쪽은 낮은 삼각파 한 음. 0.35초 안
+    magic(vol, at, rate) {
+      const r = rate || 1, dk = r < 0.85;
+      sample('heavy', vol * 1.1, { at, rate: dk ? 0.62 : 0.8, lp: dk ? 1400 : 2400, key: 'skM', max: 3 });
+      if (dk) tone(147 * J(), 0.3, 'triangle', vol * 0.35, { to: 110, at });
+      else L.bell(r > 1.1 ? 587 : 392, vol * 0.2, at + 0.02, 0.35);
+    },
     // 말발굽(돌격): 낮은 쿵 n번
     hooves(n, vol, at) { for (let i = 0; i < n; i++) { tone(85 * J(), 0.07, 'sine', vol, { to: 50, at: at + i * 0.065 }); noise(0.03, 600, vol * 0.4, { at: at + i * 0.065 }); } },
     // 여러 개가 꽂힘(투척·화살): 짧은 타격 n번
@@ -283,9 +308,11 @@
     storm: { h: (w, at) => { for (let i = 0; i < 5; i++) L.whoosh(i % 2 ? 'heavy' : 'sword', 0.42, at + i * 0.045, 1 + i * 0.06, 0.22); sample('clash', 0.35, { at: at + 0.14, rate: 1.1, dur: 0.18, key: 'skHit', max: 3 }); } },
     // 장비 장판교 호통(상징 기술, 목표 −7.5dB): 함성(넓은 대역 잡음 + 톱니 목소리) + 큰북 + 징
     roar: { h: (w, at) => { noise(0.45, 380, 0.9, { to: 170, at, q: 1.2 }); tone(190, 0.45, 'sawtooth', 0.08, { to: 150, at }); L.drum(0.5, at); L.gong(110, 0.2, at + 0.02, 0.9); } },
-    scheme: { h: (w, at) => { L.magic(0.36, at, 0.7); L.dark(0.1, at, 0.35); } },
+    // 렌더(2026-11-26): −16.0dB → +3dB(기운 0.36→0.51, 어두운 음 0.1→0.14)
+    scheme: { h: (w, at) => { L.magic(0.51, at, 0.7); L.dark(0.14, at, 0.35); } },
     hearts: { h: (w, at) => { sparkle(6, 1175, 0.12, at); [784, 988, 1175].forEach((f, i) => tone(f, 0.35, 'triangle', 0.14, { at: at + i * 0.05 })); L.bell(1175, 0.1, at, 0.5); } },
-    curse: { h: (w, at) => { L.dark(0.2, at, 0.5); L.magic(0.35, at, 0.6, 0.35); } },
+    // 렌더(2026-11-26): −14.4dB → +1dB
+    curse: { h: (w, at) => { L.dark(0.22, at, 0.5); L.magic(0.39, at, 0.6); } },
     knives: { h: (w, at) => L.thunks(6, 0.03, 0.45, at, 1.6) },
     // 자기·아군 강화: 시전 한 번, 폭발 쿵 없음. 목표 최대: 지원 −11dB(−10~−14), 신화·불멸의 버프 −7.5dB(−6~−9) — skill-sfx.md 9절 표
     // 순욱 구호탄랑(신화 버프): 차오름 + 오르는 음 → 0.2초 큰북·종
@@ -352,16 +379,19 @@
     // 태사자 신의의 맹세(불멸 버프): 빛기둥 차오름 → 0.3초 큰북·종·합창
     oath: { c: () => { swell(0.3, 300, 2200, 0.25, 'noise'); tone(196, 0.45, 'triangle', 0.2, { to: 392 }); L.bell(784, 0.15, 0.3, 0.5); L.drum(0.45, 0.3); L.choir([392, 494, 587], 0.06, 0.3, 0.6); } },
     // 여포 천하무쌍(상징 기술): 큰 불길 + 큰북 + 낮은 징 + 으르렁
-    peerless: { c: () => { L.fire(0.6, 0.45, 0); L.drum(0.5, 0); L.gong(98, 0.22, 0.03, 1); tone(82, 0.5, 'sawtooth', 0.1, { to: 60 }); } },
+    // 2026-11-26: 불길이 녹음 휘두름을 품어 커졌으므로 0.45→0.38, 으르렁은 톱니파 → 삼각파(0.1→0.14)
+    peerless: { c: () => { L.fire(0.6, 0.38, 0); L.drum(0.5, 0); L.gong(98, 0.22, 0.03, 1); tone(82, 0.5, 'triangle', 0.14, { to: 60 }); } },
     // 곽가 요절의 예지: 안개 쓸림 녹음(빠르게) + 숨결 + 반짝 + 종
-    mist: { c: () => { L.whoosh('heavy', 0.7, 0, 1.2, 0.4); noise(0.6, 1200, 0.35, { to: 600, q: 0.6 }); sparkle(3, 1568, 0.1, 0.15); L.bell(1046, 0.14, 0.1, 0.5); } },
+    // 렌더(2026-11-26): −14.4dB → +1dB(휘두름 녹음 0.7→0.8, 종 0.14→0.16. 숨결 잡음은 안 키움)
+    mist: { c: () => { L.whoosh('heavy', 0.8, 0, 1.2, 0.4); noise(0.6, 1200, 0.35, { to: 600, q: 0.6 }); sparkle(3, 1568, 0.1, 0.15); L.bell(1046, 0.16, 0.1, 0.5); } },
     eightlock: { c: () => { for (let i = 0; i < 8; i++) sample('shield', 0.3, { at: i * 0.035, rate: 0.9 + i * 0.03, dur: 0.15, key: 'skT', max: 8 }); thump(120, 0.2, 0.3); } },
     imperial: { c: () => { [0, 0.1, 0.2, 0.3].forEach((t) => tone(110, 0.25, 'sine', 0.32, { to: 70, at: t })); L.bell(392, 0.11, 0.4, 0.6); } },
     spearspin: { c: () => { [0, 0.13, 0.26].forEach((t, i) => L.whoosh('spear', 0.38, t, 1 + i * 0.08, 0.2)); tone(196, 0.4, 'triangle', 0.05); } },
     // 마초 금마초의 위용(신화 버프): 밝은 합창 + 포효 + 큰북 + 반짝
     goldlion: { c: () => { L.choir([392, 494, 587], 0.09, 0, 0.7); noise(0.35, 380, 0.5, { to: 170, q: 1.2 }); L.drum(0.45, 0); sparkle(4, 1568, 0.05, 0.1); } },
     // 육손 인내의 진(신화 버프): 불길 + 불고리 쓸림 녹음 + 돌풍 + 북
-    firering: { c: () => { L.fire(0.5, 0.5, 0); L.whoosh('heavy', 0.55, 0, 0.8, 0.4); L.gust(0.4, 0.3, 0, 400, 1200); L.drum(0.35, 0); } },
+    // 2026-11-26: 불길 안에 휘두름 녹음(0.6)이 들어가서 따로 겹치던 휘두름(0.55)은 뺐다(크기 그대로 유지)
+    firering: { c: () => { L.fire(0.5, 0.5, 0); L.gust(0.4, 0.3, 0, 400, 1200); L.drum(0.35, 0); } },
     bulwark: { c: () => { sample('shield', 0.65, { rate: 0.75, dur: 0.3, key: 'skT', max: 8 }); thump(95, 0.3); noise(0.3, 300, 0.12, { type: 'lowpass', to: 90 }); } },
     // 손견 강동 호령: 발톱 셋 + 쓸림 녹음 + 으르렁
     tiger: { c: () => { [0, 0.1, 0.2].forEach((t) => noise(0.1, 2600, 0.7, { to: 1000, at: t })); L.whoosh('heavy', 0.5, 0, 0.8, 0.3); tone(85, 0.4, 'sawtooth', 0.16, { to: 60 }); noise(0.4, 300, 0.6, { to: 160, q: 1.5 }); } },
@@ -382,9 +412,10 @@
       (r.h || dflt.h)(w, at);
       if (o.hit) skLand(w, at);
     } else if (o.k === 'circle') {
-      // 원형: 짧은 손짓(주문 녹음 앞 0.3초) + 터질 때까지 차오르는 소리. 터지는 소리는 skb가 낸다
-      sample('skill', 0.3, { dur: 0.3, lp: 3000, key: 'skM', max: 3 });
-      swell(Math.max(0.15, (o.dl || 0.5) * 0.9), 300, 1600 + 600 * w, 0.05 + 0.02 * w, 'noise');
+      // 원형: 짧은 손짓 + 터질 때까지 차오르는 소리. 터지는 소리는 skb가 낸다
+      // 2026-11-26: 손짓을 주문 녹음(spell.wav, 평타 '불'과 같은 주문 계열)에서 휘두름 녹음으로, 차오름 끝 높이를 2.2~2.6kHz → 1.3~1.5kHz로 낮춤(쉿 소리 줄임)
+      sample('heavy', 0.3, { rate: 0.85, lp: 2400, key: 'skM', max: 3 });
+      swell(Math.max(0.15, (o.dl || 0.5) * 0.9), 300, 1000 + 300 * w, 0.05 + 0.02 * w, 'noise');
     } else if (AT_BOSS[o.k]) (r.h || SKS.burst.h)(w, BLAST_AT[o.vx] || 0);
     else (r.c || SKS.guard.c)(); // 표에 없는 지원 연출은 지원 크기(−11dB)의 기본 소리
   };

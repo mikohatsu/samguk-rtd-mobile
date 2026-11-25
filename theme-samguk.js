@@ -347,10 +347,12 @@
   // 2026-11-17 2차(지렛대): 보통·어려움에만 선택 항목을 둔다(없으면 엔진 기본값 → 쉬움·악몽은 코드상 그대로).
   //   upPct 강화 1단계당 공격력(기본 0.2), sellGold 1성 해산 금화 배율, bossGold 보스 토벌 금화 배율,
   //   laneBump [시작R, 끝R, 배율] 라인 몹 체력 구간 보정, bossHpx {라운드: 배율} 보스 체력 보정. 근거: production/team/2026-11-17/balance-levers.md
+  // 2026-11-26 보통 bossHpx 80(조조) 2.0→1.3(사용자 「보통 조조 전설 4명 + 7성 15강으로 숨도 안 쉬고 때렸는데 못 잡음」). 위 3차 주석의 3.9는 v0.2.27에 2.0으로 내려간 값이다.
+  //   자동 조작 전설 2명·강화 15 조합 28개 처치 시간 중앙값 제한의 64%→42%(사람은 1.6~1.8배 느림 → 약 70~75%). 근거: production/team/2026-11-26/boss-rules.md, tests/balance/boss-time.js
   const difficulties = [
     { id: 'easy', name: '쉬움', rounds: 70, mult: 0.4, lane: 1, bossAtk: 0.45, startUnits: 6, level: 0 },
     { id: 'normal', name: '보통', rounds: 90, mult: 0.85, lane: 1.55, bossAtk: 0.72, startUnits: 7, level: 1,
-      upPct: 0.22, sellGold: 0.7, bossGold: 1.2, laneBump: [[31, 80, 1.1]], bossHpx: { 55: 1.25, 70: 1.3, 80: 2.0, 90: 1.6 } },
+      upPct: 0.22, sellGold: 0.7, bossGold: 1.2, laneBump: [[31, 80, 1.1]], bossHpx: { 55: 1.25, 70: 1.3, 80: 1.3, 90: 1.6 } },
     { id: 'hard', name: '어려움', rounds: 100, mult: 1.1, lane: 1.9, bossAtk: 0.92, startUnits: 8, level: 2,
       upPct: 0.22, sellGold: 0.7, bossGold: 1.2, bossHpx: { 55: 1.1, 70: 1.2, 80: 1.2, 90: 4.4, 100: 4.2 } },
     // 악몽: 사용자 '악몽도 지금 쉬움'(2026-11-17). 불멸이 있으면 R55~110이 거의 공짜라(balance-tiers.md) R90~110 보스 체력 ×2. 사람 시험으로 다시 맞출 것
@@ -380,6 +382,8 @@
 
   // 패턴 gen: 엔진·raid.js의 hazard 생성기 이름. min: 추가되는 난이도 단계(0 쉬움~3 악몽). ctr: 반격 창.
   // style caster: 붙지 않고 순간이동하며 원거리로 친다. phases: 체력 비율(at)에서 시작하는 고유 기믹(raid.js mechs).
+  // 조조 화용도(raid.js mechs.huarong): 길 위·아래 불판. delay 깔리기까지(초), tick 초당 피해(보스 한 방 b.hit 배율, 난이도 bossAtk 포함), after 바람이 그친 뒤 더 타는 시간(초)
+  const HUARONG_FIRE = { delay: 0.3, tick: 0.25, after: 0.5, road: 280 }; // road: 길 폭(2026-11-26 190→280, 몸통 키 127 + 옛 여유)
   const bosses = [
     { round: 10, id: 'b_janggak', name: '장각', mark: '角', title: '황건의 난', place: '광종', fx: '#f2dd5c', reqDps: 48, hitTier: 2, time: 120,
       arena: { sky: '#3a2f14', ground: '#6b5a2c', motif: 'altar' }, line: '창천은 이미 죽었고, 황천이 일어나리라.',
@@ -403,7 +407,7 @@
       patterns: [{ n: '적토 돌진', gen: 'chain', vis: 'redhare', p: { w: 130, times: 3 } }, { n: '방천화극 횡소', gen: 'sweep', vis: 'halberd', p: { n: 4, arc: 1.4 } }, { n: '무쌍 난무', gen: 'combo', vis: 'halberd', p: {} }, { n: '천하무쌍', gen: 'rings', vis: 'roar', p: { n: 4 } }] },
      { round: 80, id: 'b_jojo', name: '조조', mark: '操', title: '적벽대전', place: '적벽', fx: '#ff8a3c', reqDps: 6000, hpx: 9.5, hitTier: 7, time: 170,
       arena: { sky: '#1a2230', ground: '#223a4a', motif: 'river' }, line: '술을 앞에 두고 노래하세. 인생이 얼마나 되겠는가.',
-      phases: [{ at: 0.7, m: 'huarong', n: '화용도 퇴로' }, { at: 0.35, m: 'huarong', n: '화용도 퇴로' }],
+      phases: [{ at: 0.7, m: 'huarong', n: '화용도 퇴로', fire: HUARONG_FIRE }, { at: 0.35, m: 'huarong', n: '화용도 퇴로', fire: HUARONG_FIRE }],
       patterns: [{ n: '연환선 화공', gen: 'deck', vis: 'flame', p: {} }, { n: '화선 낙하', gen: 'rain', vis: 'fireship', p: { n: 11, r: 110 } }, { n: '호표기', gen: 'charge', vis: 'charge', p: { w: 140, ctr: 1 } }, { n: '동남풍', gen: 'fan', vis: 'wind', p: { n: 9 } }] },
      { round: 90, id: 'b_yukson', name: '육손', mark: '遜', title: '이릉대전', place: '이릉', fx: '#ff6a2a', reqDps: 11000, hpx: 4.5, fhpx: 7.36, hitTier: 8, time: 180,
       arena: { sky: '#2a1a10', ground: '#403020', motif: 'forest' }, line: '칠백 리 영채여, 이제 불타거라.',
@@ -966,6 +970,19 @@
       partyHpx: { normal: { 90: 1.2 }, hard: { 100: 0.85 } },
       // 무력화(시전 끊기·반격)에 필요한 화력: 제한 시간에 겨우 잡는 화력의 몇 배를 그 시간 동안 넣어야 하는지
       staggerK: 4.5,
+      // 반격 게이지(raid.js addCounter, 2026-11-26 사용자 결정): 정면 한 대 = ctrFront, 뒤·옆 한 대 = 1. 뒤·옆 몫은 게이지의 ctrBackCap까지만 →
+      // 뒤에서만 때리면 그로기가 안 되고, 절반 이상은 정면에서 채워야 한다.
+      ctrFront: 2, ctrBackCap: 0.5,
+      // 보스전 피격 판정(engine.js bodyBox·champHit, 2026-11-26 사용자 결정 「딱 유닛 그림을 피격 판정으로, 장판은 테두리 선까지」):
+      // 장수 위치(x, y) 기준 몸통 사각형 x±hw, y+top(머리 위 끝)~y+bot(발끝). 그림(03-unit piece: 크기 r·3.7 = 148, 발끝 = y + r·0.8 = y+32)의
+      // 불투명 화소를 잰 값: 키 119(전원 116~119), 몸통 폭(가로 10~90% 화소) 중앙 52·3/4 63 → 56. 무기 끝은 넣지 않는다.
+      // hitEdge: 장판 그림의 테두리 선 바깥 끝(06-boss-vfx tele 바깥 어두운 선 4)까지 판정에 넣는 양. dangerPad: AI 회피 여유(몸통을 이만큼 더 늘려 본다)
+      hitBox: { hw: 28, top: -87, bot: 32 }, hitEdge: 4, dangerPad: 18,
+      // 판정 재조정(2026-11-26 사용자 「그림 판정 + 기술 재조정」): 한 점 판정에 맞춰 짜인 틈·길·안전지대를 몸통에 맞춘다(production/team/2026-11-26/boss-rules.md 7절)
+      //   gapPad 줄·탄·고리 사이 틈에 몸통 말고 더 주는 여유, meleeR 보스 근접 베기 반지름(150→120), dominoN 화웅 낙석 줄 수(8 그대로: 7로 줄이면 낙석이 번지는 속도가 빨라져 오히려 더 맞았다),
+      //   gateR 팔진도 생문 크기(95→120), rowsW 등애 성도 함락 줄 폭 비율(0.8→0.7). 동남풍·궁루·십자·고리·탄 간격은 engine.js가 몸통 크기로 계산한다
+      //   hzShrink 보스 장판 크기를 몸통이 커진 만큼 덜기(원·부채꼴 반지름 −20, 직선 폭 −20, 고리 폭 −40. engine.js fitHazard), rainSpread 낙석·낙뢰가 흩어지는 폭(170→240)
+      gapPad: 24, meleeR: 120, dominoN: 8, gateR: 120, rowsW: 0.7, hzShrink: 20, rainSpread: 240,
       itemBias: 3, // 들고 있는 신화·불멸 아이템과 관련된 장수가 랜덤으로 나올 가중치
     },
   };

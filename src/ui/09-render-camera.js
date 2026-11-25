@@ -19,17 +19,15 @@
     // 결투장에서 진 채 끝난 판(g.fight가 남는다), 게임에 남기는 비우지 않는다(새 판 시작 때 17-loop begin이 비운다)
     if (arenaV) S.arenaUsed = S.kill ? S.kill.f : g.fight || S.arenaUsed;
     else if (S.arenaUsed && !g.fight && !S.stay) { arenaFree(S.arenaUsed); S.arenaUsed = null; }
+    if (!arenaV) arenaWarm(); // 보스 라운드 바로 앞 라인에서 다음 경기장 바닥을 미리 나눠 그려 둔다(07-arena, 등장 첫 프레임 멈춤 방지)
     if (S.camPh !== ph) { S.camPh = ph; resetCam(); }
     if (inBoss() && performance.now() > (S.camHold || 0) && S.cam.z > 1.01) {
       const ac = g.active();
       if (ac) {
-        // 내 장수를 따라가되, 보스가 위 표시 띠(hudBand) 밑이나 화면 아래로 빠지지 않는 쪽으로 높이를 고른다. 둘 다 못 담으면 내 장수가 먼저다.
-        // 내 장수의 아래 여백은 65단위(발 35 + 발밑 고리까지 = 아래 경계에 선 장수와 같은 자리. 예전 110이라 아래쪽에 선 장수와 위쪽 보스를 절충할 폭이 45단위 좁았다)
-        // 휴대폰 가로 1.2배(세로 842단위, 띠 약 133단위): 보스와 내 장수(둘 다 기준점)의 세로 거리가 약 450단위를 넘으면 둘 다는 못 담고 보스 머리가 띠 밑으로 들어간다.
-        const ck = 1 - Math.pow(0.9, S.f60), vh = S.base.sh / (S.base.s0 * S.cam.z), hb = hudBand(), b = g.fight.boss, cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-        let ty = cl(ac.y, b.y - vh / 2 + 100, b.y + vh / 2 - hb - 190);
-        ty = cl(ty, ac.y - vh / 2 + 65, ac.y + vh / 2 - hb - 120);
-        S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ty - S.cam.y) * ck;
+        // 2026-11-26 사용자 결정: 보스전 카메라는 내가 조종하는 장수가 항상 화면 가운데. 보스 위치는 보지 않는다(예전: 보스를 같이 담으려고 높이를 절충해 보스가 움직이면 화면이 끌려갔다).
+        // 프레임마다 남은 거리의 절반씩 따라간다: 걷는 중 지연은 약 4단위(사실상 가운데), 돌진(280단위)·출전 직후에는 0.1초 남짓 미끄러져 붙는다.
+        const ck = 1 - Math.pow(0.5, S.f60);
+        S.cam.x += (ac.x - S.cam.x) * ck; S.cam.y += (ac.y - S.cam.y) * ck;
       }
     }
     applyCam();
@@ -158,8 +156,9 @@
   function resetCam() {
     // 라인: 터치 기기도 맵 전체가 보이는 배율(가장 축소한 화면)로 고정한다. 손가락 확대·축소는 막았다(10-input).
     // 보스전: 1.2배, 경기장 가운데에서 시작(등장 연출 → 전투로 넘어갈 때는 보던 높이를 그대로 둔다)
-    const was = S.cam;
-    S.cam = S.camArena ? { z: BOSS_Z, x: (ARENA.x0 + ARENA.x1) / 2, y: was && was.arena ? was.y : (ARENA.y0 + ARENA.y1) / 2, arena: true } : { z: 1, x: W / 2, y: H / 2 };
+    // 보스전이 시작되면(조종할 장수가 있으면) 그 장수 자리에서 시작한다(경기장 가운데에서 미끄러져 오지 않게)
+    const was = S.cam, ac = S.camArena && g && g.phase === 'boss' && g.fight ? g.active() : null;
+    S.cam = S.camArena ? { z: BOSS_Z, x: ac ? ac.x : (ARENA.x0 + ARENA.x1) / 2, y: ac ? ac.y : was && was.arena ? was.y : (ARENA.y0 + ARENA.y1) / 2, arena: true } : { z: 1, x: W / 2, y: H / 2 };
     applyCam();
   }
   function applyCam() {
@@ -169,12 +168,11 @@
     c.z = S.coarse ? (S.camArena ? BOSS_Z : 1) : Math.max(1, Math.min(3.2, c.z));
     const s = B.s0 * c.z, vw = B.sw / s, vh = B.sh / s;
     if (S.camArena) {
-      // 보스전: 경기장 둘레까지만 본다. 위는 위 난간(바깥 끝이 경계선에서 85단위)이 보스 표시 띠(hudBand) 바로 밑에 오는 데까지, 아래는 아래 난간 가운데 줄(65단위)까지, 양옆은 폭의 10%까지 경기장 밖을 보여 준다.
-      // (휴대폰 가로 1.2배: 세로 842단위가 보이고 움직이는 폭은 332단위라, 어디에 서 있어도 경기장 세로의 70% 안팎이 한 화면에 들어온다)
-      // 그 범위가 화면보다 좁으면(휴대폰 가로: 경기장 폭이 다 들어온다) 경기장 가운데에 고정한다.
-      const x0 = ARENA.x0 - vw * 0.1, x1 = ARENA.x1 + vw * 0.1, y0 = ARENA.y0 - 85 - hudBand(), y1 = ARENA.y1 + 65;
-      c.x = vw >= x1 - x0 ? (ARENA.x0 + ARENA.x1) / 2 : Math.max(x0 + vw / 2, Math.min(x1 - vw / 2, c.x));
-      c.y = vh >= y1 - y0 ? (y0 + y1) / 2 : Math.max(y0 + vh / 2, Math.min(y1 - vh / 2, c.y));
+      // 보스전(2026-11-26 사용자 결정 「내 장수가 항상 가운데」): 화면 가운데는 경기장 안(장수가 설 수 있는 범위) 어디든 된다.
+      // 가장자리에 선 장수도 가운데에 두므로 경기장 바깥이 보이고, 그 자리는 07-arena arenaFloor의 어두운 바깥 바닥(그 밖은 같은 어둠색)으로 채운다.
+      // 장수가 없을 때(등장·출전 고르기)는 resetCam이 경기장 가운데에 둔다. PC에서 끌어 옮겨도 경기장 밖으로 나가지 않는다.
+      c.x = Math.max(ARENA.x0, Math.min(ARENA.x1, c.x));
+      c.y = Math.max(ARENA.y0, Math.min(ARENA.y1, c.y));
     } else {
       c.x = vw >= W ? W / 2 : Math.max(vw / 2, Math.min(W - vw / 2, c.x));
       c.y = vh >= H ? H / 2 : Math.max(vh / 2, Math.min(H - vh / 2, c.y));
