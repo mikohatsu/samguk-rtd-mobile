@@ -340,7 +340,7 @@
       + `<div style="margin-top:4px;color:${x.on ? '#f4ecd8' : 'var(--dim)'}">${esc(s.desc)}</div><div class="sts">${synTiersHtml(x)}</div>`
       + `<div class="sn">${esc(t('synBossNote', { n: g.synMaxPerCarry || 5 }))}</div>`;
     const inAll = !!el.closest('#synall'), inBar = !!el.closest('#selbar, #ucard');
-    pop.classList.add('sp'); pop.classList.toggle('sx', inAll); pop.classList.toggle('sb', inBar);
+    pop.classList.remove('af'); pop.classList.add('sp'); pop.classList.toggle('sx', inAll); pop.classList.toggle('sb', inBar);
     pop.hidden = false; S.synPop = id;
     const r = el.getBoundingClientRect(), vw = window.innerWidth / zoom;
     // 선택 바·상세 카드의 인연 칩: 칩 바로 위에 띄운다(자리가 모자라면 화면 위 끝부터)

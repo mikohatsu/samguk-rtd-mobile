@@ -281,7 +281,8 @@
   function showFlag(f, e) {
     const pop = $('achpop');
     pop.classList.remove('sp'); // 인연 창 모양(스크롤)을 업적 창에 남기지 않는다
-    if (!f) { pop.hidden = true; return; }
+    if (!f) { pop.hidden = true; pop.classList.remove('af'); return; }
+    pop.classList.add('af'); // 업적 창은 늘 같은 폭(내용 길이에 따라 모양이 바뀌지 않게)
     const a = f.a, c = a.cond, ids = c.units || c.anyOf || [];
     // 여러 기가 필요한 조건은 (보유/필요)를 붙이고, 다 모아야 진하게 켠다
     const chips = ids.map((id) => {
@@ -301,9 +302,10 @@
     const progLine = prog === null ? '' : `<div class="chips"><span class="ac ${prog >= c.n ? 'have' : ''}">${I.t('progress', { a: Math.min(prog, c.n), b: c.n })}</span></div>`;
     pop.innerHTML = `<strong>${esc(a.name)}${g.me.done[a.id] ? ' ★' : ''}</strong><div>${esc(a.desc)}</div>${chips ? `<div class="chips">${chips}</div>` : ''}${progLine}${partyLine}<div style="color:var(--dim);margin-top:4px">${I.t('reward')}: ${esc(rwText(a.reward))}</div>`;
     pop.hidden = false;
-    // 화면 배율 안쪽 좌표로 옮기고 창 밖으로 나가지 않게 막는다
-    const x = Math.min(e.clientX / zoom + 12, window.innerWidth / zoom - pop.offsetWidth - 4);
-    const y = Math.max(4, Math.min(e.clientY / zoom + 12, window.innerHeight / zoom - pop.offsetHeight - 4));
+    // 화면 배율 안쪽 좌표로 옮기고 창 밖으로 나가지 않게 막는다.
+    // 깃발 줄은 화면 오른쪽에 있어 오른쪽 버튼들에 가리지 않게, 누른 곳의 왼쪽에 펼친다(세로는 누른 높이에 맞추되 화면 안).
+    const x = Math.max(4, e.clientX / zoom - pop.offsetWidth - 14);
+    const y = Math.max(4, Math.min(e.clientY / zoom - 18, window.innerHeight / zoom - pop.offsetHeight - 4));
     pop.style.left = x + 'px'; pop.style.top = y + 'px';
   }
   function rwText(r) {
