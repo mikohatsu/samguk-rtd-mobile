@@ -3,7 +3,7 @@ const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..'), out = path.join(root, 'www');
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out);
-const files = ['config.js', 'version.js', 'theme-samguk.js', 'i18n-data.js', 'i18n.js', 'engine.js', 'raid.js', 'synergy.js', 'ai.js', 'art.js', 'audio.js', 'net.js', 'native.js', 'shop.js', 'progression.js', 'palace.js', 'lobby.js', 'skillfx.js', 'rig.js', 'skillicons.js', 'sfxdata.js', 'credits.js', 'news.js', 'tutorial.js', 'glctx.js', 'ui.js'];
+const files = ['config.js', 'version.js', 'det.js', 'theme-samguk.js', 'i18n-data.js', 'i18n.js', 'engine.js', 'raid.js', 'synergy.js', 'ai.js', 'art.js', 'audio.js', 'net.js', 'native.js', 'shop.js', 'progression.js', 'palace.js', 'lobby.js', 'skillfx.js', 'rig.js', 'skillicons.js', 'sfxdata.js', 'credits.js', 'news.js', 'tutorial.js', 'glctx.js', 'ui.js'];
 // 첫 화면은 index.html이어야 한다
 fs.copyFileSync(path.join(root, 'samguk-rtd.html'), path.join(out, 'index.html'));
 files.forEach((f) => fs.copyFileSync(path.join(root, f), path.join(out, f)));

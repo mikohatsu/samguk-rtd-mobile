@@ -385,7 +385,16 @@
     // 판 표(서버가 판 시작 때 내주는 기록표)를 끝까지 못 받은 판의 결과 화면. 표가 없으면 서버가 결과를 받지 않아 경험치·동전·전적이 오르지 않는다(17-loop S.tkMiss).
     // 2026-11-26: 예전 열쇠 noTicket이 선택권 창의 '보유한 선택권이 없습니다'(같은 이름)를 덮어써, 선택권이 0장일 때 이 글이 선택권 창에 떴다 → 열쇠를 나눔
     tkMissed: ['판을 시작할 때 서버와 연결되지 않아, 이번 판의 경험치·동전·전적은 계정에 기록되지 않습니다.', 'バトル開始時にサーバーへ接続できなかったため、今回の経験値・銅銭・戦績はアカウントに記録されません。', "The server couldn't be reached when this game started, so this game's XP, coins and record won't be saved to your account.", '本局开始时未能连接服务器，因此本局的经验值、铜钱和战绩不会记入账号。'],
-    tkRejected: ['서버가 이번 판 결과를 받지 않아 경험치·동전·전적이 기록되지 않았습니다(이어하기는 시작한 지 7일 안에 끝내야 합니다).', 'サーバーが今回の結果を受け付けなかったため、経験値・銅銭・戦績は記録されませんでした（続きからのプレイは開始から7日以内に終える必要があります）。', 'The server did not accept this result, so XP, coins and history were not recorded (resumed games must finish within 7 days of starting).', '服务器未接收本局结果，经验、铜钱和战绩未被记录（继续游戏需在开始后7天内完成）。'],
+    tkRejected: ['서버가 이번 판 결과를 받지 않아 경험치·동전·전적이 기록되지 않았습니다.', 'サーバーが今回の結果を受け付けなかったため、経験値・銅銭・戦績は記録されませんでした。', 'The server did not accept this result, so XP, coins and history were not recorded.', '服务器未接收本局结果，经验、铜钱和战绩未被记录。'],
+    // 2026-11-26(secure-a): 난이도 잠금은 서버(계정) 기록만 따른다. 이어하기 표는 계정당 한 칸(새 혼자 판이 바꾼다), 재연산 검증에서 인정되지 않은 판은 보상을 회수한다
+    lockSrcNote: ['난이도 잠금은 이제 계정 기록을 따릅니다. 서버에 기록되지 않은 클리어로 열렸던 난이도는 다시 잠겼습니다.', '難易度の解放は今後アカウントの記録に従います。サーバーに記録されていないクリアで解放されていた難易度は、再びロックされました。', 'Difficulty unlocks now follow your account record. Difficulties opened by clears the server never recorded are locked again.', '难度解锁今后以账号记录为准。由未记入服务器的通关解锁的难度已重新锁定。'],
+    lockPending: ['서버 확인 중 — 연결되면 열립니다', 'サーバー確認中 — 接続すると解放されます', 'Checking with server — unlocks when online', '服务器确认中 — 联网后解锁'],
+    contNoRec: ['기록 없이 이어하기 (한 번 더 누르기)', '記録なしで続ける（もう一度タップ）', 'Continue without saving (tap again)', '不记录继续（再点一次）'],
+    contReplaced: ['이 판은 다른 혼자 판이 시작되어 계정에 기록되지 않습니다. 그래도 이어서 할 수 있습니다.', 'このバトルは別のひとりプレイが始まったため、アカウントに記録されません。続けて遊ぶことはできます。', 'Another solo game was started, so this game will not be saved to your account. You can still keep playing.', '已开始另一局单人游戏，本局不会记入账号。仍可继续游玩。'],
+    contUsed: ['이 판의 결과는 이미 기록되었습니다. 이어서 해도 다시 기록되지 않습니다.', 'このバトルの結果はすでに記録されています。続けても再度記録されません。', "This game's result is already recorded. Continuing will not record it again.", '本局结果已记录，继续游戏也不会再次记录。'],
+    contOther: ['다른 계정에서 시작한 판이라 이 계정에는 기록되지 않습니다.', '別のアカウントで始めたバトルのため、このアカウントには記録されません。', 'This game was started on another account, so it will not be saved to this one.', '本局在其他账号开始，不会记入当前账号。'],
+    revokedNote: ['검증에서 인정되지 않은 판 {n}개의 보상이 회수되었습니다. (경험치 {x}, 동전 {c})', '検証で認められなかったバトル{n}件の報酬が回収されました。（経験値 {x}、銅銭 {c}）', 'Rewards from {n} game(s) that failed verification were taken back. ({x} XP, {c} coins)', '{n}局未通过验证，其奖励已被收回。（经验 {x}，铜钱 {c}）'],
+    rankWait: ['순위는 기록 검증이 끝나면 반영됩니다.', 'ランキングは記録の検証後に反映されます。', 'Rankings update once this record is verified.', '排行榜将在记录验证后更新。'],
     // 서버가 알려 준 최소 버전보다 낮을 때(로딩 화면)
     updateNeed: ['새 버전이 나왔습니다. 스토어에서 업데이트해 주세요.', '新しいバージョンがあります。ストアでアップデートしてください。', 'A new version is available. Please update from the store.', '有新版本，请前往商店更新。'],
     updateWeb: ['새 버전이 나왔습니다. 페이지를 새로고침해 주세요.', '新しいバージョンがあります。ページを再読み込みしてください。', 'A new version is available. Please reload the page.', '有新版本，请刷新页面。'],

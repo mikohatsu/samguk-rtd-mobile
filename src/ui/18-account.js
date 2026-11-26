@@ -37,19 +37,38 @@
   // 판이 끝나면 판 결과를 서버에 보내 경험치·동전을 받는다(같은 판은 한 번만). 온라인 판은 /api/result, 오프라인 판(혼자·AI 동맹)은 /api/history.
   // 보상 배율은 서버가 판 표에 적어 둔 판 종류(인원)로 정한다. 오프라인 판은 표가 있을 때만 보낸다(표가 없으면 서버가 받지 않는다)
   // 서버에 닿지 못하면(끊김·5xx) 보낼 내용을 기기에 남겨 두고 다음에 앱을 켤 때·로비로 돌아올 때 다시 보낸다(lobby.js queueSend·flushPending)
+  // 입력 기록 묶기(2026-11-26 재연산 검증): JSON → gzip → base64(rec). 서버 본문 한도 64KB(/api/result·/api/history).
+  // CompressionStream이 없는 기기(iOS 16.3 이하 등)는 JSON 그대로(recj) — 한도를 넘으면 기록 없이 보낸다(서버는 기록 없는 새 판을 '검증 못 함'으로 둔다).
+  const REC_MAX = 60000;
+  async function packRec(rec) {
+    if (!rec) return {};
+    const raw = JSON.stringify(rec);
+    try {
+      if (typeof CompressionStream === 'function') {
+        const buf = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+        let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+        const b64 = btoa(bin);
+        return b64.length <= REC_MAX ? { rec: b64 } : {};
+      }
+    } catch (e) { /* 압축 실패: 아래 그대로 보내기 */ }
+    return raw.length <= REC_MAX ? { recj: rec } : {};
+  }
   async function reportResult() {
-    S.msClaim = false; S.rwRank = null; S.rwAch = null;
+    S.msClaim = false; S.rwRank = null; S.rwAch = null; S.rankWait = false;
     if (g.trial) return; // 체험은 결과를 보내지 않는다(이중 안전장치: 체험은 'over'를 내지 않는다)
     if (!ACC.token || S.reported || (!S.online && !S.gameTk)) return;
     S.reported = true;
     const path = S.online ? '/api/result' : '/api/history';
     const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: bots.length ? 'ai' : net ? 'room' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.resultRound, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {}, ach: Object.keys((g.me && g.me.done) || {}).filter((k) => g.me.done[k]) };
+    // 판을 끝까지 만든 입력 기록(서버가 다시 돌려 맞춰 본다). 씨앗이 든 표(새 서버, S.tkSeed)일 때만 — 업데이트 전 서버는 본문 8KB 한도라 큰 기록이 붙으면 보고가 끊긴다
+    if (g.rec && body.ticket && S.tkSeed) Object.assign(body, await packRec(g.rec.dump(g.stepN)));
     const uid = ACC.me && ACC.me.id, r = await api(path, body);
     S.repDone = true; // 결과창(14-endstats-xp esStep)이 답을 기다리다 경험치 막대를 채운다
     if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend(path, body, uid);
     if (r.me) {
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0; S.xpFrom = (r.me.xp || 0) - (r.gained || 0);
       if (r.rejected) S.tkRej = true; // 서버가 이 판 결과를 받지 않았다(표 만료 등): 결과 화면에 "기록되지 않음"을 알린다(2026-11-26)
+      S.rankWait = !r.rejected && r.rank === true; // 순위 후보 판: 순위는 재연산 검증 뒤에 오른다(결과 화면에 한 줄. 2026-11-26 "검증된 거만 올리게 해줘 랭킹은")
       // 서버가 준 관직 승급·업적 첫 달성 보상: 결과창 '다음 목표' 칸에 알린다(14-endstats-xp.js goalBox)
       S.rwRank = Array.isArray(r.rankUp) && r.rankUp.length ? r.rankUp : null; S.rwAch = Array.isArray(r.ach) && r.ach.length ? r.ach : null;
       // 경험치는 통계창 앞 경험치 연출 창(14 xpGate·playXp)이 보이고, 통계창 '내 정보' 줄은 최종 값(2026-11-26: 연출 창 되살림. 연출 중에는 넘기지 않고 끝난 뒤 눌러서 넘긴다)

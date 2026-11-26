@@ -9,6 +9,7 @@ const { WebSocketServer } = require('ws');
 const SHOP = require('../shop.js');
 const THEME = require('../theme-samguk.js'); // 장수 해금 목록·가격(theme.unlock)
 const { openStore } = require('./store');
+const REPLAY = require('./replay'); // 판 결과 재연산 검증 일꾼(2026-11-26, B 담당 server/replay*.js)
 
 const PORT = +process.env.PORT || 8300;
 const ROOT = path.join(__dirname, '..');
@@ -225,12 +226,45 @@ const tooFast = (round, time) => time > 0 && time < (round - 1) * MIN_ROUND_SEC;
 
 // ---------- 판 표(ticket): 결과·전적은 서버가 판 시작 때 내준 표로만 받는다 ----------
 // 기기가 보낸 난이도·시간을 그대로 믿지 않으려는 것(2026-11-18 보안 점검). 표 = 계정·난이도·악몽 단계·발급 시각·번호를 서버 비밀값으로 서명한 글자.
-// - 난이도·악몽 단계는 표의 값만 쓴다. 서버 기록으로 아직 안 열린 난이도는 열린 데까지만 쳐 준다(보상 배율·해금 진행).
+// - 난이도·악몽 단계는 표의 값만 쓴다. 표를 줄 때 잠긴 난이도는 거절한다(협동 손님만 예외). 보고 때도 깬 난이도 + 1까지만 쳐 준다(보상 배율·해금 진행).
 // - 걸린 시간은 서버 시계(지금 - 발급 시각)로 잰다: 라운드당 WALL_ROUND_SEC(45초 라운드, 3배속이면 15초, 여유 20%)보다 빠르면 아무것도 주지 않는다.
-// - 표 하나에 보고 한 번. 보상 받은 판끼리는 시간이 겹칠 수 없다(표를 여러 장 받아 두고 한꺼번에 내는 것 방지). 하루 동전 상한.
+// - 표 하나에 보고 한 번. 보상 받은 판끼리는 시간이 겹칠 수 없다(이어하기 칸 표는 빼고). 하루 경험치·동전 상한(DB).
+// 표 v2(2026-11-26 secure-a, 사용자 결정 ③): { v: 2, u, d, m, k, t, n, s(씨앗), sv(1 = 이어하기 칸 표), r(방 코드), g(방 판 시작 시각) }
+// - 이어하기 칸 표(혼자 오프라인 새 판): 계정당 한 칸(accounts.save_tk). 새 혼자 판이 칸을 바꾸면 앞 표는 무효. 기한 없음. 결과를 받으면 칸을 비운다(1회용).
+// - 실시간 표(협동·AI 동맹·온라인 혼자): 24시간, 여러 장.
+// - 예전 표(v 없음, 업데이트 전에 받은 표): 지금까지 규칙 그대로(전적 7일·결과 24시간) 받고 재연산 검증에서 뺀다(verify = legacy, 회수 없음. 2026-11-26 사용자 결정 "기존판은 냅둬").
 // 비밀값은 DATA_DIR/ticket.key(없으면 만든다). 서버를 다시 켜도 진행 중인 판의 표가 살아 있다.
-const WALL_ROUND_SEC = 12, GAME_ROUND_SEC = 40, TICKET_MAX_MS = 24 * 3600000, TICKET_SAVE_MS = 7 * 24 * 3600000, RESULT_COINS_DAY = 3000;
+const WALL_ROUND_SEC = 12, TICKET_MAX_MS = 24 * 3600000, TICKET_SAVE_MS = 7 * 24 * 3600000;
+// 하루(일본 시간) 판 보상 상한. 근거는 production/team/2026-11-26/secure-a.md '하루 경험치 상한'(열심히 하는 사람의 하루 8시간 최상위 판 ≈ 9,800)
+const RESULT_COINS_DAY = Math.max(0, +process.env.RESULT_COINS_DAY || 3000), RESULT_XP_DAY = Math.max(0, +process.env.RESULT_XP_DAY || 10000);
 const ROUNDS = {}; THEME.difficulties.forEach((d) => { ROUNDS[d.id] = d.rounds; });
+// 순위 시간 하한(SEC-003): 실제 판 구조로 가능한 가장 짧은 판 시간. 라인 라운드는 게임 시간 45초 고정(theme rules.roundTime, 배속은 계산 횟수만 바꾼다),
+// 보스 라운드는 라인이 없고 등장 연출(engine.js startBoss introT 4.2초) + 처치 뒤 멈춤(engine.js KILL_HOLD 4.3초, 마지막 보스는 없음)이 고정이다.
+// 보스전 자체는 아주 강하면 몇 초에 끝날 수 있어 0으로 친다. 협동 손님의 시계 맞춤(net.js roundT 보정) 몫으로 RANK_SLACK(2%)을 둔다.
+// 쉬움 클리어 하한 = (라인 65 × 45 + 보스 4 × 8 + 4) × 0.98 = 2,901초(예전 하한 2,760초, AI 실측 3,196초).
+const RANK_RULE = { laneSec: (THEME.rules && THEME.rules.roundTime) || 45, bossIntroSec: 4, bossHoldSec: 4, slack: 0.98 };
+const BOSS_SET = new Set((THEME.bosses || []).map((x) => x.round).filter((r) => r > 0));
+function rankMinTime(round, win) {
+  let lane = 0, boss = 0;
+  for (let r = 1; r < round; r++) { if (BOSS_SET.has(r)) boss++; else lane++; }
+  return Math.floor((lane * RANK_RULE.laneSec + boss * (RANK_RULE.bossIntroSec + RANK_RULE.bossHoldSec) + (win ? RANK_RULE.bossIntroSec : 0)) * RANK_RULE.slack);
+}
+// 값싼 통계 상한(보안 검토 P0-5): 도달 라운드로는 불가능한 숫자면 그 판을 받지 않는다. 정직한 판이 걸리지 않게 넉넉히 잡았다
+// (실측: 쉬움 70라운드 AI 판 처치 2,645·금화 4,450·합성 112 = 라운드당 38·64·1.6). 정직한 숫자를 베껴 보내는 조작은 못 막는다(재연산 몫).
+const STAT_CAP = { killsPerRound: 100, killsBase: 100, goldPerRound: 300, goldBase: 20000, combPerRound: 8, combBase: 30, midMul: 2 };
+const MID_ROUNDS = (THEME.midbosses || []).map((x) => x.round).filter((r) => r > 0);
+function statsBad(b, round) {
+  const st = b && b.st && typeof b.st === 'object' ? b.st : {}, n = (k) => { const v = +st[k]; return isFinite(v) ? v : 0; };
+  const bossN = [...BOSS_SET].filter((r) => r <= round).length, midN = MID_ROUNDS.filter((r) => r <= round).length;
+  if (n('kills') > round * STAT_CAP.killsPerRound + STAT_CAP.killsBase) return 'kills';
+  if (n('goldIn') > round * STAT_CAP.goldPerRound + STAT_CAP.goldBase) return 'gold';
+  if (n('combines') > round * STAT_CAP.combPerRound + STAT_CAP.combBase) return 'combines';
+  if (n('bossWins') > bossN || n('bosses') > bossN) return 'bosses';
+  // 중간보스는 잡은 뒤 300~720초 쉬었다가 다시 나온다(theme midbosses respawn) → 판 시간이 길수록 더 잡을 수 있다.
+  // 한 중간보스를 잡을 수 있는 횟수의 상한 = 1 + ⌈판 시간 / 300초⌉(가장 짧은 재등장). 2026-11-26: 고정 ×2 상한이 정직한 긴 판(R47·R57)을 거절하던 문제
+  if (n('midKill') > midN * (1 + Math.ceil(Math.max(0, timeOf(b)) / 300))) return 'mids';
+  return null;
+}
 let ticketKey = null;
 function ticketSecret() {
   if (ticketKey) return ticketKey;
@@ -247,48 +281,65 @@ const tkSign = (body) => crypto.createHmac('sha256', ticketSecret()).update(body
 // 표의 k = 판 시작 때 서버가 본 방 인원(연결이 살아 있는 자리 수). 0 = 오프라인(방 코드가 없거나, 그런 방이 없거나, 그 방에 앉아 있지 않음).
 // SEAT_MUL[k] = 경험치·동전에 곱하는 배율: 오프라인 0.5, 온라인 1인 0.6, 2인 1.0, 3인 1.2, 4인 1.4, 5인 1.7
 const SEAT_MUL = [0.5, 0.6, 1.0, 1.2, 1.4, 1.7];
-// 이 계정이 그 방에 앉아 있으면 연결된 자리 수(1~5), 아니면 0
-function roomSeats(raw, uid) {
+// 이 계정이 그 방에 앉아 있으면 { seats(연결된 자리 수 1~5), code, host(서버가 보는 방장인지), start(방장이 보낸 마지막 판 시작 신호 시각) }, 아니면 seats 0
+function roomInfo(raw, uid) {
   const code = String(raw || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12), room = code ? rooms.get(code) : null;
-  if (!room) return 0;
-  let n = 0, mine = false;
-  room.forEach((p) => { if (p.uid === uid) mine = true; if (p.ws && p.ws.readyState === 1) n++; });
-  return mine ? Math.max(1, Math.min(SEAT_MUL.length - 1, n)) : 0;
+  if (!room) return { seats: 0 };
+  let n = 0, mine = null;
+  room.forEach((p, pid) => { if (p.uid === uid) mine = pid; if (p.ws && p.ws.readyState === 1) n++; });
+  if (!mine) return { seats: 0 };
+  return { seats: Math.max(1, Math.min(SEAT_MUL.length - 1, n)), code, host: hostOf(room) === mine, start: room.startAt || 0 };
 }
-function makeTicket(uid, diff, mut, seats) {
-  const body = Buffer.from(JSON.stringify({ u: uid, d: diff, m: mut, k: seats | 0, t: Date.now(), n: crypto.randomBytes(9).toString('base64url') })).toString('base64url');
+const roomSeats = (raw, uid) => roomInfo(raw, uid).seats;
+// o = { u, d, m, k, n, s, sv, r, g }
+function makeTicket(o) {
+  const t = { v: 2, u: o.u, d: o.d, m: o.m | 0, k: o.k | 0, t: Date.now(), n: o.n, s: o.s | 0 };
+  if (o.sv) t.sv = 1;
+  if (o.o) t.o = 1;
+  if (o.r) { t.r = o.r; if (o.g) t.g = o.g; }
+  const body = Buffer.from(JSON.stringify(t)).toString('base64url');
   return body + '.' + tkSign(body);
 }
-// maxMs: 표를 받아 주는 기한. 오프라인 혼자 판(전적 보고)은 이어하기로 며칠에 걸쳐 끝낼 수 있어 7일(2026-11-26: 하루 넘겨 이어 깬 쉬움 클리어가 표 만료로 버려지던 문제)
-function readTicket(raw, uid, maxMs) {
-  const s = String(raw || ''); if (s.length > 400) return null;
+// 서명·모양만 본다(계정·기한은 부르는 쪽이). 맞지 않으면 null
+function parseTicket(raw) {
+  const s = String(raw || ''); if (s.length > 600) return null;
   const i = s.indexOf('.'); if (i < 1) return null;
   const body = s.slice(0, i), sig = Buffer.from(s.slice(i + 1)), want = Buffer.from(tkSign(body));
   if (sig.length !== want.length || !crypto.timingSafeEqual(sig, want)) return null;
   let t; try { t = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch (e) { return null; }
-  if (!t || t.u !== uid || !DIFFS.includes(t.d) || typeof t.t !== 'number' || typeof t.n !== 'string') return null;
-  if (Date.now() - t.t > (maxMs || TICKET_MAX_MS) || t.t > Date.now() + 60000) return null;
+  if (!t || typeof t.u !== 'string' || !DIFFS.includes(t.d) || typeof t.t !== 'number' || typeof t.n !== 'string') return null;
   return t;
 }
-const usedTickets = new Map(); // 번호 → 쓴 시각(전적 보고의 중복 방지. 결과 보고는 저장소가 열쇠로 한 번 더 막는다)
-const lastReward = new Map(); // 계정 → 마지막으로 보상을 준 시각
-const dayCoins = new Map(); // 계정 → { day, n }
-setInterval(() => { const now = Date.now(); usedTickets.forEach((at, k) => { if (now - at > TICKET_MAX_MS) usedTickets.delete(k); }); lastReward.forEach((at, k) => { if (now - at > TICKET_MAX_MS) lastReward.delete(k); }); }, 3600000);
-// 표와 보고를 맞춰 본다. 돌려주는 값: null(받지 않음) 또는 { diff(쳐 주는 난이도), mut, round, time, rankOk, nonce, start, seats(판 인원. 0 = 오프라인) }
+// 표의 종류와 받아 주는 기한. what = 'history'(오프라인 전적) | 'result'(온라인 결과)
+const tkKind = (t) => (!t.v ? 'legacy' : t.sv ? 'save' : 'live');
+// o = 1: 업데이트 전 앱이 받은 표(save를 보내지 않음). 그 앱의 혼자 판 이어하기가 지금 규칙(오프라인 7일)대로 끝까지 보고되게 한다(사용자 결정 "기존판은 냅둬")
+const tkMaxMs = (kind, what, old) => (kind === 'save' ? Infinity : (kind === 'legacy' || old) && what === 'history' ? TICKET_SAVE_MS : TICKET_MAX_MS);
+const tkExpired = (t, what) => Date.now() - t.t > tkMaxMs(tkKind(t), what, !!t.o) || t.t > Date.now() + 60000;
+const usedTickets = new Map(); // 번호 → 쓴 시각(같은 실행 안의 중복 방지. 저장소가 결과 열쇠로 한 번 더 막는다)
+setInterval(() => { const now = Date.now(); usedTickets.forEach((at, k) => { if (now - at > TICKET_MAX_MS) usedTickets.delete(k); }); }, 3600000);
+// 표와 보고를 맞춰 본다. 돌려주는 값: { bad: 까닭 }(받지 않음) 또는
+// { kind, diff(쳐 주는 난이도), played, mut, round, time, win, rankOk, nonce, start, seats, seed, room, party(서버가 정한 협동 순위 열쇠) }
 function judge(u, b, what) {
-  const t = readTicket(b.ticket, u.id, what === 'history' ? TICKET_SAVE_MS : TICKET_MAX_MS);
-  if (!t) { if (b.ticket) warnSome('ticket_bad', 20, `uid=${u.id} ${what}`); return null; }
-  if (usedTickets.has(t.n)) return null;
+  const t = parseTicket(b.ticket);
+  if (!t || t.u !== u.id) { if (b.ticket) warnSome('ticket_bad', 20, `uid=${u.id} ${what}`); return { bad: 'ticket' }; }
+  const kind = tkKind(t);
+  if (tkExpired(t, what)) { warnSome('ticket_old', 20, `uid=${u.id} ${what} kind=${kind}`); return { bad: 'expired' }; }
+  if (usedTickets.has(t.n)) return { bad: 'used' };
+  if (kind === 'save' && u.saveTk !== t.n) return { bad: 'replaced' }; // (저장할 때 잠금 안에서 한 번 더 본다)
   const pg = progOf(u), played = DIFFS.indexOf(t.d), di = Math.min(played, pg.clr + 1), diff = DIFFS[di];
   const mut = diff === 'nightmare' && played === di ? Math.min(Math.max(0, t.m | 0), 5, pg.nmx + 1) : 0;
   const round = Math.min(ROUNDS[t.d] || 200, Math.max(0, b.round | 0)), time = timeOf(b), wall = (Date.now() - t.t) / 1000;
-  if (wall < (round - 1) * WALL_ROUND_SEC) { warnSome('result_fast', 20, `uid=${u.id} ${what} round=${round} wall=${Math.round(wall)} diff=${t.d} win=${!!b.win}`); return null; }
+  if (wall < (round - 1) * WALL_ROUND_SEC) { warnSome('result_fast', 20, `uid=${u.id} ${what} round=${round} wall=${Math.round(wall)} diff=${t.d} win=${!!b.win}`); return { bad: 'fast' }; }
+  const sb = statsBad(b, round);
+  if (sb) { warnSome('result_stats', 20, `uid=${u.id} ${what} round=${round} stat=${sb}`); return { bad: 'stats' }; }
   const win = !!b.win && round >= (ROUNDS[t.d] || 0);
-  // 순위에 올릴 수 있는 기록: 고른 난이도 그대로 쳐 준 판이고, 판 시간이 라운드 수에 맞고, 벽시계보다 3배속 넘게 빠르지 않다
-  const rankOk = win && played === di && (t.m | 0) === mut && time >= (round - 1) * GAME_ROUND_SEC && time <= wall * 3 + 60;
+  // 순위에 올릴 수 있는 기록: 고른 난이도 그대로 쳐 준 판이고, 판 시간이 실제 판 구조의 하한 이상이고, 벽시계보다 3배속 넘게 빠르지 않다
+  const rankOk = win && played === di && (t.m | 0) === mut && time >= rankMinTime(round, win) && time <= wall * 3 + 60;
   // 판 종류는 표에 적힌 값만 쓴다(옛 표에는 없다 → 오프라인)
   const seats = Math.min(SEAT_MUL.length - 1, Math.max(0, t.k | 0));
-  return { diff, played: t.d, mut, round, time, win, rankOk, nonce: t.n, start: t.t, seats };
+  // 협동 순위 열쇠(SEC-006): 서버가 표에 적은 방 코드 + 방장의 판 시작 시각. 그 값이 없는 v2 표는 판마다 따로(이 표 번호), 예전 표는 지금처럼 기기 값
+  const party = kind === 'legacy' ? String(b.party || 'tk-' + t.n).slice(0, 40) : t.r && t.g ? ('p:' + t.r + ':' + t.g).slice(0, 40) : 'tk-' + t.n;
+  return { kind, diff, played: t.d, mut, round, time, win, rankOk, nonce: t.n, start: t.t, seats, seed: t.s | 0, room: t.r || null, party };
 }
 // 순위 응답을 30초 동안 기억한다(로그인 없이 부르는 주소라, 부를 때마다 DB 질의 수백 개가 나가지 않게).
 // 같은 열쇠를 동시에 여러 번 불러도 질의는 한 번만 나간다(약속을 기억한다).
@@ -402,39 +453,68 @@ async function grantAchs(u, b, j) {
   return list.filter((x) => got.includes(x.id)).map((x) => ({ id: x.id.slice(2), coins: x.coins }));
 }
 
-// 판 보고 받기: 온라인 결과(/api/result)와 오프라인 전적(/api/history)이 같이 쓴다. 돌려주는 값: null(받지 않음) 또는 { gained, coins }
+// 판 보고 받기: 온라인 결과(/api/result)와 오프라인 전적(/api/history)이 같이 쓴다.
+// 돌려주는 값: { bad: 까닭 }(받지 않음) 또는 { gained, coins, ach, rankUp, id(결과 id = 'tk-<표 번호>'), verify(pending | legacy), rank(순위에 올랐는지) }
 // 난이도·악몽 단계·걸린 시간·판 종류는 표와 서버 시계로 정한다(judge). 같은 표는 저장소가 열쇠로 한 번만 받는다(서버를 다시 켜도).
+// 보상은 판 끝에 바로 다 준다(2026-11-26 사용자 결정 ①). 재연산 검증(B)에서 어긋나면 revokeResult로 되돌린다.
 async function settle(u, b, online) {
   const j = judge(u, b, online ? 'result' : 'history');
-  if (!j) return null;
-  // 보상 받는 판끼리는 시간이 겹칠 수 없다: 이 표가 앞선 보상보다 먼저 발급됐으면 보상은 없다.
-  // 온라인 결과는 아예 받지 않고, 오프라인 전적은 전적·난이도 진행만 남긴다(저장해 둔 판을 다른 판 뒤에 이어서 끝낸 경우)
-  const overlap = j.start < (lastReward.get(u.id) || 0);
-  if (overlap) { warnSome('result_overlap', 20, `uid=${u.id}`); if (online) return null; }
+  if (j.bad) { if (j.bad === 'replaced' && (await store.resultExists(u.id, 'tk-' + parseTicket(b.ticket).n))) return { bad: 'used' }; return j; }
+  // 보상 받는 판끼리는 시간이 겹칠 수 없다: 이 표가 앞선 보상보다 먼저 발급됐으면 보상은 없다(마지막 보상 시각은 DB, SEC-008).
+  // 온라인 결과는 아예 받지 않고, 오프라인 전적은 전적·난이도 진행만 남긴다. 이어하기 칸 표는 계정당 한 장뿐이라 이 규칙에서 뺀다(저장해 둔 혼자 판을 협동 판 뒤에 이어 깨도 보상)
+  const overlap = j.kind !== 'save' && j.start < (u.lastReward || 0);
+  if (overlap) { warnSome('result_overlap', 20, `uid=${u.id}`); if (online) return { bad: 'overlap' }; }
   const key = 'tk-' + j.nonce;
   b = Object.assign({}, b, { diff: j.diff, mutLv: j.mut, round: j.round, win: j.win });
   const rw = overlap ? { xp: 0, coins: 0 } : rewardOf(b, j.seats);
   // 전적 줄에는 실제로 고른 난이도(표의 난이도)를 적는다. 보상·순위·난이도 진행은 위 j.diff(깬 난이도 + 1까지) 그대로(2026-11-26: 보통 판이 쉬움으로 적히던 문제)
   const hb = Object.assign({}, b, { diff: j.played || j.diff, mutLv: j.played && j.played !== j.diff ? 0 : j.mut, pdiff: j.diff, pmut: j.mut });
-  // 하루(일본 시간) 판 보상 동전 상한을 넘는 만큼은 주지 않는다
-  const day = jstDayStart(), dc = dayCoins.get(u.id), had = dc && dc.day === day ? dc.n : 0;
-  const coins = Math.max(0, Math.min(rw.coins, RESULT_COINS_DAY - had));
   // 불멸 장수를 이번 판에 몇 번 소환했는지(장수별로 쌓는다. 불멸 순위는 온라인 판만)
   const imm = {}; if (online && b.imm && typeof b.imm === 'object') Object.keys(b.imm).slice(0, 12).forEach((id) => { const n = Math.min(20, b.imm[id] | 0); if (/^[a-z]{2,16}$/.test(id) && n > 0) imm[id] = n; });
-  // 클리어 순위: 방이 있는 온라인 판이고 표와 시간이 맞는 판만(judge의 rankOk). 같은 방 사람들은 방 열쇠(party)로 한 줄에 모인다
+  // 클리어 순위: 표와 시간이 맞는 판만(judge의 rankOk). 같은 방 사람들은 서버가 정한 파티 열쇠(j.party)로 한 줄에 모인다
   // 판(board)은 둘: 온라인 협동(2인 이상, 난이도 이름 그대로)과 솔로(오프라인·혼자 시작한 온라인. 'solo:난이도', 계정마다 가장 빠른 한 줄)
-  const clear = !j.rankOk ? null : j.seats >= 2 ? { diff: j.diff, party: String(b.party || key).slice(0, 40), time: j.time, mut: j.mut } : { diff: 'solo:' + j.diff, party: 'solo:' + u.id, time: j.time, mut: j.mut };
+  // 순위에는 재연산 검증이 ok인 판만 오른다(2026-11-26 사용자 결정 "검증된 거만 올리게 해줘 랭킹은"): 여기서는 후보로만 적고 confirmResult 때 넣는다.
+  // 예전 표 판(legacy)은 검증할 수 없어 후보도 아니다(이미 올라간 예전 순위 기록은 그대로 둔다)
+  const clear = !j.rankOk || j.kind === 'legacy' ? null : j.seats >= 2 ? { diff: j.diff, party: j.party, time: j.time, mut: j.mut } : { diff: 'solo:' + j.diff, party: 'solo:' + u.id, time: j.time, mut: j.mut };
   usedTickets.set(j.nonce, Date.now());
-  const done = await store.recordResult(u.id, { key, xp: rw.xp, coins, win: !!b.win, round: j.round, hist: histOf(hb, online), imm, clear });
-  if (!done) return null;
-  if (!overlap) { lastReward.set(u.id, Date.now()); dayCoins.set(u.id, { day, n: had + coins }); }
+  const verify = j.kind === 'legacy' ? 'legacy' : 'pending';
+  const done = await store.recordResult(u.id, {
+    key, xp: rw.xp, coins: rw.coins, win: !!b.win, round: j.round, hist: histOf(hb, online), imm, clear,
+    slot: j.kind === 'save' ? j.nonce : null, day: jstDayKey(), caps: { xp: RESULT_XP_DAY, coins: RESULT_COINS_DAY }, setLast: !overlap,
+    meta: { kind: j.kind, online: !!online, issuedAt: j.start, diff: j.diff, played: j.played, mut: j.mut, time: j.time, seats: j.seats, seed: j.seed, room: j.room, verify },
+  });
+  if (!done) return { bad: 'used' };
+  if (done.why) return { bad: done.why };
   // 일일 미션 진행(승패 무관). { 미션 id: 채운 양 }
   const add = {}; MISSIONS.daily.forEach((m) => { const n = m.gain(j, b); if (n > 0) add[m.id] = n; });
   if (Object.keys(add).length) await store.missionProgress(u.id, jstDayKey(), add);
-  // 업적 첫 달성·관직 승급 보상(겹친 판은 보상 없음)
+  // 업적 첫 달성·관직 승급 보상(겹친 판은 보상 없음). 이 판 때문에 준 것은 결과 줄에 적어 둔다(회수 때 같이 되돌린다)
   const ach = overlap ? [] : await grantAchs(u, b, j);
   const rankUp = await grantRanks(await store.getUser(u.id));
-  return { gained: rw.xp, coins, ach, rankUp };
+  if (ach.length || rankUp.length) await store.noteResultGrants(key, { ach: ach.map((x) => ({ id: 'a_' + x.id, coins: x.coins })), ranks: rankUp.map((x) => ({ id: 'rk_' + x.rank, rank: x.rank, coins: x.coins })) });
+  return { gained: done.xp, coins: done.coins, ach, rankUp, id: key, verify, rank: !!clear }; // rank = 순위 후보(검증 뒤 반영)
+}
+// 기기에 알리는 거절 까닭: 이용자가 할 수 있는 것이 있는 것만(이어하기 칸이 바뀜·이미 기록됨·기한 지남). 나머지(조작 의심)는 'no'로 묶는다(보안 검토 4.2)
+const whyOut = (w) => (['replaced', 'used', 'expired'].includes(w) ? w : 'no');
+
+// ---------- 판 결과 확정·회수(2026-11-26 secure-a, 사용자 결정 ①②). 재연산 작업자(B, server/replay*.js)가 부른다 ----------
+// confirmResult(id): 재연산 결과가 보고와 맞음 → verify = ok. noRecResult(id): 입력 기록이 없어 재연산을 못 함 → verify = norec(보상은 그대로, 대기열에서 빠진다).
+// revokeResult(id, why): 맞지 않음 → 그 판으로 준 경험치·동전·난이도 해금·첫 클리어 동전·업적·관직 승급 동전·불멸 수·순위·전적 한 줄을 되돌리고 verify = bad.
+//   동전은 잔액에서 빼고, 이미 써서 모자라면 빚(coin_debt)으로 남겨 다음 동전 수입에서 먼저 갚는다. 이용자는 다음 접속(/api/me) 때 알림을 받는다.
+//   예전 표 판(verify = legacy)은 회수하지 않는다. 같은 판을 두 번 불러도 한 번만 처리된다.
+// 돌려주는 값: { result: 'ok' | 'unknown' | 'legacy' | 'already', ... }
+async function confirmResult(id, note) {
+  const r = await store.confirmResult(String(id), note ? String(note).slice(0, 200) : null, 'ok');
+  if (r.result === 'ok') { rankCache.clear(); immCache.clear(); } // 이 판이 순위에 들어갔다(검증 ok일 때만 순위에 오른다)
+  return r;
+}
+async function noRecResult(id, note) {
+  return store.confirmResult(String(id), note ? String(note).slice(0, 200) : null, 'norec');
+}
+async function revokeResult(id, why) {
+  const r = await store.revokeResult(String(id), { firsts: MISSIONS.firsts, rankOfXp: (xp) => rankOf(levelOf(xp)), why: why ? String(why).slice(0, 200) : null });
+  if (r.result === 'ok') { rankCache.clear(); immCache.clear(); console.log(`[verify] 회수 ${id} uid=${r.uid} 경험치 -${r.xp} 동전 -${r.coins}(잔액에서 ${r.taken}, 빚 ${r.debt}) 까닭=${why || '-'}`); }
+  return r;
 }
 
 function readBody(req, cb, max = 8192) {
@@ -507,7 +587,7 @@ async function handle(req, res, url, query) {
       const list = await cached(immCache, id, async () => (await store.rankImm(id, 30)).map((x) => Object.assign(pub(x.user), { n: x.n })));
       return json(res, 200, { list });
     }
-    const list = await cached(rankCache, 'level', async () => (await store.rankLevel(50)).map((u) => Object.assign(pub(u), { xp: u.xp, games: u.games })));
+    const list = await cached(rankCache, 'level', async () => (await store.rankLevel(50)).map((u) => Object.assign(pub(u), { xp: u.rankXp != null ? u.rankXp : u.xp, games: u.games })));
     return json(res, 200, { list });
   }
   // 결제 검증 준비 상태: 앱은 이게 true인 스토어에서만 결제 버튼을 보인다(검증 못 하는데 돈만 나가는 일을 막는다)
@@ -520,7 +600,10 @@ async function handle(req, res, url, query) {
   if (url === '/api/me' && req.method === 'GET') {
     const u = await userOf(req);
     if (banned(res, u)) return;
-    return u ? json(res, 200, { me: profile(u) }) : json(res, 401, { error: 'auth' });
+    if (!u) return json(res, 401, { error: 'auth' });
+    // 재연산 검증에서 회수된 판(아직 알리지 않은 것): 앱이 한 번 알리고 /api/revoked/ack로 봤다고 알린다(2026-11-26 secure-a)
+    const revoked = await store.revokedUnseen(u.id);
+    return json(res, 200, revoked.length ? { me: profile(u), revoked } : { me: profile(u) });
   }
   if (req.method !== 'POST') return json(res, 404, { error: 'not_found' });
   // App Store Server Notifications V2(Apple이 부른다, 로그인 없음). 서명 검증 뒤 환불·회수면 그 거래의 해금을 뺀다.
@@ -533,7 +616,8 @@ async function handle(req, res, url, query) {
     if ((n.type === 'REFUND' || n.type === 'REVOKE') && n.tx) await revokePurchase(n.tx.txId, 'apple:' + n.type + ':' + n.env);
     return json(res, 200, { ok: true });
   }
-  let b = await new Promise((r) => readBody(req, r));
+  // 판 보고 두 주소는 입력 기록(rec, 최대 60KB)이 붙어 64KB까지 받는다(2026-11-26 재연산 검증). 나머지는 8KB
+  let b = await new Promise((r) => readBody(req, r, url === '/api/history' || url === '/api/result' ? 65536 : 8192));
   if (!b) return json(res, 400, { error: 'bad_body' });
   // 게스트: 기기에만 보관하는 비밀값으로 다시 들어온다(비밀값은 서버에 해시로만 둔다)
   if (url === '/api/guest/new') {
@@ -623,17 +707,42 @@ async function handle(req, res, url, query) {
     // 오프라인 판(혼자·AI 동맹)도 표가 있으면 전적과 함께 경험치·동전을 받는다(오프라인 배율. 클리어·불멸 순위는 없음)
     // 표가 없거나 맞지 않으면 아무것도 바꾸지 않는다(옛 앱·가짜 보고). 결과 보고와 같은 길(settle)로 받는다
     if (limited(ip + u.id, 'hist', 20, 600000)) return json(res, 429, { error: 'slow_down' });
+    const rid = REPLAY.stash(b); // 입력 기록을 먼저 둔다(받으면 재연산 대기열이 이어서 본다)
     const r = await settle(u, b, false);
-    if (!r) return json(res, 200, { me: profile(u), gained: 0, rejected: true }); // 표 만료·중복·너무 빠름 등으로 받지 않음 → 결과 화면이 "기록되지 않음"을 알린다
-    return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins, rankUp: r.rankUp, ach: r.ach });
+    if (r.bad || r.verify !== 'pending') REPLAY.drop(rid); else REPLAY.kick();
+    if (r.bad) return json(res, 200, { me: profile(u), gained: 0, rejected: true, why: whyOut(r.bad) }); // 표 만료·칸 바뀜·중복·너무 빠름 등으로 받지 않음 → 결과 화면이 "기록되지 않음"을 알린다
+    return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins, rankUp: r.rankUp, ach: r.ach, id: r.id, verify: r.verify, rank: r.rank });
   }
   if (url === '/api/hist') return json(res, 200, { hist: await store.history(u.id), prog: progOf(u) });
   // 판 시작: 표를 내준다(계정당 10분에 20장)
+  // - room(방 코드)을 같이 보내면 그 방에 앉아 있는지와 연결된 인원을 보고 표에 판 종류를 적는다(보상 배율·협동 미션). 협동 표에는 방 코드와 방장의 판 시작 시각(파티 열쇠)
+  // - 잠긴 난이도(서버 진행 기준, 깬 난이도 + 1·깬 악몽 단계 + 1보다 위)는 400 locked + 계정(me)으로 거절(SEC-002·005). 협동 손님(서버가 보는 방장이 아님)만 예외
+  // - save: true(혼자 오프라인 새 판) → 이어하기 칸 표. 이 계정의 앞 이어하기 표는 이 순간 무효
+  // - 씨앗(seed)은 서버가 정해 표와 응답에 넣는다(재연산 준비, SEC-011)
   if (url === '/api/game/start') {
     if (limited('u:' + u.id, 'tk', 20, 600000)) return json(res, 429, { error: 'slow_down' });
     if (!DIFFS.includes(b.diff)) return json(res, 400, { error: 'bad_diff' });
-    // room(방 코드)을 같이 보내면 그 방에 앉아 있는지와 연결된 인원을 보고 표에 판 종류를 적는다(보상 배율·협동 미션)
-    return json(res, 200, { ticket: makeTicket(u.id, b.diff, Math.min(5, Math.max(0, b.mutLv | 0)), roomSeats(b.room, u.id)) });
+    const ri = roomInfo(b.room, u.id), pg = progOf(u), di = DIFFS.indexOf(b.diff);
+    const mut = b.diff === 'nightmare' ? Math.min(5, Math.max(0, b.mutLv | 0)) : 0;
+    if (!(ri.seats && !ri.host) && (di > pg.clr + 1 || mut > pg.nmx + 1)) { warnSome('tk_locked', 20, `uid=${u.id} diff=${b.diff} mut=${mut} clr=${pg.clr} nmx=${pg.nmx}`); return json(res, 400, { error: 'locked', me: profile(u) }); }
+    const save = b.save === true && !ri.seats, oldApp = b.save === undefined && !ri.seats, n = crypto.randomBytes(9).toString('base64url'), seed = crypto.randomInt(1, 1000000000);
+    if (save) await store.setSaveSlot(u.id, n);
+    return json(res, 200, { ticket: makeTicket({ u: u.id, d: b.diff, m: mut, k: ri.seats, n, s: seed, sv: save, o: oldApp, r: ri.seats ? ri.code : null, g: ri.start }), seed, save });
+  }
+  // 이어하기를 누를 때 표 상태 확인: ok(기록됨) / replaced(다른 혼자 판이 시작되어 칸이 바뀜) / used(이미 기록됨) / expired / other(다른 계정의 표) / bad / legacy(예전 표, 지금 규칙대로 받음)
+  if (url === '/api/game/check') {
+    if (limited('u:' + u.id, 'tkc', 30, 60000)) return json(res, 429, { error: 'slow_down' });
+    const t = parseTicket(b.ticket);
+    if (!t) return json(res, 200, { state: 'bad' });
+    if (t.u !== u.id) return json(res, 200, { state: 'other' });
+    const kind = tkKind(t), used = await store.resultExists(u.id, 'tk-' + t.n);
+    const state = used ? 'used' : tkExpired(t, 'history') ? 'expired' : kind === 'legacy' ? 'legacy' : kind === 'save' && u.saveTk !== t.n ? 'replaced' : 'ok';
+    return json(res, 200, { state });
+  }
+  // 회수 알림을 봤음(ids = 결과 id 목록)
+  if (url === '/api/revoked/ack') {
+    await store.ackRevoked(u.id, Array.isArray(b.ids) ? b.ids.map(String) : []);
+    return json(res, 200, { ok: true });
   }
   // 미션 상태(일일 미션 3개 + 첫 클리어 8개)
   if (url === '/api/missions') {
@@ -775,9 +884,11 @@ async function handle(req, res, url, query) {
     // 판 하나에 한 번만: 같은 표로 두 번 보내면 무시
     if (limited('u:' + u.id, 'res', 6, 600000)) return json(res, 429, { error: 'slow_down' }); // 계정 기준(주소를 바꿔도 같은 한도)
     // 표가 없거나 맞지 않으면 아무것도 주지 않는다(settle)
+    const rid = REPLAY.stash(b); // 입력 기록을 먼저 둔다(받으면 재연산 대기열이 이어서 본다)
     const r = await settle(u, b, true);
-    if (!r) return json(res, 200, { me: profile(u), gained: 0, rejected: true }); // 표 만료·중복·너무 빠름 등으로 받지 않음 → 결과 화면이 "기록되지 않음"을 알린다
-    return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins, rankUp: r.rankUp, ach: r.ach });
+    if (r.bad || r.verify !== 'pending') REPLAY.drop(rid); else REPLAY.kick();
+    if (r.bad) return json(res, 200, { me: profile(u), gained: 0, rejected: true, why: whyOut(r.bad) }); // 표 만료·중복·너무 빠름 등으로 받지 않음 → 결과 화면이 "기록되지 않음"을 알린다
+    return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins, rankUp: r.rankUp, ach: r.ach, id: r.id, verify: r.verify, rank: r.rank });
   }
   if (url === '/api/delete') {
     // 탈퇴: 비밀번호 계정은 비밀번호를, Apple·Google·게스트는 '삭제' 확인 문자를 받고 계정·연결·토큰·기록을 모두 지운다
@@ -978,7 +1089,7 @@ function joinRoom(ws, q, u, early) {
       broadcast(room, id, out); send(ws, Object.assign({}, out, { self: 1 }));
     } else if (m.k === 'msg' && typeof m.t === 'string') {
       if (!RELAY_TOPICS.has(m.t)) { warnSome('ws_topic', 20, `room=${code} t=${m.t.slice(0, 24)} from=${id} uid=${u.id}`); return; }
-      if (HOST_ONLY.has(m.t)) { const h = hostOf(room); if (h !== id) warnSome('not_host', 30, `room=${code} t=${m.t} from=${id} host=${h} uid=${u.id}`); } // 기록만, 중계는 그대로
+      if (HOST_ONLY.has(m.t)) { const h = hostOf(room); if (h !== id) warnSome('not_host', 30, `room=${code} t=${m.t} from=${id} host=${h} uid=${u.id}`); else if (m.t === 'start') room.startAt = Date.now(); } // 기록만, 중계는 그대로. 방장의 시작 신호 시각은 협동 표·파티 열쇠에(SEC-006)
       broadcast(room, id, { k: 'msg', from: id, t: m.t.slice(0, 24), d: cleanRelay(m.d, 0) });
     }
   };
@@ -1071,6 +1182,9 @@ async function start(opts = {}) {
   const modT = setInterval(() => refreshSanctions().catch((e) => console.error('[mod] 제재 목록을 읽지 못함(앞선 목록 유지):', e && e.message)), MOD_REFRESH_MS); if (modT.unref) modT.unref();
   if (gplayOn()) { const gv = () => pollGoogleVoided().catch((e) => console.error('[iap] 구글 환불 목록 조회 실패:', e && e.message)); gv(); const gvT = setInterval(gv, GVOID_MS); if (gvT.unref) gvT.unref(); }
   const appleT = setInterval(() => sweepAppleTokens().catch((e) => console.error('[apple] 남은 토큰 정리 실패:', e && e.message)), 3600000); if (appleT.unref) appleT.unref();
+  // 재연산 검증 일꾼(판 보고 뒤 따로 돈다. 어긋나면 revokeResult, 기록이 없으면 noRecResult).
+  // 서버로 직접 띄울 때(node server/app.js)는 켜고, 시험이 start()로 띄울 때는 opts.replay가 true일 때만(검증 상태를 시험이 직접 다루는 경우가 있다)
+  if (opts.replay != null ? opts.replay : require.main === module) REPLAY.start({ store, dataDir: DATA, root: ROOT, confirm: confirmResult, norec: noRecResult, revoke: revokeResult, lockedIds: () => (THEME.unlock ? THEME.unlock.lockedIds() : []), unitKey: (id) => (THEME.unlock && THEME.unlock.key ? THEME.unlock.key(id) : id) });
   await new Promise((r) => server.listen(opts.port != null ? opts.port : PORT, r));
   console.log(`삼국 랜덤 디펜스 온라인 서버(${store.kind}): http://localhost:${server.address().port}`);
   return { server, store };
@@ -1078,4 +1192,4 @@ async function start(opts = {}) {
 // 처리하지 못한 오류 하나로 서버 전체(모든 방)가 내려가지 않게 기록만 남긴다
 if (require.main === module) { process.on('uncaughtException', (e) => console.error('uncaught', e)); process.on('unhandledRejection', (e) => console.error('unhandled', e)); }
 if (require.main === module) start().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { start };
+module.exports = { start, confirmResult, noRecResult, revokeResult };

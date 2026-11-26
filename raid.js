@@ -2,6 +2,7 @@
 // 결정(페이즈 진입, 오브젝트, 성공·실패)은 방장 게임만 하고, 상태는 보스 동기화(bs)에 실어 모두에게 보낸다.
 // 장판(hazard)은 기존처럼 방장이 만들어 hz로 보내고, 각자 자기 출전 유닛에게 적용한다.
 (function (root) {
+  const DET = root.RTD_DET || (typeof require !== 'undefined' ? require('./det.js') : null); // 결정적 sin·cos·atan2·hypot·exp·log(det.js, 서버 재연산 검증)
   const E = root.RTD_ENGINE || (typeof require !== 'undefined' ? require('./engine.js') : null);
   const { Game, ARENA, dist, clamp, inLine, inCone, angDiff, polyPoly, polyNear, rectPoly } = E;
   const P = Game.prototype;
@@ -125,7 +126,7 @@
     this.fxBurst(f.boss.x, f.boss.y, '#7fd4ff', 140);
   };
   // 보스 정면(반격 판정)
-  P.inFront = function (c) { const f = this.fight, b = f.boss; return angDiff(Math.atan2(c.y - b.y, c.x - b.x), f.mech.face) < 1.1; };
+  P.inFront = function (c) { const f = this.fight, b = f.boss; return angDiff(DET.atan2(c.y - b.y, c.x - b.x), f.mech.face) < 1.1; };
   // damageBoss 안에서 호출: 피해 배율(그로기·약점)
   // samp(인연 팀 보스 약화)는 디버퍼 약점 간파(amp)와 따로 곱한다(둘 다 max라 한 채널이면 덮여 없어진다)
   P.raidMul = function () { const M = this.fight.mech; return (1 + M.vuln) * (M.gr > 0 ? 1.3 : 1) * (1 + (M.ampT > 0 ? M.amp : 0)) * (1 + (M.sampT > 0 ? M.sampV : 0)); };
@@ -197,10 +198,10 @@
       if (o.k === 'tower' && o.cd <= 0) {
         o.cd = 3.4; const t = this.nearestTo(o.x, o.y);
         // 세 줄 간격: 표적 거리에서 줄 사이 틈이 발판 + 여유 이상(최소 0.25, 2026-11-26)
-        if (t) { const a0 = Math.atan2(t.y - o.y, t.x - o.x), st = this.fanStep(0.25, 40, dist(t.x, t.y, o.x, o.y), a0); this.addHazards([-st, 0, st].map((da) => ({ k: 'line', x: o.x, y: o.y, a: a0 + da, len: 1500, w: 40, delay: 1 * pace, dmg: b.hit * 0.28, fx: 'arrow' }))); }
+        if (t) { const a0 = DET.atan2(t.y - o.y, t.x - o.x), st = this.fanStep(0.25, 40, dist(t.x, t.y, o.x, o.y), a0); this.addHazards([-st, 0, st].map((da) => ({ k: 'line', x: o.x, y: o.y, a: a0 + da, len: 1500, w: 40, delay: 1 * pace, dmg: b.hit * 0.28, fx: 'arrow' }))); }
       } else if (o.k === 'amb' && o.cd <= 0) {
         o.cd = 2.6; const t = this.nearestTo(o.x, o.y);
-        if (t) this.addHazards([{ k: 'proj', x: o.x, y: o.y, a: Math.atan2(t.y - o.y, t.x - o.x), v: 360, r: 15, delay: 0.5, dmg: b.hit * 0.22, fx: 'arrow' }]);
+        if (t) this.addHazards([{ k: 'proj', x: o.x, y: o.y, a: DET.atan2(t.y - o.y, t.x - o.x), v: 360, r: 15, delay: 0.5, dmg: b.hit * 0.22, fx: 'arrow' }]);
       }
     }
   };
@@ -262,7 +263,7 @@
   P.raidSpots = function () {
     const f = this.fight, out = [], my = this.footMid();
     f.hazards.forEach((h) => {
-      if (h.k === 'los' && !h.fired) f.mech.objs.forEach((p) => { if (p.k === 'pillar') { const a = Math.atan2(p.y - h.y, p.x - h.x); out.push([p.x + Math.cos(a) * (p.r + 46), p.y + Math.sin(a) * (p.r + 46)]); } });
+      if (h.k === 'los' && !h.fired) f.mech.objs.forEach((p) => { if (p.k === 'pillar') { const a = DET.atan2(p.y - h.y, p.x - h.x); out.push([p.x + DET.cos(a) * (p.r + 46), p.y + DET.sin(a) * (p.r + 46)]); } });
       if (h.k === 'safe' && !h.fired) h.spots.forEach((s) => out.push([s[0], s[1] - my]));
       if (h.k === 'band' && h.t < h.delay + (h.dur || 0)) out.push([f.boss.x, (h.y0 + h.y1) / 2 - my], [CX, (h.y0 + h.y1) / 2 - my]);
     });
@@ -272,7 +273,7 @@
   P.gazeHit = function (c) {
     const b = this.fight.boss;
     if (!c.move || dist(c.x, c.y, c.tx, c.ty) < 6) return false;
-    return angDiff(Math.atan2(c.ty - c.y, c.tx - c.x), Math.atan2(b.y - c.y, b.x - c.x)) < 1.0;
+    return angDiff(DET.atan2(c.ty - c.y, c.tx - c.x), DET.atan2(b.y - c.y, b.x - c.x)) < 1.0;
   };
   // stepHazards에서 raid 장판을 넘겨받는다. true면 지운다.
   P.raidHazard = function (h, dt) {
@@ -283,8 +284,8 @@
       if (h.k === 'push') {
         own.forEach((c) => {
           if (polyNear(this.footPoly(c.x, c.y, this.hitEdge()), h.x, h.y) > h.r) return; // 발판이 충격파 원에 닿으면 밀린다
-          const a = Math.atan2(c.y - h.y, c.x - h.x);
-          c.kx = (Math.cos(a) * h.pw) / 0.35; c.ky = (Math.sin(a) * h.pw) / 0.35; c.kt = 0.35; c.move = false;
+          const a = DET.atan2(c.y - h.y, c.x - h.x);
+          c.kx = (DET.cos(a) * h.pw) / 0.35; c.ky = (DET.sin(a) * h.pw) / 0.35; c.kt = 0.35; c.move = false;
         });
       } else if (h.k === 'all') own.forEach((c) => this.hurtChamp(c, h.kill ? c.hp + 1e6 : h.frac ? c.mhp * h.frac : h.dmg));
       else if (h.dmg && h.k !== 'wind' && h.k !== 'gaze') own.forEach((c) => { if (this.champHit(h, c)) this.hurtChamp(c, h.kill ? c.hp + 1e6 : h.dmg); });
@@ -319,7 +320,7 @@
       return [s[0], s[1] - this.footMid()];
     }
     // 반격: 보스 정면으로
-    if (M.ctr > 0 && !this.inFront(c)) { const r = Math.min(200, this.range(c.def) * 0.8); return [clamp(b.x + Math.cos(M.face) * r, ARENA.x0, ARENA.x1), clamp(b.y + Math.sin(M.face) * r, ARENA.y0, ARENA.y1)]; }
+    if (M.ctr > 0 && !this.inFront(c)) { const r = Math.min(200, this.range(c.def) * 0.8); return [clamp(b.x + DET.cos(M.face) * r, ARENA.x0, ARENA.x1), clamp(b.y + DET.sin(M.face) * r, ARENA.y0, ARENA.y1)]; }
     return null;
   };
 
@@ -340,12 +341,12 @@
     }
     if (b.atkCd <= 0) {
       b.atkCd = 2.2;
-      this.addHazards([{ k: 'proj', x: b.x, y: b.y, a: Math.atan2(t.y - b.y, t.x - b.x), v: 430, r: 16, delay: 0.35, dmg: b.hit * 0.1, fx: 'orb' }]);
+      this.addHazards([{ k: 'proj', x: b.x, y: b.y, a: DET.atan2(t.y - b.y, t.x - b.x), v: 430, r: 16, delay: 0.35, dmg: b.hit * 0.1, fx: 'orb' }]);
     }
   };
 
   // ---- 보스별 고유 기믹(페이즈) ----
-  const ring = (n, rx, ry, off) => Array.from({ length: n }, (_, i) => { const a = off + (i / n) * Math.PI * 2; return [CX + Math.cos(a) * rx, CY + Math.sin(a) * ry]; });
+  const ring = (n, rx, ry, off) => Array.from({ length: n }, (_, i) => { const a = off + (i / n) * Math.PI * 2; return [CX + DET.cos(a) * rx, CY + DET.sin(a) * ry]; });
   P.mechs = {
     // 장각: 부적 제단 3개. 제단이 있는 동안 모두에게 낙뢰. 다 부수면 그로기, 30초를 넘기면 폭주.
     altars: {
@@ -435,7 +436,7 @@
         if (s.n <= 0) { this.dropObjs('pillar'); f.mech.busy = null; return; }
         s.n--; s.cd = 5.2;
         const a = this.rand() * Math.PI * 2;
-        b.x = clamp(CX + Math.cos(a) * 560, ARENA.x0 + 60, ARENA.x1 - 60); b.y = clamp(CY + Math.sin(a) * 340, ARENA.y0 + 60, ARENA.y1 - 60);
+        b.x = clamp(CX + DET.cos(a) * 560, ARENA.x0 + 60, ARENA.x1 - 60); b.y = clamp(CY + DET.sin(a) * 340, ARENA.y0 + 60, ARENA.y1 - 60);
         this.fxBurst(b.x, b.y, f.def.fx, 90);
         this.addHazards([{ k: 'los', raid: 1, x: b.x | 0, y: b.y | 0, delay: 3.8 * this.pace(), dmg: b.hit * 0.95 }]);
       },
@@ -473,7 +474,7 @@
   G.charge = function (f, b, t, p, pace, all) {
     if (p.ctr && !p.now) {
       const M = f.mech;
-      M.ctr = 3; M.ctrGot = 0; M.ctrBack = 0; M.ctrNeed = 4 + 2 * this.party; M.face = Math.atan2(t.y - b.y, t.x - b.x); M.ctrGo = { gen: 'charge', t, p, v: f.vis };
+      M.ctr = 3; M.ctrGot = 0; M.ctrBack = 0; M.ctrNeed = 4 + 2 * this.party; M.face = DET.atan2(t.y - b.y, t.x - b.x); M.ctrGo = { gen: 'charge', t, p, v: f.vis };
       return;
     }
     baseCharge.call(this, f, b, t, p, pace, all);

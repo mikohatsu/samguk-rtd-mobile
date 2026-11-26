@@ -100,7 +100,7 @@
       try { sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); } catch (e) { sv = null; }
       const cb = $('contbtn'), showC = sv && sv.v === 1; // 이어하기는 마지막에 온라인을 골랐어도 저장이 있으면 보인다
       cb.hidden = !showC;
-      if (showC) { const dn = (T.difficulties.find((d) => d.id === sv.diff) || {}).name || ''; cb.textContent = t('continueGame', { r: sv.round, d: dn }); cb.onclick = () => begin({ snap: sv, mode: 'solo', diff: sv.diff }); }
+      if (showC) { const dn = (T.difficulties.find((d) => d.id === sv.diff) || {}).name || ''; cb.textContent = contArmed() ? t('contNoRec') : t('continueGame', { r: sv.round, d: dn }); cb.onclick = () => contGo(sv); }
       $('startbtn').textContent = isRoom ? (!lobby ? t('joinFirst') : host ? t('startHost') : t('waitHost')) : ovArm ? t('overwriteSave') : t('start');
       $('startbtn').disabled = (isRoom && (!lobby || !host)) || (!pk('diff') && !hostPick) || (window.RTD_LOBBY && !window.RTD_LOBBY.diffOpen(cfg.diff, +cfg.mutLv));
       if (lobby && host) {
@@ -110,6 +110,27 @@
       renderLobby();
       if (window.RTD_LOBBY) window.RTD_LOBBY.refresh();
     };
+    // 이어하기(2026-11-26 secure-a): 로그인해 있고 이어하기 표가 있으면 서버에 표 상태를 묻는다(1.5초 넘게 걸리거나 끊기면 그냥 시작 — 판 끝에 서버가 판단).
+    // 다른 혼자 판이 시작되어 칸이 바뀜(replaced)·이미 기록됨(used)·다른 계정의 표(other)면 까닭을 알리고 버튼이 '기록 없이 이어하기'로 바뀐다.
+    // 4초 안에 한 번 더 누르면 기록 없이 이어 한다(판은 그대로 할 수 있다). 예전 앱이 둔 표(legacy)는 서버가 지금 규칙대로 받는다.
+    let contArmAt = 0;
+    const contArmed = () => Date.now() - contArmAt < 4000;
+    async function contGo(sv) {
+      const LB = window.RTD_LOBBY;
+      if (contArmed()) { contArmAt = 0; begin({ snap: sv, mode: 'solo', diff: sv.diff, noRecord: true }); return; }
+      const st = ACC.token && ACC.me && LB && LB.saveTk ? LB.saveTk() : null;
+      let why = null;
+      if (st && !st.legacy && st.u !== ACC.me.id) why = 'other';
+      else if (st) {
+        const r = await Promise.race([api('/api/game/check', { ticket: st.tk }), pause(1500).then(() => ({}))]);
+        if (r.state === 'replaced' || r.state === 'used' || r.state === 'other') why = r.state;
+      }
+      if (!why) { begin({ snap: sv, mode: 'solo', diff: sv.diff }); return; }
+      contArmAt = Date.now();
+      if (LB && LB.toast) LB.toast(t(why === 'replaced' ? 'contReplaced' : why === 'used' ? 'contUsed' : 'contOther'), 6000);
+      dr();
+      setTimeout(() => { if (!$('title').hidden) dr(); }, 4100);
+    }
     function refreshAcc() { const ah = accHtml(); if ($('accbox').dataset.html !== ah) { $('accbox').innerHTML = ah; $('accbox').dataset.html = ah; bindAcc(); } }
     // 로비: 방 코드 현판, 다섯 자리 카드(초상·관직 문장·이름·관직·레벨, 방장·나 표시), 방장이 고른 설정
     // 카드는 바뀐 자리만 다시 그린다(새로 들어온 사람 카드만 등장 연출이 걸리고, 다른 카드는 깜빡이지 않는다)
@@ -329,7 +350,7 @@
       let netDown = false;
       // 로그인 상태 새로 받기(등급이 다른 기기에서 올랐을 수 있다). 토큰이 만료됐으면(401) api()가 지운다
       let ban = null; // 정지된 계정(403 banned): 아래에서 안내만 보이고 멈춘다
-      if (ACC.token) { const r = await api('/api/me'); if (r.me) { ACC.me = r.me; saveAcc(); } else if (r.status === 0) netDown = true; else if (r.error === 'banned') ban = r; }
+      if (ACC.token) { const r = await api('/api/me'); if (r.me) { ACC.me = r.me; saveAcc(); if (window.RTD_LOBBY && window.RTD_LOBBY.onMe) window.RTD_LOBBY.onMe(r); } else if (r.status === 0) netDown = true; else if (r.error === 'banned') ban = r; } // onMe: 회수 알림·난이도 잠금 안내(lobby.js)
       if (!ACC.token && GUEST && GUEST.id) {
         const r = await api('/api/guest/login', { id: GUEST.id, secret: GUEST.secret });
         if (r.token) setAcc(r); else if (r.status === 401) saveGuest(null); else if (r.status === 0) netDown = true; else if (r.error === 'banned') ban = r;

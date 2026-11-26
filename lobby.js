@@ -192,22 +192,39 @@
     const el = $('lsay'); el.textContent = nm(lines[lineI]); el.hidden = false; sayT = performance.now() + 3200;
   }
 
-  function toast(txt) {
+  // ms: 보이는 시간(기본 2.6초. 긴 안내는 길게)
+  function toast(txt, ms) {
     let el = $('ltoast'); if (!el) { el = document.createElement('div'); el.id = 'ltoast'; $('title').appendChild(el); }
-    el.textContent = txt; el.hidden = false; el.classList.remove('in'); void el.offsetWidth; el.classList.add('in'); clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2600);
+    el.textContent = txt; el.hidden = false; el.classList.remove('in'); void el.offsetWidth; el.classList.add('in'); clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), ms || 2600);
   }
   // ---------- 전적과 난이도 해금 ----------
   const DIFFS = ['easy', 'normal', 'hard', 'nightmare'];
   const loadJ = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') || d; } catch (e) { return d; } };
   const saveJ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 저장 불가 */ } };
-  // 해금 진행도: 기기에서 깬 것과 계정에서 깬 것 중 높은 쪽
-  // 상점은 쉬움을 처음 클리어하면 열린다(기기·계정 진행도 중 높은 쪽)
+  // 해금 진행도(2026-11-26 secure-a, SEC-005): 로그인한 계정은 서버 계정 기록(me.prog)만 쓴다. 기기 기록(rtd-prog)은 계정이 없는 기기에서만.
+  // 서버가 아직 받지 않은 판(보류 중·끊김)으로는 잠금을 풀지 않는다. 서버가 받으면 답(me)으로 바로 열린다.
+  // 상점은 쉬움을 처음 클리어하면 열린다
   const shopOpen = () => !!C && prog().clr >= 0;
+  const signedIn = () => !!(C && C.ACC.token && C.ACC.me);
+  // 기기에 남기는 판 수·클리어 수(전적 창이 서버 전적을 못 불러올 때 대신 보이는 값). 계정마다 따로(계정을 바꿔도 섞이지 않게)
+  const progKey = () => (signedIn() ? 'rtd-prog@' + C.ACC.me.id : 'rtd-prog');
+  // 이어하기 판의 표(rtd-save-tk): { u: 계정, tk: 표, s: 씨앗 }. 예전 앱은 표 글자만 두었다(legacy: 그대로 받아 끝까지 보고한다)
+  function readSaveTk() {
+    let raw = null; try { raw = localStorage.getItem('rtd-save-tk'); } catch (e) { return null; }
+    if (!raw) return null;
+    if (raw[0] !== '{') return { u: null, tk: raw, legacy: true };
+    try { const o = JSON.parse(raw); return o && typeof o.tk === 'string' ? o : null; } catch (e) { return null; }
+  }
+  // tk가 없으면 지운다(새 혼자 판이 시작될 때 앞 판의 표가 새 판에 붙지 않게)
+  function writeSaveTk(tk, seed) {
+    try { if (tk && signedIn()) localStorage.setItem('rtd-save-tk', JSON.stringify({ u: C.ACC.me.id, tk, s: seed || 0 })); else localStorage.removeItem('rtd-save-tk'); } catch (e) { /* 저장 불가 */ }
+  }
   // 첫 신화 2명을 이미 받았는지(로그인: 계정 보유 목록, 아니면 이 기기의 rtd-starter)
   const hasStarter = () => { if (!C) return true; const me = C.ACC.me; if (me && C.ACC.token) return (me.owned || []).includes(UL().starterKey); return loadJ('rtd-starter', []).length > 0; };
   function prog() {
-    const l = loadJ('rtd-prog', { clr: -1, nmx: -1 }), a = (C.ACC.me && C.ACC.me.prog) || { clr: -1, nmx: -1 };
-    return { clr: Math.max(l.clr, a.clr), nmx: Math.max(l.nmx, a.nmx) };
+    if (signedIn()) { const a = C.ACC.me.prog || {}; return { clr: a.clr == null ? -1 : a.clr, nmx: a.nmx == null ? -1 : a.nmx }; }
+    const l = loadJ('rtd-prog', { clr: -1, nmx: -1 });
+    return { clr: l.clr == null ? -1 : l.clr, nmx: l.nmx == null ? -1 : l.nmx };
   }
   function diffOpen(diff, mut) {
     const p = prog(), i = DIFFS.indexOf(diff);
@@ -219,37 +236,39 @@
     const s = g.stats || {};
     return { kills: s.kills | 0, midKill: s.midKill | 0, midMiss: s.midMiss | 0, lifeLost: s.lifeLost | 0, goldIn: s.goldIn | 0, combines: s.combines | 0, crafts: (s.crafts || []).length, best: s.best | 0, tickets: s.tickets | 0, chests: s.chests | 0, bosses: (s.bosses || []).length, bossWins: (s.bosses || []).filter((b) => b.win).length, fast: (s.bosses || []).filter((b) => b.fast).length };
   }
-  // 판이 끝날 때: 기기에 남기고, 로그인한 오프라인 판은 서버에도(온라인 판은 결과 보고에 같이 간다)
+  // 판이 끝날 때: 기기에 남긴다(전적 창의 대신 보이는 기록). 서버 보고는 18-account.js reportResult가 한다.
+  // 로그인한 계정이면 판 수·클리어 수만 그 계정 칸에 남기고 난이도 해금(clr·nmx)은 올리지 않는다(해금은 서버 답으로만, SEC-005)
   function recordGame(g, online, mode, ticket) {
     if (g.trial) return; // 체험은 전적을 남기지 않는다(rtd-hist의 myth는 로그인 안 한 기기의 해금 근거라 체험 장수가 열려 버린다)
     const rec = { at: Date.now(), diff: g.diff.id, mut: g.mutLv || 0, mutLv: g.mutLv || 0, round: g.resultRound || g.round, win: g.over === 'win', time: Math.round(g.time), online: !!online, mode, myth: (g.stats && g.stats.myth) || {}, st: statsOf(g) };
     const h = loadJ('rtd-hist', []); h.unshift(rec); saveJ('rtd-hist', h.slice(0, 20));
-    const p = loadJ('rtd-prog', { clr: -1, nmx: -1, plays: {}, clears: {} });
+    const acct = signedIn(), k = progKey(), p = loadJ(k, { clr: -1, nmx: -1, plays: {}, clears: {} });
     p.plays = p.plays || {}; p.clears = p.clears || {};
     p.plays[rec.diff] = (p.plays[rec.diff] || 0) + 1;
-    if (rec.win) { p.clears[rec.diff] = (p.clears[rec.diff] || 0) + 1; p.clr = Math.max(p.clr, DIFFS.indexOf(rec.diff)); if (rec.diff === 'nightmare') p.nmx = Math.max(p.nmx, rec.mut); }
-    saveJ('rtd-prog', p);
+    if (rec.win) { p.clears[rec.diff] = (p.clears[rec.diff] || 0) + 1; if (!acct) { p.clr = Math.max(p.clr, DIFFS.indexOf(rec.diff)); if (rec.diff === 'nightmare') p.nmx = Math.max(p.nmx, rec.mut); } }
+    saveJ(k, p);
     // 서버 보고는 18-account.js reportResult가 한다(오프라인 판도 /api/history로 경험치·동전을 받는다)
   }
   // ---------- 못 보낸 판 결과 다시 보내기 ----------
-  // 판이 끝날 때 서버에 닿지 못하면(끊김 = status 0, 서버 오류 = 5xx) 보낼 내용(주소·본문, 판 표 포함)을 기기에 둔다(최대 5건, 24시간).
+  // 판이 끝날 때 서버에 닿지 못하면(끊김 = status 0, 서버 오류 = 5xx) 보낼 내용(주소·본문, 판 표 포함)을 기기에 둔다(최대 5건, 7일 — 서버가 예전 오프라인 표를 7일 받는다.
+  // 이어하기 칸 표는 서버 기한이 없지만 기기 보관은 7일로 묶는다).
   // 앱을 켤 때(19-title.js boot)와 로비 화면을 다시 그릴 때(refresh, 1분에 한 번) 그 계정으로 로그인해 있으면 다시 보낸다.
   // 서버가 200으로 답하면(보상이 0이어도) 지운다. 같은 표는 서버가 한 번만 받으므로 두 번 받는 일은 없다.
-  const PEND = 'rtd-pending', PEND_MAX = 5, PEND_MS = 24 * 3600000, PEND_PATHS = ['/api/result', '/api/history'], PEND_GAP = 60000;
+  const PEND = 'rtd-pending', PEND_MAX = 5, PEND_MS = 7 * 24 * 3600000, PEND_PATHS = ['/api/result', '/api/history'], PEND_GAP = 60000;
   const netFail = (r) => r.status === 0 || r.status >= 500;
   function queueSend(path, body, uid) {
     if (!PEND_PATHS.includes(path) || !body) return;
     const q = loadJ(PEND, []); q.push({ k: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), p: path, b: body, u: uid || null, at: Date.now() }); saveJ(PEND, q.slice(-PEND_MAX));
   }
   // 로딩 화면이 걷힌 뒤에 알린다(로딩 화면이 로비의 알림을 가린다)
-  const toastLobby = (txt) => { const B = $('boot'); if (B && !B.hidden) setTimeout(() => toastLobby(txt), 500); else toast(txt); };
+  const toastLobby = (txt, ms) => { const B = $('boot'); if (B && !B.hidden) setTimeout(() => toastLobby(txt, ms), 500); else toast(txt, ms); };
   let flushing = false, flushAt = 0;
   async function flushPending() {
     const me = C && C.ACC.me; if (!me || !C.ACC.token || flushing) return;
     flushing = true; flushAt = Date.now();
     try {
       const now = Date.now(), q = loadJ(PEND, []).filter((x) => x && PEND_PATHS.includes(x.p) && x.b && now - x.at < PEND_MS);
-      saveJ(PEND, q); // 24시간 지난 것은 버린다
+      saveJ(PEND, q); // 7일 지난 것은 버린다
       let gained = 0;
       for (const it of q) {
         if (it.u !== me.id) continue; // 다른 계정으로 한 판은 그 계정으로 들어왔을 때 보낸다
@@ -264,16 +283,48 @@
       if (gained > 0) toastLobby(L('resentXp', { n: gained }));
     } finally { flushing = false; }
   }
+  // ---------- 계정 진행 새로 받기(2026-11-26 secure-a) ----------
+  // 로비에 들어올 때(refresh)·다시 연결될 때 /api/me를 1분에 한 번까지 다시 받는다(다른 기기에서 오른 진행, 회수 결과가 반영된다).
+  // 답에 회수 알림(revoked)이 있으면 한 번 알리고 서버에 봤다고 알린다. 업데이트 직후, 기기 기록으로만 열려 있던 난이도가 다시 잠긴 사람에게 한 번 안내.
+  const ME_GAP = 60000; let meAt = 0, meBusy = false;
+  function onMe(r) {
+    if (!C || !r || !r.me) return;
+    meAt = Date.now();
+    if (Array.isArray(r.revoked) && r.revoked.length) {
+      const xp = r.revoked.reduce((n, x) => n + (x.xp | 0), 0), coins = r.revoked.reduce((n, x) => n + (x.coins | 0), 0);
+      toastLobby(C.t('revokedNote', { n: r.revoked.length, x: xp, c: coins }), 8000);
+      C.api('/api/revoked/ack', { ids: r.revoked.map((x) => x.id) });
+    }
+    // 예전 기기 기록(rtd-prog)이 계정보다 앞서 있던 기기: 한 번만 안내('rtd-locksrc'). 기기 값을 서버에 올리지는 않는다(조작한 기기 값으로 해금되는 길이 된다)
+    let seen = '1'; try { seen = localStorage.getItem('rtd-locksrc'); } catch (e) { /* 저장 불가 */ }
+    if (!seen) {
+      const l = loadJ('rtd-prog', { clr: -1, nmx: -1 }), a = r.me.prog || {}, n = (v) => (v == null ? -1 : v);
+      try { localStorage.setItem('rtd-locksrc', '1'); } catch (e) { /* 저장 불가 */ }
+      if (n(l.clr) > n(a.clr) || n(l.nmx) > n(a.nmx)) toastLobby(C.t('lockSrcNote'), 8000);
+    }
+  }
+  async function syncMe(force) {
+    if (!C || !C.ACC.token || meBusy || (!force && Date.now() - meAt < ME_GAP)) return;
+    meBusy = true; meAt = Date.now();
+    try {
+      const before = JSON.stringify(prog()), r = await C.api('/api/me');
+      if (!r.me) return;
+      C.ACC.me = r.me; C.saveAcc(); onMe(r); renderTop();
+      if (JSON.stringify(prog()) !== before && $('title') && !$('title').hidden) { if (C.repaintSetup) C.repaintSetup(); else markLocks(); }
+    } finally { meBusy = false; }
+  }
+  // 서버에 아직 닿지 못한 이긴 판(보류 중)이 이 난이도를 열 판인지: 잠금 글을 '서버 확인 중'으로 바꿔 보인다(잠금은 풀지 않는다)
+  const pendingOpens = (i) => { const me = signedIn() && C.ACC.me; return !!me && loadJ(PEND, []).some((x) => x && x.u === me.id && x.b && x.b.win && DIFFS.indexOf(x.b.diff) >= i - 1); };
   // 난이도 버튼에 잠금 표시
   function markLocks() {
     const dname = (id) => (C.T.difficulties.find((d) => d.id === id) || {}).name || id;
     document.querySelectorAll('#diffs button[data-v]').forEach((b) => {
-      const i = DIFFS.indexOf(b.dataset.v), open = diffOpen(b.dataset.v, 0);
+      const i = DIFFS.indexOf(b.dataset.v), open = diffOpen(b.dataset.v, 0), why = !open && pendingOpens(i) ? C.t('lockPending') : L('locked', { a: dname(DIFFS[i - 1]) });
       b.classList.toggle('lock', !open); b.disabled = !open;
-      b.title = open ? '' : L('locked', { a: dname(DIFFS[i - 1]) });
+      b.title = open ? '' : why;
       // 잠긴 난이도는 무엇을 깨면 열리는지 버튼 안에 글로 보여 준다(터치 화면에서는 title이 안 보인다)
       let lk = b.querySelector('.lk');
-      if (!open) { if (!lk) { lk = document.createElement('em'); lk.className = 'lk'; b.appendChild(lk); } lk.innerHTML = '<i class="ico lock" aria-hidden="true"></i>' + esc(L('locked', { a: dname(DIFFS[i - 1]) })); }
+      if (!open) { if (!lk) { lk = document.createElement('em'); lk.className = 'lk'; b.appendChild(lk); } lk.innerHTML = '<i class="ico lock" aria-hidden="true"></i>' + esc(why); }
       else if (lk) lk.remove();
     });
     const p = prog();
@@ -606,7 +657,7 @@
         if (my !== rseq || panel !== 'history') return;
         if (r.status === 200 && !r.error) { hist = r.hist || []; pg = r.prog || { plays: {}, clears: {} }; } else fell = true;
       }
-      if (!me || fell) { hist = loadJ('rtd-hist', []); pg = loadJ('rtd-prog', { plays: {}, clears: {} }); }
+      if (!me || fell) { hist = loadJ('rtd-hist', []); pg = loadJ(progKey(), { plays: {}, clears: {} }); }
       const plays = pg.plays || {}, clears = pg.clears || {}, total = Object.values(plays).reduce((a, b) => a + b, 0);
       const dn = (id) => (C.T.difficulties.find((d) => d.id === id) || {}).name || id;
       let h = `<div class="hs-sum"><div><span>${L('totalPlays')}</span><b>${total}</b></div>${DIFFS.map((d) => { const p = plays[d] || 0; return `<div><span>${esc(dn(d))}</span><b>${p ? `${clears[d] || 0}/${p}` : '—'}</b><small>${p ? L('hsClears') : L('hsNone')}</small></div>`; }).join('')}</div>`;
@@ -975,6 +1026,7 @@
     // 미션 빨간 점: 로비에 들어올 때(로그인한 계정이 바뀔 때) 한 번 받는다
     { const tk = C.ACC.token || null; if (tk !== msTok) { msTok = tk; ms = null; msDot(); if (tk) msLoad(); } }
     if (!$('title').hidden && Date.now() - flushAt > PEND_GAP) flushPending(); // 못 보낸 판 결과·결제 영수증
+    if (!$('title').hidden) syncMe(); // 계정 진행 새로 받기(1분에 한 번까지)
     lcSync();
     // 생성 그림을 다 불러온 뒤 내 아이콘을 다시 그린다(먼저 그리면 옛 도형 그림이 보임)
     if (Art.ready && Art.ready.then) Art.ready.then(() => renderTop());
@@ -1003,5 +1055,5 @@
   const mapTheme = () => { const me = C && C.ACC.me, p = me && me.mapSkin && SHOP.MAP_SKINS[me.mapSkin]; return p && p.theme ? p.theme : null; };
   // 테마 그림이 뒤늦게 도착하면 상점의 지도 미리보기를 다시 그린다
   if (typeof window !== 'undefined') window.addEventListener('rtd-maptheme', () => { if (panel === 'shop' && ptab === 'maps') renderPanel(); });
-  root.RTD_LOBBY = { trialBack, shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, missions: () => ms, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), tip: tipToggle, close: () => { closeWizard(true); closePanel(); } };
+  root.RTD_LOBBY = { trialBack, shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, onMe, syncMe, toast: (txt, ms) => toastLobby(txt, ms), saveTk: () => readSaveTk(), setSaveTk: (tk, seed) => writeSaveTk(tk, seed), missions: () => ms, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), tip: tipToggle, close: () => { closeWizard(true); closePanel(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

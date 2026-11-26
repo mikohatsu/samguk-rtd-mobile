@@ -15,6 +15,8 @@ const ok = (c, m) => { console.log((c ? 'OK  ' : 'FAIL') + ' ' + m); if (!c) pro
   const h = { at: Date.now(), diff: 'hard', mut: 0, round: 100, win: true, time: 3600, online: true, mode: 'multi', myth: { jojo: 1 }, st: { kills: 5 } };
   ok(await s.recordResult(u.id, { key: 'k1', xp: 300, coins: 80, win: true, round: 100, hist: h, imm: { jojo: 2 }, clear: { diff: 'hard', party: 'p1', time: 3600, mut: 0 } }), '판 결과 저장');
   ok(!(await s.recordResult(u.id, { key: 'k1', xp: 300, coins: 80, win: true, round: 100, hist: h, imm: {}, clear: null })), '같은 열쇠 두 번은 무시');
+  // 순위(클리어 줄·불멸 수)는 재연산 검증 ok 때 들어간다(2026-11-26 "검증된 거만 올리게 해줘 랭킹은")
+  ok((await s.confirmResult('k1', null, 'ok')).ranked === true, '검증 확정: 순위에 넣음');
   const v = await s.getUser(u.id);
   ok(v.xp === 300 && v.coins === 80 && v.games === 1 && v.clr === 2 && v.plays.hard === 1 && v.clears.hard === 1 && v.imm.jojo === 2, `계정 갱신 xp ${v.xp} 동전 ${v.coins} clr ${v.clr}`);
   ok((await s.history(u.id)).length === 1, '전적 1줄');

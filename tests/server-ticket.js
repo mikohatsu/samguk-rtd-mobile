@@ -67,7 +67,8 @@ function forge(uid, diff, mut, agoSec, key, k) {
     r = await api('/api/result', { ticket: t1, round: 70, win: true, time: 3200 }, tok);
     ok(r.gained === 0, '같은 표를 두 번 내면 두 번째는 0');
     let rk = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy`)).json();
-    ok(rk.list.length === 1 && rk.list[0].time === 3200, `클리어 순위에는 정상 기록만 있음(100초라고 적은 기록은 없음, ${rk.list.length}건)`);
+    // 2026-11-26 "검증된 거만 올리게 해줘 랭킹은": 이 시험의 표는 예전 표(v 없음)라 검증할 수 없어 순위에 오르지 않는다(검증 뒤 순위는 server-secure.js)
+    ok(rk.list.length === 0, `예전 표 판은 순위에 오르지 않음(${rk.list.length}건)`);
 
     // 겹치는 판: 앞선 보상보다 먼저 발급된 표(여러 장 받아 두고 한꺼번에 내기)
     r = await api('/api/result', { ticket: forge(uid, 'easy', 0, 3000), round: 70, win: true, time: 3200 }, tok);
@@ -97,9 +98,9 @@ function forge(uid, diff, mut, agoSec, key, k) {
     await api('/api/history', { ticket: forge(s1.me.id, 'easy', 0, 3600), round: 70, win: true, time: 3300 }, s1.token); // 오프라인(AI 동맹)
     await api('/api/result', { ticket: forge(s2.me.id, 'easy', 0, 3600, null, 1), round: 70, win: true, time: 3100 }, s2.token); // 온라인 방에 혼자
     const solo = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy&mode=solo`)).json();
-    ok(solo.list.length === 2 && solo.list[0].time === 3100 && solo.list[1].time === 3300 && solo.list.every((c) => c.members.length === 1), `솔로 순위: 오프라인 판과 혼자 한 온라인 판이 빠른 순으로 (${solo.list.map((c) => c.time).join(',')})`);
+    ok(solo.list.length === 0, `예전 표 판은 솔로 순위에도 오르지 않음 (${solo.list.length}건)`);
     rk = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy`)).json();
-    ok(rk.list.length === 1 && rk.list[0].time === 3200, `온라인 협동 순위에는 솔로 기록이 섞이지 않음(${rk.list.length}건)`);
+    ok(rk.list.length === 0, `온라인 협동 순위도 비어 있음(${rk.list.length}건)`);
 
     // 2026-11-26 회귀 방지: 쉬움도 못 깬 계정이 악몽 표로 이겨도 진행은 '깬 난이도 + 1'(쉬움)까지만 오르고, 전적 줄에는 실제로 고른 난이도(악몽)가 보인다
     const nv = await api('/api/guest/new', { nick: 'nv1', agree: true });
@@ -110,6 +111,10 @@ function forge(uid, diff, mut, agoSec, key, k) {
     // 오프라인 이어하기 표는 7일까지 받는다(24시간을 넘긴 표도 기록), 8일 지난 표는 거부(rejected)
     r = await api('/api/history', { ticket: forge(nv.me.id, 'easy', 0, 30 * 3600), round: 70, win: true, time: 3300 }, nv.token);
     ok(r.me.prog.clr >= 0 && !r.rejected, '30시간 전에 시작한 이어하기 판도 기록');
+    // 2026-11-26 회귀 방지: 중간보스는 300~720초마다 다시 나오므로 긴 판은 중간보스 처치가 '중간보스 수 × 2'를 넘을 수 있다(정직한 R57 판이 거절되던 문제)
+    const lm = await api('/api/guest/new', { nick: 'mid1', agree: true });
+    r = await api('/api/history', { ticket: forge(lm.me.id, 'easy', 0, 3600), round: 57, win: false, time: 2700, st: { midKill: 20, kills: 1500 } }, lm.token);
+    ok(!r.rejected && r.gained > 0, `긴 판의 중간보스 재처치(20회 > 중간보스 8 × 2, R57·2700초)는 받아들임(rejected ${!!r.rejected}, 경험치 ${r.gained})`);
     r = await api('/api/history', { ticket: forge(nv.me.id, 'easy', 0, 8 * 24 * 3600), round: 70, win: true, time: 3300 }, nv.token);
     ok(r.rejected === true, '8일 지난 표는 거부하고 rejected로 알림');
   } catch (e) { ok(false, '예외 ' + e.message); }

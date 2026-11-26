@@ -1,38 +1,44 @@
 // 게임 규칙과 시뮬레이션. DOM을 쓰지 않아 브라우저와 Node 양쪽에서 돈다.
 (function (root) {
+  const DET = root.RTD_DET || (typeof require !== 'undefined' ? require('./det.js') : null); // 결정적 sin·cos·atan2·hypot·exp·log(det.js, 서버 재연산 검증)
   const W = 1500, H = 1010;
   const ROAD = { x0: 190, y0: 70, x1: W - 222, y1: H - 70 }; // 왼쪽 여백은 전황, 오른쪽 여백은 업적 깃발 자리
   const INNER = { x0: ROAD.x0 + 48, y0: ROAD.y0 + 48, x1: ROAD.x1 - 48, y1: ROAD.y1 - 48 };
   const PATH = [[ROAD.x0, ROAD.y0], [ROAD.x1, ROAD.y0], [ROAD.x1, ROAD.y1], [ROAD.x0, ROAD.y1]];
   const ARENA = { x0: 175, y0: 60, x1: W - 50, y1: H - 60 }; // 왼쪽은 전황 표시 자리
-  const dist = (a, b, c, d) => Math.hypot(a - c, b - d);
+  const dist = (a, b, c, d) => DET.hypot(a - c, b - d);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  const angDiff = (a, b) => Math.abs(DET.atan2(DET.sin(a - b), DET.cos(a - b)));
   // 보스 처치 연출 시간(초): 보스를 이긴 뒤 이만큼 라인 진행(적 생성·이동·라운드 시간·유닛 공격·중간보스 대기)을 멈춘다.
   // 화면의 처치 연출(src/ui/07-arena KILL_REAL 4.3초)과 같다. 협동은 모두가 bossEnd를 받아 같은 규칙으로 멈추고, 방장의 라운드 시간도 멈춰 다음 라운드가 같이 밀린다.
   const KILL_HOLD = 4.3;
   // 인연 라인 효과가 없는 유닛(주인 없는 유닛·시너지 없음)이 받는 빈 값
   const SYN0 = Object.freeze({ atk: 0, haste: 0, range: 0, splashR: 0, burn: 0, grantBurn: 0, burnSlow: 0, pierce: 0, multi: 0, slowAdd: 0, stunAdd: 0, auraR: 0, auraPct: 0, crit: [] });
 
+  // 판 난수(mulberry32). 상태 r.s(32비트 정수)를 이어하기 저장본에 넣는다(2026-11-26 재연산 검증: 복원해도 같은 난수가 이어진다).
   function mulberry(seed) {
-    let s = seed >>> 0;
-    return () => {
-      s = (s + 0x6d2b79f5) >>> 0;
-      let t = s;
+    const r = () => {
+      r.s = (r.s + 0x6d2b79f5) >>> 0;
+      let t = r.s;
       t = Math.imul(t ^ (t >>> 15), t | 1);
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+    r.s = seed >>> 0;
+    return r;
   }
+  // 씨앗이 없는 판(시험·오프라인 표 없음)만 쓰는 새 씨앗. 게임 규칙 코드에서 Math.random을 부르는 곳은 이 한 곳뿐이다.
+  // 서버 표가 있는 판은 표의 씨앗(sd)을 opt.seed로 넣는다(src/ui/17-loop begin).
+  const newSeed = () => (Math.random() * 4294967296) >>> 0;
 
   // 기하: 스킬과 패턴이 같은 판정을 쓴다
   const inLine = (px, py, x, y, a, len, w, pad) => {
-    const dx = px - x, dy = py - y, c = Math.cos(a), s = Math.sin(a);
+    const dx = px - x, dy = py - y, c = DET.cos(a), s = DET.sin(a);
     const along = dx * c + dy * s, side = Math.abs(-dx * s + dy * c);
     return along >= -pad && along <= len + pad && side <= w / 2 + pad;
   };
   const inCone = (px, py, x, y, a, r, arc, pad) =>
-    dist(px, py, x, y) <= r + pad && (dist(px, py, x, y) < pad || angDiff(Math.atan2(py - y, px - x), a) <= arc / 2);
+    dist(px, py, x, y) <= r + pad && (dist(px, py, x, y) < pad || angDiff(DET.atan2(py - y, px - x), a) <= arc / 2);
   // ---- 피격 판정 도형(2026-11-26 사용자 결정, 같은 날 「던파식」으로 바꿈) ----
   // 2.5D 레이드(던전앤파이터·캐슬 크래셔 등)의 관례: 바닥 장판·지상 공격은 캐릭터 발밑 그림자(바닥 평면의 발자국)로 판정하고 높이는 공중 판정에만 쓴다.
   // 그래서 장수 피격 범위 = 발밑 원판(03-unit piece의 discSprite)과 같은 타원. 장판은 그려진 테두리 선 바깥 끝까지. 둘이 조금이라도 겹치면 맞는다.
@@ -61,8 +67,8 @@
   };
   const polyFar = (P, x, y) => P.reduce((m, [px, py]) => Math.max(m, dist(px, py, x, y)), 0);
   // 직선 장판(x,y에서 a 방향으로 len, 폭 w)의 네 꼭짓점, 부채꼴(반지름 r, 벌어진 각 arc)을 호 10조각으로 나눈 다각형(arc가 π보다 크면 반씩 나눠 본다)
-  const linePoly = (x, y, a, len, w) => { const c = Math.cos(a), s = Math.sin(a), hw = w / 2; return [[x - s * hw, y + c * hw], [x + c * len - s * hw, y + s * len + c * hw], [x + c * len + s * hw, y + s * len - c * hw], [x + s * hw, y - c * hw]]; };
-  const conePoly = (x, y, a, r, arc) => { const out = [[x, y]]; for (let i = 0; i <= 10; i++) { const t = a - arc / 2 + (arc * i) / 10; out.push([x + Math.cos(t) * r, y + Math.sin(t) * r]); } return out; };
+  const linePoly = (x, y, a, len, w) => { const c = DET.cos(a), s = DET.sin(a), hw = w / 2; return [[x - s * hw, y + c * hw], [x + c * len - s * hw, y + s * len + c * hw], [x + c * len + s * hw, y + s * len - c * hw], [x + s * hw, y - c * hw]]; };
+  const conePoly = (x, y, a, r, arc) => { const out = [[x, y]]; for (let i = 0; i <= 10; i++) { const t = a - arc / 2 + (arc * i) / 10; out.push([x + DET.cos(t) * r, y + DET.sin(t) * r]); } return out; };
   const conePolyHit = (h, P) => (h.arc > Math.PI ? conePolyHit({ x: h.x, y: h.y, a: h.a - h.arc / 4, r: h.r, arc: h.arc / 2 }, P) || conePolyHit({ x: h.x, y: h.y, a: h.a + h.arc / 4, r: h.r, arc: h.arc / 2 }, P) : polyPoly(conePoly(h.x, h.y, h.a, h.r, h.arc), P));
   const rectPoly = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
   // 발밑 타원 기본값(theme rules.hitFoot이 없을 때): 원판 가운데 = 위치 + (0, dy), 반지름 rx·ry(원판 그림 + 바깥 선). 03-unit discSprite: 100×48 칸에 45×20 타원,
@@ -77,7 +83,15 @@
       this.bot = !!opt.bot; // AI 사령관의 게임: 보스전 출전 유닛을 스스로 움직인다
       // 자동 조합이 켜진 인연 단계의 마지막 한 기를 남긴다(설정 「인연 유지」, 화면이 넣는다. AI 동맹·시뮬레이터는 끔). 2026-11-19 사용자 결정
       this.keepSyn = !!opt.keepSyn;
-      this.rand = mulberry(opt.seed || (Math.random() * 1e9) | 0);
+      this.seed = (Number.isFinite(opt.seed) ? opt.seed : newSeed()) >>> 0;
+      this.rand = mulberry(this.seed);
+      // 계산 걸음 수(step을 부른 횟수, 판이 끝난 뒤는 세지 않는다). 입력 기록은 "몇 번째 걸음 앞에서 무엇을 했는지"로 남는다(input).
+      this.stepN = 0;
+      this.rec = null; // 입력 기록기(화면이 붙인다: { push(step, type, args) }). 재연산·시험·AI 판에는 없다
+      // 조작 상태: 화면의 조이스틱·공격 버튼은 매 프레임 엔진 값을 직접 쓰지 않고 바뀔 때만 명령(input 'ls'·'lj'·'bj'·'ba'·'mn')으로 넣는다.
+      // ls = 라인 조이스틱으로 움직일 유닛 id, lj = [방향, 세기, 공격] 또는 null, bj = [방향, 세기] 또는 null(보스전), ba = 보스전 공격 버튼을 누르고 있음
+      this.pad = { ls: [], lj: null, bj: null, ba: false };
+      this.laneJoy = null; this.manual = false;
       this.net = opt.net || null;
       this.defs = {}; theme.units.forEach((d) => (this.defs[d.id] = d));
       // 장수 해금(theme.unlock): opt.unlocked = 이 사람이 연 잠금 장수 id 목록. 없으면 화면이 넣은 provider, 그것도 없으면(시험·시뮬레이터) 전부 열림.
@@ -529,7 +543,7 @@
     stepDrops(dt) {
       for (const d of this.drops) {
         if (d.tx == null) continue;
-        const dx = d.tx - d.x, dy = d.ty - d.y, l = Math.hypot(dx, dy), s = 420 * dt;
+        const dx = d.tx - d.x, dy = d.ty - d.y, l = DET.hypot(dx, dy), s = 420 * dt;
         if (l <= s) { d.x = d.tx; d.y = d.ty; d.tx = d.ty = null; } else { d.x += (dx / l) * s; d.y += (dy / l) * s; }
       }
     }
@@ -639,7 +653,7 @@
       let v = pts[pts.length - 1][1];
       for (let i = 0; i < pts.length - 1; i++) {
         const [a, x] = pts[i], [b, y] = pts[i + 1];
-        if (r <= b) { v = Math.exp(Math.log(x) + ((Math.max(r, a) - a) / (b - a)) * (Math.log(y) - Math.log(x))); break; }
+        if (r <= b) { v = DET.exp(DET.log(x) + ((Math.max(r, a) - a) / (b - a)) * (DET.log(y) - DET.log(x))); break; }
       }
       // laneBump: 난이도별 [시작 라운드, 끝 라운드, 배율] 구간 보정(없으면 1). 2026-11-17 보통 R31~80 ×1.1(빌드 부족이 중반에 드러나게)
       const bump = (this.diff.laneBump || []).reduce((m, [a, b, k]) => (r >= a && r <= b ? m * k : m), 1);
@@ -651,37 +665,109 @@
     // ---- 이어하기(오프라인 혼자): 라인 단계의 판 상태를 저장·복원한다. 보스전 중에는 저장하지 않는다. ----
     // 알림 문구: 언어 모듈이 있으면 그 번역, 없으면(Node 시험 등) 한국어
     L(k, v, ko) { const f = this.T.L; return f ? f(k, v) : ko; }
+    // 저장본 형식 v 1(이어하기 버튼이 v === 1만 본다). x = 2부터(2026-11-26 재연산 검증): 난수 상태(rs)·씨앗·걸음 수, 위치는 반올림하지 않고,
+    // 유닛 공격 대기(cd)·목표·명령·명중 수, 적의 둔화·화상·기절·정예 여부, 상자 이동 목표를 그대로 넣는다. 저장 시각(at)은 화면이 붙인다(엔진은 시계를 읽지 않는다).
+    // 서버 재연산은 기록의 'R'(이어하기) 걸음에서 snapshot() → JSON → restore()를 똑같이 해서, 복원 때 바뀌는 값(오라 다시 계산 등)까지 같게 만든다.
     snapshot() {
       if (this.phase !== 'wave' || this.over || this.fight) return null;
       const T = this.T, p = this.me;
       return {
-        v: 1, at: Date.now(), diff: this.diff.id, mutLv: this.mutLv, muts: this.muts.map((m) => m.id), unl: this.unlocked,
+        v: 1, x: 2, diff: this.diff.id, mutLv: this.mutLv, muts: this.muts.map((m) => m.id), unl: this.unlocked,
+        seed: this.seed, rs: this.rand.s, step: this.stepN, autoT: this.autoT || 0, killHold: this.killHold || 0, keepSyn: this.keepSyn,
         round: this.round, roundT: this.roundT, time: this.time, lives: this.lives, nextId: this.nextId,
         spawned: this.spawned, toSpawn: this.toSpawn, spawnCd: this.spawnCd || 0, endedRound: this.endedRound, midDone: this.midDone, mids: this.mids, stats: this.stats,
         me: { gold: p.gold, upgrades: p.upgrades, tickets: p.tickets, auto: p.auto, zones: p.zones, ever: p.ever, done: p.done, usedItems: (p.usedItems || []).slice() },
-        units: this.units.filter((u) => u.owner === p.idx).map((u) => ({ id: u.id, d: u.def.id, x: Math.round(u.x), y: Math.round(u.y), slot: u.slot || null, o: u.order && (u.order.t === 'hold' || u.order.t === 'focus') ? u.order.t : 'idle', ss: u.sageSlot })),
+        units: this.units.filter((u) => u.owner === p.idx).map((u) => ({ id: u.id, d: u.def.id, x: u.x, y: u.y, slot: u.slot || null, o: u.order ? Object.assign({}, u.order) : null, ss: u.sageSlot, cd: u.cd, sc: u.scan, h: u.hits, tg: u.target && this.enemies.includes(u.target) ? u.target.id : 0, /* 이미 쓰러진 적은 다음 걸음에 어차피 놓는다 */ f: u.face == null ? null : u.face, pt: u.procT || 0 })),
         drops: this.drops.map((d) => Object.assign({}, d)),
-        enemies: this.enemies.map((e) => ({ id: e.id, w: e.mid ? -1 : T.waves.indexOf(e.w), x: Math.round(e.x), y: Math.round(e.y), seg: e.seg, hp: e.hp, mhp: e.mhp, def: e.def, sp: e.speed, mr: e.midDef ? e.midDef.round : 0, mt: e.midT || 0 })),
+        enemies: this.enemies.map((e) => ({ id: e.id, w: e.mid ? -1 : T.waves.indexOf(e.w), x: e.x, y: e.y, seg: e.seg, hp: e.hp, mhp: e.mhp, def: e.def, sp: e.speed, mr: e.midDef ? e.midDef.round : 0, mt: e.midT || 0,
+          sl: e.slow, slT: e.slowT, bu: e.burn, buT: e.burnT, bb: e.burnBy == null ? null : e.burnBy, bs: e.burnSlow || 0, st: e.stun, el: e.elite ? 1 : 0, r: e.r, ht: e.hitT || 0, ha: e.hitA || 0 })),
       };
     }
     static restore(theme, s) {
-      const g = new Game(theme, Object.assign({ diff: s.diff, mode: 'solo', muts: s.muts, mutLv: s.mutLv }, s.unl !== undefined ? { unlocked: s.unl } : {}));
+      const x2 = s.x >= 2;
+      const g = new Game(theme, Object.assign({ diff: s.diff, mode: 'solo', muts: s.muts, mutLv: s.mutLv }, s.unl !== undefined ? { unlocked: s.unl } : {}, x2 && Number.isFinite(s.seed) ? { seed: s.seed } : {}));
       g.events.length = 0; // 새 판을 만들며 생긴 알림은 버린다
       ['round', 'roundT', 'time', 'lives', 'nextId', 'spawned', 'toSpawn', 'spawnCd', 'endedRound', 'midDone', 'mids', 'stats'].forEach((k) => { if (s[k] !== undefined) g[k] = s[k]; });
+      if (x2) { g.rand.s = s.rs >>> 0; g.stepN = s.step | 0; g.autoT = s.autoT || 0; g.killHold = s.killHold || 0; g.keepSyn = !!s.keepSyn; }
       Object.assign(g.me, s.me);
       if (!Array.isArray(g.me.usedItems)) g.me.usedItems = []; // 옛 저장본에는 이 항목이 없다
-      g.units = s.units.filter((u) => g.defs[u.d]).map((u) => ({ id: u.id, def: g.defs[u.d], owner: 0, x: u.x, y: u.y, cd: 0, order: { t: u.o || 'idle' }, target: null, aura: 0, hits: 0, scan: 0, fl: 0, slot: u.slot || undefined, sageSlot: u.ss }));
-      g.drops = (s.drops || []).map((d) => Object.assign({}, d, { tx: undefined, ty: undefined }));
       g.enemies = (s.enemies || []).map((e) => {
         const m = e.mr ? g.midByRound[e.mr] : null;
         const w = m ? { mark: m.mark, name: m.name, color: '#e8c15a', look: theme.midLooks[m.name] } : theme.waves[Math.max(0, e.w)];
         const o = { id: e.id, w, x: e.x, y: e.y, seg: e.seg, hp: e.hp, mhp: e.mhp, def: e.def, speed: e.sp, mid: !!m, slow: 0, slowT: 0, burn: 0, burnT: 0, stun: 0, r: m ? 24 : 13 };
         if (m) { o.midDef = m; o.midT = e.mt; }
+        if (x2) {
+          Object.assign(o, { slow: e.sl || 0, slowT: e.slT || 0, burn: e.bu || 0, burnT: e.buT || 0, stun: e.st || 0, r: e.r || o.r, hitT: e.ht || 0, hitA: e.ha || 0 });
+          if (e.bb != null) o.burnBy = e.bb;
+          if (e.bs) o.burnSlow = e.bs;
+          if (e.el) o.elite = true;
+        }
         return o;
       });
+      const foe = (id) => (id ? g.enemies.find((e) => e.id === id) || null : null);
+      g.units = s.units.filter((u) => g.defs[u.d]).map((u) => {
+        const o = { id: u.id, def: g.defs[u.d], owner: 0, x: u.x, y: u.y, cd: 0, order: { t: typeof u.o === 'string' ? u.o : 'idle' }, target: null, aura: 0, hits: 0, scan: 0, fl: 0, slot: u.slot || undefined, sageSlot: u.ss };
+        if (x2) {
+          if (u.o && typeof u.o === 'object' && typeof u.o.t === 'string') o.order = Object.assign({}, u.o);
+          Object.assign(o, { cd: u.cd || 0, scan: u.sc || 0, hits: u.h | 0, target: foe(u.tg) });
+          if (u.f != null) o.face = u.f;
+          if (u.pt) o.procT = u.pt;
+        }
+        return o;
+      });
+      g.drops = (s.drops || []).map((d) => (x2 ? Object.assign({}, d) : Object.assign({}, d, { tx: undefined, ty: undefined })));
       g.phase = 'wave'; g.fight = null; g.achDirty = true; g.auraT = 0;
       g.recomputeAuras();
       return g;
+    }
+    // ---- 입력 명령 한 길(2026-11-26 사용자 결정: 판 결과 서버 재연산 전수 검증) ----
+    // 화면(src/ui)이 판 상태를 바꾸는 행동은 모두 g.input(종류, 인자 배열)로 들어온다. 인자는 숫자·글자만(객체 참조 대신 id).
+    // 좌표는 정수로 반올림한 뒤 적용·기록한다(기록한 값과 적용한 값이 같아야 서버가 같은 판을 다시 만든다).
+    // 기록: this.rec가 있으면 [지금까지 계산한 걸음 수, 종류, 인자]를 남긴다. 재연산은 같은 걸음 앞에서 같은 input을 부른다.
+    // 돌려주는 값은 원래 함수의 값(합성으로 생긴 유닛 등). 모르는 종류·잘못된 인자는 아무것도 하지 않고 undefined.
+    // 쓰는 법: const n = g.input('cb', [defId, preferUid]); if (n) setSel([n.id]);
+    //          g.input('mv', ['move', x, y, id1, id2]);  g.input('sk', [스킬 번호, x, y]);
+    input(type, a) {
+      const h = CMD[type];
+      if (!h) return undefined;
+      const args = Array.isArray(a) ? a.map(normArg) : [];
+      if (this.rec && !this.over) this.rec.push(this.stepN, type, args); // 판이 끝난 뒤(게임에 남기)의 조작은 기록하지 않는다
+      return h(this, args);
+    }
+    // 화면이 매 프레임 보내는 조작 상태(조이스틱·공격 버튼)를 라인 조이스틱 값으로 바꾼다. 방향은 64방향표(det.js JOY), 세기는 단계/8.
+    padLane() {
+      const P = this.pad, v = P.lj;
+      if (!v || !P.ls.length) { this.laneJoy = null; return; }
+      const [x, y] = joyVec(v[0], v[1]);
+      this.laneJoy = { ids: new Set(P.ls), x, y, atk: !!v[2] };
+    }
+    // 보스전: 고른 장수에게 조이스틱·공격 버튼을 걸고 나머지 내 장수의 조이스틱은 놓는다(예전 15-pad padTick이 매 프레임 하던 일을 매 걸음).
+    // 조작 명령이 한 번도 없었던 판(시험·AI 사령관)은 건드리지 않는다.
+    padChamp() {
+      const P = this.pad;
+      if (!P.used) return;
+      const c = this.active();
+      this.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
+      if (!c) return;
+      if (P.bj) { const [x, y] = joyVec(P.bj[0], P.bj[1]); c.joy = { x, y }; } else c.joy = null;
+      if (P.ba) c.atkHold = 0.3;
+    }
+    // 한 걸음 크기: 혼자 하는 보스전은 초당 60번, 나머지(라인·협동·AI 동맹)는 30번. 화면 루프(17-loop)와 서버 재연산이 같이 쓴다.
+    stepDt() { return !this.net && this.phase === 'boss' ? 1 / 60 : 1 / 30; }
+    // 악몽 +N 규칙 뽑기: 판 씨앗으로 정한다(서버가 표의 씨앗으로 같은 규칙인지 확인한다). 서로 배타인 규칙(excl)은 함께 뽑지 않는다.
+    // 쓰는 법: Game.rollMuts(theme, 3, seed) → ['rule_a', 'rule_b', 'rule_c']
+    static rollMuts(theme, n, seed) {
+      const ms = theme.mutators || [], r = mulberry((seed ^ 0x5bd1e995) >>> 0);
+      const ex = (a, b) => { const m = ms.find((x) => x.id === a); return !!(m && m.excl && m.excl.includes(b)); };
+      let pool = ms.map((m) => m.id); const out = [];
+      for (let i = 0; i < n && pool.length; i++) { const id = pool.splice((r() * pool.length) | 0, 1)[0]; out.push(id); pool = pool.filter((x) => !ex(id, x) && !ex(x, id)); }
+      return out;
+    }
+    // AI 동맹 판의 동맹 빌드 고르기(씨앗으로). builds = ai.js BUILDS. 돌려주는 값: 빌드 번호 배열
+    static pickBuilds(nBuilds, n, seed) {
+      const r = mulberry((seed ^ 0x27d4eb2d) >>> 0), pool = []; for (let i = 0; i < nBuilds; i++) pool.push(i);
+      const out = []; for (let i = 0; i < n && pool.length; i++) out.push(pool.splice((r() * pool.length) | 0, 1)[0]);
+      return out;
     }
     nextRound() {
       if (this.isAuthority) {
@@ -786,6 +872,7 @@
 
     step(dt) {
       if (this.over) return;
+      this.stepN++;
       this.time += dt;
       this.auraT -= dt;
       if (this.auraT <= 0) { this.auraT = 0.5; this.recomputeAuras(); }
@@ -870,21 +957,21 @@
         const J = this.laneJoy;
         let la = false;
         if (J && u.owner === this.me.idx && J.ids.has(u.id)) {
-          const jm = Math.hypot(J.x, J.y);
+          const jm = DET.hypot(J.x, J.y);
           if (J.atk) {
             la = true;
             if (jm > 0.1) {
               u.slot = null; u.order = { t: 'hold' };
               const s = speed * Math.min(1, jm / 0.5) * dt;
               u.x = clamp(u.x + (J.x / jm) * s, INNER.x0, INNER.x1); u.y = clamp(u.y + (J.y / jm) * s, INNER.y0, INNER.y1);
-              u.face = Math.atan2(J.y, J.x); u.moveT = 0.12;
+              u.face = DET.atan2(J.y, J.x); u.moveT = 0.12;
               if (u.target && dist(u.x, u.y, u.target.x, u.target.y) > rng) u.target = null;
             }
           } else if (jm > 0.1) {
             u.slot = null; u.order = { t: 'hold' }; u.target = null;
             const s = speed * Math.min(1, jm / 0.5) * dt;
             u.x = clamp(u.x + (J.x / jm) * s, INNER.x0, INNER.x1); u.y = clamp(u.y + (J.y / jm) * s, INNER.y0, INNER.y1);
-            u.face = Math.atan2(J.y, J.x); u.moveT = 0.12;
+            u.face = DET.atan2(J.y, J.x); u.moveT = 0.12;
             continue;
           }
         }
@@ -898,7 +985,7 @@
         }
         if (u.target) {
           const e = u.target;
-          u.face = Math.atan2(e.y - u.y, e.x - u.x);
+          u.face = DET.atan2(e.y - u.y, e.x - u.x);
           if (u.cd <= 0) { u.cd = this.attackTime(u.def) / (1 + this.hasteOf(u.owner, u.def) + (u.owner != null ? this.synFor(u.owner, u.def).haste : 0)); u.atkT = 0.22; this.attackEnemy(u, e); }
         } else if (!la && o.t === 'amove') {
           if (this.moveTo(u, o.x, o.y, speed, dt)) u.order = { t: 'idle' };
@@ -929,7 +1016,7 @@
       const d = dist(u.x, u.y, x, y) || 1, s = Math.min(d, sp * dt);
       u.moveT = 0.12;
       u.x += ((x - u.x) / d) * s; u.y += ((y - u.y) / d) * s;
-      u.face = Math.atan2(y - u.y, x - u.x);
+      u.face = DET.atan2(y - u.y, x - u.x);
     }
     rollHit(d, u) {
       // 패시브 공통 처리: 치명, n번째 강타
@@ -953,7 +1040,7 @@
       if (u.owner === this.me.idx) this.log('sfx', { s: wp, gap: 70 });
       const shoot = (t, amount) => {
         this.fx.push({ k: 'shot', wp, big: d.tier >= 9, x0: u.x, y0: u.y, x1: t.x, y1: t.y, t: 0, life: 0.24, c: this.shotColor(d) });
-        t.hitT = 0.14; t.hitA = Math.atan2(t.y - u.y, t.x - u.x);
+        t.hitT = 0.14; t.hitA = DET.atan2(t.y - u.y, t.x - u.x);
         if (d.tier >= 2 || this.rand() < 0.4) this.fx.push({ k: 'spark', x: t.x, y: t.y, t: -0.2, life: 0.18, c: this.shotColor(d), r: d.tier >= 6 ? 26 : 16, a: t.hitA });
         this.damageEnemy(t, amount, u, p);
       };
@@ -1204,8 +1291,8 @@
     canDash(c) { return c && c.def.tier >= this.R.dashMinTier && c.dashCd <= 0; }
     dash(c, x, y) {
       if (!this.canDash(c)) return;
-      const a = Math.atan2(y - c.y, x - c.x), l = Math.min(280, dist(c.x, c.y, x, y));
-      const nx = clamp(c.x + Math.cos(a) * l, ARENA.x0, ARENA.x1), ny = clamp(c.y + Math.sin(a) * l, ARENA.y0, ARENA.y1);
+      const a = DET.atan2(y - c.y, x - c.x), l = Math.min(280, dist(c.x, c.y, x, y));
+      const nx = clamp(c.x + DET.cos(a) * l, ARENA.x0, ARENA.x1), ny = clamp(c.y + DET.sin(a) * l, ARENA.y0, ARENA.y1);
       this.fx.push({ k: 'dash', x0: c.x, y0: c.y, x1: nx, y1: ny, t: 0, life: 0.3, c: this.T.factions[c.def.fac].color });
       this.log('sfx', { s: 'dash' });
       const x0 = c.x, y0 = c.y;
@@ -1300,9 +1387,9 @@
       const cdrX = this.pv(c.def, 'cdr') + this.sageVal(this.players[c.owner], 'sageCdr') + (f.pcdr || 0) + (this.mut.bossCdr || 0);
       c.skillCd[i] = s.cd * (1 - Math.min(0.6, cdrX));
       const ch = this.passives(c.def, 'chain').reduce((m, x) => m + x.n, 0);
-      if (ch) c.skillCd = c.skillCd.map((v, j) => (j === i ? v : Math.max(0, v - ch))); c.atkT = 0.36; c.face = Math.atan2(y - c.y, x - c.x);
+      if (ch) c.skillCd = c.skillCd.map((v, j) => (j === i ? v : Math.max(0, v - ch))); c.atkT = 0.36; c.face = DET.atan2(y - c.y, x - c.x);
       this.log('dmgtext', { x: c.x, y: c.y - 86, v: s.n, big: true });
-      const a = Math.atan2(y - c.y, x - c.x), b = f.boss;
+      const a = DET.atan2(y - c.y, x - c.x), b = f.boss;
       // 스킬 피해는 등급 표기 공격력 기준이며 조준이 빗나가면 0이다
       // 인연: 스킬 피해(skillAmp), 다음 스킬 배율(출사표·오장원, 피해 스킬에만 쓰이고 사라진다)
       const dmg = this.champAtk(c) / this.attackTime(c.def) * s.mult * (1 + this.pv(c.def, 'skillPct') + this.synGet(c, 'skillAmp') + Math.max(0, cdrX - 0.6)) * (s.mult > 0 ? 1 + this.synTakeNext(c) : 1);
@@ -1319,13 +1406,13 @@
       if (s.k === 'line') {
         this.fx.push({ k: 'beam', x: c.x, y: c.y, a, len: s.len, w: s.w, t: 0, life: 0.5, c: s.fx, vx: s.vx }); this.log('shake', { v: 0.6 });
         if (inLine(b.x, b.y, c.x, c.y, a, s.len, s.w, 60)) hitBoss();
-        if (s.dashThrough) { const l = Math.min(s.len, 360); c.x = clamp(c.x + Math.cos(a) * l, ARENA.x0, ARENA.x1); c.y = clamp(c.y + Math.sin(a) * l, ARENA.y0, ARENA.y1); c.inv = Math.max(c.inv, 0.4); c.move = false; }
+        if (s.dashThrough) { const l = Math.min(s.len, 360); c.x = clamp(c.x + DET.cos(a) * l, ARENA.x0, ARENA.x1); c.y = clamp(c.y + DET.sin(a) * l, ARENA.y0, ARENA.y1); c.inv = Math.max(c.inv, 0.4); c.move = false; }
       } else if (s.k === 'cone') {
         this.fx.push({ k: 'cone', x: c.x, y: c.y, a, r: s.r, arc: s.arc, t: 0, life: 0.42, c: s.fx, vx: s.vx }); this.log('shake', { v: 0.5 });
         if (inCone(b.x, b.y, c.x, c.y, a, s.r, s.arc, 60)) hitBoss();
       } else if (s.k === 'circle') {
         const d = s.range ? Math.min(s.range, dist(c.x, c.y, x, y)) : 0;
-        const px = clamp(c.x + Math.cos(a) * d, ARENA.x0, ARENA.x1), py = clamp(c.y + Math.sin(a) * d, ARENA.y0, ARENA.y1);
+        const px = clamp(c.x + DET.cos(a) * d, ARENA.x0, ARENA.x1), py = clamp(c.y + DET.sin(a) * d, ARENA.y0, ARENA.y1);
         spx = px; spy = py;
         f.hazards.push({ own: true, vx: s.vx, x: px, y: py, r: s.r * (1 + this.pv(c.def, 'aoe')), delay: s.delay, t: 0, c: s.fx, dmg, stun: s.stun || 0, champ: c });
       } else if (s.k === 'buff') {
@@ -1482,7 +1569,7 @@
     // 발밑 타원(볼록 16각형): 위치(x, y) + (0, dy)를 가운데로 반지름 rx·ry. pad만큼 사방으로 늘린다.
     footPoly(x, y, pad) {
       const F = this.R.hitFoot || HITFOOT, p = pad || 0, cy = y + F.dy, rx = F.rx + p, ry = F.ry + p, out = [];
-      for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; out.push([x + Math.cos(a) * rx, cy + Math.sin(a) * ry]); }
+      for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; out.push([x + DET.cos(a) * rx, cy + DET.sin(a) * ry]); }
       return out;
     }
     footMid() { return (this.R.hitFoot || HITFOOT).dy; }
@@ -1492,8 +1579,8 @@
     // 발판 폭·깊이(테두리 선 포함), 방향 a인 직선에 수직으로 잰 발판 폭 / 직선 방향 길이, 틈에 더 주는 여유(R.gapPad)
     footW() { return 2 * ((this.R.hitFoot || HITFOOT).rx + this.hitEdge()); }
     footD() { return 2 * ((this.R.hitFoot || HITFOOT).ry + this.hitEdge()); }
-    footAcross(a) { const rx = this.footW() / 2, ry = this.footD() / 2; return 2 * Math.hypot(rx * Math.sin(a), ry * Math.cos(a)); }
-    footAlong(a) { const rx = this.footW() / 2, ry = this.footD() / 2; return 2 * Math.hypot(rx * Math.cos(a), ry * Math.sin(a)); }
+    footAcross(a) { const rx = this.footW() / 2, ry = this.footD() / 2; return 2 * DET.hypot(rx * DET.sin(a), ry * DET.cos(a)); }
+    footAlong(a) { const rx = this.footW() / 2, ry = this.footD() / 2; return 2 * DET.hypot(rx * DET.cos(a), ry * DET.sin(a)); }
     gapPad() { return this.R.gapPad != null ? this.R.gapPad : 8; }
     // 한 점에서 퍼지는 직선 여러 줄(폭 w)의 간격(rad): 거리 d에서 줄 사이 틈이 발판(방향 a 기준) + 여유 이상이 되게. base보다 좁히지는 않는다.
     // 틈은 발판의 보스 쪽 끝(거리 d − 직선 방향 발판 길이의 절반)에서 잰다(가장 좁은 자리)
@@ -1529,6 +1616,7 @@
         return;
       }
       if (this.phase !== 'boss') return;
+      if (!this.bot) this.padChamp();
       f.t += dt;
       b.flash = Math.max(0, b.flash - dt);
       // 1초마다: 버퍼 사기 진작 합 갱신, 힐러 구호(아군 전체 회복)
@@ -1583,7 +1671,7 @@
         const c = b.charge;
         c.delay -= dt;
         if (c.delay <= 0) {
-          const s = 1300 * dt; b.x += Math.cos(c.a) * s; b.y += Math.sin(c.a) * s; c.left -= s;
+          const s = 1300 * dt; b.x += DET.cos(c.a) * s; b.y += DET.sin(c.a) * s; c.left -= s;
           if (c.left <= 0 || b.x < ARENA.x0 || b.x > ARENA.x1 || b.y < ARENA.y0 || b.y > ARENA.y1) {
             b.x = clamp(b.x, ARENA.x0, ARENA.x1); b.y = clamp(b.y, ARENA.y0, ARENA.y1);
             b.charge = null;
@@ -1606,7 +1694,7 @@
         if (!hold) { b.x += ((t.x - b.x) / d) * sp; b.y += ((t.y - b.y) / d) * sp; }
       } else if (b.atkCd <= 0) {
         b.atkCd = 1.6;
-        this.addHazards([{ k: 'cone', x: b.x, y: b.y, a: Math.atan2(t.y - b.y, t.x - b.x), r: 150, arc: 1.5, delay: 0.5, dmg: b.hit * 0.14, fx: 'blade' }]);
+        this.addHazards([{ k: 'cone', x: b.x, y: b.y, a: DET.atan2(t.y - b.y, t.x - b.x), r: 150, arc: 1.5, delay: 0.5, dmg: b.hit * 0.14, fx: 'blade' }]);
       }
       if (f.bigCd > 0) f.bigCd -= dt;
       if (this.bigPending()) b.gap = Math.max(b.gap, 1.6);
@@ -1658,7 +1746,7 @@
         if (h.raid) { if (this.raidHazard(h, dt)) f.hazards.splice(i, 1); continue; }
         if (h.k === 'proj') {
           if (h.t < h.delay) continue;
-          h.x += Math.cos(h.a) * h.v * dt; h.y += Math.sin(h.a) * h.v * dt;
+          h.x += DET.cos(h.a) * h.v * dt; h.y += DET.sin(h.a) * h.v * dt;
           let gone = h.x < 0 || h.x > W || h.y < 0 || h.y > H;
           f.champs.forEach((c) => { if (!gone && !c.dead && this.projHit(h, c) && c.inv <= 0) { if (c.pshT > 0) this.fx.push({ k: 'ring', x: c.x, y: c.y, r: 40, t: 0, life: 0.3, c: '#d8ecff' }); else this.hurtChamp(c, h.dmg); gone = true; } });
           if (gone) f.hazards.splice(i, 1);
@@ -1701,16 +1789,16 @@
       if (c.atkHold > 0) c.atkHold -= dt;
       if (c.atkLock > 0) c.atkLock -= dt;
       // 이동 중 공격 보정: 조이스틱을 밀고 있어도 공격 버튼을 눌렀고 사거리 안이며 칠 수 있으면, 잠깐 멈춰 치고 다시 조이스틱대로 움직인다.
-      const joyHeld = man && c.joy && Math.hypot(c.joy.x, c.joy.y) > 0.1;
+      const joyHeld = man && c.joy && DET.hypot(c.joy.x, c.joy.y) > 0.1;
       const wantHit = man && c.atkHold > 0 && fo && c.cd <= 0 && d <= rng + 40 + (fo === b ? 0 : fo.r);
       let joyMove = false;
       if (joyHeld && !wantHit && !(c.atkLock > 0)) {
-        const jm = Math.hypot(c.joy.x, c.joy.y);
+        const jm = DET.hypot(c.joy.x, c.joy.y);
         {
           joyMove = true; c.move = false; c.chase = false;
           const s = speed * Math.min(1, jm / 0.5) * dt; // 절반만 밀어도 최고 속도(끝까지 밀어야 빨라지면 굼뜨게 느껴진다)
           c.x = clamp(c.x + (c.joy.x / jm) * s, ARENA.x0, ARENA.x1); c.y = clamp(c.y + (c.joy.y / jm) * s, ARENA.y0, ARENA.y1);
-          c.face = Math.atan2(c.joy.y, c.joy.x); c.moveT = 0.12;
+          c.face = DET.atan2(c.joy.y, c.joy.x); c.moveT = 0.12;
         }
       }
       if (joyHeld) { c.move = false; c.chase = false; } // 조이스틱을 쥐고 있는 동안은 자동으로 다가가지 않는다
@@ -1720,7 +1808,7 @@
       if (c.move) {
         const m = dist(c.x, c.y, c.tx, c.ty);
         if (m < 6) c.move = false;
-        else { const s = Math.min(m, speed * dt); c.x += ((c.tx - c.x) / m) * s; c.y += ((c.ty - c.y) / m) * s; c.face = Math.atan2(c.ty - c.y, c.tx - c.x); c.moveT = 0.12; }
+        else { const s = Math.min(m, speed * dt); c.x += ((c.tx - c.x) / m) * s; c.y += ((c.ty - c.y) / m) * s; c.face = DET.atan2(c.ty - c.y, c.tx - c.x); c.moveT = 0.12; }
       }
       if (fo && !c.move && !joyMove && (!man || c.atkHold > 0) && d <= rng + 40 + (fo === b ? 0 : fo.r) && c.cd <= 0) {
         c.cd = this.attackTime(c.def) * (1 - Math.min(0.6, this.pv(c.def, 'haste'))) / (1 + this.hasteOf(c.owner, c.def) + (c.hasteT > 0 ? c.hasteV : 0) + this.synGet(c, 'haste')); c.atkT = 0.24;
@@ -1737,10 +1825,10 @@
         // 평타 딜러의 강타는 크게 터뜨린다
         if (big && c.def.role === 'auto') {
           this.fx.push({ k: 'blast', x: fo.x, y: fo.y - 10, r: 70 + c.def.tier * 6, t: 0, life: 0.45, c: this.shotColor(c.def) });
-          this.fx.push({ k: 'spark', x: fo.x, y: fo.y - 20, t: 0, life: 0.3, c: '#fff6c8', r: 90, a: Math.atan2(fo.y - c.y, fo.x - c.x) });
+          this.fx.push({ k: 'spark', x: fo.x, y: fo.y - 20, t: 0, life: 0.3, c: '#fff6c8', r: 90, a: DET.atan2(fo.y - c.y, fo.x - c.x) });
           if (c.owner === this.me.idx) this.log('shake', { v: 0.45 });
         }
-        c.face = Math.atan2(fo.y - c.y, fo.x - c.x);
+        c.face = DET.atan2(fo.y - c.y, fo.x - c.x);
         this.fx.push({ k: 'shot', wp: this.weapon(c.def), big: true, x0: c.x, y0: c.y, x1: fo.x, y1: fo.y, t: 0, life: 0.26, c: this.shotColor(c.def) });
         this.fx.push({ k: 'spark', x: fo.x, y: fo.y - 20, t: -0.22, life: 0.22, c: this.shotColor(c.def), r: 44, a: c.face });
         if (c.owner === this.me.idx) this.log('sfx', { s: this.weapon(c.def), gap: 70 });
@@ -1781,7 +1869,7 @@
         let best = null, bs = 1e9;
         // 가까운 안전한 자리부터 찾는다(가까운 곳이 모두 위험하면 더 멀리)
         for (const r of [150, 280, 420]) for (let i = 0; i < 12; i++) {
-          const a = ((i + k * 0.37) / 12) * Math.PI * 2, x = clamp(c.x + Math.cos(a) * r, ARENA.x0, ARENA.x1), y = clamp(c.y + Math.sin(a) * r, ARENA.y0, ARENA.y1);
+          const a = ((i + k * 0.37) / 12) * Math.PI * 2, x = clamp(c.x + DET.cos(a) * r, ARENA.x0, ARENA.x1), y = clamp(c.y + DET.sin(a) * r, ARENA.y0, ARENA.y1);
           const s = this.danger(x, y) * 1000 + dist(x, y, c.x, c.y) * 0.6 + Math.abs(dist(x, y, b.x, b.y) - rng) * 0.4 + this.crowd(c, x, y) * 2;
           if (s < bs) { bs = s; best = [x, y]; }
         }
@@ -1797,7 +1885,7 @@
       const goal = this.raidGoal(c);
       if (goal) {
         // 기믹 자리에 모일 때도 한 점에 포개지지 않게 순번대로 둘레에 선다(안전지대 반지름 95 이상, 정면 판정 ±63° 안쪽)
-        if (k % 5) { const ga = (k % 5) * 1.257, gx = clamp(goal[0] + Math.cos(ga) * 46, ARENA.x0, ARENA.x1), gy = clamp(goal[1] + Math.sin(ga) * 46, ARENA.y0, ARENA.y1); if (this.danger(gx, gy) === 0) { goal[0] = gx; goal[1] = gy; } }
+        if (k % 5) { const ga = (k % 5) * 1.257, gx = clamp(goal[0] + DET.cos(ga) * 46, ARENA.x0, ARENA.x1), gy = clamp(goal[1] + DET.sin(ga) * 46, ARENA.y0, ARENA.y1); if (this.danger(gx, gy) === 0) { goal[0] = gx; goal[1] = gy; } }
         if (dist(c.x, c.y, goal[0], goal[1]) > 18 && this.danger(goal[0], goal[1]) === 0) { c.tx = goal[0]; c.ty = goal[1]; c.move = true; } else c.move = false;
         if (c.ai) this.autoSkills(c);
         return;
@@ -1806,10 +1894,10 @@
       const wall = (x, y) => Math.min(x - ARENA.x0, ARENA.x1 - x, y - ARENA.y0, ARENA.y1 - y);
       if (d > rng + 30 || d < 110 || wall(c.x, c.y) < 120 || (!c.move && this.crowd(c, c.x, c.y, true) > 36)) {
         // 보스와 사거리만큼 떨어진 자리 중 벽에서 먼 쪽을 고른다(구석에 몰리면 장판을 못 피한다)
-        const a0 = Math.atan2(c.y - b.y, c.x - b.x);
+        const a0 = DET.atan2(c.y - b.y, c.x - b.x);
         let tx = 0, ty = 0, bs = -1e9;
         for (let i = -9; i <= 9; i++) {
-          const a = a0 + i * 0.35, x = clamp(b.x + Math.cos(a) * rng, ARENA.x0, ARENA.x1), y = clamp(b.y + Math.sin(a) * rng, ARENA.y0, ARENA.y1);
+          const a = a0 + i * 0.35, x = clamp(b.x + DET.cos(a) * rng, ARENA.x0, ARENA.x1), y = clamp(b.y + DET.sin(a) * rng, ARENA.y0, ARENA.y1);
           // 남아 있는 불길 같은 장판을 피해 보스 둘레의 다른 쪽으로 돈다
           const s = Math.min(wall(x, y), 160) - Math.abs(i - side) * 12 - this.danger(x, y) * 1000 - this.crowd(c, x, y) * 1.5; // side: 비켜설 때 사람마다 도는 쪽이 다르다
           if (s > bs) { bs = s; tx = x; ty = y; }
@@ -1821,7 +1909,7 @@
           if (this.crowd(c, c.x, c.y, true) > 36) {
             let best = null, bq = 1e9;
             for (let i = 0; i < 8; i++) {
-              const a2 = ((i + k * 0.37) / 8) * Math.PI * 2, x = clamp(c.x + Math.cos(a2) * 80, ARENA.x0, ARENA.x1), y = clamp(c.y + Math.sin(a2) * 80, ARENA.y0, ARENA.y1);
+              const a2 = ((i + k * 0.37) / 8) * Math.PI * 2, x = clamp(c.x + DET.cos(a2) * 80, ARENA.x0, ARENA.x1), y = clamp(c.y + DET.sin(a2) * 80, ARENA.y0, ARENA.y1);
               if (this.danger(x, y) > 0) continue;
               const q = this.crowd(c, x, y) - Math.min(wall(x, y), 120) * 0.3;
               if (q < bq) { bq = q; best = [x, y]; }
@@ -1877,6 +1965,53 @@
 
   }
 
+  // ---- 입력 명령표(Game.input) ----
+  // 종류 → (g, 인자) 처리. 인자 배열 칸의 뜻은 줄마다 적었다. 내 것(g.me)에만 걸린다. 객체는 id로 찾고 없으면 아무것도 하지 않는다.
+  // 인자 정리: 숫자는 정수로(좌표·id·번호 모두 정수), 글자는 32자까지, 참/거짓은 1/0, 나머지는 0. 기록하는 값 = 적용하는 값
+  const normArg = (v) => (typeof v === 'number' ? (Number.isFinite(v) ? Math.round(v) : 0) : typeof v === 'string' ? v.slice(0, 32) : v === true ? 1 : 0);
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const int = (v) => Math.round(num(v));
+  const unitOf = (g, id) => g.units.find((u) => u.id === id && u.owner === g.me.idx) || null;
+  const dropOf = (g, id) => g.drops.find((d) => d.id === id) || null;
+  // 조이스틱 벡터: 방향 번호(0~63)와 세기 단계(0~4) → 크기 단계/8인 벡터(세기 0.5 = 최고 속도)
+  const joyVec = (d, m) => { const v = DET.JOY[((d | 0) % DET.JOY_DIRS + DET.JOY_DIRS) % DET.JOY_DIRS], k = Math.max(0, Math.min(4, m | 0)) / DET.JOY_LV; return [v[0] * k, v[1] * k]; };
+  const tgtOf = (v) => (v === 'b' ? 'b' : typeof v === 'number' && v > 0 ? v : null);
+  const CMD = {
+    // 유닛 명령 [종류(move·amove·stop·hold·focus), x, y, 유닛 id...] — 좌표는 정수
+    mv: (g, a) => { const k = a[0]; if (!['move', 'amove', 'stop', 'hold', 'focus'].includes(k)) return; g.cmd(k, a.slice(3).filter((x) => typeof x === 'number'), num(a[1]), num(a[2])); },
+    cb: (g, a) => (g.defs[a[0]] ? g.combine(g.me, a[0], a[1] || undefined) : null), // 합성 [장수 id, 먼저 쓸 유닛 id]
+    cr: (g, a) => (g.recipeOf(a[0]) ? g.craft(g.me, a[0]) : null), // 조합법 [장수 id]
+    tk: (g, a) => g.useTicket(g.me, int(a[0]), a[1]), // 선택권 [등급, 장수 id]
+    sl: (g, a) => { const u = unitOf(g, a[0]); return u ? g.sell(g.me, u) : 0; }, // 해산 [유닛 id]
+    up: (g, a) => (g.T.upgrades.some((x) => x.id === a[0]) ? g.buyUpgrade(g.me, a[0]) : false), // 강화 [강화 묶음 id]
+    hi: (g, a) => (g.defs[a[0]] ? g.hire(g.me, a[0]) : false), // 명사 영입 [장수 id]
+    dm: (g, a) => g.dismiss(g.me, a[0]), // 명사 해임 [장수 id]
+    zn: (g, a) => { if (a[0] in g.me.zones && ['L', 'R', 'B1', 'B2', 'B3'].includes(a[1])) g.setZone(g.me, a[0], a[1]); }, // 정렬 구역 [묶음, 구역]
+    au: (g, a) => { if (['t1', 't2', 't3', 't45', 'sell'].includes(a[0])) g.setAuto(g.me, a[0], !!a[1]); }, // 자동 [묶음, 켬]
+    ch: (g, a) => g.openChest(g.me, dropOf(g, a[0])), // 상자 열기 [상자 id]
+    md: (g, a) => g.moveDrop(g.me, dropOf(g, a[0]), num(a[1]), num(a[2])), // 상자·아이템 옮기기 [id, x, y]
+    fu: (g, a) => g.fuseItems(g.me, a[0] || null), // 신화 아이템 4개 합치기 [남길 아이템 id]
+    ud: (g, a) => g.useDrop(g.me, dropOf(g, a[0]), unitOf(g, a[1])), // 소모품 쓰기 [소모품 id, 유닛 id]
+    ks: (g, a) => { g.keepSyn = !!a[0]; }, // 설정 「인연 유지」 [켬]
+    // 보스전
+    pk: (g, a) => g.confirmPick(a.filter((x) => typeof x === 'number')), // 출전 [유닛 id...]
+    sb: (g, a) => g.replaceChamp(a[0]), // 대체 출전 [유닛 id]
+    sc: (g, a) => g.selectChamp(a[0] < 0 ? null : int(a[0])), // 장수 고르기 [순번, -1 = 해제]
+    am: (g, a) => g.arenaMove(num(a[0]), num(a[1]), !!a[2]), // 이동 [x, y, 공격하며]
+    ac: (g, a) => g.arenaChase(tgtOf(a[0])), // 쫓아가 치기 [대상('b' = 보스, 숫자 = 기믹 대상, 0 = 가까운 것)]
+    as: (g) => g.arenaStop(), // 멈춤
+    tg: (g, a) => { const c = g.active(); if (c) c.tgt = tgtOf(a[0]); }, // 노릴 대상 [대상]
+    ds: (g, a) => g.dash(g.active(), num(a[0]), num(a[1])), // 이동기 [x, y]
+    sk: (g, a) => { const c = g.active(); return c ? g.useSkill(c, num(a[0]), num(a[1]), num(a[2])) : false; }, // 스킬 [번호, x, y]
+    hl: (g) => g.useHeal(), // 화타 치료
+    // 조작 상태(바뀔 때만): 라인 조이스틱 대상 유닛, 라인 조이스틱 [방향, 세기, 공격] / [], 보스전 조이스틱 [방향, 세기] / [], 공격 버튼 [누름], 직접 조작 [켬]
+    ls: (g, a) => { g.pad.ls = a.filter((x) => typeof x === 'number').slice(0, 200); g.pad.used = true; g.padLane(); },
+    lj: (g, a) => { g.pad.lj = a.length >= 2 ? [int(a[0]), int(a[1]), a[2] ? 1 : 0] : null; g.pad.used = true; g.padLane(); },
+    bj: (g, a) => { g.pad.bj = a.length >= 2 ? [int(a[0]), int(a[1])] : null; g.pad.used = true; },
+    ba: (g, a) => { g.pad.ba = !!a[0]; g.pad.used = true; if (g.pad.ba && g.phase === 'boss') { const c = g.active(); if (c) c.atkHold = 0.3; } },
+    mn: (g, a) => { g.manual = !!a[0]; },
+  };
+
   // 패턴 생성기. 보스 데이터의 gen 이름으로 호출된다. pace는 난이도별 텔레그래프 시간 배율.
   Game.prototype.patternGen = {
     rain(f, b, t, p, pace, all) {
@@ -1889,7 +2024,7 @@
     },
     fan(f, b, t, p, pace) {
       // 표적이 가운데 두 줄 사이에 오게 쏜다. 2026-11-26: 그 틈이 표적 거리에서 몸통(그림) + 여유보다 넓게 간격을 벌리고(최소 0.32), 부채 전체 폭(약 2.9rad)은 그대로 두려고 줄 수를 줄인다(짝·홀 유지)
-      const a0 = Math.atan2(t.y - b.y, t.x - b.x), list = [], st = this.fanStep(0.32, 46, dist(t.x, t.y, b.x, b.y), a0);
+      const a0 = DET.atan2(t.y - b.y, t.x - b.x), list = [], st = this.fanStep(0.32, 46, dist(t.x, t.y, b.x, b.y), a0);
       let n = Math.min(p.n, Math.floor(2.9 / st) + 1); if ((n - p.n) % 2) n--;
       n = Math.max(n, p.n % 2 ? 1 : 2);
       for (let i = 0; i < n; i++) list.push({ k: 'line', x: b.x, y: b.y, a: a0 + (i - (n - 1) / 2) * st, len: 1900, w: 46, delay: 1 * pace, dmg: b.hit * 0.35 });
@@ -1897,7 +2032,7 @@
     },
     cross(f, b, t, p, pace) {
       // 2026-11-26: 보스에서 300 떨어진 곳의 줄 사이 틈이 발판 폭(가장 긴 쪽) + 여유 이상이 되게 줄 수를 줄인다
-      const a0 = Math.atan2(t.y - b.y, t.x - b.x), list = [], n = Math.max(2, Math.min(p.n, Math.floor((Math.PI * 2 * 300) / (70 + this.footW() + this.gapPad()))));
+      const a0 = DET.atan2(t.y - b.y, t.x - b.x), list = [], n = Math.max(2, Math.min(p.n, Math.floor((Math.PI * 2 * 300) / (70 + this.footW() + this.gapPad()))));
       for (let i = 0; i < n; i++) list.push({ k: 'line', x: b.x, y: b.y, a: a0 + (i / n) * Math.PI * 2, len: 2000, w: 70, delay: 1.1 * pace, dmg: b.hit * 0.4 });
       this.addHazards(list);
     },
@@ -1910,12 +2045,12 @@
       this.addHazards(list);
     },
     sweep(f, b, t, p, pace) {
-      const a0 = Math.atan2(t.y - b.y, t.x - b.x), list = [];
+      const a0 = DET.atan2(t.y - b.y, t.x - b.x), list = [];
       for (let i = 0; i < p.n; i++) list.push({ k: 'cone', x: b.x, y: b.y, a: a0 + (i % 2 ? 1 : -1) * 0.5 + i * 1.05, r: 420, arc: p.arc, delay: (0.9 + i * 0.4) * pace, dmg: b.hit * 0.38 });
       this.addHazards(list);
     },
     charge(f, b, t, p, pace) {
-      const a = Math.atan2(t.y - b.y, t.x - b.x), len = Math.max(620, dist(t.x, t.y, b.x, b.y) + 200), delay = 1 * pace;
+      const a = DET.atan2(t.y - b.y, t.x - b.x), len = Math.max(620, dist(t.x, t.y, b.x, b.y) + 200), delay = 1 * pace;
       this.addHazards([{ k: 'line', x: b.x, y: b.y, a, len, w: p.w, delay, dmg: b.hit * 0.45 }]);
       b.charge = { a, left: len, delay };
       if (p.repeat > 1) b.gap = Math.min(b.gap, 2.2);
@@ -1941,7 +2076,30 @@
     },
   };
 
-  const api = { Game, W, H, ROAD, INNER, ARENA, PATH, dist, clamp, inLine, inCone, angDiff, polyPoly, polyNear, polyFar, linePoly, rectPoly };
+  // ---- 입력 기록기(2026-11-26 재연산 검증) ----
+  // 화면(17-loop)이 판을 시작할 때 g.rec = new Recorder(머리)로 붙이면 g.input이 명령을 [앞 명령과의 걸음 차, 종류, 인자...]로 쌓는다.
+  // 머리 = { v: 1, eh(엔진 묶음 해시), lang, seed, diff, mutLv, muts, unl, ai, b } — 서버 재연산(server/replay-core.js)이 이 값으로 같은 판을 만든다.
+  // 이어하기: 저장할 때 dump()를 저장본에 같이 넣고, 복원할 때 Recorder.from(저장된 기록)으로 이어 붙인 뒤 mark(걸음)로 'R'을 남긴다.
+  // 명령이 MAX를 넘으면 기록을 버린다(full = true, 보고에 기록을 넣지 않는다).
+  // 쓰는 법: g.rec = new Recorder({ v: 1, seed: g.seed, ... }); ... const rec = g.rec.dump(g.stepN);
+  class Recorder {
+    constructor(head) { this.head = Object.assign({}, head); delete this.head.c; delete this.head.end; this.c = []; this.last = 0; this.full = false; }
+    push(step, type, args) {
+      if (this.full) return;
+      if (this.c.length >= Recorder.MAX) { this.full = true; this.c = []; return; }
+      this.c.push([step - this.last, type].concat(args)); this.last = step;
+    }
+    mark(step) { this.push(step, 'R', []); }
+    dump(endStep) { return this.full ? null : Object.assign({}, this.head, { c: this.c.slice(), end: { step: endStep | 0 } }); }
+    static from(rec) {
+      const r = new Recorder(rec);
+      r.c = (rec.c || []).slice(); r.last = r.c.reduce((t, x) => t + (x[0] | 0), 0);
+      return r;
+    }
+  }
+  Recorder.MAX = 150000;
+
+  const api = { Game, Recorder, W, H, ROAD, INNER, ARENA, PATH, dist, clamp, inLine, inCone, angDiff, polyPoly, polyNear, polyFar, linePoly, rectPoly };
   root.RTD_ENGINE = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

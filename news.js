@@ -10,6 +10,12 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.4.6', d: '2026-11-27', items: [
+      ['순위표에는 기록 검증이 끝난 판만 오릅니다. 보상은 판이 끝나면 바로 받고, 검증은 서버가 뒤에서 진행합니다.', 'ランキングには記録の検証が終わったバトルだけが載ります。報酬はバトル終了後すぐに受け取れ、検証はサーバーが裏で行います。', 'Only verified games appear in the rankings. You still get rewards right after a game; the server verifies it in the background.', '排行榜只显示通过记录验证的对局。奖励在对局结束后立即发放，验证由服务器在后台进行。'],
+      ['검증에서 인정되지 않은 판은 보상이 회수되며, 다음에 로비에 들어올 때 알려 드립니다.', '検証で認められなかったバトルは報酬が回収され、次にロビーに入ったときにお知らせします。', 'Rewards from games that fail verification are taken back, and you will be notified in the lobby.', '未通过验证的对局奖励将被收回，下次进入大厅时会提示。'],
+      ['이어하기로 끝낸 싱글 판은 기간과 상관없이 기록됩니다.', '「続きから」で終えたシングルは、期間に関係なく記録されます。', 'Solo games finished via Resume are now recorded no matter how long ago they started.', '通过“继续游戏”完成的单人对局，无论间隔多久都会被记录。'],
+      ['난이도 해금은 서버 기록을 기준으로 합니다.', '難易度の解放はサーバーの記録を基準にします。', 'Difficulty unlocks are now based on your server record.', '难度解锁以服务器记录为准。'],
+    ] },
     { v: '0.4.4', d: '2026-11-26', items: [
       ['이어하기로 하루를 넘겨 끝낸 싱글 판의 결과(경험치·동전·전적·난이도 해금)가 서버에 기록되지 않던 문제를 고쳤습니다. 이제 시작한 지 7일 안에 끝내면 기록됩니다.', '「続きから」で日をまたいで終えたシングルの結果（経験値・銅銭・戦績・難易度解放）がサーバーに記録されない問題を直しました。開始から7日以内に終えれば記録されます。', 'Fixed solo games finished after resuming the next day not being recorded on the server (XP, coins, history, difficulty unlocks). Games finished within 7 days of starting are now recorded.', '修复了通过“继续游戏”跨天完成的单人对局结果（经验、铜钱、战绩、难度解锁）未被服务器记录的问题。现在开始后7天内完成即可记录。'],
       ['서버가 결과를 받지 않은 판은 결과 화면에 알림이 나옵니다.', 'サーバーが結果を受け付けなかった対局は、結果画面でお知らせします。', 'The result screen now tells you when the server did not accept a result.', '服务器未接收结果的对局会在结算画面提示。'],

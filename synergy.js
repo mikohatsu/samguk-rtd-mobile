@@ -7,6 +7,7 @@
 // - 원군 피해(syn)는 적중 트리거(hitN·crit·표식)를 다시 부르지 않는다.
 // - 연출은 fx 목록에 넣기만 한다(그림은 src/ui/07-arena.js가 기존 그림으로 그린다). 남의 원군 연출은 presence(sv)로 받아 이름표와 함께 그린다.
 (function (root) {
+  const DET = root.RTD_DET || (typeof require !== 'undefined' ? require('./det.js') : null); // 결정적 sin·cos·atan2·hypot·exp·log(det.js, 서버 재연산 검증)
   const E = root.RTD_ENGINE || (typeof require !== 'undefined' ? require('./engine.js') : null);
   const { Game, ARENA, dist, clamp, inLine, inCone } = E;
   const P = Game.prototype;
@@ -230,10 +231,10 @@
   // ---- 연출(fx만 넣는다) ----
   P.synVisOk = function () { let n = 0; for (const x of this.fx) if (x.k === 'synAlly' && !x.who) n++; return n < VIS_MAX; };
   P.synPos = function (c, pos, i) {
-    const b = this.fight.boss, a = Math.atan2(b.y - c.y, b.x - c.x);
-    if (pos === 'side') { const o = [[-1, 0.9], [1, 0.9], [-1, -0.9], [1, -0.9]][i % 4]; return [clamp(c.x + Math.cos(a + o[1] * 1.6) * 80 * Math.abs(o[0]), ARENA.x0, ARENA.x1), clamp(c.y + Math.sin(a + o[1] * 1.6) * 80, ARENA.y0, ARENA.y1)]; }
+    const b = this.fight.boss, a = DET.atan2(b.y - c.y, b.x - c.x);
+    if (pos === 'side') { const o = [[-1, 0.9], [1, 0.9], [-1, -0.9], [1, -0.9]][i % 4]; return [clamp(c.x + DET.cos(a + o[1] * 1.6) * 80 * Math.abs(o[0]), ARENA.x0, ARENA.x1), clamp(c.y + DET.sin(a + o[1] * 1.6) * 80, ARENA.y0, ARENA.y1)]; }
     if (pos === 'far') return [ARENA.x1 - 70, clamp(b.y + ((i % 3) - 1) * 110, ARENA.y0 + 60, ARENA.y1 - 60)];
-    if (pos === 'behind') return [clamp(b.x + Math.cos(a) * 95, ARENA.x0, ARENA.x1), clamp(b.y + Math.sin(a) * 95, ARENA.y0, ARENA.y1)];
+    if (pos === 'behind') return [clamp(b.x + DET.cos(a) * 95, ARENA.x0, ARENA.x1), clamp(b.y + DET.sin(a) * 95, ARENA.y0, ARENA.y1)];
     // 기본: 결투장 왼쪽 가장자리(라인에서 온 원군)
     const span = ARENA.y1 - ARENA.y0 - 220;
     return [ARENA.x0 + 50, ARENA.y0 + 110 + ((i * 170 + (this.fight.synVisN || 0) * 70) % span)];
@@ -244,7 +245,7 @@
     if (!d) return;
     if (!who) f.synVisN = (f.synVisN || 0) + 1;
     this.fx.push({ k: 'synAlly', id, x, y, t: 0, life: 0.75, tx: b.x, ty: b.y, who: who || null });
-    const a = Math.atan2(b.y - y, b.x - x), dd = dist(x, y, b.x, b.y), sk = look === 'skill' ? (d.sk || []).find((s) => s.mult > 0) : null;
+    const a = DET.atan2(b.y - y, b.x - x), dd = dist(x, y, b.x, b.y), sk = look === 'skill' ? (d.sk || []).find((s) => s.mult > 0) : null;
     if (look === 'charge') this.fx.push({ k: 'cone', x, y, a, r: dd + 60, arc: 0.7, t: -0.1, life: 0.42, c: '#ffd0a0', vx: 'charge' });
     else if (sk && sk.k === 'line') this.fx.push({ k: 'beam', x, y, a, len: dd + 80, w: 70, t: -0.1, life: 0.5, c: sk.fx, vx: sk.vx });
     else if (sk && sk.k === 'cone') this.fx.push({ k: 'cone', x, y, a, r: dd + 60, arc: 0.8, t: -0.1, life: 0.42, c: sk.fx, vx: sk.vx });
@@ -300,7 +301,7 @@
           this.synHit(c, a.m * S, a.stun ? { stun: a.stun } : null);
           if (id) this.synShowAlly(c, id, a.pos || 'side', 0, a.look, a.wp);
           if (a.vx) this.fx.push({ k: 'blast', x: b.x, y: b.y, r: 130, t: 0, life: 0.6, c: a.col || '#fff0b0', vx: a.vx });
-          if (a.beam) this.fx.push({ k: 'beam', x: c.x, y: c.y, a: Math.atan2(b.y - c.y, b.x - c.x), len: dist(c.x, c.y, b.x, b.y) + 80, w: 80, t: 0, life: 0.5, c: a.col || '#c8f0ff', vx: a.beam });
+          if (a.beam) this.fx.push({ k: 'beam', x: c.x, y: c.y, a: DET.atan2(b.y - c.y, b.x - c.x), len: dist(c.x, c.y, b.x, b.y) + 80, w: 80, t: 0, life: 0.5, c: a.col || '#c8f0ff', vx: a.beam });
           if (a.anim) this.fx.push({ k: 'synAnim', name: a.anim, x: b.x, y: b.y - 30, r: 150, t: 0, life: 0.5, col: a.col || null });
           if (c.owner === this.me.idx) this.log('dmgtext', { x: b.x, y: b.y - 110, v: Math.round(a.m * S), big: true });
         };
@@ -414,12 +415,12 @@
       case 'dmgHit': {
         const n = a.n || 1;
         this.synHit(c, (ctx.v || 0) * a.pct * n);
-        const a0 = Math.atan2(b.y - c.y, b.x - c.x);
-        for (let k = 0; k < Math.min(n, 3); k++) { const da = (k - (n - 1) / 2) * 0.12; this.fx.push({ k: 'shot', wp: 'bow', big: true, x0: c.x, y0: c.y, x1: b.x + Math.cos(a0 + da + Math.PI / 2) * 30 * (k - 1), y1: b.y + Math.sin(a0 + da + Math.PI / 2) * 30 * (k - 1), t: -0.05 * k, life: 0.3, c: '#f4e8c8' }); }
+        const a0 = DET.atan2(b.y - c.y, b.x - c.x);
+        for (let k = 0; k < Math.min(n, 3); k++) { const da = (k - (n - 1) / 2) * 0.12; this.fx.push({ k: 'shot', wp: 'bow', big: true, x0: c.x, y0: c.y, x1: b.x + DET.cos(a0 + da + Math.PI / 2) * 30 * (k - 1), y1: b.y + DET.sin(a0 + da + Math.PI / 2) * 30 * (k - 1), t: -0.05 * k, life: 0.3, c: '#f4e8c8' }); }
         break;
       }
       case 'dashHit': {
-        const id = pickId(a.ids), x0 = ctx.x0, y0 = ctx.y0, len = dist(x0, y0, c.x, c.y), an = Math.atan2(c.y - y0, c.x - x0);
+        const id = pickId(a.ids), x0 = ctx.x0, y0 = ctx.y0, len = dist(x0, y0, c.x, c.y), an = DET.atan2(c.y - y0, c.x - x0);
         if (id && this.synVisOk()) { this.synAllyFx(id, x0, y0 + 40, null, null); this.synOut({ k: 'a', id, x: Math.round(x0), y: Math.round(y0 + 40), l: '', w: '' }); }
         this.fx.push({ k: 'beam', x: x0, y: y0 + 40, a: an, len: len + 120, w: 80, t: 0, life: 0.45, c: '#9ad0ff', vx: 'thrust' });
         if (inLine(b.x, b.y, x0, y0, an, len + 120, 160, 60) || dist(c.x, c.y, b.x, b.y) < 200) this.synHit(c, a.m * S);
@@ -557,8 +558,8 @@
   // 호위 원군이 서는 자리(주장 둘레, 순번마다 다른 쪽)
   const AL_ANG = [1.2, -1.2, 2.3, -2.3];
   P.synAlPos = function (c, al) {
-    const b = this.fight.boss, a = Math.atan2(b.y - c.y, b.x - c.x) + AL_ANG[al.i % 4];
-    return [clamp(c.x + Math.cos(a) * 70, ARENA.x0, ARENA.x1), clamp(c.y + Math.sin(a) * 70, ARENA.y0, ARENA.y1)];
+    const b = this.fight.boss, a = DET.atan2(b.y - c.y, b.x - c.x) + AL_ANG[al.i % 4];
+    return [clamp(c.x + DET.cos(a) * 70, ARENA.x0, ARENA.x1), clamp(c.y + DET.sin(a) * 70, ARENA.y0, ARENA.y1)];
   };
   // 실제로 피해를 받았을 때(무적·보호막으로 다 막으면 제외) 0.3초에 1번까지(확장 문서 N2)
   P.synHurt = function (c, dmg) {

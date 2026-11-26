@@ -1,6 +1,7 @@
 // AI 사령관. 사람 협동 참가자처럼 자기 라인(게임)을 따로 받아 명령만 내린다:
 // 상자·선택권·조합·조합법·강화·영입·배치, 중간보스 인코스 추격, 보스전 출전과 교체.
 (function (root) {
+  const DET = root.RTD_DET || (typeof require !== 'undefined' ? require('./det.js') : null); // 결정적 sin·cos·atan2·hypot·exp·log(det.js, 서버 재연산 검증)
   const E = root.RTD_ENGINE || (typeof require !== 'undefined' ? require('./engine.js') : null);
   const { INNER, dist } = E;
 
@@ -117,8 +118,10 @@
       const miss = ids.filter((id) => (keep[id] || 0) > g.ownedOf(p, id).length).sort((a, b) => facOk(b) - facOk(a));
       if (miss.length) return miss[0];
       // 없으면 합치기에 가장 가까운 것(진영 빌드는 자기 진영을 조금 더 쳐준다)
-      const score = (id) => (need ? (g.freeOf(p, id).length - (keep[id] || 0)) % need : 0) + (facOk(id) ? 0.5 : 0) + g.rand() * 0.1;
-      return ids.slice().sort((a, b) => score(b) - score(a))[0];
+      // 점수는 장수마다 한 번만 매긴다(난수 포함). 정렬 비교 함수 안에서 난수를 뽑으면 엔진마다(V8·JavaScriptCore) 비교 횟수가 달라
+      // 난수 소비가 갈린다 → 서버 재연산과 어긋난다(2026-11-26).
+      const sc = {}; ids.forEach((id) => { sc[id] = (need ? (g.freeOf(p, id).length - (keep[id] || 0)) % need : 0) + (facOk(id) ? 0.5 : 0) + g.rand() * 0.1; });
+      return ids.slice().sort((a, b) => sc[b] - sc[a])[0];
     }
     itemTarget(d, keep) {
       const g = this.g, list = this.mine().filter((u) => !g.inFight(u) && g.canUseDrop(d, u));
@@ -151,7 +154,7 @@
         const u = g.units.find((x) => x.id === id), rng = g.range(u.def), d = dist(mid.x, mid.y, u.x, u.y);
         if (d > rng * 0.8) {
           // 길 바로 안쪽(인코스)으로 앞질러 간다
-          const ax = cx - mid.x, ay = cy - mid.y, al = Math.hypot(ax, ay) || 1;
+          const ax = cx - mid.x, ay = cy - mid.y, al = DET.hypot(ax, ay) || 1;
           g.cmd('move', [u.id], mid.x + (ax / al) * rng * 0.6, mid.y + (ay / al) * rng * 0.6);
           u.order.after = 'focus';
         } else if (u.order.t !== 'focus') g.cmd('focus', [u.id]);

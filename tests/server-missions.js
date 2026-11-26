@@ -112,10 +112,11 @@ const rkSum = (xp) => { let n = 0; for (let k = 1; k <= PROG.rankOf(PROG.levelOf
     const old = await guest('ms_old');
     r = await api('/api/result', { ticket: forge(old.id, 'easy', 0, 3600), round: 70, win: true, time: 3200 }, old.tok);
     ok(r.gained === 43 && r.coins === 23, `판 인원이 안 적힌 옛 표: 오프라인 배율 (${r.gained}/${r.coins})`);
-    // 클리어 순위: 온라인 협동(k>=2) 4건, 솔로(k=0 전적 보고, k=1 혼자 한 온라인, 옛 표) 3건으로 나뉜다
+    // 클리어 순위: 2026-11-26 "검증된 거만 올리게 해줘 랭킹은" — 이 시험의 표는 모두 예전 표(v 없음)라 검증할 수 없어 순위에 오르지 않는다
+    // (온라인 협동·솔로로 나뉘는 것과 검증 뒤 오르는 것은 tests/server-secure.js가 본다)
     const rk = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy`)).json();
     const rs = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy&mode=solo`)).json();
-    ok(rk.list.length === 4 && rs.list.length === 3, `클리어 순위: 온라인 협동 ${rk.list.length}건(기대 4), 솔로 ${rs.list.length}건(기대 3)`);
+    ok(rk.list.length === 0 && rs.list.length === 0, `예전 표 판은 순위에 오르지 않음: 온라인 협동 ${rk.list.length}건, 솔로 ${rs.list.length}건`);
     // 전적의 online 표시: 전적 보고는 오프라인, 결과 보고는 온라인
     const hD = await api('/api/hist', {}, D.tok), hE = await api('/api/hist', {}, E.tok);
     ok(hD.hist.length === 1 && hD.hist[0].online === false && hE.hist[0].online === true, '전적의 온라인 표시: 전적 보고 = 오프라인, 결과 보고 = 온라인');
@@ -155,12 +156,22 @@ const rkSum = (xp) => { let n = 0; for (let k = 1; k <= PROG.rankOf(PROG.levelOf
     ok(dailyOf(r, 'd_play2').n === 0, '10라운드 미만으로 끝난 판은 판 수로 세지 않음');
     // 통계를 부풀린 판: 합성은 라운드당 4번, 보스는 도달 라운드까지 나온 보스 수를 넘지 못한다
     const N = await guest('ms_n');
-    await api('/api/history', { ticket: forge(N.id, 'easy', 0, 600, 0), round: 2, win: false, time: 60, st: { combines: 500, bossWins: 9 } }, N.tok);
+    // 2026-11-26(secure-a): 도달 라운드로 불가능한 통계(합성 > 라운드×8+30, 보스 처치 > 나온 보스 수)는 판 전체를 받지 않는다(app.js statsBad)
+    r = await api('/api/history', { ticket: forge(N.id, 'easy', 0, 600, 0), round: 2, win: false, time: 60, st: { combines: 500, bossWins: 9 } }, N.tok);
+    const rj = r.rejected === true;
     r = await api('/api/missions', {}, N.tok);
-    ok(dailyOf(r, 'd_comb10').n === 8 && dailyOf(r, 'd_boss3').n === 0 && dailyOf(r, 'd_play2').n === 0, `2라운드 판에 합성 500·보스 9를 적어 보냄: 합성 8(라운드×4), 보스 0 (${dailyOf(r, 'd_comb10').n}, ${dailyOf(r, 'd_boss3').n})`);
-    await api('/api/history', { ticket: forge(N.id, 'easy', 0, 600, 0), round: 30, win: false, time: 1200, st: { combines: 5, bossWins: 9 } }, N.tok);
+    ok(rj && dailyOf(r, 'd_comb10').n === 0 && dailyOf(r, 'd_boss3').n === 0, `2라운드 판에 합성 500·보스 9를 적어 보냄: 판을 받지 않음, 미션 진행 없음 (${dailyOf(r, 'd_comb10').n}, ${dailyOf(r, 'd_boss3').n})`);
+    // 있을 수는 있지만 많은 합성(2라운드에 40, 통계 상한 46 안): 미션에는 라운드×4까지만 센다
+    await api('/api/history', { ticket: forge(N.id, 'easy', 0, 600, 0), round: 2, win: false, time: 60, st: { combines: 40 } }, N.tok);
     r = await api('/api/missions', {}, N.tok);
-    ok(dailyOf(r, 'd_boss3').n === 2, `30라운드 판에 보스 9를 적어 보냄: 보스 2(R10·R25) (${dailyOf(r, 'd_boss3').n})`);
+    ok(dailyOf(r, 'd_comb10').n === 8 && dailyOf(r, 'd_play2').n === 0, `2라운드 판에 합성 40: 미션 합성은 8(라운드×4)까지 (${dailyOf(r, 'd_comb10').n})`);
+    r = await api('/api/history', { ticket: forge(N.id, 'easy', 0, 600, 0), round: 30, win: false, time: 1200, st: { combines: 5, bossWins: 9 } }, N.tok);
+    const rj2 = r.rejected === true;
+    r = await api('/api/missions', {}, N.tok);
+    ok(rj2 && dailyOf(r, 'd_boss3').n === 0, `30라운드 판에 보스 9를 적어 보냄(나온 보스는 2): 판을 받지 않음 (${dailyOf(r, 'd_boss3').n})`);
+    await api('/api/history', { ticket: forge(N.id, 'easy', 0, 600, 0), round: 30, win: false, time: 1200, st: { combines: 5, bossWins: 2, bosses: 2 } }, N.tok);
+    r = await api('/api/missions', {}, N.tok);
+    ok(dailyOf(r, 'd_boss3').n === 2, `30라운드 판에 보스 2: 보스 2(R10·R25) (${dailyOf(r, 'd_boss3').n})`);
     // 셋 다 채우기(M): 70R 클리어(합성 30·보스 5) + 1R 패배(판 수 아님) + 10R 패배
     const M = await guest('ms_m');
     r = await api('/api/history', { ticket: forge(M.id, 'easy', 0, 7200, 0), round: 70, win: true, time: 3200, st: { combines: 30, bossWins: 5 } }, M.tok);

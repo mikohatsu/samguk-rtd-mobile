@@ -3,7 +3,11 @@
   function saveGame() {
     if (!S.saveOn || !g || g.over) return;
     const s = g.snapshot();
-    if (s) { try { localStorage.setItem('rtd-save', JSON.stringify(s)); } catch (e) { /* 저장 공간 없음 */ } }
+    if (!s) return;
+    s.at = Date.now(); // 저장 시각(엔진은 시계를 읽지 않는다)
+    // 입력 기록도 같이 둔다: 이어 할 때 이어 붙여 서버가 처음부터 다시 돌릴 수 있게(이 걸음에서 저장 → 복원한 것으로 'R'을 남긴다)
+    if (g.rec) s.rec = g.rec.dump(g.stepN);
+    try { localStorage.setItem('rtd-save', JSON.stringify(s)); } catch (e) { /* 저장 공간 없음 */ }
   }
   function lifeOffline() { return !net || net.t.kind === 'hub'; }
   // 앱을 내렸을 때: 브라우저의 visibilitychange와 앱의 appStateChange(native.js가 'rtd-appstate'로 넘긴다) 둘 다 받는다.
@@ -35,22 +39,28 @@
       // 보스 처치 연출 동안(g.killHold, 엔진이 라인을 멈춘다)도 1배속: 멈추는 시간이 실제 연출 시간(07-arena KILL_REAL)과 같게
       acc += dt * (g.phase !== 'wave' || g.killHold > 0 ? 1 : net ? net.clock.sp : speed);
       // 혼자(또는 AI와) 하는 보스전은 계산을 초당 60번으로 한다: 30번이면 조이스틱을 민 뒤 최대 한 프레임 늦게 움직여 굼떠 보인다.
-      // 협동은 서로 같은 간격으로 계산해야 하므로 30번 그대로.
-      const h = !net && g.phase === 'boss' ? 1 / 60 : 1 / 30;
+      // 협동은 서로 같은 간격으로 계산해야 하므로 30번 그대로(g.stepDt).
+      // 한 걸음 = 가상 방 소식 전달 → 내 판 → AI 동맹 판과 AI 판단. 서버 재연산(server/replay-core.js stepWorld)과 같은 순서여야 한다(2026-11-26):
+      // 걸음 크기는 걸음마다 다시 본다(한 프레임 안에서 보스전이 시작돼도 다음 걸음부터 1/60), AI 판단도 프레임이 아니라 걸음마다(게임 시간으로) 한다.
       let n = 0;
-      while (acc >= h && n < 40) { if (hub) hub.flush(); g.step(h); bots.forEach((b) => b.g.step(h)); acc -= h; n++; }
+      while (acc >= g.stepDt() && n < 40) {
+        const h = g.stepDt();
+        if (hub) hub.flush();
+        g.step(h);
+        bots.forEach((b) => { b.g.step(h); b.brain.update(h); });
+        acc -= h; n++;
+      }
       if (acc > 0.3) acc = 0;
     }
     if (net) net.tickStatus(dt, g);
     bots.forEach((b) => {
       b.net.speedWant = net.speedWant;
       b.net.tickStatus(dt, b.g);
-      if (!held && !(S.freeze > 0) && !S.mutHold) b.brain.update(dt);
       // AI도 사람처럼 높은 등급 등장을 알린다. 남에게서 받은 알림(remote)을 다시 보내면 AI끼리 끝없이 주고받아 멈추므로 자기 것만 보낸다.
       b.g.events.forEach((e) => { if (e.type === 'pop' && !e.remote) b.net.send('pop', { id: e.def.id, name: b.net.name }); });
       b.g.events.length = 0;
     });
-    if (hub) hub.flush();
+    // 가상 방 소식은 다음 걸음 앞에서만 전한다(예전에는 프레임 끝에도 전했다 — 그러면 소식과 내 조작의 순서가 프레임 시각에 따라 달라져 서버가 같은 판을 만들 수 없다)
     drainEvents();
   }
   // 협동 중에는 탭이 뒤로 가도 시뮬레이션이 멈추면 안 된다
@@ -180,31 +190,64 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       Snd.play(wp, 70);
     }
   }
-  // 판 표를 못 받았을 때 다시 받는 간격(ms)
+  // 판 표를 못 받았을 때 다시 받는 간격(ms). 방 협동 판만 다시 받는다(아래 begin 설명)
   const TICKET_RETRY_MS = [3000, 6000, 12000, 24000];
+  // 판 시작(2026-11-26 재연산 검증): 로그인한 혼자·AI 동맹 새 판은 서버 표를 먼저 받고 표의 씨앗으로 판을 만든다(서버가 같은 씨앗으로 다시 돌려 결과를 맞춘다).
+  // 최대 TICKET_WAIT_MS 기다린다(그동안 로비가 그대로 보인다). 못 받으면 기기 씨앗으로 시작하고, 늦게 온 표는 씨앗이 달라 쓰지 않는다 → 이 판은 결과 화면에 '기록되지 않음'.
+  // 방 협동은 씨앗이 방장의 시작 신호에 있으므로 예전처럼 판과 함께 표를 받는다(협동 재연산은 다음 단계).
+  const TICKET_WAIT_MS = 3000;
+  let starting = false;
   function begin(opt) {
+    if (starting) return;
+    const want = ACC.token && !opt.trial && !opt.snap && !opt.net;
+    if (!want) { beginNow(opt, null); return; }
+    const LB = window.RTD_LOBBY, saveOn = !opt.online && !opt.ai && (opt.mode || 'solo') === 'solo';
+    starting = true;
+    if (saveOn && LB && LB.setSaveTk) LB.setSaveTk(null); // 앞 판의 표가 새 판에 붙지 않게(표를 못 받은 채 이어 하면 앞 판 표로 보고되던 문제)
+    const req = api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, save: saveOn });
+    Promise.race([req, new Promise((r) => setTimeout(() => r(null), TICKET_WAIT_MS))])
+      .then((r) => { starting = false; beginNow(opt, r || { status: 0, late: req }); }, () => { starting = false; beginNow(opt, { status: 0 }); });
+  }
+  // pre: begin이 미리 받은 표 답(없으면 null = 표를 받지 않는 판 / 이어하기 / 방 협동)
+  function beginNow(opt, pre) {
     if (window.RTD_LOBBY) window.RTD_LOBBY.close();
     $('title').hidden = true; $('title').style.display = 'none';
     I.applyDom($('app'));
     $('app').hidden = false;
     fit();
+    const room = !!opt.net && !opt.ai; // 방 협동(씨앗은 방장의 시작 신호)
+    // 혼자·AI 동맹 새 판의 씨앗: 서버 표의 씨앗(있으면), 없으면 기기. 악몽 +N 규칙과 AI 동맹 빌드도 씨앗으로 정한다(서버가 같은 값인지 확인한다)
+    let builds = null;
+    if (!opt.snap && !room && !opt.trial) {
+      opt.seed = pre && pre.ticket && pre.seed ? pre.seed >>> 0 : (Math.random() * 4294967296) >>> 0;
+      if (opt.diff === 'nightmare' && opt.mutLv) opt.muts = E.Game.rollMuts(T, +opt.mutLv, opt.seed);
+    }
     // AI 동맹: 나와 AI 사령관들을 가상 방에 넣고, AI마다 자기 라인을 따로 돌린다(방 협동과 같은 규칙)
+    hub = null; bots = [];
     if (opt.ai) {
       hub = window.RTD_NET.hub();
       opt.net = hub.join(myName());
-      opt.mode = 'multi'; opt.seed = opt.seed || (Math.random() * 1e9) | 0;
-      const pool = window.RTD_AI.BUILDS.slice();
-      bots = [];
+      opt.mode = 'multi';
+      const B = window.RTD_AI.BUILDS;
+      builds = E.Game.pickBuilds(B.length, +opt.ai, opt.seed);
       for (let i = 0; i < opt.ai; i++) {
-        const b = pool.splice((Math.random() * pool.length) | 0, 1)[0], bn = hub.join(I.t('ai_' + b.id)); // 동맹 이름은 문구표(ai_<빌드 id>)로 4개 언어
+        const b = B[builds[i]], bn = hub.join(I.t('ai_' + b.id)); // 동맹 이름은 문구표(ai_<빌드 id>)로 4개 언어
         const bg = new E.Game(T, { diff: opt.diff, mode: 'multi', seed: opt.seed + i + 1, net: bn, bot: true, muts: opt.muts, mutLv: opt.mutLv });
         bn.attach(bg);
         bots.push({ g: bg, net: bn, brain: new window.RTD_AI.Brain(bg, b) });
       }
     }
     g = opt.snap ? E.Game.restore(T, opt.snap) : new E.Game(T, opt);
-    // 설정 「인연 유지」(기본 켬): 자동 조합이 켜진 인연 단계의 마지막 한 기를 남긴다. 기기 설정 'rtd-keepsyn' = '0'이면 끔
-    try { g.keepSyn = localStorage.getItem('rtd-keepsyn') !== '0'; } catch (e) { g.keepSyn = true; }
+    // 입력 기록(2026-11-26 재연산 검증): 혼자·AI 동맹 판. 이어하기는 저장본의 기록을 이어 붙이고 이 걸음에 'R'(저장 → 복원)을 남긴다(예전 저장본은 기록 없음)
+    if (!g.trial && !room) {
+      // pf: 이 판을 돌린 자바스크립트 엔진 — 'jsc'(애플 WebKit: 아이폰·아이패드의 모든 브라우저·앱, Mac 사파리) / 'v8'. 서버는 jsc 판을 실측 전까지 회수하지 않고 기록만 한다(2026-11-26 사용자 결정)
+      const ua = (navigator && navigator.userAgent) || '', jsc = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) || (/AppleWebKit/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Android/.test(ua));
+      if (!opt.snap) g.rec = new E.Recorder({ v: 1, pf: jsc ? 'jsc' : 'v8', eh: window.RTD_ENGINE_HASH || '', lang: I.lang, seed: g.seed, diff: g.diff.id, mutLv: g.mutLv | 0, muts: g.muts.map((m) => m.id), unl: g.unlocked, ai: +opt.ai || 0, b: builds || undefined });
+      else if (opt.snap.rec && opt.snap.x >= 2 && !opt.noRecord) { g.rec = E.Recorder.from(opt.snap.rec); g.rec.mark(g.stepN); }
+    }
+    // 설정 「인연 유지」(기본 켬): 자동 조합이 켜진 인연 단계의 마지막 한 기를 남긴다. 기기 설정 'rtd-keepsyn' = '0'이면 끔(입력 명령으로 넣는다)
+    let keep = true; try { keep = localStorage.getItem('rtd-keepsyn') !== '0'; } catch (e) { keep = true; }
+    g.input('ks', [keep ? 1 : 0]);
     // 신화·불멸 체험(opt.trial, trial-mode.md): 저장·판 표·결과 보고·전적·튜토리얼·광고 없음. S.trial = { unit }
     S.trial = g.trial ? opt.trial : null; S.trialFx = null;
     // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기). 체험은 저장하지 않는다(rtd-save에 있던 일반 판 이어하기도 그대로 남는다)
@@ -213,21 +256,39 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 판 표는 S.gameTk에 둔다(S.ticket은 선택권 창이 쓰는 값이라 같이 쓰면 선택권을 쓸 때 판 표가 지워진다).
     // 표를 못 받으면(끊김·서버 오류) 3·6·12·24초 뒤에 다시 받는다. 판이 끝났거나 다른 판이 시작됐으면 멈춘다.
     // 끝까지 못 받은 채 판이 끝나면 결과 화면에서 알린다(S.tkWant = 이 판은 표를 받아야 하는 판, S.tkMiss = 못 받고 끝남).
-    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false; S.tkRej = false;
+    // 2026-11-26(secure-a, 사용자 결정 ③): 혼자 오프라인 새 판은 '이어하기 칸' 표(save: true)를 받는다 — 계정당 한 칸, 기한 없음, 새 혼자 판이 칸을 바꾼다.
+    // 이어하기 표는 { u: 계정, tk, s: 씨앗 }으로 둔다(lobby.js saveTk). 다른 계정의 표는 쓰지 않는다. 예전 앱이 둔 표 글자(legacy)는 그대로 써서 끝까지 보고한다.
+    // opt.noRecord: 이어하기를 누를 때 서버가 '칸이 바뀜·이미 기록됨·다른 계정'이라고 해서 기록 없이 이어 하기로 한 판(19-title.js) → 결과 화면에 '기록되지 않음'.
+    // 서버가 표를 잠금(locked)으로 거절하면 답에 온 계정 진행으로 바꿔 두고 이 판은 기록되지 않는다고 알린다. 씨앗은 S.tkSeed(재연산 준비).
+    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false; S.tkRej = false; S.tkSeed = 0;
+    const LB = window.RTD_LOBBY;
     if (ACC.token && !S.trial) { // 체험은 서버에 판 표를 받지 않는다(서버 통신 0회)
-      if (opt.snap) { try { S.gameTk = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
-      else {
-        const saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo';
+      if (opt.snap) {
+        const st = !opt.noRecord && LB && LB.saveTk ? LB.saveTk() : null;
+        if (st && (st.legacy || (ACC.me && st.u === ACC.me.id))) { S.gameTk = st.tk; S.tkSeed = st.s | 0; }
+        if (opt.noRecord) S.tkRej = true;
+      } else {
+        const saveOn = !opt.online && !opt.ai && !room && (opt.mode || 'solo') === 'solo';
         const mine = g, waits = TICKET_RETRY_MS.slice();
         S.tkWant = true;
-        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, room: (opt.net && opt.net.code) || undefined }).then((r) => {
-          if (g !== mine) return; // 그 사이 다른 판이 시작됐다
-          if (r.ticket) { S.gameTk = r.ticket; if (saveOn) { try { localStorage.setItem('rtd-save-tk', r.ticket); } catch (e) { /* 저장 불가 */ } } return; }
+        // 표 답 하나를 받아 둔다. 끝났으면(표·잠김·4xx) true
+        const take = (r) => {
+          if (g !== mine || !r) return true; // 그 사이 다른 판이 시작됐다
+          if (r.ticket) {
+            if (!room && r.seed && (r.seed >>> 0) !== g.seed) return true; // 표가 늦게 와 판이 이미 기기 씨앗으로 시작됨 → 이 판은 기록되지 않음(결과 화면 tkMiss). 씨앗 없는 표(업데이트 전 서버)는 예전처럼 쓴다
+            S.gameTk = r.ticket; S.tkSeed = r.seed | 0; if (saveOn && LB && LB.setSaveTk) LB.setSaveTk(r.ticket, r.seed); return true;
+          }
+          if (r.error === 'locked') { if (r.me) { ACC.me = r.me; saveAcc(); } S.tkWant = false; S.tkRej = true; return true; } // 서버 기록으로는 잠긴 난이도
           // 로그인이 풀렸거나(401) 요청이 잘못됐으면(400) 다시 해도 같다
-          if (r.status === 401 || r.status === 400 || g.over || !waits.length) return;
+          return r.status === 401 || r.status === 400;
+        };
+        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, room: (opt.net && opt.net.code) || undefined, save: false }).then((r) => {
+          if (take(r) || g.over || !waits.length) return;
           setTimeout(() => { if (g === mine && !g.over && !S.gameTk) ask(); }, waits.shift());
         });
-        ask();
+        if (room) ask();
+        else if (pre && pre.late) pre.late.then(take); // 기다리다 시간이 넘음(늦게 온 표는 take가 씨앗을 보고 버린다)
+        else take(pre);
       }
     }
     S.everSel = false; S.frontWarned = false; S.fromSnap = !!opt.snap; S.endHoldUntil = 0; S.toastHoldUntil = 0; S.toastQ = []; S.vicUntil = 0;
@@ -241,7 +302,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 첫 오프라인 혼자 하기(이어하기 제외)에서 튜토리얼
     // 자동 배치(1~3성 자동 합성·정렬)는 기본으로 꺼 둔다. 직접 켠 사람만 그 선택을 기억해 다음 판에도 켠다('rtd-auto' = '1').
     // 튜토리얼이 자동 버튼을 가르친다. 건너뛰어도 켜지 않는다.
-    const autoOnAll = () => ['t1', 't2', 't3'].forEach((k) => g.setAuto(g.me, k, true));
+    const autoOnAll = () => ['t1', 't2', 't3'].forEach((k) => g.input('au', [k, 1]));
     let autoPref = false; try { autoPref = localStorage.getItem('rtd-auto') === '1'; } catch (e) { /* 저장 불가 */ }
     // 팁(명사·시너지)은 모든 판에서 보고, 단계 안내는 혼자 하는 오프라인 새 판에서만(tutorial)
     const tutOn = !!(window.RTD_TUT && window.RTD_TUT.maybeStart({ get g() { return g; }, S, T, t: I.t, dirty, tutorial: S.saveOn && !opt.snap, onSkip: () => { if (autoPref) autoOnAll(); dirty(); } }));

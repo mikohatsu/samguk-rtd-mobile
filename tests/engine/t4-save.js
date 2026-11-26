@@ -79,5 +79,12 @@ try {
 
 skip('저장 파일이 실제로 깨졌을 때(JSON 잘림)와 저장 위치(localStorage) 덮어쓰기는 화면 코드(src/ui/17-loop.js) 몫이라 확인 못 함');
 skip('없는 장수 id가 조합법·업적 기록(ever/done)에 남아 있을 때(B-14)는 확인 못 함');
-skip('불러온 판의 난수 흐름은 저장 전과 다르다(씨앗을 저장하지 않음). 같은 판이 재현되는지는 보지 않음');
+// 2026-11-26 저장본 x 2: 씨앗·난수 상태·걸음 수가 들어가 불러온 판의 난수 흐름이 저장 전과 같다(재연산 검증). 판 전체 재현은 t17-replay가 본다
+try {
+  const g = new E.Game(T, { diff: 'easy', mode: 'solo', seed: 4321 });
+  for (let i = 0; i < 900; i++) g.step(L.DT);
+  const s = json(g.snapshot()), g2 = E.Game.restore(T, s);
+  const a1 = [g.rand(), g.rand(), g.rand()], a2 = [g2.rand(), g2.rand(), g2.rand()];
+  ok(s.x === 2 && g2.seed === g.seed && g2.stepN === g.stepN && a1.join() === a2.join(), `불러온 판의 씨앗·걸음 수·다음 난수가 저장 전과 같음(걸음 ${g2.stepN}, 난수 ${a2[0].toFixed(6)})`);
+} catch (e) { ok(false, '난수 상태 확인 중 예외 — ' + L.errText(e)); }
 L.done('t4-save');

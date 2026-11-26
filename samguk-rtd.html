@@ -334,6 +334,7 @@ button.chip { cursor: pointer; font: inherit; font-size: 11px; }
 @media (prefers-reduced-motion: reduce) { #xpfx .xplv { display: none; } #xpfx .l.up .xpm img, #xpfx .l.up small, #xpfx.ready .xpnext { animation: none; } }
 /* 판 표를 못 받은 판의 결과창 한 줄(tkMissed) */
 #end .es-tkmiss { text-align: center; font: 700 12.5px var(--ui); color: #ff9d8a; }
+#end .es-rankwait { text-align: center; font: 700 12.5px var(--ui); }
 #xpfx .xpmid { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 #xpfx .xpbar { width: 100%; height: 22px; border-style: solid; border-width: 6px 8px; border-image: url(gfx/ui_menu.png) 12 fill stretch; position: relative; }
 #xpfx .xpbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(180deg, #ffe08a, #d89a2a 60%, #a8661a); box-shadow: 0 0 10px rgba(255,190,80,.7); border-radius: 2px; }
@@ -2113,6 +2114,7 @@ html[lang="ko"] .sh-nm { word-break: keep-all; }
 <div id="match" hidden></div>
 <script src="config.js"></script>
 <script src="version.js"></script>
+<script src="det.js"></script>
 <script src="theme-samguk.js"></script>
 <script src="i18n-data.js"></script>
 <script src="i18n.js"></script>

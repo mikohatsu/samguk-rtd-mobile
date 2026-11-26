@@ -24,11 +24,12 @@
     const pb = S.progBefore, pn = window.RTD_LOBBY && window.RTD_LOBBY.progNow ? window.RTD_LOBBY.progNow() : null, mut = g.mutLv || 0;
     // 1. 이번 판으로 열린 것(승리 판)
     let opened = 0;
-    if (win && pb) {
+    // 2026-11-26(secure-a): 열림은 서버가 받아 준 뒤의 진행(pn, 계정 기록)으로 확인한다. 서버 답 전·거절이면 '열림'을 보이지 않는다
+    if (win && pb && pn) {
       const i = DF.indexOf(g.diff.id), nx = T.difficulties.find((d) => d.id === DF[i + 1]);
-      if (i > pb.clr && nx) { line(I.t('goalDiff', { a: k(esc(nx.name)) }), 'new'); opened++; }
-      if (g.diff.id === 'nightmare' && mut > pb.nmx && mut < 5) { line(I.t('goalMut', { n: mut + 1 }), 'new'); opened++; }
-      if (pb.clr < 0 && opened < 2) { line(I.t('goalShop'), 'new'); opened++; }
+      if (i > pb.clr && pn.clr >= i && nx) { line(I.t('goalDiff', { a: k(esc(nx.name)) }), 'new'); opened++; }
+      if (g.diff.id === 'nightmare' && mut > pb.nmx && pn.nmx >= mut && mut < 5) { line(I.t('goalMut', { n: mut + 1 }), 'new'); opened++; }
+      if (pb.clr < 0 && pn.clr >= 0 && opened < 2) { line(I.t('goalShop'), 'new'); opened++; }
     }
     // 2. 진 판 조언(강화를 한 번도 안 했으면 강화, 합성을 한 번도 안 했으면 합성)
     if (!win) { const ups = Object.values(g.me.upgrades || {}).reduce((a, b) => a + b, 0); if (!ups) line(I.t('tipUpgrade'), 'tip'); else if (!g.stats.combines) line(I.t('tipCombine'), 'tip'); }
@@ -200,7 +201,7 @@
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
     // 창 = 스크롤되는 본문(.es-body) + 고정 바닥 줄(.es-foot). 버튼이 통계 칸을 가리지 않는다
     return `<div class="over" id="end"><div class="sheet es ${win ? 'is-win' : 'is-lose'}"><div class="es-body">
-      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss || S.tkRej ? `<div class="dim es-tkmiss">${esc(t(S.tkRej ? 'tkRejected' : 'tkMissed'))}</div>` : ''}
+      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss || S.tkRej ? `<div class="dim es-tkmiss">${esc(t(S.tkRej ? 'tkRejected' : 'tkMissed'))}</div>` : S.rankWait ? `<div class="dim es-rankwait">${esc(t('rankWait'))}</div>` : ''}
       ${esMe()}
       <div class="es-rec"><div class="esr-big">${big}</div><div class="esr-small">${small}</div></div>
       ${goalBox()}

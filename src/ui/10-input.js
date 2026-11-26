@@ -1,4 +1,5 @@
   // ---- 입력 ----
+  // 판 상태를 바꾸는 조작(고르기·이동·상자·소모품·보스전 이동·대상)은 입력 명령(g.input)으로 넣는다(2026-11-26 재연산 검증, engine.js CMD)
   const toWorld = (e) => { const r = view.getBoundingClientRect(); return { x: (((e.clientX - r.left) / r.width) * view.width - S.ox) / S.scale, y: (((e.clientY - r.top) / r.height) * view.height - S.oy) / S.scale }; };
   const unitAt = (x, y) => { let best = null, bd = S.coarse ? 52 : 38; g.units.forEach((u) => { if (u.owner !== 0) return; const d = dist(u.x, u.y, x, y); if (d < bd) { bd = d; best = u; } }); return best; };
   // 누른 자리에서 가장 가까운 상자·아이템(거리가 같으면 위에 그려진, 나중에 생긴 것). 터치는 손가락 크기에 맞게 범위를 넓힌다.
@@ -45,9 +46,9 @@
     drawerTapClose();
     if (inBoss()) {
       const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 50);
-      if (i >= 0) g.selectChamp(i);
+      if (i >= 0) g.input('sc', [i]);
       // 터치로는 이동하지 않는다(이동은 조이스틱). 적을 톡 치면 그 적을 노리기만 한다.
-      else if (g.active()) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.active().tgt = tg; }
+      else if (g.active()) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.input('tg', [tg]); }
       dirty(); return;
     }
     if (!laneOn()) return;
@@ -61,7 +62,7 @@
     if (spect()) return;
     if (S.cmdMode === 'use') {
       const d = g.drops.find((x) => x.id === S.dropSel), u = unitAt(m.x, m.y);
-      const n = g.useDrop(g.me, d, u);
+      const n = d && u ? g.input('ud', [d.id, u.id]) : null;
       if (n) { setSel([n.id]); S.dropSel = null; } else toast(I.t('cantUse'), 'warn');
       setMode(null); return;
     }
@@ -70,7 +71,7 @@
     let drop = dropAt(m.x, m.y);
     if (drop) { const u0 = unitAt(m.x, m.y); if (u0 && dist(u0.x, u0.y, m.x, m.y) < dist(drop.x, drop.y, m.x, m.y)) drop = null; }
     if (drop) {
-      if (drop.kind === 'chest') { const out = g.openChest(g.me, drop); S.dropSel = out ? out.id : null; S.sel = []; }
+      if (drop.kind === 'chest') { const out = g.input('ch', [drop.id]); S.dropSel = out ? out.id : null; S.sel = []; }
       else { S.dropSel = drop.id; S.sel = []; }
       dirty(); return;
     }
@@ -139,12 +140,12 @@
     }
     // ---- 마우스(PC): 기존 조작 ----
     if (inBoss()) {
-      if (e.button === 2) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.arenaChase(tg); else g.arenaMove(m.x, m.y, false); }
-      else if (S.cmdMode === 'amove') { g.arenaChase(); setMode(null); }
-      else if (S.cmdMode === 'move') { g.arenaMove(m.x, m.y, false); setMode(null); }
+      if (e.button === 2) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.input('ac', [tg]); else g.input('am', [m.x, m.y, 0]); }
+      else if (S.cmdMode === 'amove') { g.input('ac', [0]); setMode(null); }
+      else if (S.cmdMode === 'move') { g.input('am', [m.x, m.y, 0]); setMode(null); }
       else {
         const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 40);
-        if (i >= 0) g.selectChamp(i); else g.selectChamp(null);
+        g.input('sc', [i >= 0 ? i : -1]);
         drawerTapClose();
         dirty();
       }
@@ -206,7 +207,7 @@
     drawerTapClose(); // 마우스 클릭(끌지 않음)
     const drop = dropAt(d.x0, d.y0);
     if (drop) {
-      if (drop.kind === 'chest') { const out = g.openChest(g.me, drop); S.dropSel = out ? out.id : null; S.sel = []; dirty(); }
+      if (drop.kind === 'chest') { const out = g.input('ch', [drop.id]); S.dropSel = out ? out.id : null; S.sel = []; dirty(); }
       else { S.dropSel = drop.id; S.sel = []; dirty(); }
       return;
     }
@@ -225,9 +226,9 @@
     if (spect()) return;
     // 상자·아이템을 고른 상태면 그것을 옮긴다
     const drop = !S.sel.length && S.dropSel && g.drops.find((d) => d.id === S.dropSel);
-    if (drop) { g.moveDrop(g.me, drop, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); return; }
-    if (mode === 'amove') { g.cmd('amove', S.sel, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#ff7a60' }); }
-    else { g.cmd('move', S.sel, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); }
+    if (drop) { g.input('md', [drop.id, m.x, m.y]); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); return; }
+    if (mode === 'amove') { g.input('mv', ['amove', m.x, m.y].concat(S.sel)); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#ff7a60' }); }
+    else { g.input('mv', ['move', m.x, m.y].concat(S.sel)); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); }
   }
   function setMode(m) { S.cmdMode = m; $('stage').classList.toggle('targeting', !!m); dirty(); }
   function setSel(ids) { S.sel = ids; dirty(); }

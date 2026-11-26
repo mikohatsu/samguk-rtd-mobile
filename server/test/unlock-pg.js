@@ -10,6 +10,7 @@ const ok = (c, m) => { console.log((c ? 'OK  ' : 'FAIL') + ' ' + m); if (!c) pro
   const u = await s.createUser('g', { nick: '조조', gsalt: 'a', gsec: 'b', agreed: { terms: 1, at: Date.now() } });
   const h = { at: Date.now(), diff: 'easy', mut: 0, round: 70, win: true, time: 3000, online: true, mode: 'solo', myth: { gwakga: 1 }, st: {} };
   await s.recordResult(u.id, { key: 'k1', xp: 100, coins: 0, win: true, round: 70, hist: h, imm: { jojo: 1 }, clear: null });
+  await s.confirmResult('k1', null, 'ok'); // 불멸 소환 수는 검증 확정 때 들어간다(2026-11-26)
   let ever = [];
   try { ever = await s.everMyth(u.id); } catch (e) { console.log('     everMyth 예외(pg-mem이 jsonb_object_keys를 지원하지 않을 수 있음): ' + e.message); ever = null; }
   if (ever) ok(ever.includes('gwakga') && ever.includes('jojo'), `소환 기록 모으기 (${ever.join(',')})`);

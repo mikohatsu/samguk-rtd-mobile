@@ -35,10 +35,11 @@
     const k = Math.min(1, len / AIM_DRAG), r = info.shape === 'circle' ? info.range * k : Math.max(info.range, 120);
     return { x: c.x + (A.dx / len) * Math.max(r, info.shape === 'circle' ? 0 : 30), y: c.y + (A.dy / len) * Math.max(r, info.shape === 'circle' ? 0 : 30) };
   }
+  // 스킬·이동기는 지금 고른 장수(g.active())가 쓴다 — 입력 명령(g.input)으로 넣어 기록에 남긴다(2026-11-26 재연산 검증)
   function castAt(c, k, x, y) {
-    if (S.stay) return;
-    if (k === 'dash') g.dash(c, x, y);
-    else g.useSkill(c, +k, x, y);
+    if (S.stay || c !== g.active()) return;
+    if (k === 'dash') g.input('ds', [x, y]);
+    else g.input('sk', [+k, x, y]);
   }
   // 재사용이 거의 끝났을 때(BUF_EARLY초 이하) 누른 것은 버리지 않고 BUF_KEEP ms 동안 들고 있다가 끝나는 순간 쓴다(선입력)
   const BUF_EARLY = 0.25, BUF_KEEP = 300;
@@ -87,9 +88,9 @@
       e.preventDefault(); e.stopPropagation();
       try { b.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
       const k = b.dataset.sk;
-      if (k === 'atk') { PAD.atk = e.pointerId; if (c && !PAD.lane) c.atkHold = 0.3; b.classList.add('on'); return; }
+      if (k === 'atk') { PAD.atk = e.pointerId; if (c && !PAD.lane && !g.over) padSend(); b.classList.add('on'); return; }
       if (!c) return;
-      if (k === 'heal') { g.useHeal(); return; }
+      if (k === 'heal') { g.input('hl', []); return; }
       // 버튼의 data-cd는 화면 갱신(180ms) 때만 바뀌므로 엔진의 남은 재사용 시간을 직접 본다
       if (cdLeft(c, k) > BUF_EARLY) return;
       const r = b.getBoundingClientRect();
@@ -171,24 +172,54 @@
     joy.classList.add('on');
   }
   function joyEnd(e) { if (PAD.joy && PAD.joy.id === e.pointerId) joyReset(); }
-  // 매 프레임: 조이스틱·공격 버튼 상태를 지금 고른 장수에 넘긴다
-  function padTick() {
-    if (!g) return;
+  // 조이스틱 값 → 입력 기록용 정수 [방향(0~63), 세기 단계(0~4)]. 엔진은 세기 0.5에서 최고 속도, 0.1 미만은 움직이지 않는다(det.js JOY)
+  // 방향 64칸(5.6°)·세기 5단계로 묶어 같은 칸 안의 손가락 떨림은 명령을 만들지 않는다(기록 크기)
+  function joyQ(v) {
+    if (!v) return null;
+    const m = Math.hypot(v.x, v.y);
+    if (m < 0.1) return [0, 0];
+    return [Math.round((Math.atan2(v.y, v.x) / (Math.PI * 2)) * 64) & 63, Math.max(1, Math.min(4, Math.round(m * 8)))];
+  }
+  // 지금 조작 상태를 엔진에 넣는다: 바뀐 것만 명령으로(g.input 'ls'·'lj'·'bj'·'ba'). 매 프레임(padTick)과 공격 버튼을 누른 순간에 부른다.
+  // 예전에는 매 프레임 엔진 값(g.laneJoy, c.joy, c.atkHold)을 직접 썼다 — 화면이 판 상태를 바꾸면 서버가 같은 판을 다시 만들 수 없다.
+  function padSend() {
     // 라인: 고른 유닛들을 조이스틱 방향으로 직접 움직인다(다중 선택도 대형 그대로 함께 움직인다)
     // 공격 버튼을 누르고 있으면(atk) 움직이면서도 사거리 안의 중간보스부터 친다. 라인은 각자 클라이언트가 돌리므로 협동에서도 내 유닛에만 걸린다.
     const la = PAD.lane && PAD.atk != null;
-    g.laneJoy = PAD.lane && (PAD.jv || la) && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv ? PAD.jv.x : 0, y: PAD.jv ? PAD.jv.y : 0, atk: la } : null;
+    const lj = PAD.lane && (PAD.jv || la) && S.sel.length ? (joyQ(PAD.jv) || [0, 0]).concat(la ? 1 : 0) : null;
+    const ls = lj ? S.sel.slice(0, 200) : g.pad.ls;
+    // 보스전: 고른 장수의 조이스틱·공격(라인 보기 중에는 놓는다)
+    const boss = g.phase === 'boss' && !S.laneView && !!g.active();
+    const bj = boss ? joyQ(PAD.jv) : null, ba = boss && PAD.atk != null ? 1 : 0;
+    const P = g.pad;
+    if (lj && ls.join() !== P.ls.join()) g.input('ls', ls);
+    if (String(lj) !== String(P.lj)) g.input('lj', lj || []);
+    if (String(bj) !== String(P.bj)) g.input('bj', bj || []);
+    if (ba !== (P.ba ? 1 : 0)) g.input('ba', [ba]);
+  }
+  // 매 프레임: 조이스틱·공격 버튼 상태를 엔진에 넣는다(바뀐 것만)
+  function padTick() {
+    if (!g) return;
+    if (g.over) { if (S.stay) stayPad(); return; }
+    padSend();
     const c = g.phase === 'boss' && !S.laneView ? g.active() : null;
     if (!c) { PAD.buf = null; return; }
-    g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
-    c.joy = PAD.jv;
-    if (PAD.atk != null) c.atkHold = 0.3;
     // 선입력: 재사용이 끝나는 프레임에 쓴다. 시간이 지났거나 장수가 바뀌었거나 죽었으면 버린다.
     const B = PAD.buf;
     if (B) {
       if (B.uid !== c.uid || c.dead || performance.now() > B.until) PAD.buf = null;
       else if (cdLeft(c, B.A.k) <= 0) { PAD.buf = null; fireAim(c, B.A); dirty(); }
     }
+  }
+  // 게임에 남기(17-loop, 판이 끝난 뒤): 판 결과와 무관하므로 예전처럼 엔진 값을 직접 쓴다(명령·기록 없음)
+  function stayPad() {
+    const la = PAD.lane && PAD.atk != null;
+    g.laneJoy = PAD.lane && (PAD.jv || la) && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv ? PAD.jv.x : 0, y: PAD.jv ? PAD.jv.y : 0, atk: la } : null;
+    const c = g.phase === 'boss' && !S.laneView ? g.active() : null;
+    if (!c) return;
+    g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
+    c.joy = PAD.jv;
+    if (PAD.atk != null) c.atkHold = 0.3;
   }
   // 보스전 스킬: 선택한 장수의 스킬·이동기·화타 치료를 공격 버튼 둘레(고양이 발)에 아이콘과 재사용 시간으로 보여 준다
   const SK_GLYPH = { line: '斬', circle: '爆', cone: '扇', buff: '勢', shield: '盾', heal: '治', rally: '令', taunt: '挑', weaken: '弱' };
@@ -198,7 +229,7 @@
   function renderSkillBar() {
     const bar = $('skillbar'), joy = $('joy'), c = inBoss() && g.phase === 'boss' ? g.active() : null;
     padInit();
-    g.manual = !!c;
+    if (!g.over && g.manual !== !!c) g.input('mn', [c ? 1 : 0]); // 직접 조작(조이스틱·공격 버튼) 켬/끔 — 바뀔 때만 명령
     // 라인에서는 터치 기기에서 유닛을 고르면 조이스틱과 공격 버튼만 띄운다(스킬 없음). 공격 버튼을 안 눌러도 유닛은 사거리 안의 적을 알아서 친다
     const lane = !c && !!S.coarse && laneOn() && !viewedPeer() && (!g.over || !!S.stay) && S.sel.length > 0;
     PAD.lane = lane;

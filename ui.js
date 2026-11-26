@@ -3838,6 +3838,7 @@
   applyZoom();
 
   // ---- 입력 ----
+  // 판 상태를 바꾸는 조작(고르기·이동·상자·소모품·보스전 이동·대상)은 입력 명령(g.input)으로 넣는다(2026-11-26 재연산 검증, engine.js CMD)
   const toWorld = (e) => { const r = view.getBoundingClientRect(); return { x: (((e.clientX - r.left) / r.width) * view.width - S.ox) / S.scale, y: (((e.clientY - r.top) / r.height) * view.height - S.oy) / S.scale }; };
   const unitAt = (x, y) => { let best = null, bd = S.coarse ? 52 : 38; g.units.forEach((u) => { if (u.owner !== 0) return; const d = dist(u.x, u.y, x, y); if (d < bd) { bd = d; best = u; } }); return best; };
   // 누른 자리에서 가장 가까운 상자·아이템(거리가 같으면 위에 그려진, 나중에 생긴 것). 터치는 손가락 크기에 맞게 범위를 넓힌다.
@@ -3884,9 +3885,9 @@
     drawerTapClose();
     if (inBoss()) {
       const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 50);
-      if (i >= 0) g.selectChamp(i);
+      if (i >= 0) g.input('sc', [i]);
       // 터치로는 이동하지 않는다(이동은 조이스틱). 적을 톡 치면 그 적을 노리기만 한다.
-      else if (g.active()) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.active().tgt = tg; }
+      else if (g.active()) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.input('tg', [tg]); }
       dirty(); return;
     }
     if (!laneOn()) return;
@@ -3900,7 +3901,7 @@
     if (spect()) return;
     if (S.cmdMode === 'use') {
       const d = g.drops.find((x) => x.id === S.dropSel), u = unitAt(m.x, m.y);
-      const n = g.useDrop(g.me, d, u);
+      const n = d && u ? g.input('ud', [d.id, u.id]) : null;
       if (n) { setSel([n.id]); S.dropSel = null; } else toast(I.t('cantUse'), 'warn');
       setMode(null); return;
     }
@@ -3909,7 +3910,7 @@
     let drop = dropAt(m.x, m.y);
     if (drop) { const u0 = unitAt(m.x, m.y); if (u0 && dist(u0.x, u0.y, m.x, m.y) < dist(drop.x, drop.y, m.x, m.y)) drop = null; }
     if (drop) {
-      if (drop.kind === 'chest') { const out = g.openChest(g.me, drop); S.dropSel = out ? out.id : null; S.sel = []; }
+      if (drop.kind === 'chest') { const out = g.input('ch', [drop.id]); S.dropSel = out ? out.id : null; S.sel = []; }
       else { S.dropSel = drop.id; S.sel = []; }
       dirty(); return;
     }
@@ -3978,12 +3979,12 @@
     }
     // ---- 마우스(PC): 기존 조작 ----
     if (inBoss()) {
-      if (e.button === 2) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.arenaChase(tg); else g.arenaMove(m.x, m.y, false); }
-      else if (S.cmdMode === 'amove') { g.arenaChase(); setMode(null); }
-      else if (S.cmdMode === 'move') { g.arenaMove(m.x, m.y, false); setMode(null); }
+      if (e.button === 2) { const tg = g.foeAt(m.x, m.y); if (tg != null) g.input('ac', [tg]); else g.input('am', [m.x, m.y, 0]); }
+      else if (S.cmdMode === 'amove') { g.input('ac', [0]); setMode(null); }
+      else if (S.cmdMode === 'move') { g.input('am', [m.x, m.y, 0]); setMode(null); }
       else {
         const l = g.localChamps(), i = l.findIndex((c) => !c.dead && dist(c.x, c.y, m.x, m.y) < 40);
-        if (i >= 0) g.selectChamp(i); else g.selectChamp(null);
+        g.input('sc', [i >= 0 ? i : -1]);
         drawerTapClose();
         dirty();
       }
@@ -4045,7 +4046,7 @@
     drawerTapClose(); // 마우스 클릭(끌지 않음)
     const drop = dropAt(d.x0, d.y0);
     if (drop) {
-      if (drop.kind === 'chest') { const out = g.openChest(g.me, drop); S.dropSel = out ? out.id : null; S.sel = []; dirty(); }
+      if (drop.kind === 'chest') { const out = g.input('ch', [drop.id]); S.dropSel = out ? out.id : null; S.sel = []; dirty(); }
       else { S.dropSel = drop.id; S.sel = []; dirty(); }
       return;
     }
@@ -4064,9 +4065,9 @@
     if (spect()) return;
     // 상자·아이템을 고른 상태면 그것을 옮긴다
     const drop = !S.sel.length && S.dropSel && g.drops.find((d) => d.id === S.dropSel);
-    if (drop) { g.moveDrop(g.me, drop, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); return; }
-    if (mode === 'amove') { g.cmd('amove', S.sel, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#ff7a60' }); }
-    else { g.cmd('move', S.sel, m.x, m.y); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); }
+    if (drop) { g.input('md', [drop.id, m.x, m.y]); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); return; }
+    if (mode === 'amove') { g.input('mv', ['amove', m.x, m.y].concat(S.sel)); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#ff7a60' }); }
+    else { g.input('mv', ['move', m.x, m.y].concat(S.sel)); S.pings.push({ x: m.x, y: m.y, t: 0, c: '#7dff8e' }); }
   }
   function setMode(m) { S.cmdMode = m; $('stage').classList.toggle('targeting', !!m); dirty(); }
   function setSel(ids) { S.sel = ids; dirty(); }
@@ -4087,6 +4088,8 @@
   // 서랍은 설정 탭만(강화·명사·선택권 탭은 살 수 있는 버튼이 있어서)
   const STAY_OK = new Set(['drawer', 'tab', 'drawerClose', 'selExp', 'langSet', 'gfx', 'fps30', 'perf', 'credits', 'desel', 'esc', 'ucard', 'statDet', 'selDef', 'amove', 'modeMove', 'stop', 'champ', 'vol', 'restart', 'quit', 'lang', 'stayView']);
   // ---- 행동: DOM 갱신 중에도 놓치지 않게 pointerdown 위임으로 받는다 ----
+  // 판 상태를 바꾸는 행동은 모두 입력 명령(g.input, engine.js CMD)으로 넣는다 — 걸음 번호와 함께 기록되어 서버가 같은 판을 다시 돌린다(2026-11-26).
+  // 화면 상태(S.*)·설정·소리만 바꾸는 행동은 그대로.
   function doAct(a, arg) {
     if (spect() && (!SPECT_OK.has(a) || (a === 'viewPeer' && arg === 'me'))) return;
     if (S.stay && (!STAY_OK.has(a) || ((a === 'drawer' || a === 'tab') && arg !== 'set'))) return;
@@ -4095,29 +4098,29 @@
     if (a === 'tab') { S.tab = arg; S.drawer = arg; }
     else if (a === 'drawer') { if (S.drawer === arg) S.drawer = null; else { S.drawer = arg; S.tab = arg; } }
     else if (a === 'drawerClose') S.drawer = null;
-    else if (a === 'autoAll') { const on = !['t1', 't2', 't3'].every((k) => p.auto[k]); ['t1', 't2', 't3'].forEach((k) => g.setAuto(p, k, on)); try { localStorage.setItem('rtd-auto', on ? '1' : '0'); } catch (e) { /* 저장 불가 */ } toast(on ? t('autoToastOn') : t('autoToastOff'), on ? 'good' : ''); }
+    else if (a === 'autoAll') { const on = !['t1', 't2', 't3'].every((k) => p.auto[k]); ['t1', 't2', 't3'].forEach((k) => g.input('au', [k, on ? 1 : 0])); try { localStorage.setItem('rtd-auto', on ? '1' : '0'); } catch (e) { /* 저장 불가 */ } toast(on ? t('autoToastOn') : t('autoToastOff'), on ? 'good' : ''); }
     else if (a === 'selExp') S.selExp = !S.selExp;
     // 언어: 로비에서는 저장하고 바로 다시 불러온다(I.setLang). 판 안에서는 저장만 하고 로비로 돌아가면 바뀐다고 알린다.
     else if (a === 'langSet') { if (arg !== I.lang) { if (!g) { I.setLang(arg); return; } try { localStorage.setItem('rtd-lang', arg); } catch (e) { /* 저장 불가 */ } toast(I.LANGS.find(([k]) => k === arg)[1] + ' — ' + t('langLater'), 'good'); } }
     else if (a === 'gfx') { if (Q.level !== arg) { Q.level = arg; Q.rs = 1; applyQuality(); sizeMap(); if (g) fit(); } }
     else if (a === 'fps30') { Q.fps30 = !Q.fps30; applyQuality(); }
-    else if (a === 'keepSyn') { if (g) { g.keepSyn = !g.keepSyn; try { localStorage.setItem('rtd-keepsyn', g.keepSyn ? '1' : '0'); } catch (e) { /* 저장 불가 */ } } }
+    else if (a === 'keepSyn') { if (g) { g.input('ks', [g.keepSyn ? 0 : 1]); try { localStorage.setItem('rtd-keepsyn', g.keepSyn ? '1' : '0'); } catch (e) { /* 저장 불가 */ } } }
     else if (a === 'perf') { Q.perf = !Q.perf; applyQuality(); }
     else if (a === 'credits') { if (window.RTD_CREDITS) window.RTD_CREDITS.open(); }
     else if (a === 'desel') { setSel([]); S.dropSel = null; S.rsel = null; setMode(null); }
     else if (a === 'amove') { if (inBoss() || S.sel.length) setMode('amove'); }
     else if (a === 'modeMove') { if (inBoss() || S.sel.length) setMode('move'); }
-    else if (a === 'stop') { if (inBoss()) g.arenaStop(); else g.cmd('focus', S.sel); setMode(null); }
+    else if (a === 'stop') { if (inBoss()) g.input('as', []); else g.input('mv', ['focus', 0, 0].concat(S.sel)); setMode(null); }
     else if (a === 'esc') setMode(null);
     // 직접 누른 조합·제작이 켜져 있는 인연 시너지를 끄거나 단계를 내리면 먼저 묻는다(16-hud renderOverlay의 확인 창). 자동 조합·AI 동맹은 묻지 않는다.
     // arg가 있으면 다중 선택 묶음 카드의 合成: 그 유닛으로 합성한다(13-info-timers renderInfo)
-    else if (a === 'combine') { const cu = arg ? list.find((x) => x.def.id === arg) : u; if (cu && !askCombine('combine', cu.def.id, cu.id)) { const n = g.combine(p, cu.def.id, cu.id); if (n) setSel([n.id]); } }
-    else if (a === 'combineGo') { const c = S.combineAsk; S.combineAsk = null; if (c) { if (c.drawer) S.drawer = c.drawer; const n = c.a === 'craft' ? g.craft(p, c.id) : g.combine(p, c.id, c.uid); if (n) setSel([n.id]); } }
+    else if (a === 'combine') { const cu = arg ? list.find((x) => x.def.id === arg) : u; if (cu && !askCombine('combine', cu.def.id, cu.id)) { const n = g.input('cb', [cu.def.id, cu.id]); if (n) setSel([n.id]); } }
+    else if (a === 'combineGo') { const c = S.combineAsk; S.combineAsk = null; if (c) { if (c.drawer) S.drawer = c.drawer; const n = c.a === 'craft' ? g.input('cr', [c.id]) : g.input('cb', [c.id, c.uid || 0]); if (n) setSel([n.id]); } }
     else if (a === 'combineNo') { const c = S.combineAsk; S.combineAsk = null; if (c && c.drawer) S.drawer = c.drawer; }
     // 해산은 되돌릴 수 없어 두 번 누른다: 처음 누르면 버튼이 '한 번 더'로 바뀌고 3초 안에 같은 유닛으로 다시 눌러야 해산한다(설정의 나가기와 같은 방식)
     else if (a === 'sell') {
       if (list.length === 1 && u.def.tier === 1) {
-        if (S.sellArm === u.id) { S.sellArm = null; const v = g.sell(p, u); toast(I.t('disbanded', { a: u.def.name, c: T.currency, v }), 'good'); }
+        if (S.sellArm === u.id) { S.sellArm = null; const v = g.input('sl', [u.id]); toast(I.t('disbanded', { a: u.def.name, c: T.currency, v }), 'good'); }
         else { const id = u.id; S.sellArm = id; setTimeout(() => { if (S.sellArm === id) { S.sellArm = null; dirty(); } }, 3000); }
       }
     }
@@ -4128,8 +4131,8 @@
     else if (a === 'viewPeer') { S.view = arg === 'me' || S.view === arg ? null : arg; setSel([]); S.dropSel = null; S.allyOpen = false; }
     else if (a === 'allyList') S.allyOpen = !S.allyOpen;
     else if (a === 'laneView') { if (g.phase === 'boss' && !g.trial) { S.laneView = !S.laneView; S.cmdMode = null; S.drag = null; } }
-    else if (a === 'auto') g.setAuto(p, arg, !p.auto[arg]);
-    else if (a === 'zone') { const [k, z] = arg.split(':'); g.setZone(p, k, z); }
+    else if (a === 'auto') g.input('au', [arg, p.auto[arg] ? 0 : 1]);
+    else if (a === 'zone') { const [k, z] = arg.split(':'); g.input('zn', [k, z]); }
     else if (a === 'vol') {
       // 소리 크기: − / ＋ 버튼으로 25%씩(0~100%). arg = 'sfx:-' · 'sfx:+' · 'bgm:-' · 'bgm:+'
       const [key, dir] = String(arg).split(':'), next = Math.max(0, Math.min(1, (Math.round(Snd.state[key] * 4) + (dir === '-' ? -1 : 1)) / 4));
@@ -4138,24 +4141,24 @@
     else if (a === 'book') S.book = S.book === arg ? null : arg;
     else if (a === 'timer') { const el = document.querySelector(`.tw[data-r="${arg}"]`); if (el) el.classList.toggle('open'); }
     else if (a === 'useDrop') { if (S.dropSel && g.drops.some((d) => d.id === S.dropSel && d.kind !== 'item')) setMode('use'); }
-    else if (a === 'up') g.buyUpgrade(p, arg);
-    else if (a === 'craft') { if (!askCombine('craft', arg)) { const n = g.craft(p, arg); if (n) setSel([n.id]); } }
-    else if (a === 'hire') g.hire(p, arg);
-    else if (a === 'fuse') { const n = g.fuseItems(p, S.dropSel); if (n) S.dropSel = n.id; }
-    else if (a === 'dismiss') { if (S.dismiss === arg) { g.dismiss(p, arg); S.dismiss = null; } else { S.dismiss = arg; toast(I.t('dismissConfirm', { a: defOf[arg].name }), 'warn'); setTimeout(() => { if (S.dismiss === arg) S.dismiss = null; }, 3000); } }
+    else if (a === 'up') g.input('up', [arg]);
+    else if (a === 'craft') { if (!askCombine('craft', arg)) { const n = g.input('cr', [arg]); if (n) setSel([n.id]); } }
+    else if (a === 'hire') g.input('hi', [arg]);
+    else if (a === 'fuse') { const n = g.input('fu', [S.dropSel || 0]); if (n) S.dropSel = n.id; }
+    else if (a === 'dismiss') { if (S.dismiss === arg) { g.input('dm', [arg]); S.dismiss = null; } else { S.dismiss = arg; toast(I.t('dismissConfirm', { a: defOf[arg].name }), 'warn'); setTimeout(() => { if (S.dismiss === arg) S.dismiss = null; }, 3000); } }
     else if (a === 'ticket') { S.ticket = +arg; S.ticketPh = g.phase; S.drawer = 'ticket'; S.tab = 'ticket'; }
-    else if (a === 'ticketPick') { g.useTicket(p, S.ticket, arg); if (!(p.tickets[S.ticket] > 0)) S.ticket = null; }
+    else if (a === 'ticketPick') { g.input('tk', [S.ticket, arg]); if (!(p.tickets[S.ticket] > 0)) S.ticket = null; }
     else if (a === 'ticketClose') S.ticket = null;
     else if (a === 'selDef') setSel(list.filter((x) => x.def.id === arg).map((x) => x.id));
     else if (a === 'pick') { const id = +arg, i = S.pick.indexOf(id); if (i >= 0) S.pick.splice(i, 1); else { S.pick.push(id); if (S.pick.length > g.slotCount()) S.pick.shift(); } }
-    else if (a === 'pickGo') { g.confirmPick(S.pick); S.pick = []; }
-    else if (a === 'sub') g.replaceChamp(+arg);
-    else if (a === 'skill') { const c = g.active(); if (c) g.useSkill(c, +arg, S.mouse.x, S.mouse.y); }
+    else if (a === 'pickGo') { g.input('pk', S.pick.slice()); S.pick = []; }
+    else if (a === 'sub') g.input('sb', [+arg]);
+    else if (a === 'skill') { if (g.active()) g.input('sk', [+arg, S.mouse.x, S.mouse.y]); }
     // 스킬 막대를 눌러 쓸 때는 마우스가 막대 위에 있으므로 보스를 겨눈다
-    else if (a === 'skillBar') { const c = g.active(), b = g.fight && g.fight.boss; if (c && b) g.useSkill(c, +arg, b.x, b.y); }
-    else if (a === 'heal') g.useHeal();
-    else if (a === 'dash') { g.dash(g.active(), S.mouse.x, S.mouse.y); }
-    else if (a === 'champ') g.selectChamp(+arg);
+    else if (a === 'skillBar') { const c = g.active(), b = g.fight && g.fight.boss; if (c && b) g.input('sk', [+arg, b.x, b.y]); }
+    else if (a === 'heal') g.input('hl', []);
+    else if (a === 'dash') { if (g.active()) g.input('ds', [S.mouse.x, S.mouse.y]); }
+    else if (a === 'champ') g.input('sc', [+arg]);
     else if (a === 'restart') adThen(() => location.reload());
     // 체험 결과 카드: 로비로 돌아가 상점 해금 탭의 그 장수 카드를 연다(lobby.js trialBack). 광고(adThen)를 거치지 않는다.
     // trialUnlock은 카드의 해금 버튼을 강조한다(해금 자체는 카드의 기존 버튼을 눌러야 한다)
@@ -5067,11 +5070,12 @@
     const pb = S.progBefore, pn = window.RTD_LOBBY && window.RTD_LOBBY.progNow ? window.RTD_LOBBY.progNow() : null, mut = g.mutLv || 0;
     // 1. 이번 판으로 열린 것(승리 판)
     let opened = 0;
-    if (win && pb) {
+    // 2026-11-26(secure-a): 열림은 서버가 받아 준 뒤의 진행(pn, 계정 기록)으로 확인한다. 서버 답 전·거절이면 '열림'을 보이지 않는다
+    if (win && pb && pn) {
       const i = DF.indexOf(g.diff.id), nx = T.difficulties.find((d) => d.id === DF[i + 1]);
-      if (i > pb.clr && nx) { line(I.t('goalDiff', { a: k(esc(nx.name)) }), 'new'); opened++; }
-      if (g.diff.id === 'nightmare' && mut > pb.nmx && mut < 5) { line(I.t('goalMut', { n: mut + 1 }), 'new'); opened++; }
-      if (pb.clr < 0 && opened < 2) { line(I.t('goalShop'), 'new'); opened++; }
+      if (i > pb.clr && pn.clr >= i && nx) { line(I.t('goalDiff', { a: k(esc(nx.name)) }), 'new'); opened++; }
+      if (g.diff.id === 'nightmare' && mut > pb.nmx && pn.nmx >= mut && mut < 5) { line(I.t('goalMut', { n: mut + 1 }), 'new'); opened++; }
+      if (pb.clr < 0 && pn.clr >= 0 && opened < 2) { line(I.t('goalShop'), 'new'); opened++; }
     }
     // 2. 진 판 조언(강화를 한 번도 안 했으면 강화, 합성을 한 번도 안 했으면 합성)
     if (!win) { const ups = Object.values(g.me.upgrades || {}).reduce((a, b) => a + b, 0); if (!ups) line(I.t('tipUpgrade'), 'tip'); else if (!g.stats.combines) line(I.t('tipCombine'), 'tip'); }
@@ -5243,7 +5247,7 @@
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
     // 창 = 스크롤되는 본문(.es-body) + 고정 바닥 줄(.es-foot). 버튼이 통계 칸을 가리지 않는다
     return `<div class="over" id="end"><div class="sheet es ${win ? 'is-win' : 'is-lose'}"><div class="es-body">
-      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss || S.tkRej ? `<div class="dim es-tkmiss">${esc(t(S.tkRej ? 'tkRejected' : 'tkMissed'))}</div>` : ''}
+      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss || S.tkRej ? `<div class="dim es-tkmiss">${esc(t(S.tkRej ? 'tkRejected' : 'tkMissed'))}</div>` : S.rankWait ? `<div class="dim es-rankwait">${esc(t('rankWait'))}</div>` : ''}
       ${esMe()}
       <div class="es-rec"><div class="esr-big">${big}</div><div class="esr-small">${small}</div></div>
       ${goalBox()}
@@ -5392,10 +5396,11 @@
     const k = Math.min(1, len / AIM_DRAG), r = info.shape === 'circle' ? info.range * k : Math.max(info.range, 120);
     return { x: c.x + (A.dx / len) * Math.max(r, info.shape === 'circle' ? 0 : 30), y: c.y + (A.dy / len) * Math.max(r, info.shape === 'circle' ? 0 : 30) };
   }
+  // 스킬·이동기는 지금 고른 장수(g.active())가 쓴다 — 입력 명령(g.input)으로 넣어 기록에 남긴다(2026-11-26 재연산 검증)
   function castAt(c, k, x, y) {
-    if (S.stay) return;
-    if (k === 'dash') g.dash(c, x, y);
-    else g.useSkill(c, +k, x, y);
+    if (S.stay || c !== g.active()) return;
+    if (k === 'dash') g.input('ds', [x, y]);
+    else g.input('sk', [+k, x, y]);
   }
   // 재사용이 거의 끝났을 때(BUF_EARLY초 이하) 누른 것은 버리지 않고 BUF_KEEP ms 동안 들고 있다가 끝나는 순간 쓴다(선입력)
   const BUF_EARLY = 0.25, BUF_KEEP = 300;
@@ -5444,9 +5449,9 @@
       e.preventDefault(); e.stopPropagation();
       try { b.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
       const k = b.dataset.sk;
-      if (k === 'atk') { PAD.atk = e.pointerId; if (c && !PAD.lane) c.atkHold = 0.3; b.classList.add('on'); return; }
+      if (k === 'atk') { PAD.atk = e.pointerId; if (c && !PAD.lane && !g.over) padSend(); b.classList.add('on'); return; }
       if (!c) return;
-      if (k === 'heal') { g.useHeal(); return; }
+      if (k === 'heal') { g.input('hl', []); return; }
       // 버튼의 data-cd는 화면 갱신(180ms) 때만 바뀌므로 엔진의 남은 재사용 시간을 직접 본다
       if (cdLeft(c, k) > BUF_EARLY) return;
       const r = b.getBoundingClientRect();
@@ -5528,24 +5533,54 @@
     joy.classList.add('on');
   }
   function joyEnd(e) { if (PAD.joy && PAD.joy.id === e.pointerId) joyReset(); }
-  // 매 프레임: 조이스틱·공격 버튼 상태를 지금 고른 장수에 넘긴다
-  function padTick() {
-    if (!g) return;
+  // 조이스틱 값 → 입력 기록용 정수 [방향(0~63), 세기 단계(0~4)]. 엔진은 세기 0.5에서 최고 속도, 0.1 미만은 움직이지 않는다(det.js JOY)
+  // 방향 64칸(5.6°)·세기 5단계로 묶어 같은 칸 안의 손가락 떨림은 명령을 만들지 않는다(기록 크기)
+  function joyQ(v) {
+    if (!v) return null;
+    const m = Math.hypot(v.x, v.y);
+    if (m < 0.1) return [0, 0];
+    return [Math.round((Math.atan2(v.y, v.x) / (Math.PI * 2)) * 64) & 63, Math.max(1, Math.min(4, Math.round(m * 8)))];
+  }
+  // 지금 조작 상태를 엔진에 넣는다: 바뀐 것만 명령으로(g.input 'ls'·'lj'·'bj'·'ba'). 매 프레임(padTick)과 공격 버튼을 누른 순간에 부른다.
+  // 예전에는 매 프레임 엔진 값(g.laneJoy, c.joy, c.atkHold)을 직접 썼다 — 화면이 판 상태를 바꾸면 서버가 같은 판을 다시 만들 수 없다.
+  function padSend() {
     // 라인: 고른 유닛들을 조이스틱 방향으로 직접 움직인다(다중 선택도 대형 그대로 함께 움직인다)
     // 공격 버튼을 누르고 있으면(atk) 움직이면서도 사거리 안의 중간보스부터 친다. 라인은 각자 클라이언트가 돌리므로 협동에서도 내 유닛에만 걸린다.
     const la = PAD.lane && PAD.atk != null;
-    g.laneJoy = PAD.lane && (PAD.jv || la) && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv ? PAD.jv.x : 0, y: PAD.jv ? PAD.jv.y : 0, atk: la } : null;
+    const lj = PAD.lane && (PAD.jv || la) && S.sel.length ? (joyQ(PAD.jv) || [0, 0]).concat(la ? 1 : 0) : null;
+    const ls = lj ? S.sel.slice(0, 200) : g.pad.ls;
+    // 보스전: 고른 장수의 조이스틱·공격(라인 보기 중에는 놓는다)
+    const boss = g.phase === 'boss' && !S.laneView && !!g.active();
+    const bj = boss ? joyQ(PAD.jv) : null, ba = boss && PAD.atk != null ? 1 : 0;
+    const P = g.pad;
+    if (lj && ls.join() !== P.ls.join()) g.input('ls', ls);
+    if (String(lj) !== String(P.lj)) g.input('lj', lj || []);
+    if (String(bj) !== String(P.bj)) g.input('bj', bj || []);
+    if (ba !== (P.ba ? 1 : 0)) g.input('ba', [ba]);
+  }
+  // 매 프레임: 조이스틱·공격 버튼 상태를 엔진에 넣는다(바뀐 것만)
+  function padTick() {
+    if (!g) return;
+    if (g.over) { if (S.stay) stayPad(); return; }
+    padSend();
     const c = g.phase === 'boss' && !S.laneView ? g.active() : null;
     if (!c) { PAD.buf = null; return; }
-    g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
-    c.joy = PAD.jv;
-    if (PAD.atk != null) c.atkHold = 0.3;
     // 선입력: 재사용이 끝나는 프레임에 쓴다. 시간이 지났거나 장수가 바뀌었거나 죽었으면 버린다.
     const B = PAD.buf;
     if (B) {
       if (B.uid !== c.uid || c.dead || performance.now() > B.until) PAD.buf = null;
       else if (cdLeft(c, B.A.k) <= 0) { PAD.buf = null; fireAim(c, B.A); dirty(); }
     }
+  }
+  // 게임에 남기(17-loop, 판이 끝난 뒤): 판 결과와 무관하므로 예전처럼 엔진 값을 직접 쓴다(명령·기록 없음)
+  function stayPad() {
+    const la = PAD.lane && PAD.atk != null;
+    g.laneJoy = PAD.lane && (PAD.jv || la) && S.sel.length ? { ids: new Set(S.sel), x: PAD.jv ? PAD.jv.x : 0, y: PAD.jv ? PAD.jv.y : 0, atk: la } : null;
+    const c = g.phase === 'boss' && !S.laneView ? g.active() : null;
+    if (!c) return;
+    g.localChamps().forEach((o) => { if (o !== c) o.joy = null; });
+    c.joy = PAD.jv;
+    if (PAD.atk != null) c.atkHold = 0.3;
   }
   // 보스전 스킬: 선택한 장수의 스킬·이동기·화타 치료를 공격 버튼 둘레(고양이 발)에 아이콘과 재사용 시간으로 보여 준다
   const SK_GLYPH = { line: '斬', circle: '爆', cone: '扇', buff: '勢', shield: '盾', heal: '治', rally: '令', taunt: '挑', weaken: '弱' };
@@ -5555,7 +5590,7 @@
   function renderSkillBar() {
     const bar = $('skillbar'), joy = $('joy'), c = inBoss() && g.phase === 'boss' ? g.active() : null;
     padInit();
-    g.manual = !!c;
+    if (!g.over && g.manual !== !!c) g.input('mn', [c ? 1 : 0]); // 직접 조작(조이스틱·공격 버튼) 켬/끔 — 바뀔 때만 명령
     // 라인에서는 터치 기기에서 유닛을 고르면 조이스틱과 공격 버튼만 띄운다(스킬 없음). 공격 버튼을 안 눌러도 유닛은 사거리 안의 적을 알아서 친다
     const lane = !c && !!S.coarse && laneOn() && !viewedPeer() && (!g.over || !!S.stay) && S.sel.length > 0;
     PAD.lane = lane;
@@ -5872,7 +5907,11 @@
   function saveGame() {
     if (!S.saveOn || !g || g.over) return;
     const s = g.snapshot();
-    if (s) { try { localStorage.setItem('rtd-save', JSON.stringify(s)); } catch (e) { /* 저장 공간 없음 */ } }
+    if (!s) return;
+    s.at = Date.now(); // 저장 시각(엔진은 시계를 읽지 않는다)
+    // 입력 기록도 같이 둔다: 이어 할 때 이어 붙여 서버가 처음부터 다시 돌릴 수 있게(이 걸음에서 저장 → 복원한 것으로 'R'을 남긴다)
+    if (g.rec) s.rec = g.rec.dump(g.stepN);
+    try { localStorage.setItem('rtd-save', JSON.stringify(s)); } catch (e) { /* 저장 공간 없음 */ }
   }
   function lifeOffline() { return !net || net.t.kind === 'hub'; }
   // 앱을 내렸을 때: 브라우저의 visibilitychange와 앱의 appStateChange(native.js가 'rtd-appstate'로 넘긴다) 둘 다 받는다.
@@ -5904,22 +5943,28 @@
       // 보스 처치 연출 동안(g.killHold, 엔진이 라인을 멈춘다)도 1배속: 멈추는 시간이 실제 연출 시간(07-arena KILL_REAL)과 같게
       acc += dt * (g.phase !== 'wave' || g.killHold > 0 ? 1 : net ? net.clock.sp : speed);
       // 혼자(또는 AI와) 하는 보스전은 계산을 초당 60번으로 한다: 30번이면 조이스틱을 민 뒤 최대 한 프레임 늦게 움직여 굼떠 보인다.
-      // 협동은 서로 같은 간격으로 계산해야 하므로 30번 그대로.
-      const h = !net && g.phase === 'boss' ? 1 / 60 : 1 / 30;
+      // 협동은 서로 같은 간격으로 계산해야 하므로 30번 그대로(g.stepDt).
+      // 한 걸음 = 가상 방 소식 전달 → 내 판 → AI 동맹 판과 AI 판단. 서버 재연산(server/replay-core.js stepWorld)과 같은 순서여야 한다(2026-11-26):
+      // 걸음 크기는 걸음마다 다시 본다(한 프레임 안에서 보스전이 시작돼도 다음 걸음부터 1/60), AI 판단도 프레임이 아니라 걸음마다(게임 시간으로) 한다.
       let n = 0;
-      while (acc >= h && n < 40) { if (hub) hub.flush(); g.step(h); bots.forEach((b) => b.g.step(h)); acc -= h; n++; }
+      while (acc >= g.stepDt() && n < 40) {
+        const h = g.stepDt();
+        if (hub) hub.flush();
+        g.step(h);
+        bots.forEach((b) => { b.g.step(h); b.brain.update(h); });
+        acc -= h; n++;
+      }
       if (acc > 0.3) acc = 0;
     }
     if (net) net.tickStatus(dt, g);
     bots.forEach((b) => {
       b.net.speedWant = net.speedWant;
       b.net.tickStatus(dt, b.g);
-      if (!held && !(S.freeze > 0) && !S.mutHold) b.brain.update(dt);
       // AI도 사람처럼 높은 등급 등장을 알린다. 남에게서 받은 알림(remote)을 다시 보내면 AI끼리 끝없이 주고받아 멈추므로 자기 것만 보낸다.
       b.g.events.forEach((e) => { if (e.type === 'pop' && !e.remote) b.net.send('pop', { id: e.def.id, name: b.net.name }); });
       b.g.events.length = 0;
     });
-    if (hub) hub.flush();
+    // 가상 방 소식은 다음 걸음 앞에서만 전한다(예전에는 프레임 끝에도 전했다 — 그러면 소식과 내 조작의 순서가 프레임 시각에 따라 달라져 서버가 같은 판을 만들 수 없다)
     drainEvents();
   }
   // 협동 중에는 탭이 뒤로 가도 시뮬레이션이 멈추면 안 된다
@@ -6049,31 +6094,64 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       Snd.play(wp, 70);
     }
   }
-  // 판 표를 못 받았을 때 다시 받는 간격(ms)
+  // 판 표를 못 받았을 때 다시 받는 간격(ms). 방 협동 판만 다시 받는다(아래 begin 설명)
   const TICKET_RETRY_MS = [3000, 6000, 12000, 24000];
+  // 판 시작(2026-11-26 재연산 검증): 로그인한 혼자·AI 동맹 새 판은 서버 표를 먼저 받고 표의 씨앗으로 판을 만든다(서버가 같은 씨앗으로 다시 돌려 결과를 맞춘다).
+  // 최대 TICKET_WAIT_MS 기다린다(그동안 로비가 그대로 보인다). 못 받으면 기기 씨앗으로 시작하고, 늦게 온 표는 씨앗이 달라 쓰지 않는다 → 이 판은 결과 화면에 '기록되지 않음'.
+  // 방 협동은 씨앗이 방장의 시작 신호에 있으므로 예전처럼 판과 함께 표를 받는다(협동 재연산은 다음 단계).
+  const TICKET_WAIT_MS = 3000;
+  let starting = false;
   function begin(opt) {
+    if (starting) return;
+    const want = ACC.token && !opt.trial && !opt.snap && !opt.net;
+    if (!want) { beginNow(opt, null); return; }
+    const LB = window.RTD_LOBBY, saveOn = !opt.online && !opt.ai && (opt.mode || 'solo') === 'solo';
+    starting = true;
+    if (saveOn && LB && LB.setSaveTk) LB.setSaveTk(null); // 앞 판의 표가 새 판에 붙지 않게(표를 못 받은 채 이어 하면 앞 판 표로 보고되던 문제)
+    const req = api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, save: saveOn });
+    Promise.race([req, new Promise((r) => setTimeout(() => r(null), TICKET_WAIT_MS))])
+      .then((r) => { starting = false; beginNow(opt, r || { status: 0, late: req }); }, () => { starting = false; beginNow(opt, { status: 0 }); });
+  }
+  // pre: begin이 미리 받은 표 답(없으면 null = 표를 받지 않는 판 / 이어하기 / 방 협동)
+  function beginNow(opt, pre) {
     if (window.RTD_LOBBY) window.RTD_LOBBY.close();
     $('title').hidden = true; $('title').style.display = 'none';
     I.applyDom($('app'));
     $('app').hidden = false;
     fit();
+    const room = !!opt.net && !opt.ai; // 방 협동(씨앗은 방장의 시작 신호)
+    // 혼자·AI 동맹 새 판의 씨앗: 서버 표의 씨앗(있으면), 없으면 기기. 악몽 +N 규칙과 AI 동맹 빌드도 씨앗으로 정한다(서버가 같은 값인지 확인한다)
+    let builds = null;
+    if (!opt.snap && !room && !opt.trial) {
+      opt.seed = pre && pre.ticket && pre.seed ? pre.seed >>> 0 : (Math.random() * 4294967296) >>> 0;
+      if (opt.diff === 'nightmare' && opt.mutLv) opt.muts = E.Game.rollMuts(T, +opt.mutLv, opt.seed);
+    }
     // AI 동맹: 나와 AI 사령관들을 가상 방에 넣고, AI마다 자기 라인을 따로 돌린다(방 협동과 같은 규칙)
+    hub = null; bots = [];
     if (opt.ai) {
       hub = window.RTD_NET.hub();
       opt.net = hub.join(myName());
-      opt.mode = 'multi'; opt.seed = opt.seed || (Math.random() * 1e9) | 0;
-      const pool = window.RTD_AI.BUILDS.slice();
-      bots = [];
+      opt.mode = 'multi';
+      const B = window.RTD_AI.BUILDS;
+      builds = E.Game.pickBuilds(B.length, +opt.ai, opt.seed);
       for (let i = 0; i < opt.ai; i++) {
-        const b = pool.splice((Math.random() * pool.length) | 0, 1)[0], bn = hub.join(I.t('ai_' + b.id)); // 동맹 이름은 문구표(ai_<빌드 id>)로 4개 언어
+        const b = B[builds[i]], bn = hub.join(I.t('ai_' + b.id)); // 동맹 이름은 문구표(ai_<빌드 id>)로 4개 언어
         const bg = new E.Game(T, { diff: opt.diff, mode: 'multi', seed: opt.seed + i + 1, net: bn, bot: true, muts: opt.muts, mutLv: opt.mutLv });
         bn.attach(bg);
         bots.push({ g: bg, net: bn, brain: new window.RTD_AI.Brain(bg, b) });
       }
     }
     g = opt.snap ? E.Game.restore(T, opt.snap) : new E.Game(T, opt);
-    // 설정 「인연 유지」(기본 켬): 자동 조합이 켜진 인연 단계의 마지막 한 기를 남긴다. 기기 설정 'rtd-keepsyn' = '0'이면 끔
-    try { g.keepSyn = localStorage.getItem('rtd-keepsyn') !== '0'; } catch (e) { g.keepSyn = true; }
+    // 입력 기록(2026-11-26 재연산 검증): 혼자·AI 동맹 판. 이어하기는 저장본의 기록을 이어 붙이고 이 걸음에 'R'(저장 → 복원)을 남긴다(예전 저장본은 기록 없음)
+    if (!g.trial && !room) {
+      // pf: 이 판을 돌린 자바스크립트 엔진 — 'jsc'(애플 WebKit: 아이폰·아이패드의 모든 브라우저·앱, Mac 사파리) / 'v8'. 서버는 jsc 판을 실측 전까지 회수하지 않고 기록만 한다(2026-11-26 사용자 결정)
+      const ua = (navigator && navigator.userAgent) || '', jsc = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) || (/AppleWebKit/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Android/.test(ua));
+      if (!opt.snap) g.rec = new E.Recorder({ v: 1, pf: jsc ? 'jsc' : 'v8', eh: window.RTD_ENGINE_HASH || '', lang: I.lang, seed: g.seed, diff: g.diff.id, mutLv: g.mutLv | 0, muts: g.muts.map((m) => m.id), unl: g.unlocked, ai: +opt.ai || 0, b: builds || undefined });
+      else if (opt.snap.rec && opt.snap.x >= 2 && !opt.noRecord) { g.rec = E.Recorder.from(opt.snap.rec); g.rec.mark(g.stepN); }
+    }
+    // 설정 「인연 유지」(기본 켬): 자동 조합이 켜진 인연 단계의 마지막 한 기를 남긴다. 기기 설정 'rtd-keepsyn' = '0'이면 끔(입력 명령으로 넣는다)
+    let keep = true; try { keep = localStorage.getItem('rtd-keepsyn') !== '0'; } catch (e) { keep = true; }
+    g.input('ks', [keep ? 1 : 0]);
     // 신화·불멸 체험(opt.trial, trial-mode.md): 저장·판 표·결과 보고·전적·튜토리얼·광고 없음. S.trial = { unit }
     S.trial = g.trial ? opt.trial : null; S.trialFx = null;
     // 오프라인 혼자 하기만 자동 저장한다(앱이 꺼져도 이어하기). 체험은 저장하지 않는다(rtd-save에 있던 일반 판 이어하기도 그대로 남는다)
@@ -6082,21 +6160,39 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 판 표는 S.gameTk에 둔다(S.ticket은 선택권 창이 쓰는 값이라 같이 쓰면 선택권을 쓸 때 판 표가 지워진다).
     // 표를 못 받으면(끊김·서버 오류) 3·6·12·24초 뒤에 다시 받는다. 판이 끝났거나 다른 판이 시작됐으면 멈춘다.
     // 끝까지 못 받은 채 판이 끝나면 결과 화면에서 알린다(S.tkWant = 이 판은 표를 받아야 하는 판, S.tkMiss = 못 받고 끝남).
-    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false; S.tkRej = false;
+    // 2026-11-26(secure-a, 사용자 결정 ③): 혼자 오프라인 새 판은 '이어하기 칸' 표(save: true)를 받는다 — 계정당 한 칸, 기한 없음, 새 혼자 판이 칸을 바꾼다.
+    // 이어하기 표는 { u: 계정, tk, s: 씨앗 }으로 둔다(lobby.js saveTk). 다른 계정의 표는 쓰지 않는다. 예전 앱이 둔 표 글자(legacy)는 그대로 써서 끝까지 보고한다.
+    // opt.noRecord: 이어하기를 누를 때 서버가 '칸이 바뀜·이미 기록됨·다른 계정'이라고 해서 기록 없이 이어 하기로 한 판(19-title.js) → 결과 화면에 '기록되지 않음'.
+    // 서버가 표를 잠금(locked)으로 거절하면 답에 온 계정 진행으로 바꿔 두고 이 판은 기록되지 않는다고 알린다. 씨앗은 S.tkSeed(재연산 준비).
+    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false; S.tkRej = false; S.tkSeed = 0;
+    const LB = window.RTD_LOBBY;
     if (ACC.token && !S.trial) { // 체험은 서버에 판 표를 받지 않는다(서버 통신 0회)
-      if (opt.snap) { try { S.gameTk = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
-      else {
-        const saveOn = !opt.online && !opt.ai && !opt.net && (opt.mode || 'solo') === 'solo';
+      if (opt.snap) {
+        const st = !opt.noRecord && LB && LB.saveTk ? LB.saveTk() : null;
+        if (st && (st.legacy || (ACC.me && st.u === ACC.me.id))) { S.gameTk = st.tk; S.tkSeed = st.s | 0; }
+        if (opt.noRecord) S.tkRej = true;
+      } else {
+        const saveOn = !opt.online && !opt.ai && !room && (opt.mode || 'solo') === 'solo';
         const mine = g, waits = TICKET_RETRY_MS.slice();
         S.tkWant = true;
-        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, room: (opt.net && opt.net.code) || undefined }).then((r) => {
-          if (g !== mine) return; // 그 사이 다른 판이 시작됐다
-          if (r.ticket) { S.gameTk = r.ticket; if (saveOn) { try { localStorage.setItem('rtd-save-tk', r.ticket); } catch (e) { /* 저장 불가 */ } } return; }
+        // 표 답 하나를 받아 둔다. 끝났으면(표·잠김·4xx) true
+        const take = (r) => {
+          if (g !== mine || !r) return true; // 그 사이 다른 판이 시작됐다
+          if (r.ticket) {
+            if (!room && r.seed && (r.seed >>> 0) !== g.seed) return true; // 표가 늦게 와 판이 이미 기기 씨앗으로 시작됨 → 이 판은 기록되지 않음(결과 화면 tkMiss). 씨앗 없는 표(업데이트 전 서버)는 예전처럼 쓴다
+            S.gameTk = r.ticket; S.tkSeed = r.seed | 0; if (saveOn && LB && LB.setSaveTk) LB.setSaveTk(r.ticket, r.seed); return true;
+          }
+          if (r.error === 'locked') { if (r.me) { ACC.me = r.me; saveAcc(); } S.tkWant = false; S.tkRej = true; return true; } // 서버 기록으로는 잠긴 난이도
           // 로그인이 풀렸거나(401) 요청이 잘못됐으면(400) 다시 해도 같다
-          if (r.status === 401 || r.status === 400 || g.over || !waits.length) return;
+          return r.status === 401 || r.status === 400;
+        };
+        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, room: (opt.net && opt.net.code) || undefined, save: false }).then((r) => {
+          if (take(r) || g.over || !waits.length) return;
           setTimeout(() => { if (g === mine && !g.over && !S.gameTk) ask(); }, waits.shift());
         });
-        ask();
+        if (room) ask();
+        else if (pre && pre.late) pre.late.then(take); // 기다리다 시간이 넘음(늦게 온 표는 take가 씨앗을 보고 버린다)
+        else take(pre);
       }
     }
     S.everSel = false; S.frontWarned = false; S.fromSnap = !!opt.snap; S.endHoldUntil = 0; S.toastHoldUntil = 0; S.toastQ = []; S.vicUntil = 0;
@@ -6110,7 +6206,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 첫 오프라인 혼자 하기(이어하기 제외)에서 튜토리얼
     // 자동 배치(1~3성 자동 합성·정렬)는 기본으로 꺼 둔다. 직접 켠 사람만 그 선택을 기억해 다음 판에도 켠다('rtd-auto' = '1').
     // 튜토리얼이 자동 버튼을 가르친다. 건너뛰어도 켜지 않는다.
-    const autoOnAll = () => ['t1', 't2', 't3'].forEach((k) => g.setAuto(g.me, k, true));
+    const autoOnAll = () => ['t1', 't2', 't3'].forEach((k) => g.input('au', [k, 1]));
     let autoPref = false; try { autoPref = localStorage.getItem('rtd-auto') === '1'; } catch (e) { /* 저장 불가 */ }
     // 팁(명사·시너지)은 모든 판에서 보고, 단계 안내는 혼자 하는 오프라인 새 판에서만(tutorial)
     const tutOn = !!(window.RTD_TUT && window.RTD_TUT.maybeStart({ get g() { return g; }, S, T, t: I.t, dirty, tutorial: S.saveOn && !opt.snap, onSkip: () => { if (autoPref) autoOnAll(); dirty(); } }));
@@ -6214,19 +6310,38 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   // 판이 끝나면 판 결과를 서버에 보내 경험치·동전을 받는다(같은 판은 한 번만). 온라인 판은 /api/result, 오프라인 판(혼자·AI 동맹)은 /api/history.
   // 보상 배율은 서버가 판 표에 적어 둔 판 종류(인원)로 정한다. 오프라인 판은 표가 있을 때만 보낸다(표가 없으면 서버가 받지 않는다)
   // 서버에 닿지 못하면(끊김·5xx) 보낼 내용을 기기에 남겨 두고 다음에 앱을 켤 때·로비로 돌아올 때 다시 보낸다(lobby.js queueSend·flushPending)
+  // 입력 기록 묶기(2026-11-26 재연산 검증): JSON → gzip → base64(rec). 서버 본문 한도 64KB(/api/result·/api/history).
+  // CompressionStream이 없는 기기(iOS 16.3 이하 등)는 JSON 그대로(recj) — 한도를 넘으면 기록 없이 보낸다(서버는 기록 없는 새 판을 '검증 못 함'으로 둔다).
+  const REC_MAX = 60000;
+  async function packRec(rec) {
+    if (!rec) return {};
+    const raw = JSON.stringify(rec);
+    try {
+      if (typeof CompressionStream === 'function') {
+        const buf = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+        let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+        const b64 = btoa(bin);
+        return b64.length <= REC_MAX ? { rec: b64 } : {};
+      }
+    } catch (e) { /* 압축 실패: 아래 그대로 보내기 */ }
+    return raw.length <= REC_MAX ? { recj: rec } : {};
+  }
   async function reportResult() {
-    S.msClaim = false; S.rwRank = null; S.rwAch = null;
+    S.msClaim = false; S.rwRank = null; S.rwAch = null; S.rankWait = false;
     if (g.trial) return; // 체험은 결과를 보내지 않는다(이중 안전장치: 체험은 'over'를 내지 않는다)
     if (!ACC.token || S.reported || (!S.online && !S.gameTk)) return;
     S.reported = true;
     const path = S.online ? '/api/result' : '/api/history';
     const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: bots.length ? 'ai' : net ? 'room' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.resultRound, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {}, ach: Object.keys((g.me && g.me.done) || {}).filter((k) => g.me.done[k]) };
+    // 판을 끝까지 만든 입력 기록(서버가 다시 돌려 맞춰 본다). 씨앗이 든 표(새 서버, S.tkSeed)일 때만 — 업데이트 전 서버는 본문 8KB 한도라 큰 기록이 붙으면 보고가 끊긴다
+    if (g.rec && body.ticket && S.tkSeed) Object.assign(body, await packRec(g.rec.dump(g.stepN)));
     const uid = ACC.me && ACC.me.id, r = await api(path, body);
     S.repDone = true; // 결과창(14-endstats-xp esStep)이 답을 기다리다 경험치 막대를 채운다
     if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend(path, body, uid);
     if (r.me) {
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0; S.xpFrom = (r.me.xp || 0) - (r.gained || 0);
       if (r.rejected) S.tkRej = true; // 서버가 이 판 결과를 받지 않았다(표 만료 등): 결과 화면에 "기록되지 않음"을 알린다(2026-11-26)
+      S.rankWait = !r.rejected && r.rank === true; // 순위 후보 판: 순위는 재연산 검증 뒤에 오른다(결과 화면에 한 줄. 2026-11-26 "검증된 거만 올리게 해줘 랭킹은")
       // 서버가 준 관직 승급·업적 첫 달성 보상: 결과창 '다음 목표' 칸에 알린다(14-endstats-xp.js goalBox)
       S.rwRank = Array.isArray(r.rankUp) && r.rankUp.length ? r.rankUp : null; S.rwAch = Array.isArray(r.ach) && r.ach.length ? r.ach : null;
       // 경험치는 통계창 앞 경험치 연출 창(14 xpGate·playXp)이 보이고, 통계창 '내 정보' 줄은 최종 값(2026-11-26: 연출 창 되살림. 연출 중에는 넘기지 않고 끝난 뒤 눌러서 넘긴다)
@@ -6506,7 +6621,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       try { sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); } catch (e) { sv = null; }
       const cb = $('contbtn'), showC = sv && sv.v === 1; // 이어하기는 마지막에 온라인을 골랐어도 저장이 있으면 보인다
       cb.hidden = !showC;
-      if (showC) { const dn = (T.difficulties.find((d) => d.id === sv.diff) || {}).name || ''; cb.textContent = t('continueGame', { r: sv.round, d: dn }); cb.onclick = () => begin({ snap: sv, mode: 'solo', diff: sv.diff }); }
+      if (showC) { const dn = (T.difficulties.find((d) => d.id === sv.diff) || {}).name || ''; cb.textContent = contArmed() ? t('contNoRec') : t('continueGame', { r: sv.round, d: dn }); cb.onclick = () => contGo(sv); }
       $('startbtn').textContent = isRoom ? (!lobby ? t('joinFirst') : host ? t('startHost') : t('waitHost')) : ovArm ? t('overwriteSave') : t('start');
       $('startbtn').disabled = (isRoom && (!lobby || !host)) || (!pk('diff') && !hostPick) || (window.RTD_LOBBY && !window.RTD_LOBBY.diffOpen(cfg.diff, +cfg.mutLv));
       if (lobby && host) {
@@ -6516,6 +6631,27 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       renderLobby();
       if (window.RTD_LOBBY) window.RTD_LOBBY.refresh();
     };
+    // 이어하기(2026-11-26 secure-a): 로그인해 있고 이어하기 표가 있으면 서버에 표 상태를 묻는다(1.5초 넘게 걸리거나 끊기면 그냥 시작 — 판 끝에 서버가 판단).
+    // 다른 혼자 판이 시작되어 칸이 바뀜(replaced)·이미 기록됨(used)·다른 계정의 표(other)면 까닭을 알리고 버튼이 '기록 없이 이어하기'로 바뀐다.
+    // 4초 안에 한 번 더 누르면 기록 없이 이어 한다(판은 그대로 할 수 있다). 예전 앱이 둔 표(legacy)는 서버가 지금 규칙대로 받는다.
+    let contArmAt = 0;
+    const contArmed = () => Date.now() - contArmAt < 4000;
+    async function contGo(sv) {
+      const LB = window.RTD_LOBBY;
+      if (contArmed()) { contArmAt = 0; begin({ snap: sv, mode: 'solo', diff: sv.diff, noRecord: true }); return; }
+      const st = ACC.token && ACC.me && LB && LB.saveTk ? LB.saveTk() : null;
+      let why = null;
+      if (st && !st.legacy && st.u !== ACC.me.id) why = 'other';
+      else if (st) {
+        const r = await Promise.race([api('/api/game/check', { ticket: st.tk }), pause(1500).then(() => ({}))]);
+        if (r.state === 'replaced' || r.state === 'used' || r.state === 'other') why = r.state;
+      }
+      if (!why) { begin({ snap: sv, mode: 'solo', diff: sv.diff }); return; }
+      contArmAt = Date.now();
+      if (LB && LB.toast) LB.toast(t(why === 'replaced' ? 'contReplaced' : why === 'used' ? 'contUsed' : 'contOther'), 6000);
+      dr();
+      setTimeout(() => { if (!$('title').hidden) dr(); }, 4100);
+    }
     function refreshAcc() { const ah = accHtml(); if ($('accbox').dataset.html !== ah) { $('accbox').innerHTML = ah; $('accbox').dataset.html = ah; bindAcc(); } }
     // 로비: 방 코드 현판, 다섯 자리 카드(초상·관직 문장·이름·관직·레벨, 방장·나 표시), 방장이 고른 설정
     // 카드는 바뀐 자리만 다시 그린다(새로 들어온 사람 카드만 등장 연출이 걸리고, 다른 카드는 깜빡이지 않는다)
@@ -6735,7 +6871,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       let netDown = false;
       // 로그인 상태 새로 받기(등급이 다른 기기에서 올랐을 수 있다). 토큰이 만료됐으면(401) api()가 지운다
       let ban = null; // 정지된 계정(403 banned): 아래에서 안내만 보이고 멈춘다
-      if (ACC.token) { const r = await api('/api/me'); if (r.me) { ACC.me = r.me; saveAcc(); } else if (r.status === 0) netDown = true; else if (r.error === 'banned') ban = r; }
+      if (ACC.token) { const r = await api('/api/me'); if (r.me) { ACC.me = r.me; saveAcc(); if (window.RTD_LOBBY && window.RTD_LOBBY.onMe) window.RTD_LOBBY.onMe(r); } else if (r.status === 0) netDown = true; else if (r.error === 'banned') ban = r; } // onMe: 회수 알림·난이도 잠금 안내(lobby.js)
       if (!ACC.token && GUEST && GUEST.id) {
         const r = await api('/api/guest/login', { id: GUEST.id, secret: GUEST.secret });
         if (r.token) setAcc(r); else if (r.status === 401) saveGuest(null); else if (r.status === 0) netDown = true; else if (r.error === 'banned') ban = r;
