@@ -5243,7 +5243,7 @@
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
     // 창 = 스크롤되는 본문(.es-body) + 고정 바닥 줄(.es-foot). 버튼이 통계 칸을 가리지 않는다
     return `<div class="over" id="end"><div class="sheet es ${win ? 'is-win' : 'is-lose'}"><div class="es-body">
-      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss ? `<div class="dim es-tkmiss">${esc(t('tkMissed'))}</div>` : ''}
+      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss || S.tkRej ? `<div class="dim es-tkmiss">${esc(t(S.tkRej ? 'tkRejected' : 'tkMissed'))}</div>` : ''}
       ${esMe()}
       <div class="es-rec"><div class="esr-big">${big}</div><div class="esr-small">${small}</div></div>
       ${goalBox()}
@@ -6082,7 +6082,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 판 표는 S.gameTk에 둔다(S.ticket은 선택권 창이 쓰는 값이라 같이 쓰면 선택권을 쓸 때 판 표가 지워진다).
     // 표를 못 받으면(끊김·서버 오류) 3·6·12·24초 뒤에 다시 받는다. 판이 끝났거나 다른 판이 시작됐으면 멈춘다.
     // 끝까지 못 받은 채 판이 끝나면 결과 화면에서 알린다(S.tkWant = 이 판은 표를 받아야 하는 판, S.tkMiss = 못 받고 끝남).
-    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false;
+    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false; S.tkRej = false;
     if (ACC.token && !S.trial) { // 체험은 서버에 판 표를 받지 않는다(서버 통신 0회)
       if (opt.snap) { try { S.gameTk = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
       else {
@@ -6226,6 +6226,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend(path, body, uid);
     if (r.me) {
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0; S.xpFrom = (r.me.xp || 0) - (r.gained || 0);
+      if (r.rejected) S.tkRej = true; // 서버가 이 판 결과를 받지 않았다(표 만료 등): 결과 화면에 "기록되지 않음"을 알린다(2026-11-26)
       // 서버가 준 관직 승급·업적 첫 달성 보상: 결과창 '다음 목표' 칸에 알린다(14-endstats-xp.js goalBox)
       S.rwRank = Array.isArray(r.rankUp) && r.rankUp.length ? r.rankUp : null; S.rwAch = Array.isArray(r.ach) && r.ach.length ? r.ach : null;
       // 경험치는 통계창 앞 경험치 연출 창(14 xpGate·playXp)이 보이고, 통계창 '내 정보' 줄은 최종 값(2026-11-26: 연출 창 되살림. 연출 중에는 넘기지 않고 끝난 뒤 눌러서 넘긴다)

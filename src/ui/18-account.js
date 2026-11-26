@@ -49,6 +49,7 @@
     if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend(path, body, uid);
     if (r.me) {
       ACC.me = r.me; saveAcc(); S.xpGained = r.gained; S.coinGained = r.coins || 0; S.xpFrom = (r.me.xp || 0) - (r.gained || 0);
+      if (r.rejected) S.tkRej = true; // 서버가 이 판 결과를 받지 않았다(표 만료 등): 결과 화면에 "기록되지 않음"을 알린다(2026-11-26)
       // 서버가 준 관직 승급·업적 첫 달성 보상: 결과창 '다음 목표' 칸에 알린다(14-endstats-xp.js goalBox)
       S.rwRank = Array.isArray(r.rankUp) && r.rankUp.length ? r.rankUp : null; S.rwAch = Array.isArray(r.ach) && r.ach.length ? r.ach : null;
       // 경험치는 통계창 앞 경험치 연출 창(14 xpGate·playXp)이 보이고, 통계창 '내 정보' 줄은 최종 값(2026-11-26: 연출 창 되살림. 연출 중에는 넘기지 않고 끝난 뒤 눌러서 넘긴다)

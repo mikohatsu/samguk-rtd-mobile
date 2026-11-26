@@ -213,7 +213,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     // 판 표는 S.gameTk에 둔다(S.ticket은 선택권 창이 쓰는 값이라 같이 쓰면 선택권을 쓸 때 판 표가 지워진다).
     // 표를 못 받으면(끊김·서버 오류) 3·6·12·24초 뒤에 다시 받는다. 판이 끝났거나 다른 판이 시작됐으면 멈춘다.
     // 끝까지 못 받은 채 판이 끝나면 결과 화면에서 알린다(S.tkWant = 이 판은 표를 받아야 하는 판, S.tkMiss = 못 받고 끝남).
-    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false;
+    S.ticket = null; S.gameTk = null; S.tkWant = false; S.tkMiss = false; S.tkRej = false;
     if (ACC.token && !S.trial) { // 체험은 서버에 판 표를 받지 않는다(서버 통신 0회)
       if (opt.snap) { try { S.gameTk = localStorage.getItem('rtd-save-tk') || null; } catch (e) { /* 저장 불가 */ } }
       else {

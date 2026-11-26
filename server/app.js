@@ -227,7 +227,7 @@ const tooFast = (round, time) => time > 0 && time < (round - 1) * MIN_ROUND_SEC;
 // - 걸린 시간은 서버 시계(지금 - 발급 시각)로 잰다: 라운드당 WALL_ROUND_SEC(45초 라운드, 3배속이면 15초, 여유 20%)보다 빠르면 아무것도 주지 않는다.
 // - 표 하나에 보고 한 번. 보상 받은 판끼리는 시간이 겹칠 수 없다(표를 여러 장 받아 두고 한꺼번에 내는 것 방지). 하루 동전 상한.
 // 비밀값은 DATA_DIR/ticket.key(없으면 만든다). 서버를 다시 켜도 진행 중인 판의 표가 살아 있다.
-const WALL_ROUND_SEC = 12, GAME_ROUND_SEC = 40, TICKET_MAX_MS = 24 * 3600000, RESULT_COINS_DAY = 3000;
+const WALL_ROUND_SEC = 12, GAME_ROUND_SEC = 40, TICKET_MAX_MS = 24 * 3600000, TICKET_SAVE_MS = 7 * 24 * 3600000, RESULT_COINS_DAY = 3000;
 const ROUNDS = {}; THEME.difficulties.forEach((d) => { ROUNDS[d.id] = d.rounds; });
 let ticketKey = null;
 function ticketSecret() {
@@ -257,14 +257,15 @@ function makeTicket(uid, diff, mut, seats) {
   const body = Buffer.from(JSON.stringify({ u: uid, d: diff, m: mut, k: seats | 0, t: Date.now(), n: crypto.randomBytes(9).toString('base64url') })).toString('base64url');
   return body + '.' + tkSign(body);
 }
-function readTicket(raw, uid) {
+// maxMs: 표를 받아 주는 기한. 오프라인 혼자 판(전적 보고)은 이어하기로 며칠에 걸쳐 끝낼 수 있어 7일(2026-11-26: 하루 넘겨 이어 깬 쉬움 클리어가 표 만료로 버려지던 문제)
+function readTicket(raw, uid, maxMs) {
   const s = String(raw || ''); if (s.length > 400) return null;
   const i = s.indexOf('.'); if (i < 1) return null;
   const body = s.slice(0, i), sig = Buffer.from(s.slice(i + 1)), want = Buffer.from(tkSign(body));
   if (sig.length !== want.length || !crypto.timingSafeEqual(sig, want)) return null;
   let t; try { t = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch (e) { return null; }
   if (!t || t.u !== uid || !DIFFS.includes(t.d) || typeof t.t !== 'number' || typeof t.n !== 'string') return null;
-  if (Date.now() - t.t > TICKET_MAX_MS || t.t > Date.now() + 60000) return null;
+  if (Date.now() - t.t > (maxMs || TICKET_MAX_MS) || t.t > Date.now() + 60000) return null;
   return t;
 }
 const usedTickets = new Map(); // 번호 → 쓴 시각(전적 보고의 중복 방지. 결과 보고는 저장소가 열쇠로 한 번 더 막는다)
@@ -273,7 +274,7 @@ const dayCoins = new Map(); // 계정 → { day, n }
 setInterval(() => { const now = Date.now(); usedTickets.forEach((at, k) => { if (now - at > TICKET_MAX_MS) usedTickets.delete(k); }); lastReward.forEach((at, k) => { if (now - at > TICKET_MAX_MS) lastReward.delete(k); }); }, 3600000);
 // 표와 보고를 맞춰 본다. 돌려주는 값: null(받지 않음) 또는 { diff(쳐 주는 난이도), mut, round, time, rankOk, nonce, start, seats(판 인원. 0 = 오프라인) }
 function judge(u, b, what) {
-  const t = readTicket(b.ticket, u.id);
+  const t = readTicket(b.ticket, u.id, what === 'history' ? TICKET_SAVE_MS : TICKET_MAX_MS);
   if (!t) { if (b.ticket) warnSome('ticket_bad', 20, `uid=${u.id} ${what}`); return null; }
   if (usedTickets.has(t.n)) return null;
   const pg = progOf(u), played = DIFFS.indexOf(t.d), di = Math.min(played, pg.clr + 1), diff = DIFFS[di];
@@ -621,7 +622,7 @@ async function handle(req, res, url, query) {
     // 표가 없거나 맞지 않으면 아무것도 바꾸지 않는다(옛 앱·가짜 보고). 결과 보고와 같은 길(settle)로 받는다
     if (limited(ip + u.id, 'hist', 20, 600000)) return json(res, 429, { error: 'slow_down' });
     const r = await settle(u, b, false);
-    if (!r) return json(res, 200, { me: profile(u), gained: 0 });
+    if (!r) return json(res, 200, { me: profile(u), gained: 0, rejected: true }); // 표 만료·중복·너무 빠름 등으로 받지 않음 → 결과 화면이 "기록되지 않음"을 알린다
     return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins, rankUp: r.rankUp, ach: r.ach });
   }
   if (url === '/api/hist') return json(res, 200, { hist: await store.history(u.id), prog: progOf(u) });
@@ -773,7 +774,7 @@ async function handle(req, res, url, query) {
     if (limited('u:' + u.id, 'res', 6, 600000)) return json(res, 429, { error: 'slow_down' }); // 계정 기준(주소를 바꿔도 같은 한도)
     // 표가 없거나 맞지 않으면 아무것도 주지 않는다(settle)
     const r = await settle(u, b, true);
-    if (!r) return json(res, 200, { me: profile(u), gained: 0 });
+    if (!r) return json(res, 200, { me: profile(u), gained: 0, rejected: true }); // 표 만료·중복·너무 빠름 등으로 받지 않음 → 결과 화면이 "기록되지 않음"을 알린다
     return json(res, 200, { me: profile(await store.getUser(u.id)), gained: r.gained, coins: r.coins, rankUp: r.rankUp, ach: r.ach });
   }
   if (url === '/api/delete') {

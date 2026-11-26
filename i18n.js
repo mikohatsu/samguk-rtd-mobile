@@ -385,6 +385,7 @@
     // 판 표(서버가 판 시작 때 내주는 기록표)를 끝까지 못 받은 판의 결과 화면. 표가 없으면 서버가 결과를 받지 않아 경험치·동전·전적이 오르지 않는다(17-loop S.tkMiss).
     // 2026-11-26: 예전 열쇠 noTicket이 선택권 창의 '보유한 선택권이 없습니다'(같은 이름)를 덮어써, 선택권이 0장일 때 이 글이 선택권 창에 떴다 → 열쇠를 나눔
     tkMissed: ['판을 시작할 때 서버와 연결되지 않아, 이번 판의 경험치·동전·전적은 계정에 기록되지 않습니다.', 'バトル開始時にサーバーへ接続できなかったため、今回の経験値・銅銭・戦績はアカウントに記録されません。', "The server couldn't be reached when this game started, so this game's XP, coins and record won't be saved to your account.", '本局开始时未能连接服务器，因此本局的经验值、铜钱和战绩不会记入账号。'],
+    tkRejected: ['서버가 이번 판 결과를 받지 않아 경험치·동전·전적이 기록되지 않았습니다(이어하기는 시작한 지 7일 안에 끝내야 합니다).', 'サーバーが今回の結果を受け付けなかったため、経験値・銅銭・戦績は記録されませんでした（続きからのプレイは開始から7日以内に終える必要があります）。', 'The server did not accept this result, so XP, coins and history were not recorded (resumed games must finish within 7 days of starting).', '服务器未接收本局结果，经验、铜钱和战绩未被记录（继续游戏需在开始后7天内完成）。'],
     // 서버가 알려 준 최소 버전보다 낮을 때(로딩 화면)
     updateNeed: ['새 버전이 나왔습니다. 스토어에서 업데이트해 주세요.', '新しいバージョンがあります。ストアでアップデートしてください。', 'A new version is available. Please update from the store.', '有新版本，请前往商店更新。'],
     updateWeb: ['새 버전이 나왔습니다. 페이지를 새로고침해 주세요.', '新しいバージョンがあります。ページを再読み込みしてください。', 'A new version is available. Please reload the page.', '有新版本，请刷新页面。'],

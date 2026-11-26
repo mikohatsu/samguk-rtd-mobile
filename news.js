@@ -10,6 +10,10 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.4.4', d: '2026-11-26', items: [
+      ['이어하기로 하루를 넘겨 끝낸 싱글 판의 결과(경험치·동전·전적·난이도 해금)가 서버에 기록되지 않던 문제를 고쳤습니다. 이제 시작한 지 7일 안에 끝내면 기록됩니다.', '「続きから」で日をまたいで終えたシングルの結果（経験値・銅銭・戦績・難易度解放）がサーバーに記録されない問題を直しました。開始から7日以内に終えれば記録されます。', 'Fixed solo games finished after resuming the next day not being recorded on the server (XP, coins, history, difficulty unlocks). Games finished within 7 days of starting are now recorded.', '修复了通过“继续游戏”跨天完成的单人对局结果（经验、铜钱、战绩、难度解锁）未被服务器记录的问题。现在开始后7天内完成即可记录。'],
+      ['서버가 결과를 받지 않은 판은 결과 화면에 알림이 나옵니다.', 'サーバーが結果を受け付けなかった対局は、結果画面でお知らせします。', 'The result screen now tells you when the server did not accept a result.', '服务器未接收结果的对局会在结算画面提示。'],
+    ] },
     { v: '0.4.3', d: '2026-11-26', items: [
       ['전적에 실제로 고른 난이도가 기록됩니다(보통 판이 쉬움으로 적히던 문제).', '戦績に実際に選んだ難易度が記録されるようになりました（ふつうがかんたんと記録される問題）。', 'Game history now records the difficulty you actually played (Normal games were shown as Easy).', '战绩会记录实际选择的难度（修复普通难度被记为简单的问题）。'],
       ['전적의 「오프라인/온라인」 표시를 「싱글·AI 동맹·협동」으로 바꾸고, AI 동맹·싱글 판이 협동으로 기록되던 문제를 고쳤습니다.', '戦績の「オフライン／オンライン」表示を「シングル・AI同盟・協力」に変え、AI同盟やシングルが協力として記録される問題を直しました。', 'History tags now read Solo / AI allies / Co-op, and AI or solo games are no longer recorded as co-op.', '战绩标签改为“单人·AI同盟·合作”，并修复AI同盟和单人对局被记为合作的问题。'],

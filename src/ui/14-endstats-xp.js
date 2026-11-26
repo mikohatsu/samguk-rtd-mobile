@@ -200,7 +200,7 @@
     const head = win ? `<div class="es-win"><span>${t('win')}</span></div>` : `<div class="es-lose"><span>${t('lose')}</span></div>`;
     // 창 = 스크롤되는 본문(.es-body) + 고정 바닥 줄(.es-foot). 버튼이 통계 칸을 가리지 않는다
     return `<div class="over" id="end"><div class="sheet es ${win ? 'is-win' : 'is-lose'}"><div class="es-body">
-      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss ? `<div class="dim es-tkmiss">${esc(t('tkMissed'))}</div>` : ''}
+      ${head}${lost ? `<div class="es-lost">${lost}</div>` : ''}${S.tkMiss || S.tkRej ? `<div class="dim es-tkmiss">${esc(t(S.tkRej ? 'tkRejected' : 'tkMissed'))}</div>` : ''}
       ${esMe()}
       <div class="es-rec"><div class="esr-big">${big}</div><div class="esr-small">${small}</div></div>
       ${goalBox()}
