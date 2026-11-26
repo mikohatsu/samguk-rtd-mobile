@@ -10,6 +10,10 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.4.3', d: '2026-11-26', items: [
+      ['전적에 실제로 고른 난이도가 기록됩니다(보통 판이 쉬움으로 적히던 문제).', '戦績に実際に選んだ難易度が記録されるようになりました（ふつうがかんたんと記録される問題）。', 'Game history now records the difficulty you actually played (Normal games were shown as Easy).', '战绩会记录实际选择的难度（修复普通难度被记为简单的问题）。'],
+      ['전적의 「오프라인/온라인」 표시를 「싱글·AI 동맹·협동」으로 바꾸고, AI 동맹·싱글 판이 협동으로 기록되던 문제를 고쳤습니다.', '戦績の「オフライン／オンライン」表示を「シングル・AI同盟・協力」に変え、AI同盟やシングルが協力として記録される問題を直しました。', 'History tags now read Solo / AI allies / Co-op, and AI or solo games are no longer recorded as co-op.', '战绩标签改为“单人·AI同盟·合作”，并修复AI同盟和单人对局被记为合作的问题。'],
+    ] },
     { v: '0.4.2', d: '2026-11-26', items: [
       ['안드로이드에서 보스전과 보스 등장 장면이 훨씬 부드러워졌습니다.', 'Androidでボス戦とボス登場シーンがずっと滑らかになりました。', 'Boss fights and boss entrances run much more smoothly on Android.', '安卓设备上的首领战和首领登场画面流畅了许多。'],
       ['장수마다 스킬 연출이 새로워지고, 보스 기술 연출과 맞았을 때의 타격감이 강해졌습니다. 방어 스킬을 쓰면 방패가 나타나고, 효과가 걸린 동안 몸에 방패가 보입니다.', '武将ごとにスキル演出が新しくなり、ボスの技の演出と被弾時の手応えが強くなりました。防御スキルを使うと盾が現れ、効果中は体に盾が重なります。', 'Every hero has new skill effects, boss attacks look heavier, and taking hits feels stronger. Defensive skills now show a shield, which stays on the hero while active.', '每位武将的技能演出焕然一新，首领技能与受击手感更强。使用防御技能会出现盾牌，效果持续时身上也会显示盾牌。'],

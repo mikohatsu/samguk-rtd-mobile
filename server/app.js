@@ -285,7 +285,7 @@ function judge(u, b, what) {
   const rankOk = win && played === di && (t.m | 0) === mut && time >= (round - 1) * GAME_ROUND_SEC && time <= wall * 3 + 60;
   // 판 종류는 표에 적힌 값만 쓴다(옛 표에는 없다 → 오프라인)
   const seats = Math.min(SEAT_MUL.length - 1, Math.max(0, t.k | 0));
-  return { diff, mut, round, time, win, rankOk, nonce: t.n, start: t.t, seats };
+  return { diff, played: t.d, mut, round, time, win, rankOk, nonce: t.n, start: t.t, seats };
 }
 // 순위 응답을 30초 동안 기억한다(로그인 없이 부르는 주소라, 부를 때마다 DB 질의 수백 개가 나가지 않게).
 // 같은 열쇠를 동시에 여러 번 불러도 질의는 한 번만 나간다(약속을 기억한다).
@@ -411,6 +411,8 @@ async function settle(u, b, online) {
   const key = 'tk-' + j.nonce;
   b = Object.assign({}, b, { diff: j.diff, mutLv: j.mut, round: j.round, win: j.win });
   const rw = overlap ? { xp: 0, coins: 0 } : rewardOf(b, j.seats);
+  // 전적 줄에는 실제로 고른 난이도(표의 난이도)를 적는다. 보상·순위·난이도 진행은 위 j.diff(깬 난이도 + 1까지) 그대로(2026-11-26: 보통 판이 쉬움으로 적히던 문제)
+  const hb = Object.assign({}, b, { diff: j.played || j.diff, mutLv: j.played && j.played !== j.diff ? 0 : j.mut });
   // 하루(일본 시간) 판 보상 동전 상한을 넘는 만큼은 주지 않는다
   const day = jstDayStart(), dc = dayCoins.get(u.id), had = dc && dc.day === day ? dc.n : 0;
   const coins = Math.max(0, Math.min(rw.coins, RESULT_COINS_DAY - had));
@@ -420,7 +422,7 @@ async function settle(u, b, online) {
   // 판(board)은 둘: 온라인 협동(2인 이상, 난이도 이름 그대로)과 솔로(오프라인·혼자 시작한 온라인. 'solo:난이도', 계정마다 가장 빠른 한 줄)
   const clear = !j.rankOk ? null : j.seats >= 2 ? { diff: j.diff, party: String(b.party || key).slice(0, 40), time: j.time, mut: j.mut } : { diff: 'solo:' + j.diff, party: 'solo:' + u.id, time: j.time, mut: j.mut };
   usedTickets.set(j.nonce, Date.now());
-  const done = await store.recordResult(u.id, { key, xp: rw.xp, coins, win: !!b.win, round: j.round, hist: histOf(b, online), imm, clear });
+  const done = await store.recordResult(u.id, { key, xp: rw.xp, coins, win: !!b.win, round: j.round, hist: histOf(hb, online), imm, clear });
   if (!done) return null;
   if (!overlap) { lastReward.set(u.id, Date.now()); dayCoins.set(u.id, { day, n: had + coins }); }
   // 일일 미션 진행(승패 무관). { 미션 id: 채운 양 }

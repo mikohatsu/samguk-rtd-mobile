@@ -234,7 +234,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     arenaFree(S.arenaUsed); S.arenaUsed = null; // 지난 판의 결투장 캔버스(07-arena)
     S.es = null; S.stay = null; S.lastArena = null; S.repDone = false; S.xpFrom = null; $('stage').classList.remove('stay');
     S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.coinGained = 0; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;
-    if (opt.net) { net = opt.net; net.onLobby = null; net.attach(g); speed = 1; }
+    net = opt.net || null; // 판마다 새로 정한다(지난 AI·방 판의 연결이 남아 혼자 판이 '방' 판으로 기록되던 문제)
+    if (net) { net.onLobby = null; net.attach(g); speed = 1; }
     Snd.init();
     S.tutHold = false;
     // 첫 오프라인 혼자 하기(이어하기 제외)에서 튜토리얼

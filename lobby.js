@@ -64,7 +64,7 @@
     language: ['언어', '言語', 'Language', '语言'],
     history: ['전적', '戦績', 'Records', '战绩'], totalPlays: ['전체 판', '総プレイ', 'Games', '总局数'], hsClears: ['클리어 / 판', 'クリア / 回数', 'clears / games', '通关 / 局数'], hsNone: ['아직 안 함', '未プレイ', 'Not played', '未游玩'],
     recent: ['최근 20판 (누르면 자세히)', '直近20回（タップすると詳細）', 'Last 20 games (tap for details)', '最近20局（点击查看详情）'], win: ['승리', '勝利', 'Win', '胜利'], lose: ['패배', '敗北', 'Loss', '失败'],
-    mythGot: ['신화 이상 소환', '神話以上の召喚', 'Myth+ summoned', '神话以上召唤'], noMyth: ['없음', 'なし', 'None', '无'], offlineTag: ['오프라인', 'オフライン', 'Offline', '离线'], onlineTag: ['온라인', 'オンライン', 'Online', '在线'],
+    mythGot: ['신화 이상 소환', '神話以上の召喚', 'Myth+ summoned', '神话以上召唤'], noMyth: ['없음', 'なし', 'None', '无'], offlineTag: ['오프라인', 'オフライン', 'Offline', '离线'], tagSolo: ['싱글', 'シングル', 'Solo', '单人'], tagAi: ['AI 동맹', 'AI同盟', 'AI allies', 'AI同盟'], tagRoom: ['협동', '協力', 'Co-op', '合作'], onlineTag: ['온라인', 'オンライン', 'Online', '在线'],
     histLocal: ['로그인하지 않은 기록은 이 기기에만 저장됩니다.', 'ログインしていない記録はこの端末にだけ保存されます。', 'Records made while signed out stay on this device.', '未登录时的记录只保存在本设备。'],
     st_kills: ['처치', '撃破', 'Kills', '击杀'], st_mid: ['중간보스 토벌/놓침', '中ボス 討伐/逃し', 'Mid-bosses won/missed', '中首领 讨伐/逃脱'], st_life: ['잃은 라이프', '失ったライフ', 'Lives lost', '损失生命'], st_gold: ['번 금화', '獲得金貨', 'Gold earned', '获得金币'],
     st_comb: ['합성 · 조합', '合成・レシピ', 'Combines · Crafts', '合成·配方'], st_tix: ['선택권 · 상자', '選択券・宝箱', 'Tickets · Chests', '选择券·宝箱'], st_boss: ['보스 토벌/도전', 'ボス 討伐/挑戦', 'Bosses won/fought', '首领 击败/挑战'], st_fast: ['빠른 클리어', '速攻', 'Fast clears', '速通'],
@@ -619,7 +619,7 @@
         const st = x.st || {};
         const det = `<div class="hs-det" id="hsd${i}" hidden><b>${L('mythGot')}</b><div class="ms">${myth.length ? myth.map((id) => { const d = C.T.units.find((u) => u.id === id); return d ? `<span><img alt="" src="${Art.portrait(d)}">${esc(d.name)} ×${x.myth[id]}</span>` : ''; }).join('') : L('noMyth')}</div>
           <div class="sg"><span>${L('st_kills')} <b>${st.kills || 0}</b></span><span>${L('st_mid')} <b>${st.midKill || 0}/${st.midMiss || 0}</b></span><span>${L('st_life')} <b>${st.lifeLost || 0}</b></span><span>${L('st_gold')} <b>${(st.goldIn || 0).toLocaleString()}</b></span><span>${L('st_comb')} <b>${st.combines || 0} · ${st.crafts || 0}</b></span><span>${L('st_tix')} <b>${st.tickets || 0} · ${st.chests || 0}</b></span><span>${L('st_boss')} <b>${st.bossWins || 0}/${st.bosses || 0}</b></span><span>${L('st_fast')} <b>${st.fast || 0}</b></span></div></div>`;
-        return `<div class="hs-row" data-hs="${i}"><span>${when} · ${esc(dn(x.diff))}${x.mut ? ' +' + x.mut : ''} <small>${L(x.online ? 'onlineTag' : 'offlineTag')}</small></span><span>R${x.round} · ${C.clock(x.time || 0)}</span><span class="${x.win ? 'w' : 'l'}">${L(x.win ? 'win' : 'lose')}</span></div>${det}`;
+        return `<div class="hs-row" data-hs="${i}"><span>${when} · ${esc(dn(x.diff))}${x.mut ? ' +' + x.mut : ''} <small>${L(x.online || x.mode === 'room' ? 'tagRoom' : x.mode === 'ai' ? 'tagAi' : 'tagSolo')}</small></span><span>R${x.round} · ${C.clock(x.time || 0)}</span><span class="${x.win ? 'w' : 'l'}">${L(x.win ? 'win' : 'lose')}</span></div>${det}`;
       }).join('') || `<div class="lp-note lp-empty">${L('empty')}</div>`;
       body.innerHTML = h;
       return;
