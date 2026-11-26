@@ -159,13 +159,14 @@ module.exports = function jsonStore(dir) {
 
 // 전적 한 줄 + 판 수·클리어 수·해금 진행
 function applyHist(u, h) {
-  const di = DIFFS.indexOf(h.diff);
+  const pd = h.pdiff || h.diff, pm = h.pmut != null ? h.pmut : h.mut; // 진행용(깬 난이도 + 1까지). h.diff는 전적에 보이는 실제 난이도
+  const di = DIFFS.indexOf(pd);
   u.plays = u.plays || {}; u.clears = u.clears || {};
-  u.plays[h.diff] = (u.plays[h.diff] || 0) + 1;
+  u.plays[pd] = (u.plays[pd] || 0) + 1;
   if (h.win) {
-    u.clears[h.diff] = (u.clears[h.diff] || 0) + 1;
+    u.clears[pd] = (u.clears[pd] || 0) + 1;
     u.clr = Math.max(u.clr == null ? -1 : u.clr, di);
-    if (h.diff === 'nightmare') u.nmx = Math.max(u.nmx == null ? -1 : u.nmx, h.mut);
+    if (pd === 'nightmare') u.nmx = Math.max(u.nmx == null ? -1 : u.nmx, pm);
   }
   u.hist = u.hist || []; u.hist.unshift(h); if (u.hist.length > 20) u.hist.length = 20;
 }

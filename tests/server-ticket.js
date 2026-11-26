@@ -100,6 +100,18 @@ function forge(uid, diff, mut, agoSec, key, k) {
     ok(solo.list.length === 2 && solo.list[0].time === 3100 && solo.list[1].time === 3300 && solo.list.every((c) => c.members.length === 1), `솔로 순위: 오프라인 판과 혼자 한 온라인 판이 빠른 순으로 (${solo.list.map((c) => c.time).join(',')})`);
     rk = await (await fetch(`http://127.0.0.1:${PORT}/api/rank?type=clear&diff=easy`)).json();
     ok(rk.list.length === 1 && rk.list[0].time === 3200, `온라인 협동 순위에는 솔로 기록이 섞이지 않음(${rk.list.length}건)`);
+
+    // 2026-11-26 회귀 방지: 쉬움도 못 깬 계정이 악몽 표로 이겨도 진행은 '깬 난이도 + 1'(쉬움)까지만 오르고, 전적 줄에는 실제로 고른 난이도(악몽)가 보인다
+    const nv = await api('/api/guest/new', { nick: 'nv1', agree: true });
+    r = await api('/api/history', { ticket: forge(nv.me.id, 'nightmare', 3, 7200), round: 120, win: true, time: 7000 }, nv.token);
+    ok(r.me.prog.clr === 0 && r.me.prog.nmx === -1, `잠긴 악몽 표로 이겨도 진행은 쉬움까지(clr ${r.me.prog.clr}, nmx ${r.me.prog.nmx})`);
+    const hs = await api('/api/hist', {}, nv.token);
+    ok(hs.hist && hs.hist[0] && hs.hist[0].diff === 'nightmare', `전적 줄에는 실제로 고른 난이도(${hs.hist && hs.hist[0] && hs.hist[0].diff})`);
+    // 오프라인 이어하기 표는 7일까지 받는다(24시간을 넘긴 표도 기록), 8일 지난 표는 거부(rejected)
+    r = await api('/api/history', { ticket: forge(nv.me.id, 'easy', 0, 30 * 3600), round: 70, win: true, time: 3300 }, nv.token);
+    ok(r.me.prog.clr >= 0 && !r.rejected, '30시간 전에 시작한 이어하기 판도 기록');
+    r = await api('/api/history', { ticket: forge(nv.me.id, 'easy', 0, 8 * 24 * 3600), round: 70, win: true, time: 3300 }, nv.token);
+    ok(r.rejected === true, '8일 지난 표는 거부하고 rejected로 알림');
   } catch (e) { ok(false, '예외 ' + e.message); }
   srv.kill();
   try { fs.rmSync(DATA, { recursive: true, force: true }); } catch (e) { /* 무시 */ }

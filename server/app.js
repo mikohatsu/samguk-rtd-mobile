@@ -212,7 +212,9 @@ function histOf(b, online) {
   const myth = {}; if (b.myth && typeof b.myth === 'object') Object.keys(b.myth).slice(0, 30).forEach((id) => { if (/^[a-z]{2,16}$/.test(id)) myth[id] = Math.min(50, Math.max(0, b.myth[id] | 0)); });
   // 숫자는 DB 정수 범위 안으로 묶는다(범위를 넘는 값으로 500 오류가 나지 않게)
   const st = {}; if (b.st && typeof b.st === 'object') ['kills', 'midKill', 'midMiss', 'lifeLost', 'goldIn', 'goldUp', 'goldHire', 'combines', 'crafts', 'best', 'tickets', 'chests', 'bosses', 'bossWins', 'fast'].forEach((k) => { if (typeof b.st[k] === 'number' && isFinite(b.st[k])) st[k] = Math.max(-1e9, Math.min(1e9, Math.round(b.st[k]))); });
-  return { at: Date.now(), diff, mut, round: Math.min(200, Math.max(0, b.round | 0)), win: !!b.win, time: timeOf(b), online: !!online, mode: String(b.mode || '').slice(0, 8), myth, st };
+  // pdiff·pmut: 난이도 진행(clr·nmx·판 수·클리어 수)에 쓰는 값. 깬 난이도 + 1까지로 깎인 값이다(2026-11-26: v0.4.3에서 전적 diff를 실제 난이도로 바꾸며 진행까지 그 값으로 오르던 회귀를 막는다)
+  const pdiff = DIFFS.includes(b.pdiff) ? b.pdiff : diff, pmut = b.pmut != null ? Math.min(5, Math.max(0, b.pmut | 0)) : mut;
+  return { at: Date.now(), diff, mut, pdiff, pmut, round: Math.min(200, Math.max(0, b.round | 0)), win: !!b.win, time: timeOf(b), online: !!online, mode: String(b.mode || '').slice(0, 8), myth, st };
 }
 // 판 시간(초): 0 ~ 하루
 const timeOf = (b) => Math.min(86400, Math.max(0, Math.round(+b.time || 0)));
@@ -413,7 +415,7 @@ async function settle(u, b, online) {
   b = Object.assign({}, b, { diff: j.diff, mutLv: j.mut, round: j.round, win: j.win });
   const rw = overlap ? { xp: 0, coins: 0 } : rewardOf(b, j.seats);
   // 전적 줄에는 실제로 고른 난이도(표의 난이도)를 적는다. 보상·순위·난이도 진행은 위 j.diff(깬 난이도 + 1까지) 그대로(2026-11-26: 보통 판이 쉬움으로 적히던 문제)
-  const hb = Object.assign({}, b, { diff: j.played || j.diff, mutLv: j.played && j.played !== j.diff ? 0 : j.mut });
+  const hb = Object.assign({}, b, { diff: j.played || j.diff, mutLv: j.played && j.played !== j.diff ? 0 : j.mut, pdiff: j.diff, pmut: j.mut });
   // 하루(일본 시간) 판 보상 동전 상한을 넘는 만큼은 주지 않는다
   const day = jstDayStart(), dc = dayCoins.get(u.id), had = dc && dc.day === day ? dc.n : 0;
   const coins = Math.max(0, Math.min(rw.coins, RESULT_COINS_DAY - had));

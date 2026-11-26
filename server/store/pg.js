@@ -44,7 +44,8 @@ module.exports = function pgStore(pool) {
   }
   // 전적 한 줄 + 판 수·클리어 수·해금 진행(트랜잭션 안에서 부른다)
   async function applyHist(qq, uid, h, extra) {
-    const di = DIFFS.indexOf(h.diff);
+    const pd = h.pdiff || h.diff, pm = h.pmut != null ? h.pmut : h.mut; // 진행용(깬 난이도 + 1까지). h.diff는 전적에 보이는 실제 난이도
+    const di = DIFFS.indexOf(pd);
     // 같은 판 열쇠는 한 번만(동시에 두 번 오면 고유 색인이 막고, 그 오류는 '이미 받음'으로 본다)
     if (extra.key && (await qq('SELECT 1 FROM games WHERE account_id = $1 AND result_key = $2', [uid, extra.key])).rows.length) return false;
     const ins = await qq(
@@ -54,10 +55,10 @@ module.exports = function pgStore(pool) {
       [uid, new Date(h.at), h.diff, h.mut, h.round, h.win, h.time, h.online, h.mode, extra.key || null, extra.xp || 0, extra.coins || 0, JSON.stringify(h.myth || {}), JSON.stringify(h.st || {})]);
     if (!ins.rows.length) return false;
     await qq(`INSERT INTO play_counts (account_id, diff, plays, clears) VALUES ($1, $2, 1, $3)
-              ON CONFLICT (account_id, diff) DO UPDATE SET plays = play_counts.plays + 1, clears = play_counts.clears + EXCLUDED.clears`, [uid, h.diff, h.win ? 1 : 0]);
+              ON CONFLICT (account_id, diff) DO UPDATE SET plays = play_counts.plays + 1, clears = play_counts.clears + EXCLUDED.clears`, [uid, pd, h.win ? 1 : 0]);
     if (h.win) {
       await qq('UPDATE accounts SET clr = GREATEST(clr, $2::smallint) WHERE id = $1', [uid, di]);
-      if (h.diff === 'nightmare') await qq('UPDATE accounts SET nmx = GREATEST(nmx, $2::smallint) WHERE id = $1', [uid, h.mut]);
+      if (pd === 'nightmare') await qq('UPDATE accounts SET nmx = GREATEST(nmx, $2::smallint) WHERE id = $1', [uid, pm]);
     }
     // 계정마다 전적은 최근 200판만 둔다
     await qq(`DELETE FROM games WHERE account_id = $1 AND id NOT IN (SELECT id FROM games WHERE account_id = $1 ORDER BY played_at DESC, id DESC LIMIT 200)`, [uid]);
