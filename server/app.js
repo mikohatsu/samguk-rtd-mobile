@@ -10,6 +10,7 @@ const SHOP = require('../shop.js');
 const THEME = require('../theme-samguk.js'); // 장수 해금 목록·가격(theme.unlock)
 const { openStore } = require('./store');
 const REPLAY = require('./replay'); // 판 결과 재연산 검증 일꾼(2026-11-26, B 담당 server/replay*.js)
+const RLOG = require('./room-log'); // 협동 방 중계 기록·일련번호 q(2026-11-28 협동 재연산 C1). 판 계산에 쓰이는 중계에만 q를 붙인다
 
 const PORT = +process.env.PORT || 8300;
 const ROOT = path.join(__dirname, '..');
@@ -617,7 +618,7 @@ async function handle(req, res, url, query) {
     return json(res, 200, { ok: true });
   }
   // 판 보고 두 주소는 입력 기록(rec, 최대 60KB)이 붙어 64KB까지 받는다(2026-11-26 재연산 검증). 나머지는 8KB
-  let b = await new Promise((r) => readBody(req, r, url === '/api/history' || url === '/api/result' ? 65536 : 8192));
+  let b = await new Promise((r) => readBody(req, r, url === '/api/history' || url === '/api/result' ? 65536 : url === '/api/result/rec' ? REPLAY.COOP_REC_BODY : 8192));
   if (!b) return json(res, 400, { error: 'bad_body' });
   // 게스트: 기기에만 보관하는 비밀값으로 다시 들어온다(비밀값은 서버에 해시로만 둔다)
   if (url === '/api/guest/new') {
@@ -880,6 +881,14 @@ async function handle(req, res, url, query) {
     if (!nickOk(nick)) return json(res, 400, { error: 'bad_nick' });
     return json(res, 200, { me: profile(await store.setFields(u.id, { nick })) });
   }
+  // 협동 방 판의 큰 입력 기록(2026-11-28 C1): 결과 보고(64KB)에 다 들어가지 않으면 결과를 먼저 보내고(recLater) 기록은 여기로 따로 보낸다.
+  // 그 표로 이미 받은 결과(재연산 대기 중)에만 붙는다. 표 서명·계정·방 판 표인지 확인한다
+  if (url === '/api/result/rec') {
+    if (limited('u:' + u.id, 'rrec', 6, 600000)) return json(res, 429, { error: 'slow_down' });
+    const t = parseTicket(b.ticket);
+    if (!t || t.u !== u.id || !t.r || typeof b.rec !== 'string') return json(res, 400, { error: 'not_found' }); // 화면에 보이지 않는 주소지만 오류 값은 문구가 있는 것만(tests/i18n-keys)
+    return json(res, 200, { ok: REPLAY.attachRec('tk-' + t.n, b.rec) });
+  }
   if (url === '/api/result') {
     // 판 하나에 한 번만: 같은 표로 두 번 보내면 무시
     if (limited('u:' + u.id, 'res', 6, 600000)) return json(res, 429, { error: 'slow_down' }); // 계정 기준(주소를 바꿔도 같은 한도)
@@ -963,7 +972,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_MESSAGE }
 // ---------- WebSocket 한도 ----------
 // 연결당: 초당 60개(잠깐 120개까지), 초당 128KB(잠깐 256KB까지). 정상 기기는 위치 초당 10~15번, 다 합쳐 초당 30번 안쪽이다.
 // 넘친 메시지는 그것만 버린다(연결은 끊지 않는다).
-const WS_RATE = 60, WS_BURST = 120, WS_BYTES = 128 * 1024, WS_BYTES_BURST = 256 * 1024;
+const WS_RATE = +process.env.WS_RATE || 60, WS_BURST = WS_RATE * 2, WS_BYTES = 128 * 1024 * (WS_RATE / 60), WS_BYTES_BURST = WS_BYTES * 2; // WS_RATE: 시험(빨리 돌리는 협동 판 흉내)만 바꾼다
 // 주소당 동시 연결(한 사람이 방 1 + 로비 1을 쓴다. 통신사·공유기 뒤에서는 여러 사람이 한 주소를 쓰므로 넉넉히), 주소당 접속 시도, 인증 전 모아 두는 메시지 수
 const WS_PER_IP = +process.env.WS_PER_IP || 40, WS_TRIES_MIN = 240, WS_EARLY = 20;
 // 방 개수, 자리 하나의 상태 크기(열쇠 수·글자 수)
@@ -981,7 +990,7 @@ function bucketOf() {
 // 방장 전용 신호. 서버가 보는 방장 = 연결이 살아 있는 사람 가운데 자리 번호가 가장 앞인 사람.
 // 지금은 방장이 아닌 사람이 보내도 막지 않고 기록만 한다(기기가 보는 방장과 잠깐 어긋날 수 있어, 기록을 보고 나서 막는다).
 const HOST_ONLY = new Set(['phase', 'clk', 'bs', 'hz', 'start', 'pattern', 'go']);
-// 중계하는 신호 종류(net.js TOPICS에서 chat·chatno를 뺀 것). chat은 아래에서 따로 거르고, chatno는 서버만 보낸다(흉내 금지). 그 밖의 종류는 버린다.
+// 중계하는 신호 종류(net.js TOPICS에서 chat·chatno·emo를 뺀 것). chat·emo(이모티콘)는 아래에서 따로 거르고, chatno는 서버만 보낸다(흉내 금지). 그 밖의 종류는 버린다.
 const RELAY_TOPICS = new Set(['phase', 'hz', 'pattern', 'bs', 'dmg', 'wiped', 'start', 'pop', 'clk', 'sup', 'vol', 'go']);
 const seatNo = (pid) => +String(pid).slice(1);
 function hostOf(room) { let h = null; room.forEach((p, pid) => { if (p.ws && p.ws.readyState === 1 && (h === null || seatNo(pid) < seatNo(h))) h = pid; }); return h; }
@@ -991,7 +1000,7 @@ function hostOf(room) { let h = null; room.forEach((p, pid) => { if (p.ws && p.w
 // 대신 살아 있던 옛 자리는 닫히는 순간 바로 비우고(아래 close), 살아 있는 다른 방 자리가 이미 2개면 새 방에 들이지 않는다.
 const SEAT_LIVE_MAX = 2; // 방을 옮기는 순간에는 옛 방 연결이 아직 닫히지 않았을 수 있어 2까지 둔다
 function seatsOf(uid, except) { const out = []; rooms.forEach((r, c) => { if (c !== except) r.forEach((p, pid) => { if (p.uid === uid) out.push({ r, c, p, pid }); }); }); return out; }
-function freeSeat(s) { s.r.delete(s.pid); broadcast(s.r, s.pid, { k: 'left', id: s.pid }); if (!s.r.size) rooms.delete(s.c); }
+function freeSeat(s) { s.r.delete(s.pid); broadcast(s.r, s.pid, { k: 'left', id: s.pid, q: RLOG.left(s.r, s.c, s.pid) }); if (!s.r.size) { RLOG.closeRoom(s.r); rooms.delete(s.c); } }
 // 계정의 방·로비 연결을 모두 닫고 자리를 비운다(탈퇴)
 function dropConns(uid) {
   seatsOf(uid, null).forEach((s) => { const old = s.p.ws; s.p.ws = null; freeSeat(s); if (old) { try { old.close(); } catch (e) { /* 무시 */ } } });
@@ -1065,8 +1074,10 @@ function joinRoom(ws, q, u, early) {
   const pf = profile(u);
   Object.assign(me.state, { name: shownNick(u.nick), lv: pf.level, gr: pf.grade, ic: pf.icon, away: 0 });
   const peers = {}; room.forEach((p, pid) => { if (pid !== id) peers[pid] = p.state; });
-  send(ws, { k: 'hello', id, peers, mine: me.state });
-  broadcast(room, id, { k: 'pres', id, p: me.state });
+  // 협동 재연산(C1): 들어옴 표시와 내 상태를 기록에 남기고, hello에는 그 시점의 일련번호를 준다(기기가 다시 붙으면 이 번호를 기록한다)
+  RLOG.hello(room, code, id, u.id); const jq = RLOG.pres(room, code, id, me.state);
+  send(ws, { k: 'hello', id, peers, mine: me.state, q: RLOG.seq(room) });
+  broadcast(room, id, { k: 'pres', id, p: me.state, q: jq || undefined });
   const onMsg = (raw) => {
     if (!ws.allow(raw.length)) { warnSome('ws_rate', 20, `room=${code} from=${id} uid=${u.id}`); return; }
     let m;
@@ -1078,7 +1089,7 @@ function joinRoom(ws, q, u, early) {
       // 자리 상태가 끝없이 불어나지 않게: 합친 뒤의 열쇠 수·크기가 상한을 넘으면 이 메시지는 버린다
       const next = Object.assign({}, me.state, p);
       if (Object.keys(next).length > STATE_KEYS || JSON.stringify(next).length > STATE_BYTES) { warnSome('ws_state', 20, `room=${code} from=${id} uid=${u.id}`); return; }
-      Object.assign(me.state, p); broadcast(room, id, { k: 'pres', id, p });
+      Object.assign(me.state, p); broadcast(room, id, { k: 'pres', id, p, q: RLOG.pres(room, code, id, p) || undefined });
     } else if (m.k === 'msg' && m.t === 'chat') {
       // 채팅: 도배·광고는 막고(보낸 사람에게만 까닭을 알린다), 욕설은 가려서 보낸다. 보낸 사람에게도 가린 글을 돌려준다.
       const ml = mutedLeft(u.id); // 운영자가 건 채팅 금지: 보낸 사람에게만 알리고 전달하지 않는다
@@ -1087,10 +1098,20 @@ function joinRoom(ws, q, u, early) {
       if (!c.ok) { if (c.why !== 'empty') send(ws, { k: 'msg', from: id, t: 'chatno', d: { why: c.why, s: c.s || 0 }, self: 1 }); return; }
       const out = { k: 'msg', from: id, t: 'chat', d: { x: c.text, n: shownNick(u.nick) } };
       broadcast(room, id, out); send(ws, Object.assign({}, out, { self: 1 }));
+    } else if (m.k === 'msg' && m.t === 'emo') {
+      // 이모티콘(2026-11-28): 정해진 8개 id만, 채팅과 같은 제재(muted·도배 입막음), 1초에 1개·10초에 5개(server/chat.js emo). 판 계산과 무관해 기록(RLOG)에는 넣지 않는다
+      const ml = mutedLeft(u.id);
+      if (ml) { send(ws, { k: 'msg', from: id, t: 'chatno', d: { why: 'muted', s: ml }, self: 1 }); return; }
+      const c = CHAT.emo(u.id, m.d && m.d.e);
+      if (!c.ok) { if (c.why !== 'bad') send(ws, { k: 'msg', from: id, t: 'chatno', d: { why: c.why, s: c.s || 0 }, self: 1 }); return; }
+      const out = { k: 'msg', from: id, t: 'emo', d: { e: c.e, n: shownNick(u.nick) } };
+      broadcast(room, id, out); send(ws, Object.assign({}, out, { self: 1 }));
     } else if (m.k === 'msg' && typeof m.t === 'string') {
       if (!RELAY_TOPICS.has(m.t)) { warnSome('ws_topic', 20, `room=${code} t=${m.t.slice(0, 24)} from=${id} uid=${u.id}`); return; }
-      if (HOST_ONLY.has(m.t)) { const h = hostOf(room); if (h !== id) warnSome('not_host', 30, `room=${code} t=${m.t} from=${id} host=${h} uid=${u.id}`); else if (m.t === 'start') room.startAt = Date.now(); } // 기록만, 중계는 그대로. 방장의 시작 신호 시각은 협동 표·파티 열쇠에(SEC-006)
-      broadcast(room, id, { k: 'msg', from: id, t: m.t.slice(0, 24), d: cleanRelay(m.d, 0) });
+      if (HOST_ONLY.has(m.t)) { const h = hostOf(room); if (h !== id) warnSome('not_host', 30, `room=${code} t=${m.t} from=${id} host=${h} uid=${u.id}`); else if (m.t === 'start') { room.startAt = Date.now(); RLOG.start(room, code, room.startAt); } } // 기록만, 중계는 그대로. 방장의 시작 신호 시각은 협동 표·파티 열쇠에(SEC-006)
+      const d = cleanRelay(m.d, 0), mq = RLOG.msg(room, code, id, m.t, d);
+      if (m.t === 'phase' && d && d.p === 'over' && hostOf(room) === id) RLOG.over(room); // 방장의 판 끝: 기록을 곧 닫는다
+      broadcast(room, id, { k: 'msg', from: id, t: m.t.slice(0, 24), d, q: mq || undefined });
     }
   };
   const safeMsg = (raw) => { try { onMsg(raw); } catch (e) { console.error('ws', e && e.message); } };
@@ -1102,7 +1123,7 @@ function joinRoom(ws, q, u, early) {
     // 이 계정이 이미 다른 방에 앉아 있으면(방을 옮김) 이 자리는 60초 지키지 않고 바로 비운다
     if (room.get(id) === me && seatsOf(u.id, code).length) { freeSeat({ r: room, c: code, p: me, pid: id }); return; }
     me.awayT = Date.now(); me.state.away = 1;
-    broadcast(room, id, { k: 'pres', id, p: { away: 1 } });
+    broadcast(room, id, { k: 'pres', id, p: { away: 1 }, q: RLOG.pres(room, code, id, { away: 1 }) });
   });
 }
 // ---------- 로비 채팅 ----------
@@ -1168,8 +1189,8 @@ function lobbyUid(cid) { let uid = null; channels.forEach((ch) => { const p = ch
 setInterval(() => {
   const now = Date.now();
   rooms.forEach((room, code) => {
-    room.forEach((p, id) => { if (!p.ws && p.awayT && now - p.awayT > AWAY_MS) { room.delete(id); broadcast(room, id, { k: 'left', id }); } });
-    if (!room.size) rooms.delete(code);
+    room.forEach((p, id) => { if (!p.ws && p.awayT && now - p.awayT > AWAY_MS) { room.delete(id); broadcast(room, id, { k: 'left', id, q: RLOG.left(room, code, id) }); } });
+    if (!room.size) { RLOG.closeRoom(room); rooms.delete(code); }
   });
 }, 2000);
 // 5초마다 확인: 앱을 내려 응답이 없는 연결은 10초 안에 끊고 '자리 비움'으로 바꾼다(그래야 방장이 빨리 넘어간다)
@@ -1178,6 +1199,7 @@ setInterval(() => wss.clients.forEach((ws) => { if (!ws.alive) ws.terminate(); e
 // 저장소를 연 뒤에 듣기 시작한다. 시험에서는 start({ pool })로 다른 DB를 꽂을 수 있다.
 async function start(opts = {}) {
   store = await openStore({ dataDir: DATA, databaseUrl: process.env.DATABASE_URL, pool: opts.pool });
+  RLOG.config({ dir: path.join(DATA, 'replay', 'rooms') }); // 협동 방 중계 기록 파일(재연산 C1)
   await refreshSanctions(); // 운영 제재 목록(못 읽으면 서버를 띄우지 않는다)
   const modT = setInterval(() => refreshSanctions().catch((e) => console.error('[mod] 제재 목록을 읽지 못함(앞선 목록 유지):', e && e.message)), MOD_REFRESH_MS); if (modT.unref) modT.unref();
   if (gplayOn()) { const gv = () => pollGoogleVoided().catch((e) => console.error('[iap] 구글 환불 목록 조회 실패:', e && e.message)); gv(); const gvT = setInterval(gv, GVOID_MS); if (gvT.unref) gvT.unref(); }

@@ -40,7 +40,9 @@
   // 입력 기록 묶기(2026-11-26 재연산 검증): JSON → gzip → base64(rec). 서버 본문 한도 64KB(/api/result·/api/history).
   // CompressionStream이 없는 기기(iOS 16.3 이하 등)는 JSON 그대로(recj) — 한도를 넘으면 기록 없이 보낸다(서버는 기록 없는 새 판을 '검증 못 함'으로 둔다).
   const REC_MAX = 60000;
-  async function packRec(rec) {
+  // 협동 방 판(2026-11-28 C1)은 받은 소식 번호까지 기록해 긴 4~5인 판이면 60KB를 넘을 수 있다: 그때는 결과를 먼저 보내고(recLater) 기록은 /api/result/rec로 따로(서버 상한 560KB)
+  const REC_BIG = 550000;
+  async function packRec(rec, big) {
     if (!rec) return {};
     const raw = JSON.stringify(rec);
     try {
@@ -48,7 +50,7 @@
         const buf = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
         let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
         const b64 = btoa(bin);
-        return b64.length <= REC_MAX ? { rec: b64 } : {};
+        return b64.length <= REC_MAX ? { rec: b64 } : big && b64.length <= REC_BIG ? { big: b64 } : {};
       }
     } catch (e) { /* 압축 실패: 아래 그대로 보내기 */ }
     return raw.length <= REC_MAX ? { recj: rec } : {};
@@ -61,8 +63,10 @@
     const path = S.online ? '/api/result' : '/api/history';
     const body = { ticket: S.gameTk, myth: g.stats.myth || {}, st: window.RTD_LOBBY ? window.RTD_LOBBY.statsOf(g) : {}, mode: bots.length ? 'ai' : net ? 'room' : 'solo', key: S.gameKey, party: S.gameKey, diff: g.diff.id, round: g.resultRound, win: g.over === 'win', mutLv: g.mutLv || 0, time: Math.round(g.time), imm: g.stats.imm || {}, ach: Object.keys((g.me && g.me.done) || {}).filter((k) => g.me.done[k]) };
     // 판을 끝까지 만든 입력 기록(서버가 다시 돌려 맞춰 본다). 씨앗이 든 표(새 서버, S.tkSeed)일 때만 — 업데이트 전 서버는 본문 8KB 한도라 큰 기록이 붙으면 보고가 끊긴다
-    if (g.rec && body.ticket && S.tkSeed) Object.assign(body, await packRec(g.rec.dump(g.stepN)));
+    const room = !!net && !bots.length, pk = g.rec && body.ticket && S.tkSeed ? await packRec(g.rec.dump(g.stepN), room && S.online) : {};
+    if (pk.big) body.recLater = 1; else Object.assign(body, pk);
     const uid = ACC.me && ACC.me.id, r = await api(path, body);
+    if (pk.big && r && r.id && !r.rejected) api('/api/result/rec', { ticket: body.ticket, rec: pk.big }); // 큰 협동 기록은 따로(못 보내면 서버가 기다리다 '검증 못 함')
     S.repDone = true; // 결과창(14-endstats-xp esStep)이 답을 기다리다 경험치 막대를 채운다
     if ((r.status === 0 || r.status >= 500) && body.ticket && window.RTD_LOBBY) window.RTD_LOBBY.queueSend(path, body, uid);
     if (r.me) {

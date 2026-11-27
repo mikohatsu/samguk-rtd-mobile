@@ -75,7 +75,7 @@
     h += `<h3>${t('fonts')}</h3><ul>` + FONTS.map(([n, c]) => `<li>${esc(n)}<br><small>${esc(c)}</small></li>`).join('') + `</ul><p><small>SIL Open Font License, Version 1.1 — https://openfontlicense.org</small></p><p>${esc(FONT_FREE)}</p><details><summary>${t('full')} (OFL 1.1)</summary><pre>${esc(OFL)}</pre></details>`;
     h += `<h3>${t('oss')}</h3><ul>` + OSS.map(([n, c]) => `<li>${esc(n)}<br><small>${esc(c)}</small></li>`).join('') + `</ul><details><summary>${t('full')} (MIT)</summary><pre>${esc(MIT)}</pre></details>`;
     h += `<h3>${t('sfx')}</h3><ul>` + CC0.map((s) => `<li>${esc(s)}</li>`).join('') + '</ul>';
-    h += `<h3>${t('art')}</h3><p>${t('artNote')}</p><p>Canva AI · Higgsfield (Z Image)</p><ul><li>Canva AI 생성(2026-11-25), 마속 / 馬謖 — gfx/masok*</li><li>Canva AI 생성(2026-11-25), 스킬 연출 무기·소품 — gfx/vs_jian, vs_guandao, vs_fangtian, vs_shemao, vs_seal, vs_lamp, vs_chain, vs_petal</li><li>Canva AI 생성(2026-11-25), 마초 / 馬超 원화 — gfx/il_macho, ilt_macho</li><li>Canva AI 생성(2026-11-26), 방어 스킬 연출 빛 방패·가시 — gfx/vs_guard, vs_spike</li></ul><p><small>${t('disc')}</small></p>`;
+    h += `<h3>${t('art')}</h3><p>${t('artNote')}</p><p>Canva AI · Higgsfield (Z Image)</p><ul><li>Canva AI 생성(2026-11-25), 마속 / 馬謖 — gfx/masok*</li><li>Canva AI 생성(2026-11-25), 스킬 연출 무기·소품 — gfx/vs_jian, vs_guandao, vs_fangtian, vs_shemao, vs_seal, vs_lamp, vs_chain, vs_petal</li><li>Canva AI 생성(2026-11-25), 마초 / 馬超 원화 — gfx/il_macho, ilt_macho</li><li>Canva AI 생성(2026-11-26), 방어 스킬 연출 빛 방패·가시 — gfx/vs_guard, vs_spike</li><li>Canva AI 생성(2026-11-28), 협동 채팅 이모티콘 8종 — gfx/emo_*</li></ul><p><small>${t('disc')}</small></p>`;
     return h;
   }
   let openedAt = 0;

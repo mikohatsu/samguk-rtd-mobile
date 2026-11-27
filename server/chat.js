@@ -105,8 +105,28 @@ function check(uid, raw, now = Date.now()) {
   g.last = now; g.times.push(now); g.lastTxt = key; g.lastTxtT = now;
   return { ok: true, text };
 }
+// ---- 이모티콘(협동 판 게임 중, 2026-11-28) ----
+// 정해진 그림 8개(gfx/emo_<id>.png)만 보낸다. net.js EMOS와 같은 목록(tests/server-emo.js가 맞는지 본다).
+const EMOS = ['laugh', 'cry', 'angry', 'wow', 'good', 'help', 'thanks', 'think'];
+const EMO_GAP = 1000, EMO_BURST = 5, EMO_BURST_MS = 10000; // 1초에 1개, 10초에 5개까지
+const emoGates = new Map(); // 계정 → 보낸 시각들(채팅 도배 기록과 따로 센다: 이모티콘을 많이 눌러도 채팅 벌점은 쌓이지 않는다)
+// 이모티콘 하나를 검사한다. { ok, e } 또는 { ok:false, why, s } (why: bad = 목록에 없는 id, fast = 너무 잦음, mute = 채팅 도배로 막힌 동안)
+function emo(uid, id, now = Date.now()) {
+  if (typeof id !== 'string' || !EMOS.includes(id)) return { ok: false, why: 'bad' };
+  const g = gates.get(uid);
+  if (g && g.mutedUntil > now) return { ok: false, why: 'mute', s: Math.ceil((g.mutedUntil - now) / 1000) };
+  const ts = (emoGates.get(uid) || []).filter((t) => now - t < EMO_BURST_MS);
+  if ((ts.length && now - ts[ts.length - 1] < EMO_GAP) || ts.length >= EMO_BURST) { emoGates.set(uid, ts); return { ok: false, why: 'fast' }; }
+  ts.push(now); emoGates.set(uid, ts);
+  return { ok: true, e: id };
+}
+
 // 오래 조용한 계정의 기록은 지운다
-const timer = setInterval(() => { const now = Date.now(); gates.forEach((g, k) => { if (now - g.last > MUTE_KEEP && g.mutedUntil < now) gates.delete(k); }); }, 600000);
+const timer = setInterval(() => {
+  const now = Date.now();
+  gates.forEach((g, k) => { if (now - g.last > MUTE_KEEP && g.mutedUntil < now) gates.delete(k); });
+  emoGates.forEach((ts, k) => { if (!ts.length || now - ts[ts.length - 1] > EMO_BURST_MS) emoGates.delete(k); });
+}, 600000);
 if (timer.unref) timer.unref();
 
-module.exports = { mask, isAd, check, nickBad, BAD, _gates: gates };
+module.exports = { mask, isAd, check, nickBad, BAD, EMOS, emo, _gates: gates, _emoGates: emoGates };

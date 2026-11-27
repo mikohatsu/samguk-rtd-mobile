@@ -10,6 +10,11 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.4.7', d: '2026-11-28', items: [
+      ['협동 판 중에도 채팅과 장수 이모티콘으로 이야기할 수 있습니다(오른쪽 위 얼굴 버튼). 누르면 신고·차단도 됩니다.', '協力バトル中もチャットと武将スタンプで会話できます（右上の顔ボタン）。メッセージを押すと通報・ブロックもできます。', 'You can now chat and send general emotes during co-op games (face button, top right). Tap a message to report or block.', '合作对局中也可以用聊天和武将表情交流（右上角头像按钮）。点击消息可举报或屏蔽。'],
+      ['협동 판도 기록 검증을 거쳐 순위에 오릅니다.', '協力バトルも記録の検証を経てランキングに載ります。', 'Co-op games are now verified and appear in the rankings.', '合作对局也会在记录验证后进入排行榜。'],
+      ['협동 판에서 중간보스를 놓쳐 탈락할 때 게임이 멈추던 문제를 고쳤습니다.', '協力バトルで中ボスを逃して脱落したときにゲームが止まる問題を直しました。', 'Fixed the game freezing when you were eliminated by a missed mid-boss in co-op.', '修复了合作对局中因漏掉中期首领而出局时游戏卡住的问题。'],
+    ] },
     { v: '0.4.6', d: '2026-11-27', items: [
       ['순위표에는 기록 검증이 끝난 판만 오릅니다. 보상은 판이 끝나면 바로 받고, 검증은 서버가 뒤에서 진행합니다.', 'ランキングには記録の検証が終わったバトルだけが載ります。報酬はバトル終了後すぐに受け取れ、検証はサーバーが裏で行います。', 'Only verified games appear in the rankings. You still get rewards right after a game; the server verifies it in the background.', '排行榜只显示通过记录验证的对局。奖励在对局结束后立即发放，验证由服务器在后台进行。'],
       ['검증에서 인정되지 않은 판은 보상이 회수되며, 다음에 로비에 들어올 때 알려 드립니다.', '検証で認められなかったバトルは報酬が回収され、次にロビーに入ったときにお知らせします。', 'Rewards from games that fail verification are taken back, and you will be notified in the lobby.', '未通过验证的对局奖励将被收回，下次进入大厅时会提示。'],

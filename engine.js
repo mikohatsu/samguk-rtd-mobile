@@ -916,7 +916,7 @@
             this.mids[e.midDef.round] = { state: 'cool', t: e.midDef.respawn || this.R.midRespawn };
             this.stats.midMiss++;
             this.loseLife(this.R.midLifeLoss, this.L('e_midMissed', { a: e.midDef.name }, `${e.midDef.name} 놓침`));
-            if (this.over) return;
+            if (this.over || this.out) return; // 협동 탈락(eliminate)은 적 목록을 비운다 → 이 반복을 이어 가면 빈 칸을 읽는다(t18)
             continue;
           }
         }

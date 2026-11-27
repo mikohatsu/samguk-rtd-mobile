@@ -538,6 +538,10 @@
     trTraits: ['특성', '特性', 'Traits', '特性'],
     trUnlock: ['이 장수 해금하기', 'この武将を解放する', 'Unlock this general', '解锁这名武将'], trBack: ['상점으로 돌아가기', 'ショップに戻る', 'Back to shop', '返回商店'],
     trCanBuy: ['동전 {n}으로 바로 해금할 수 있어요', '銅銭{n}ですぐ解放できます', 'You can unlock it now for {n} coins', '可用{n}铜钱立即解锁'], trShort: ['동전 {n} 부족', '銅銭が{n}足りません', '{n} coins short', '还差{n}铜钱'],
+    // ---- 협동 판 게임 중 채팅·이모티콘(2026-11-28, src/ui/16b-chat.js). 입력칸·보내기는 대기실 문구(lb_chatPh·lb_send), 신고·차단은 lobby.js 문구를 쓴다 ----
+    gchat: ['채팅', 'チャット', 'Chat', '聊天'], gchatLine: ['{a}: 눌러서 신고·차단', '{a}：タップで通報・ブロック', '{a}: tap to report or block', '{a}：点击举报或屏蔽'],
+    emo_laugh: ['웃음', '笑い', 'Laugh', '大笑'], emo_cry: ['울음', '泣き', 'Cry', '哭泣'], emo_angry: ['화남', '怒り', 'Angry', '生气'], emo_wow: ['놀람', '驚き', 'Wow', '惊讶'],
+    emo_good: ['좋아요', 'いいね', 'Nice', '赞'], emo_help: ['도와줘요', '助けて', 'Help', '救命'], emo_thanks: ['고마워요', 'ありがとう', 'Thanks', '谢谢'], emo_think: ['고민 중', '考え中', 'Thinking', '思考中'],
   };
   const idx = { ko: 0, ja: 1, en: 2, zh: 3 }[lang];
   function t(key, vars) {

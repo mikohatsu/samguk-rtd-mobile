@@ -899,6 +899,12 @@
   // muted = 운영자가 건 채팅 제한(남은 시간을 시간 단위로. 1년 넘게 남았으면 무기한으로 보인다)
   const chatNo = (d) => (d && d.why === 'muted' ? L(d.s > 31536000 ? 'no_mutedPerm' : 'no_muted', { h: Math.max(1, Math.ceil((d.s || 0) / 3600)) })
     : L('no_' + (['fast', 'dup', 'ad', 'mute'].includes(d && d.why) ? d.why : 'fast'), { s: (d && d.s) || 0 }));
+  // 협동 판 게임 중 채팅(src/ui/16b-chat.js)이 같은 차단 목록·신고·확인 누름·막힘 문구를 쓴다(2026-11-28)
+  const chatKit = {
+    L: (k, v) => L(k, v), chatNo: (d) => chatNo(d), armed: (b) => armed(b), isBlocked: (n) => blocked.includes(n),
+    block: (n) => { if (!blocked.includes(n)) blocked.push(n); saveBlock(); },
+    report: (room, slot, nick, text) => C.api('/api/report', { room, slot, nick, text }),
+  };
   function sendChat() { const inp = $('chatin'), l = C.getLobby(); const v = inp.value.trim(); if (!v || !l || !l.chat) return; l.chat(v); inp.value = ''; }
 
 
@@ -1055,5 +1061,5 @@
   const mapTheme = () => { const me = C && C.ACC.me, p = me && me.mapSkin && SHOP.MAP_SKINS[me.mapSkin]; return p && p.theme ? p.theme : null; };
   // 테마 그림이 뒤늦게 도착하면 상점의 지도 미리보기를 다시 그린다
   if (typeof window !== 'undefined') window.addEventListener('rtd-maptheme', () => { if (panel === 'shop' && ptab === 'maps') renderPanel(); });
-  root.RTD_LOBBY = { trialBack, shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, onMe, syncMe, toast: (txt, ms) => toastLobby(txt, ms), saveTk: () => readSaveTk(), setSaveTk: (tk, seed) => writeSaveTk(tk, seed), missions: () => ms, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), tip: tipToggle, close: () => { closeWizard(true); closePanel(); } };
+  root.RTD_LOBBY = { trialBack, shopOpen, hasStarter, panel: () => panel, grantStarter, init, unlocked: () => (C ? unlockedList() : null), refresh, onCfg, picked: isPicked, tintMap, mapTheme, skinned, closeWizard, recordGame, queueSend, flushPending, missionCheck, onMe, syncMe, toast: (txt, ms) => toastLobby(txt, ms), saveTk: () => readSaveTk(), setSaveTk: (tk, seed) => writeSaveTk(tk, seed), missions: () => ms, statsOf, diffOpen: (d, m) => (C ? diffOpen(d, m) : true), progNow: () => (C ? prog() : null), tip: tipToggle, chatKit: () => (C ? chatKit : null), close: () => { closeWizard(true); closePanel(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -239,9 +239,14 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     }
     g = opt.snap ? E.Game.restore(T, opt.snap) : new E.Game(T, opt);
     // 입력 기록(2026-11-26 재연산 검증): 혼자·AI 동맹 판. 이어하기는 저장본의 기록을 이어 붙이고 이 걸음에 'R'(저장 → 복원)을 남긴다(예전 저장본은 기록 없음)
+    // pf: 이 판을 돌린 자바스크립트 엔진 — 'jsc'(애플 WebKit: 아이폰·아이패드의 모든 브라우저·앱, Mac 사파리) / 'v8'. 서버는 jsc 판을 실측 전까지 회수하지 않고 기록만 한다(2026-11-26 사용자 결정)
+    const ua = (navigator && navigator.userAgent) || '', jsc = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) || (/AppleWebKit/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Android/.test(ua));
+    // 협동 방 판(2026-11-28 C1): 서버가 중계에 일련번호를 주면 입력 기록 + 받은 소식 번호를 남긴다(net.js recHead·noteSeq). 씨앗·난이도·악몽 규칙은 방장의 시작 신호 값
+    if (!g.trial && room && opt.net.recHead) {
+      const rh = opt.net.recHead();
+      if (rh) g.rec = new E.Recorder({ v: 1, pf: jsc ? 'jsc' : 'v8', eh: window.RTD_ENGINE_HASH || '', lang: I.lang, seed: g.seed, diff: g.diff.id, mutLv: g.mutLv | 0, muts: g.muts.map((m) => m.id), unl: g.unlocked, ai: 0, room: rh });
+    }
     if (!g.trial && !room) {
-      // pf: 이 판을 돌린 자바스크립트 엔진 — 'jsc'(애플 WebKit: 아이폰·아이패드의 모든 브라우저·앱, Mac 사파리) / 'v8'. 서버는 jsc 판을 실측 전까지 회수하지 않고 기록만 한다(2026-11-26 사용자 결정)
-      const ua = (navigator && navigator.userAgent) || '', jsc = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) || (/AppleWebKit/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Android/.test(ua));
       if (!opt.snap) g.rec = new E.Recorder({ v: 1, pf: jsc ? 'jsc' : 'v8', eh: window.RTD_ENGINE_HASH || '', lang: I.lang, seed: g.seed, diff: g.diff.id, mutLv: g.mutLv | 0, muts: g.muts.map((m) => m.id), unl: g.unlocked, ai: +opt.ai || 0, b: builds || undefined });
       else if (opt.snap.rec && opt.snap.x >= 2 && !opt.noRecord) { g.rec = E.Recorder.from(opt.snap.rec); g.rec.mark(g.stepN); }
     }
@@ -297,6 +302,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     S.online = !!opt.online; S.gameKey = opt.key || null; S.reported = false; S.xpGained = null; S.coinGained = 0; S.xpDone = false; S.xpPlaying = false; S.overAt = 0; S.paused = false;
     net = opt.net || null; // 판마다 새로 정한다(지난 AI·방 판의 연결이 남아 혼자 판이 '방' 판으로 기록되던 문제)
     if (net) { net.onLobby = null; net.attach(g); speed = 1; }
+    chatBegin(room); // 협동 방 판의 채팅·이모티콘(16b-chat). 혼자·AI 동맹·체험 판은 끈다
     Snd.init();
     S.tutHold = false;
     // 첫 오프라인 혼자 하기(이어하기 제외)에서 튜토리얼

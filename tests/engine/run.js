@@ -4,7 +4,7 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 
-const ALL = ['t1-smoke', 't2-coop', 't3-mutators', 't4-save', 't5-host-change', 't6-unlock', 't7-synergy', 't8-lane-attack', 't9-chest-locked', 't10-coop-elim', 't12-kill-hold', 't13-counter', 't14-hitbox', 't15-pattern-gaps', 't16-dash-nodmg', 't17-replay'];
+const ALL = ['t1-smoke', 't2-coop', 't3-mutators', 't4-save', 't5-host-change', 't6-unlock', 't7-synergy', 't8-lane-attack', 't9-chest-locked', 't10-coop-elim', 't12-kill-hold', 't13-counter', 't14-hitbox', 't15-pattern-gaps', 't16-dash-nodmg', 't17-replay', 't18-midmiss-elim'];
 const want = process.argv.slice(2);
 const list = want.length ? ALL.filter((n) => want.some((w) => n.startsWith(w))) : ALL;
 if (!list.length) { console.log('FAIL 돌릴 시험이 없음: ' + want.join(' ')); process.exit(1); }

@@ -103,7 +103,7 @@
         if (g.trial) { S.paused = true; trialLeave(false, true); return; } // 체험 중 나가기: 저장·광고 없이 로비로
         saveGame();
         let rep = null;
-        if (!lifeOffline() && spect()) { g.finish(false); drainEvents(); rep = S.repP; }
+        if (!lifeOffline() && spect()) { if (net.quitOut) net.quitOut(); else g.finish(false); drainEvents(); rep = S.repP; } // 협동 재연산: 판을 끝내는 것도 입력 기록에(net.js qt)
         if (lifeOffline()) S.paused = true; else { net.kicked = true; try { net.leave(); } catch (e) { /* 이미 끊김 */ } }
         const go = () => adThen(() => location.reload());
         if (rep) Promise.race([rep.catch(() => {}), new Promise((r) => setTimeout(r, 3000))]).then(go); else go();

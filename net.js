@@ -2,7 +2,9 @@
 // 라인은 각자 클라이언트가 돌리지만, 시계(라운드·남은 시간·단계·배속)와 보스는 방장이 결정하고 모두 그 값에 맞춘다.
 // 반응이 없는 사람이 생기면 모두 멈추고, 오래 끊기면 방에서 제외한다.
 (function (root) {
-  const TOPICS = ['phase', 'hz', 'pattern', 'bs', 'dmg', 'wiped', 'start', 'pop', 'clk', 'sup', 'vol', 'chat', 'chatno', 'go'];
+  const TOPICS = ['phase', 'hz', 'pattern', 'bs', 'dmg', 'wiped', 'start', 'pop', 'clk', 'sup', 'vol', 'chat', 'chatno', 'go', 'emo'];
+  // 이모티콘 id(그림 gfx/emo_<id>.png). 서버(server/chat.js EMOS)도 같은 목록만 중계한다
+  const EMOS = ['laugh', 'cry', 'angry', 'wow', 'good', 'help', 'thanks', 'think'];
   const STALL_MS = 4000, DROP_MS = 60000; // 반응 없는 사람은 60초 뒤 제외(앱을 내려도 그동안은 자리를 지킨다)
   // 통신 수치 표(코드에 흩지 않는다)
   const NETCFG = {
@@ -60,6 +62,9 @@
       try { ws = new WebSocket(url); } catch (e) { resolve(null); return; }
       const handlers = {}, peers = {}, watch = [], fire = () => watch.forEach((f) => f());
       let id = null, mine = {}, pending = null, timer = null, done = false, left = false, retryT = null, lostAt = 0, api = null, linked = false;
+      // 협동 재연산(2026-11-28 C1): 서버가 판 계산에 쓰이는 중계에 붙이는 방 일련번호(q). 적용하기 바로 앞에서 Net에 알린다(Net이 입력 기록에 ['M'] 으로 남긴다)
+      let lastQ = 0, hasQ = false;
+      const seqd = (q) => { if (typeof q !== 'number') return; lastQ = q; if (api && api.onSeq) api.onSeq(q); };
       const out = (m) => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); };
       const flush = () => { timer = null; if (pending) { out({ k: 'pres', p: pending }); pending = null; } };
       const giveUp = setTimeout(() => { ws.close(); resolve(null); }, 4000);
@@ -82,6 +87,7 @@
         if (m.k === 'error') { if (!done) { clearTimeout(giveUp); resolve(m.code === 'full' ? 'full' : m.code === 'auth' ? 'auth' : null); } }
         else if (m.k === 'hello') {
           clearTimeout(giveUp); id = m.id; lostAt = 0; linked = true;
+          if (typeof m.q === 'number') { if (done && api.onHelloQ) api.onHelloQ(m.q); lastQ = m.q; hasQ = true; } // 다시 붙음: 아래 상태 바꾸기보다 먼저 기록(['J'])
           Object.keys(peers).forEach((k) => delete peers[k]);
           Object.keys(m.peers || {}).forEach((k) => (peers[k] = { state: m.peers[k] || {}, seen: Date.now() }));
           if (m.mine) mine = Object.assign(mine, m.mine);
@@ -101,14 +107,16 @@
             online: () => ws.readyState === 1,
             linked: () => linked, // 서버가 hello로 자리를 다시 확인해 준 뒤에만 참
             presHook: true, onPres: null, onRejoin: null,
+            seq: () => lastQ, seqOn: () => hasQ, onSeq: null, onHelloQ: null, // 협동 재연산: 서버가 일련번호를 주는지, 마지막으로 적용한 번호
           });
         } else if (m.k === 'pres' && m.p && typeof m.p === 'object') {
+          seqd(m.q);
           const p = peers[m.id] || { state: {} }; Object.assign(p.state, m.p); p.seen = Date.now(); peers[m.id] = p;
           if (api && api.onPres) api.onPres(m.id, m.p, nowMs(), p.state); // 도착 시각을 바로 적는다(위치 보간)
           fire();
         }
-        else if (m.k === 'left') { delete peers[m.id]; fire(); }
-        else if (m.k === 'msg') { if (peers[m.from]) peers[m.from].seen = Date.now(); (handlers[m.t] || []).forEach((f) => f(m.d, m.from, false)); }
+        else if (m.k === 'left') { seqd(m.q); delete peers[m.id]; fire(); }
+        else if (m.k === 'msg') { seqd(m.q); if (peers[m.from]) peers[m.from].seen = Date.now(); (handlers[m.t] || []).forEach((f) => f(m.d, m.from, false)); }
       };
     });
   }
@@ -204,6 +212,8 @@
       this.t.onPeers(() => this.onLobby && this.onLobby());
       if (this.t.presHook) this.t.onPres = (id, p, now, full) => this.pushGhost(id, p, now, full);
       if ('onRejoin' in this.t) this.t.onRejoin = () => this.rejoined();
+      if ('onSeq' in this.t) { this.t.onSeq = (q) => this.noteSeq(q); this.t.onHelloQ = (q) => this.noteHello(q); }
+      this.recQ = null; // 협동 재연산: 입력 기록에 마지막으로 적은 방 일련번호(recHead가 정한다. null = 기록하지 않음)
       this.bucket = {}; this.badAt = {}; this.badN = {};
       // 방장 전용 신호(phase, clk, bs, hz, start, pattern)는 지금 방장(막 바뀌었으면 앞 방장도)에게서 온 것만 받는다
       this.t.on('start', (d, peer, self) => {
@@ -251,6 +261,8 @@
       this.t.on('vol', (d, peer, self) => { if (this.game && obj(d) && d.r === this.game.round && (self || this.allow('vol', peer))) { const L = root.RTD_I18N; const line = L ? L.t('volLine' + clampN(d.i | 0, 0, 2)) : ''; this.game.log('toast', { text: `${str(d.n, 12)}: "${line}"`, tone: 'good' }); } });
       // 방 채팅: 서버가 거른 글만 보인다(내가 보낸 글도 서버를 거쳐 돌아온 것을 쓴다)
       this.t.on('chat', (d, peer, self) => { if (!self && obj(d) && this.onChat) this.onChat({ x: str(d.x, 80), n: str(d.n, 24) }, peer); });
+      // 이모티콘(협동 판 게임 중): 채팅과 같이 서버가 거른 것만 보인다(내 것도 서버가 돌려준 것을 쓴다)
+      this.t.on('emo', (d, peer, self) => { if (!self && obj(d) && EMOS.includes(d.e) && this.onEmo) this.onEmo({ e: d.e, n: str(d.n, 24) }, peer); });
       // 내 채팅이 막혔을 때(도배·광고) 서버가 나에게만 보낸다: 서버가 내 자리 id로 보낸 것만 받는다(남이 흉내 낸 것은 버린다)
       this.t.on('chatno', (d, peer) => { const me = this.me(); if (obj(d) && this.onChatNo && this.t.kind === 'ws' && me && peer === me.id) this.onChatNo({ why: str(d.why, 12), s: clampN(d.s, 0, 1e9) }); });
       this.t.on('pattern', (d, peer, self) => { if (!self && this.game && obj(d) && this.fromHost(peer, self)) { this.game.log('pattern', { name: str(d.n, 24) }); this.game.log('sfx', { s: 'warn' }); if (this.game.synEvent) this.game.synEvent('pattern', {}); } });
@@ -379,7 +391,8 @@
       if (self) return true;
       const h = this.hostId(), now = Date.now();
       if (h !== this.hostNow) { this.hostPrev = this.hostNow; this.hostPrevAt = now; this.hostNow = h; }
-      return peer === h || (peer != null && peer === this.hostPrev && now - this.hostPrevAt < NETCFG.hostGraceMs);
+      // 앞 방장 유예가 끝나는 것은 판 안에서는 tickStatus가 'hg' 명령으로 정한다(벽시계 판단을 입력 기록에 남겨 서버 재연산이 같게). 판 밖(대기실)은 예전처럼 시각으로
+      return peer === h || (peer != null && peer === this.hostPrev && (this.game ? true : now - this.hostPrevAt < NETCFG.hostGraceMs));
     }
     // 끊겼다가 같은 자리로 다시 붙었을 때(wsTransport의 hello)
     rejoined() {
@@ -397,7 +410,8 @@
     leave() { this.t.leave(); }
     // 판이 시작된 시각. 대기실에서는 상태 알림을 주고받지 않으므로, 그 전의 마지막 알림 시각으로 끊김을 판단하면
     // 대기실에 오래 있던 사람이 시작하자마자 '멈춤·제외'로 튕긴다. 판 시작 전 시각은 시작 시각으로 본다.
-    attach(game) { this.game = game; this.startAt = Date.now(); this.clock.last = this.startAt; }
+    // 판을 붙일 때 방장 유예 상태를 지금 방장으로 맞춘다(재연산이 같은 상태에서 시작하게. 대기실에서 막 바뀐 방장의 유예 3초는 판 안으로 넘기지 않는다)
+    attach(game) { this.game = game; this.startAt = Date.now(); this.clock.last = this.startAt; if (game) { this.hostPrev = null; this.hostNow = this.hostId(); } }
     // 앱을 내렸다 켜는 등으로 내 계산이 멈췄던 시간은 남의 잘못이 아니므로, 돌아온 시각(resumeAt)부터 다시 센다
     seenAt(p, now) { return Math.max(p.seen || now, this.startAt || 0, this.resumeAt || 0); }
     applyPhase(d) {
@@ -443,8 +457,7 @@
     volunteer() {
       const r = this.game.round;
       if (this.me() && this.me().state.vol === r) return;
-      this.t.presence({ vol: r });
-      this.send('vol', { r, n: this.name, i: (Math.random() * 3) | 0 });
+      this.cmd('vo', [r, (Math.random() * 3) | 0]); // 내 자리 상태 vol이 출전 순서(relayOrder)를 바꾸므로 입력 기록에 남긴다
     }
     volunteers() { const r = this.game.round; return this.roster().filter((p) => p.state.vol === r); }
     relayOrder() {
@@ -467,6 +480,7 @@
     // 일기토: 정해진 순서대로, 앞 사람들이 모두 '다 쓰러짐'을 알렸으면 내 차례
     relayMine() { const r = this.game.round; for (const p of this.relayOrder()) { if (p.me) return true; if (p.state.rd !== r) return false; } return true; }
     chat(text) { this.send('chat', { x: String(text).slice(0, 80) }); }
+    emo(id) { if (EMOS.includes(id)) this.send('emo', { e: id }); }
     relayDone() { this.t.presence({ rd: this.game.round }); }
     allPicked() { const r = this.game.round; return this.roster().every((p) => this.isOut(p) || (p.me ? this.game.fight.picked : p.state.picked === r)); }
     startFight() {
@@ -578,6 +592,58 @@
         g: g.me.gold, l: g.lives, n: g.enemyCount(),
       };
     }
+    // ---- 협동 재연산 기록(2026-11-28 C1, production/team/2026-11-28/coop-replay.md) ----
+    // 방 판의 계산 = 내 조작(g.input) + 받은 소식 + 아래 명령. 받은 소식은 서버 일련번호(q)로만 적는다: ['M', 앞 M과의 q 차이](이 걸음 앞에서 q까지 적용, 같은 걸음이면 하나로 합침).
+    // 다시 붙음은 ['J', q](그 시점 서버 방 상태로 바뀜 + rejoined), 벽시계·화면 판단은 ['N', 종류, 값...](applyCmd). 서버(server/replay-core.js replayRoom)가 같은 순서로 다시 넣는다.
+    // 판 상태를 바꾸는 net 쪽 판단은 모두 소식 핸들러(→ M)나 cmd(→ N)를 거쳐야 한다. 새 판단을 넣을 때도 이 길로(소식 핸들러 안에서 cmd를 부르지 않는다 — 재연산에서 두 번 적용된다).
+    // 판을 시작할 때(begin, attach 전) 부른다. 서버가 일련번호를 주지 않으면(업데이트 전 서버) null = 기록하지 않는다
+    recHead() {
+      const me = this.me();
+      if (!this.t.seqOn || !this.t.seqOn() || !me) return null;
+      this.recQ = this.t.seq();
+      return { me: me.id, q0: this.recQ, dr0: [...this.dropped] };
+    }
+    recOn() { const g = this.game; return !!(g && g.rec && !g.over && this.recQ != null && !g.rec.full); }
+    noteSeq(q) {
+      if (!this.recOn()) return;
+      const g = this.game, R = g.rec, L = R.c[R.c.length - 1];
+      if (L && L[1] === 'M' && R.last === g.stepN) L[2] += q - this.recQ;
+      else R.push(g.stepN, 'M', [q - this.recQ]);
+      this.recQ = q;
+    }
+    noteHello(q) { if (!this.recOn()) return; const g = this.game; g.rec.push(g.stepN, 'J', [q]); this.recQ = q; }
+    // 판을 바꾸는 net 판단 하나: 기록하고 적용한다
+    cmd(k, a) { a = a || []; const g = this.game; if (this.recOn()) g.rec.push(g.stepN, 'N', [k].concat(a)); return this.applyCmd(k, a); }
+    applyCmd(k, a) {
+      const g = this.game;
+      if (k === 'dr') { if (typeof a[0] === 'string') this.dropped.add(a[0].slice(0, 24)); } // 오래 반응 없는 사람 빼기(DROP_MS)
+      else if (k === 'sy') { if (this.sync) { this.sync = null; this.t.presence({ sy: 0 }); } } // 다시 붙은 뒤 따라잡기 보류 풀기
+      else if (k === 'hg') this.hostPrev = null; // 앞 방장 유예 끝
+      else if (k === 'ts') this.stepStatus();
+      else if (k === 'vo') { const r = a[0] | 0; this.t.presence({ vol: r }); this.send('vol', { r, n: this.name, i: clampN(a[1], 0, 2) | 0 }); } // 출전 신청
+      else if (k === 'qt') { if (g && !g.over) g.finish(false); } // 관전 중 나가기(11-actions quit): 내 판을 패배로 끝낸다
+    }
+    quitOut() { this.cmd('qt'); }
+    // tickStatus의 판 상태 부분이 할 일이 있는가(읽기만)
+    statusDue() {
+      const g = this.game; if (!g) return false;
+      const r = this.roster();
+      if (r.some((p) => !p.me && p.state.out && !(this.outIds && this.outIds.has(p.id)))) return true;
+      return this.isHost() && !g.over && r.length > 0 && r.every((p) => this.isOut(p) || (p.me && g.lives <= 0));
+    }
+    // 새로 탈락한 동료를 알리고, 나가도 난이도 인원에 남도록 기억한다(partySize). 방장이면 전원 탈락을 확인한다
+    stepStatus() {
+      const g = this.game; if (!g) return;
+      this.roster().forEach((p) => {
+        if (p.me || !p.state.out) return;
+        if (!this.outIds) this.outIds = new Set();
+        if (this.outIds.has(p.id)) return;
+        this.outIds.add(p.id);
+        const L = root.RTD_I18N, a = str(p.state.name, 24) || '?';
+        if (!g.over) g.log('toast', { text: L ? L.t('elimPeer', { a }) : a + ' 탈락', tone: 'warn' });
+      });
+      if (this.isHost()) this.checkAllOut();
+    }
     // 매 틱 호출: 내 상태 알림, 끊긴 사람 감시, 방장이면 시계 방송
     tickStatus(dt, g) {
       const now = Date.now();
@@ -585,7 +651,9 @@
       if (this.tickAt && now - this.tickAt > NETCFG.resumeGapMs) this.resumeAt = now;
       this.tickAt = now;
       // 다시 붙은 뒤 따라잡기 보류: 방장 시계를 받아 따라잡았거나, 방장 신호가 STALL_MS 동안 없거나(다른 방장이 없음), 최대 시간이 지나면 푼다
-      if (this.sync && (this.sync.ok || now - this.sync.sig > STALL_MS || now - this.sync.at > NETCFG.syncMaxMs)) { this.sync = null; this.t.presence({ sy: 0 }); }
+      // 푸는 판단은 벽시계라 명령('sy')으로 넣어 입력 기록에 남긴다(협동 재연산)
+      if (this.sync && (this.sync.ok || now - this.sync.sig > STALL_MS || now - this.sync.at > NETCFG.syncMaxMs)) this.cmd('sy');
+      if (this.hostPrev != null && now - this.hostPrevAt >= NETCFG.hostGraceMs) this.cmd('hg'); // 앞 방장 유예 끝(fromHost)
       this.presT -= dt; this.laneT -= dt; this.clkT -= dt;
       if (this.presT <= 0) {
         this.presT = 1;
@@ -599,18 +667,10 @@
       if (this.laneT <= 0 && g.phase === 'wave') { this.laneT = gap; this.t.presence({ ln: this.laneSnapshot(g, !!watched) }); }
       // 오래 반응이 없는 사람은 모두가 같은 규칙으로 제외한다. 내가 서버와 끊겨 있는 동안에는 판단하지 않는다(남의 소식이 안 오는 건 내 탓)
       const linked = !this.t.linked || this.t.linked();
-      if (linked) this.roster().forEach((p) => { if (!p.me && now - this.seenAt(p, now) > DROP_MS) this.dropped.add(p.id); });
-      // 새로 탈락한 동료를 알리고, 나가도 난이도 인원에 남도록 기억한다(partySize)
-      this.roster().forEach((p) => {
-        if (p.me || !p.state.out) return;
-        if (!this.outIds) this.outIds = new Set();
-        if (this.outIds.has(p.id)) return;
-        this.outIds.add(p.id);
-        const L = root.RTD_I18N, a = str(p.state.name, 24) || '?';
-        if (!g.over) g.log('toast', { text: L ? L.t('elimPeer', { a }) : a + ' 탈락', tone: 'warn' });
-      });
+      if (linked) this.roster().forEach((p) => { if (!p.me && now - this.seenAt(p, now) > DROP_MS) this.cmd('dr', [p.id]); });
+      // 새로 탈락한 동료 기억(partySize)·방장의 전원 탈락 확인: 할 일이 있을 때만 명령('ts')으로 한다(stepStatus)
+      if (this.statusDue()) this.cmd('ts');
       if (this.isHost()) {
-        this.checkAllOut();
         if (this.clkT <= 0) {
           this.clkT = 0.5;
           // 탈락한 사람의 배속 투표는 세지 않는다(관전자가 남은 사람의 배속을 묶지 않게)
@@ -626,7 +686,9 @@
   }
 
   root.RTD_NET = {
-    TOPICS,
+    TOPICS, EMOS,
+    // 협동 재연산(서버 replay-core)이 재연산용 전송 계층으로 Net을 만든다
+    make: (t, name) => new Net(t, name),
     // AI 동맹: hub.join(이름)으로 나와 AI 사령관을 같은 가상 방에 넣는다
     hub() {
       const h = makeHub();

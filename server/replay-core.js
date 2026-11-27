@@ -126,6 +126,7 @@ function replay(B, rec, opt) {
   const t0 = Date.now();
   const bad = checkRec(rec, B.T);
   if (bad) return { ok: false, err: bad, ms: Date.now() - t0 };
+  if (rec.room) return { ok: false, err: 'rec_room_kind', ms: Date.now() - t0 }; // 협동 방 기록은 replayRoom으로
   // 악몽 +N 규칙은 씨앗으로 정해진다(앱 17-loop begin). 다르면 기기가 규칙을 골라 낸 것
   if (o.checkMuts) {
     const want = rec.diff === 'nightmare' ? B.E.Game.rollMuts(B.T, rec.mutLv | 0, rec.seed) : [];
@@ -186,8 +187,8 @@ function compare(res, report, rec) {
 }
 
 // 전송 형식 풀기: base64(gzip(JSON)) → 기록. 크기 상한(풀린 뒤) 4MB
-function decodeRec(b64) {
-  if (typeof b64 !== 'string' || b64.length > 200000) return null;
+function decodeRec(b64, max) {
+  if (typeof b64 !== 'string' || b64.length > (max || 200000)) return null; // max: 협동 방 판의 따로 온 큰 기록(replay.js COOP_REC_MAX)
   try { return JSON.parse(zlib.gunzipSync(Buffer.from(b64, 'base64'), { maxOutputLength: 4 * 1024 * 1024 }).toString('utf8')); } catch (e) { return null; }
 }
 const encodeRec = (rec) => zlib.gzipSync(Buffer.from(JSON.stringify(rec))).toString('base64');
@@ -200,4 +201,213 @@ function digest(g) {
   return h.digest('hex').slice(0, 16);
 }
 
-module.exports = { BUNDLE_FILES, REC_V, engineHash, loadBundle, replay, compare, summarize, statsOf, decodeRec, encodeRec, digest, buildWorld, stepWorld, checkRec };
+
+// ======================= 협동 방 판 재연산(2026-11-28 C1) =======================
+// 기기 기록(앱 17-loop begin, net.js recHead): 혼자 판 기록 머리 + room: { me(내 자리 id), q0(판을 붙일 때까지 적용한 방 일련번호), dr0(그때 뺀 자리) }
+//   명령에 더해지는 것(net.js): ['M', dq] 이 걸음 앞에서 방 일련번호를 dq만큼 더 적용(같은 걸음의 소식은 하나로 합친다)
+//                              ['J', q]  다시 붙음(그 시점 서버 방 상태로 바뀌고 rejoined)
+//                              ['N', 종류, 값...] net.js applyCmd(벽시계·화면 판단: dr·sy·hg·ts·vo·qt)
+// 서버 방 기록(server/room-log.js 파일): { startQ, baseQ, endQ, base: { 자리: { u: 계정, s: 상태 } }, ev: [[q, 'p'|'m'|'l'|'h', 자리, ...]], host, capped }
+// 재연산: 기록 시작 상태(base)에 q0까지 접은 방 상태로 그 기기의 net(전송 계층만 재연산용)을 만들고, 기기 명령대로 소식을 같은 걸음에 넣는다.
+// 그 기기가 내보낸 소식은 방 기록의 그 자리 소식과 맞아야 한다(outCheck — 기기가 판과 다른 소식을 보냈으면 방장 소식 위조).
+
+// 서버 중계가 소식에 하는 정리(server/app.js cleanRelay와 같아야 한다 — 기기가 보낸 값과 기록 값을 같은 모양으로 맞춰 비교)
+function cleanRelay(v, cap, depth) {
+  depth = depth || 0;
+  if (v == null || typeof v === 'boolean') return v;
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  if (typeof v === 'string') { const s = v.replace(/[<>"`]/g, ''); return cap ? s.slice(0, cap) : s; }
+  if (depth >= 6) return null;
+  if (Array.isArray(v)) return v.slice(0, 400).map((x) => cleanRelay(x, cap, depth + 1));
+  if (typeof v === 'object') {
+    const o = {};
+    Object.keys(v).slice(0, 80).forEach((k) => { if (/^[A-Za-z0-9_$-]{1,24}$/.test(k) && k !== '__proto__' && k !== 'constructor' && k !== 'prototype') o[k] = cleanRelay(v[k], cap, depth + 1); });
+    return o;
+  }
+  return null;
+}
+const jclone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+const OUT_TOPICS = ['phase', 'hz', 'pattern', 'bs', 'dmg', 'sup', 'wiped']; // 걸음 안에서 나가는 소식: 순서까지 맞아야 한다
+const OUT_PRES = ['out', 'picked', 'deployed', 'rd', 'vol']; // 판 흐름을 정하는 자리 상태(값이 바뀐 순서가 맞아야 한다)
+const PHASE_NO = { wave: 1, bossIntro: 2, bossPick: 3, boss: 4, over: 5 };
+
+function roomFold(st, e) {
+  const pid = e[2];
+  if (e[1] === 'p') { const s = st[pid] || (st[pid] = { u: null, s: {} }); Object.assign(s.s, jclone(e[3])); }
+  else if (e[1] === 'h') { const s = st[pid] || (st[pid] = { u: null, s: {} }); s.u = e[3]; }
+  else if (e[1] === 'l') delete st[pid];
+}
+function loadRoomLog(file) {
+  return JSON.parse(zlib.gunzipSync(fs.readFileSync(file), { maxOutputLength: 256 * 1024 * 1024 }).toString('utf8'));
+}
+// 기록에서 자리 하나의 계정(처음 본 값)
+function seatUid(L, pid) {
+  if (L.base && L.base[pid] && L.base[pid].u) return L.base[pid].u;
+  const h = L.ev.find((e) => e[1] === 'h' && e[2] === pid);
+  return h ? h[3] : null;
+}
+// 계정 → 판 시작 뒤 그 계정의 자리 id
+function seatOf(L, uid) {
+  for (const e of L.ev) if (e[1] === 'h' && e[3] === uid) return e[2];
+  for (const pid of Object.keys(L.base || {})) if (L.base[pid].u === uid) return pid;
+  return null;
+}
+// 판 시작 뒤 그 자리가 처음 알린 탈락 라운드(없으면 0)
+function outRoundOf(L, pid) {
+  for (const e of L.ev) if (e[0] > L.startQ && e[1] === 'p' && e[2] === pid && e[3] && e[3].out) return e[3].out | 0;
+  return 0;
+}
+function startOf(L) { return L.ev.find((e) => e[0] >= L.startQ && e[1] === 'm' && e[3] === 'start') || null; }
+
+// 재연산용 전송 계층(net.js wsTransport와 같은 모양·같은 적용 순서)
+function replayTransport(me, mine) {
+  const handlers = {}, peers = {}, outM = {}, outP = {};
+  const api = {
+    kind: 'ws', presHook: true, onPres: null, onRejoin: null, onSeq: null, onHelloQ: null,
+    on: (t, fn) => { (handlers[t] = handlers[t] || []).push(fn); },
+    send: (t, d) => { (outM[t] = outM[t] || []).push(JSON.stringify(cleanRelay(jclone(d), 0))); (handlers[t] || []).forEach((f) => f(d, me, true)); },
+    presence: (p) => { Object.assign(mine, p); OUT_PRES.forEach((k) => { if (p && p[k] !== undefined) (outP[k] = outP[k] || []).push(JSON.stringify(cleanRelay(jclone(p[k]), 64))); }); },
+    peers: () => [{ id: me, me: true, state: mine, seen: 0 }].concat(Object.keys(peers).map((k) => ({ id: k, me: false, state: peers[k].state, seen: 0 }))),
+    onPeers: () => {}, leave: () => {}, closed: () => false, online: () => true, linked: () => true, seq: () => 0, seqOn: () => false,
+  };
+  return { api, handlers, peers, outM, outP, get mine() { return mine; }, set mine(v) { mine = v; } };
+}
+// a(기록)가 b(재연산)의 부분 열(순서 그대로)인지. 앞뒤로 같은 값은 하나로 본다(presence는 50ms 묶음이라 중간 값이 빠진다)
+const dedupe = (a) => a.filter((x, i) => i === 0 || x !== a[i - 1]);
+function subseq(a, b) { let j = 0; for (const x of a) { while (j < b.length && b[j] !== x) j++; if (j >= b.length) return false; j++; } return true; }
+
+// opt: { uid(보고한 계정, 자리 확인), maxMs, maxSteps }
+// 돌려주는 값: { ok, res(summarize + team), out: [내보낸 소식이 기록과 다른 칸], ms } | { ok: false, err }
+function replayRoom(B, rec, L, opt) {
+  const o = Object.assign({ maxMs: 120000, maxSteps: 600000 }, opt || {});
+  const t0 = Date.now(), fail = (err, x) => Object.assign({ ok: false, err, ms: Date.now() - t0 }, x || {});
+  const bad = checkRec(rec, B.T);
+  if (bad) return fail(bad);
+  const R = rec.room;
+  if (!R || typeof R.me !== 'string' || !Number.isInteger(R.q0) || (R.dr0 != null && (!Array.isArray(R.dr0) || R.dr0.some((x) => typeof x !== 'string')))) return fail('rec_room');
+  if (!L || !Array.isArray(L.ev)) return fail('log_bad');
+  if (L.capped) return fail('log_capped');
+  const st = startOf(L);
+  if (!st || !st[4] || typeof st[4] !== 'object') return fail('log_nostart');
+  // 판 설정은 방장의 시작 신호(서버 기록)에서. 기기 기록 머리와 다르면 기기가 다른 판을 보고한 것
+  const sd = st[4], diff = String(sd.diff || '').slice(0, 16), seed = (sd.seed | 0) >>> 0, mutLv = (Number.isFinite(sd.mutLv) ? Math.min(99, Math.max(0, sd.mutLv)) : 0) | 0;
+  const muts = Array.isArray(sd.muts) ? sd.muts.filter((x) => typeof x === 'string').slice(0, 20).map((x) => x.slice(0, 24)) : [];
+  if ((rec.seed >>> 0) !== seed || rec.diff !== diff || (rec.mutLv | 0) !== mutLv || JSON.stringify(rec.muts) !== JSON.stringify(muts)) return fail('start_mismatch');
+  if (!B.T.difficulties.some((d) => d.id === diff)) return fail('rec_diff');
+  const me = R.me;
+  if (o.uid != null && seatUid(L, me) !== String(o.uid)) return fail('seat');
+  if (R.q0 < (L.baseQ | 0) || R.q0 > L.endQ) return fail('q0');
+  // q0까지 접은 서버 방 상태
+  const S = jclone(L.base || {}), ev = L.ev;
+  let i = 0;
+  while (i < ev.length && ev[i][0] <= R.q0) roomFold(S, ev[i++]);
+  // 판을 붙일 때 이미 빠져 있던 자리(dr0)는 그 전에 방장 시계(clk)가 알린 목록 안에 있어야 한다
+  if (R.dr0 && R.dr0.length) {
+    const seen = new Set();
+    ev.forEach((e) => { if (e[0] <= R.q0 && e[1] === 'm' && e[3] === 'clk' && e[4] && Array.isArray(e[4].dr)) e[4].dr.forEach((x) => seen.add(x)); });
+    if (R.dr0.some((x) => !seen.has(x))) return fail('dr0');
+  }
+  const TR = replayTransport(me, S[me] ? jclone(S[me].s) : {});
+  Object.keys(S).forEach((pid) => { if (pid !== me) TR.peers[pid] = { state: jclone(S[pid].s) }; });
+  const { E, T, NET } = B;
+  if (!NET || !NET.make) return fail('noeng_room');
+  const unl = Array.isArray(rec.unl) ? rec.unl.slice() : null;
+  if (T.unlock) T.unlock.provider = () => (unl ? unl.slice() : null);
+  const net = NET.make(TR.api, 'replay');
+  net.started = true; net.diff = diff;
+  if (R.dr0) R.dr0.forEach((x) => net.dropped.add(x));
+  let g;
+  try { g = new E.Game(T, { diff, mode: 'multi', seed, net, muts, mutLv, online: true }); } catch (e) { return fail('build:' + e.message); }
+  net.attach(g);
+  // 방장 시계(clk)가 보여 준 라운드·단계가 실제로 있었는지 보려고 지나간 (라운드, 단계)를 모은다
+  const seenRP = new Set(), dropAll = new Set(R.dr0 || []);
+  const mark = () => { seenRP.add(g.round * 8 + (PHASE_NO[g.phase] || 0)); net.dropped.forEach((x) => dropAll.add(x)); };
+  let rq = R.q0, rejoins = 0, err = null;
+  const deliverTo = (q) => {
+    if (q > L.endQ) { err = 'log_short'; return; }
+    while (i < ev.length && ev[i][0] <= q) {
+      const e = ev[i++];
+      roomFold(S, e);
+      if (e[2] === me) { if (e[1] === 'h') { err = 'm_hello'; return; } continue; } // 내가 보낸 것은 나에게 오지 않는다. 내 hello는 J로만
+      if (e[1] === 'p') { const P = TR.peers[e[2]] || { state: {} }; Object.assign(P.state, jclone(e[3])); TR.peers[e[2]] = P; if (TR.api.onPres) TR.api.onPres(e[2], jclone(e[3]), 0, P.state); }
+      else if (e[1] === 'm') (TR.handlers[e[3]] || []).forEach((f) => f(jclone(e[4]), e[2], false));
+      else if (e[1] === 'l') delete TR.peers[e[2]];
+      mark();
+    }
+  };
+  const helloAt = (q) => {
+    if (q < rq || q > L.endQ) { err = 'j_order'; return; }
+    while (i < ev.length && ev[i][0] <= q) roomFold(S, ev[i++]); // 끊긴 동안의 소식은 받지 못했다(접기만)
+    Object.keys(TR.peers).forEach((k) => delete TR.peers[k]);
+    Object.keys(S).forEach((pid) => { if (pid !== me) TR.peers[pid] = { state: jclone(S[pid].s) }; });
+    if (S[me]) Object.assign(TR.mine, jclone(S[me].s));
+    rejoins++;
+    if (TR.api.onRejoin) TR.api.onRejoin();
+    mark();
+  };
+  const cmds = rec.c, n = cmds.length, end = rec.end.step | 0;
+  let ci = 0, at = n ? cmds[0][0] : Infinity;
+  try {
+    mark();
+    for (;;) {
+      while (ci < n && at === g.stepN) {
+        const c = cmds[ci];
+        if (c[1] === 'M') { if (!Number.isInteger(c[2]) || c[2] < 0) return fail('rec_cmd'); rq += c[2]; deliverTo(rq); }
+        else if (c[1] === 'J') { if (!Number.isInteger(c[2])) return fail('rec_cmd'); helloAt(c[2]); rq = c[2]; }
+        else if (c[1] === 'N') { if (typeof c[2] !== 'string') return fail('rec_cmd'); net.applyCmd(c[2], c.slice(3)); }
+        else if (c[1] === 'R') return fail('restore_room');
+        else g.input(c[1], c.slice(2));
+        if (err) return fail(err, { steps: g.stepN });
+        mark();
+        ci++;
+        at = ci < n ? at + cmds[ci][0] : Infinity;
+      }
+      if (g.over) break;
+      if (ci < n && at < g.stepN) return fail('cmd_order');
+      if (g.stepN >= o.maxSteps || g.stepN > end + 2) break;
+      g.step(g.stepDt());
+      g.events.length = 0;
+      mark();
+      if ((g.stepN & 1023) === 0 && Date.now() - t0 > o.maxMs) return fail('timeout', { steps: g.stepN });
+    }
+  } catch (e) {
+    return fail('throw:' + String(e && e.message).slice(0, 120), { steps: g.stepN });
+  }
+  const res = summarize(g);
+  res.left = n - ci;
+  res.team = { team: g.teamOver || null, round: g.round, out: g.out | 0, dropped: [...dropAll], rejoins, seat: me, bossN: (T.bosses || []).filter((b) => b.round > 0 && b.round <= g.round).length };
+  // 내보낸 소식 맞추기: 방 기록의 내 자리 소식(시작 신호 뒤)이 재연산이 내보낸 소식의 부분 열이어야 한다(끊긴 동안·서버가 넘쳐 버린 것은 빠질 수 있다)
+  const out = [], logM = {}, logP = {}, joinP = new Set();
+  ev.forEach((e) => { if (e[1] === 'h' && e[2] === me) joinP.add(e[0] + 1); }); // 들어올 때 서버가 대신 알린 내 상태 줄
+  ev.forEach((e) => {
+    if (e[0] <= L.startQ || e[2] !== me) return;
+    if (e[1] === 'm' && OUT_TOPICS.includes(e[3])) (logM[e[3]] = logM[e[3]] || []).push(JSON.stringify(e[4]));
+    else if (e[1] === 'm' && e[3] === 'clk') {
+      const d = e[4] || {};
+      if (!Number.isFinite(d.r) || !seenRP.has((d.r | 0) * 8 + (PHASE_NO[d.ph] || 0))) out.push('clk');
+      else if (Array.isArray(d.dr) && d.dr.some((x) => !dropAll.has(x))) out.push('clk.dr');
+    } else if (e[1] === 'p' && !joinP.has(e[0])) OUT_PRES.forEach((k) => { if (e[3] && e[3][k] !== undefined) (logP[k] = logP[k] || []).push(JSON.stringify(e[3][k])); });
+  });
+  OUT_TOPICS.forEach((t) => { if (logM[t] && !subseq(logM[t], TR.outM[t] || [])) out.push('msg.' + t); });
+  OUT_PRES.forEach((k) => { if (logP[k] && !subseq(dedupe(logP[k]), dedupe(TR.outP[k] || []))) out.push('pres.' + k); });
+  return { ok: true, res, out: [...new Set(out)], ms: Date.now() - t0 };
+}
+
+// 손님 보고를 기준 판(재연산한 팀 결과)과 맞춘다. team = replayRoom의 res.team(bossN = 팀 끝 라운드까지 나온 보스 수), seat = 손님 자리, outR = 기록에서 손님이 알린 탈락 라운드(0 = 없음)
+// 돌려주는 값: 어긋난 칸 목록(빈 배열 = 맞음)
+function guestCheck(team, rep, seat, outR) {
+  const out = [], round = rep.round | 0, win = !!rep.win;
+  if (!seat) return ['seat'];
+  if (outR) { if (win) out.push('win'); if (round > outR) out.push('round'); }
+  else {
+    if (win !== (team.team === 'win')) out.push('win');
+    if (win ? round !== team.round : round > team.round) out.push('round');
+  }
+  if (win && team.dropped.includes(seat)) out.push('dropped');
+  const nb = team.bossN | 0, s = rep.st && typeof rep.st === 'object' ? rep.st : {};
+  if ((+s.bosses || 0) > nb) out.push('st.bosses');
+  if ((+s.bossWins || 0) > nb) out.push('st.bossWins');
+  return out;
+}
+
+module.exports = { BUNDLE_FILES, REC_V, engineHash, loadBundle, replay, compare, summarize, statsOf, decodeRec, encodeRec, digest, buildWorld, stepWorld, checkRec, cleanRelay, loadRoomLog, replayRoom, guestCheck, seatOf, seatUid, outRoundOf, roomFold };

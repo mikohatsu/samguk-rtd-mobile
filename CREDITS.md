@@ -78,6 +78,7 @@
 - gfx/vs_jian·vs_guandao·vs_fangtian·vs_shemao(스킬 연출 무기: 의천검·청룡언월도·방천화극·장팔사모), vs_seal·vs_lamp·vs_chain·vs_petal(옥새·칠성 등불·사슬·꽃잎): Canva AI generate-image(2026-11-25, 글만으로 생성, 미디어 ID MAHb69r9LK8·MAHb6zP0NRY), 흰 배경은 코드로 제거하고 잘라 크기 맞춤. 원본 art_src/canva_weapons42.png·canva_props42.png.
 - gfx/il_macho.jpg·ilt_macho.jpg(마초 원화, 2026-11-25): Canva AI generate-image, 기존 gfx/il_joun.jpg(화풍)와 gfx/macho.png(SD 외형)를 참고 그림으로 올려 생성. 미디어 ID MAHb7Yh4fc0, 원본 art_src/il_macho_canva.jpg.
 - gfx/vs_guard.png(빛 방패 문양)·vs_spike.png(빛 가시, 2026-11-26): Canva AI generate-image(글만으로, 검정 바탕), 밝기를 투명도로 바꿔 흰 그림으로 가공. 미디어 ID MAHb8Wdvack, 원본 art_src/canva_guard_spike.png.
+- gfx/emo_laugh·cry·angry·wow·good·help·thanks·think.png(협동 채팅 이모티콘: 조조·유비·장비·조운·관우·마초·손책·제갈량, 2026-11-28): Canva AI generate-image 2x2 시트 2장, 기존 SD 그림(gfx/jojo·yubi·jangbi·joun·gwanu·macho·sonchaek·jegal.png)을 참고 그림으로 올려 생성. 미디어 ID MAHcIr0msz0·MAHcIk8UI4o, 원본 art_src/emo_sheet1.png·emo_sheet2.png. scripts/build-emo.py로 자르고 흰 배경만 지웠다(새로 그리지 않음).
 - 상업 이용: 가능. Canva AI Product Terms(https://www.canva.com/policies/ai-product-terms/)에 따르면 생성물은 사용자 소유이고 판매를 포함한 상업적 이용이 허용된다. 표기 의무 없음.
 - 한계: AI 생성물은 나라에 따라 저작권 보호를 못 받을 수 있고(남이 베껴도 막기 어려움), 독점권도 보장되지 않는다. 알아볼 수 있는 실존 인물·타사 캐릭터·상표가 들어가면 Canva가 권리를 보장해 주지 않는다.
 
