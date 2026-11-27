@@ -6322,7 +6322,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   const TICKET_RETRY_MS = [3000, 6000, 12000, 24000];
   // 판 시작(2026-11-26 재연산 검증): 로그인한 혼자·AI 동맹 새 판은 서버 표를 먼저 받고 표의 씨앗으로 판을 만든다(서버가 같은 씨앗으로 다시 돌려 결과를 맞춘다).
   // 최대 TICKET_WAIT_MS 기다린다(그동안 로비가 그대로 보인다). 못 받으면 기기 씨앗으로 시작하고, 늦게 온 표는 씨앗이 달라 쓰지 않는다 → 이 판은 결과 화면에 '기록되지 않음'.
-  // 방 협동은 씨앗이 방장의 시작 신호에 있으므로 예전처럼 판과 함께 표를 받는다(협동 재연산은 다음 단계).
+  // 방 협동은 씨앗이 시작 신호에 있으므로(새 서버는 서버가 정한 씨앗, 2026-11-28) 판과 함께 표를 받는다. 표 요청에 판 씨앗을 실어 서버가 그 시작에 묶게 한다.
   const TICKET_WAIT_MS = 3000;
   let starting = false;
   function begin(opt) {
@@ -6415,7 +6415,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
           // 로그인이 풀렸거나(401) 요청이 잘못됐으면(400) 다시 해도 같다
           return r.status === 401 || r.status === 400;
         };
-        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, room: (opt.net && opt.net.code) || undefined, save: false }).then((r) => {
+        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, room: (opt.net && opt.net.code) || undefined, seed: room ? g.seed : undefined, save: false }).then((r) => {
           if (take(r) || g.over || !waits.length) return;
           setTimeout(() => { if (g === mine && !g.over && !S.gameTk) ask(); }, waits.shift());
         });
@@ -6770,7 +6770,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   const saveLast = () => { try { localStorage.setItem('rtd-last', JSON.stringify({ play: cfg.play, mode: cfg.mode, diff: cfg.diff, ai: cfg.ai, mutLv: String(cfg.mutLv) })); } catch (e) { /* 저장 불가 */ } };
   const savedGame = () => { try { const sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); return sv && sv.v === 1 ? sv : null; } catch (e) { return null; } };
   // 악몽 +N: 규칙 N개를 겹치지 않게 무작위로 고른다. 시작 버튼을 누를 때(방은 방장이 시작할 때) 한 번만 뽑는다 — 미리 보거나 다시 뽑을 수 없다.
-  // 뽑힌 규칙은 판이 시작될 때 연출로 보여 준다(17b-mutintro). 방 협동은 방장이 뽑아 시작 신호(net.start)에 실어 모두가 같은 규칙으로 돈다.
+  // 뽑힌 규칙은 판이 시작될 때 연출로 보여 준다(17b-mutintro). 방 협동은 서버가 씨앗과 규칙을 정해 시작 신호에 실어 모두가 같은 규칙으로 돈다(2026-11-28, net.js start).
+  // 서버가 정하지 않는 연결(예전 서버·같은 브라우저 탭)만 방장이 여기서 뽑은 규칙을 싣는다.
   // excl(theme 변형 규칙): 서로 배제하는 규칙은 하나가 뽑히면 남은 후보에서 뺀다(배수진↔군웅할거, 2026-11-24).
   const rollMuts = (n) => {
     const ms = T.mutators || [], ex = (a, b) => { const m = ms.find((x) => x.id === a); return !!(m && m.excl && m.excl.includes(b)); };
@@ -7172,6 +7173,8 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       const show = () => dr();
       lobby.onLobby = show; show();
       // 시작 신호 → 입장 대기 화면(18b-match.js)에서 모두의 준비를 기다린 뒤 판을 시작한다. 그 사이 방을 나갔으면(lobby !== l) 시작하지 않는다
+      // 서버에 판 시작을 요청했는데 답이 없음(net.js startWaitMs): 다시 누를 수 있게 알린다
+      lobby.onStartFail = () => { if (lobby === l) $('roster').textContent = t('noServer'); };
       lobby.onStart = (d) => { saveLast(); matchIntro(l, d, () => begin({ diff: d.diff, mode: 'multi', seed: d.seed, net: l, muts: d.muts || [], mutLv: d.mutLv || 0, online: true, key: code + '-' + d.seed }), () => lobby === l); };
       return '';
     };
@@ -7181,7 +7184,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
     $('startbtn').onclick = () => {
       const mm = mutPick();
       const online = cfg.play === 'online';
-      if (cfg.mode === 'multi' || cfg.mode === 'create' || cfg.mode === 'join') { if (lobby && lobby.isHost()) { saveLast(); lobby.start(cfg.diff, mm); } return; }
+      if (cfg.mode === 'multi' || cfg.mode === 'create' || cfg.mode === 'join') { if (lobby && lobby.isHost()) { saveLast(); if (lobby.start(cfg.diff, mm) === false) $('roster').textContent = t('noServer'); } return; }
       // 싱글 단독 새 판은 이어하기 기록을 덮어쓴다: 기록이 있으면 버튼 글을 바꾸고 3초 안에 한 번 더 눌러야 시작한다
       if (cfg.mode !== 'ai' && !online && !ovArm && savedGame()) { ovArm = true; dr(); setTimeout(() => { if (ovArm) { ovArm = false; if (!$('title').hidden) dr(); } }, 3000); return; }
       ovArm = false; saveLast();

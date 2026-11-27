@@ -37,7 +37,8 @@ function makeClient(o, name, tok, seed, opt) {
   };
   // 앱 begin(방 협동)과 같은 순서: 판 만들기 → 기록기(net.recHead) → 인연 유지 입력 → 표 요청 → attach
   c.begin = async () => {
-    const s = c.startD, E = A.E;
+    // startEdit(시작 신호 사본): 조작 흉내(예: 서버 씨앗을 무시하고 자기 씨앗으로 판을 만든다)
+    const s = c.hooks.startEdit ? c.hooks.startEdit(Object.assign({}, c.startD)) : c.startD, E = A.E;
     const opt2 = { diff: s.diff, mode: 'multi', seed: s.seed, net: c.net, muts: s.muts || [], mutLv: s.mutLv || 0, online: true, key: c.net.code + '-' + s.seed };
     const g = new E.Game(A.T, opt2);
     const rh = c.hooks.noRec ? null : c.net.recHead();
@@ -45,7 +46,7 @@ function makeClient(o, name, tok, seed, opt) {
     g.input('ks', [1]);
     c.net.attach(g);
     c.g = g;
-    const r = await o.api('/api/game/start', { diff: s.diff, mutLv: s.mutLv || 0, room: c.net.code, save: false }, tok);
+    const r = await o.api('/api/game/start', { diff: s.diff, mutLv: s.mutLv || 0, room: c.net.code, seed: c.hooks.oldTk ? undefined : g.seed, save: false }, tok); // 앱 17-loop처럼 판 씨앗을 실어 그 시작의 표를 받는다
     c.ticket = r.ticket || null;
   };
   // 한 프레임: 걸음 몇 번(앱 17-loop tick) → tickStatus
@@ -85,7 +86,8 @@ async function playRoom(o, clients, opt) {
   for (const c of clients) { await c.connect(code); await sleep(30); }
   await sleep(200);
   const host = clients[0];
-  host.net.start(opt.diff || 'easy', { muts: opt.muts || [], mutLv: opt.mutLv || 0 });
+  if (opt.startFn) opt.startFn(host, opt); // 시작 신호를 다르게 보내는 흉내(예전 앱 방장·조작)
+  else host.net.start(opt.diff || 'easy', { muts: opt.muts || [], mutLv: opt.mutLv || 0 });
   for (let i = 0; i < 200 && clients.some((c) => !c.startD); i++) await sleep(10);
   if (clients.some((c) => !c.startD)) throw new Error('start 신호를 못 받음');
   for (const c of clients) await c.begin();

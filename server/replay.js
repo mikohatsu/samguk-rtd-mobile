@@ -112,6 +112,7 @@ function runJob(msg) {
 //   기준 판 재연산이 맞으면(결과 = 보고, 내보낸 소식 = 방 기록) 그 보고는 ok, 팀 결과(승패·끝 라운드·뺀 자리·보스 수)를 파티 파일에 둔다.
 //   나머지 보고(손님)는 팀 결과와 맞춰 본다(guestCheck: 승패·라운드, 탈락 라운드, 빠진 자리의 승리, 보스 수 상한) → ok | bad.
 // 기다림: 방 기록 파일이 아직 없으면(판이 아직 안 끝남·서버가 기록을 닫기 전) 다시 본다. 보고 뒤 COOP.logWaitMs가 지나도 없으면 norec(coop_nolog).
+// 씨앗(2026-11-28): 서버가 준 씨앗과 다른 기록은 bad('seed'), 방장이 고른 씨앗의 시작(예전 앱 방장)은 norec(coop_hostseed) — seedVerdict.
 // norec(보상 유지): 입력 기록 없음(예전 앱 coop_norec), 표에 방 판 열쇠 없음(coop_nokey), 방 기록 없음·넘침(coop_nolog·log_capped),
 //                   기준 판을 끝내 못 정함(coop_noanchor), 그 엔진 버전 없음(noeng), 재연산 시간 초과·예외(err:).
 const COOP = {
@@ -145,6 +146,8 @@ async function coopVerdict(row, job, tk, rec) {
   let head = null; try { head = JSON.parse(fs.readFileSync(roomHeadOf(key), 'utf8')); } catch (e) { head = null; }
   if (!head) return Date.now() - (job.at || 0) > COOP.logWaitMs ? { v: 'norec', note: 'coop_nolog' } : waitV('log');
   if (head.capped) return { v: 'norec', note: 'coop_log_capped' };
+  const sv = seedVerdict(row, head, rec);
+  if (sv) return sv;
   const P = partyLoad(key);
   P.members = P.members || {}; P.tried = P.tried || [];
   if (P.anchor) return guestVerdict(row, job, head, P.anchor);
@@ -174,6 +177,22 @@ async function coopVerdict(row, job, tk, rec) {
   P2.anchor = { id: row.id, uid: row.uid, team: r.res.team, at: Date.now() };
   partySave(key, P2);
   return { v: 'ok', note: `coop_anchor R${r.res.round} team ${r.res.team.team}/R${r.res.team.round} ${r.ms}ms` };
+}
+// 방 판 씨앗(2026-11-28 사용자 결정 "서버가 정하게", production/team/2026-11-28/coop-seed.md). 기록 머리 v2(server/room-log.js start info)부터 본다.
+// - 서버가 씨앗을 준 시작(ss > 0): 기기 기록의 씨앗이 그 값이어야 한다(아니면 bad 'seed' — 혼자 판 replay:seed와 같다). 악몽 단계·규칙도 서버가 정했으므로 같아야 한다(bad 'mut').
+// - 방장이 고른 씨앗의 시작(ss 0 = 예전 앱 방장): 재연산하지 않는다. 그 시작을 보낸 계정이 새 앱 기록(rec.room)을 냈으면 새 앱은 늘 서버 씨앗을 쓰므로 조작(bad 'seed'),
+//   나머지(그 방의 새 앱 손님)는 norec(coop_hostseed, 보상 유지·순위 없음). 예전 앱 기록(rec 없음)은 이 앞에서 norec(coop_norec).
+// - 머리 v1(이 변경 전 서버가 쓴 기록): 지금까지 규칙 그대로(null).
+function seedVerdict(row, head, rec) {
+  if (!head || !(head.v >= 2)) return null;
+  const ss = head.ss >>> 0;
+  if (ss) {
+    if ((rec.seed >>> 0) !== ss) return { v: 'bad', note: 'seed' };
+    if ((rec.mutLv | 0) !== (head.mutLv | 0) || JSON.stringify(Array.isArray(rec.muts) ? rec.muts : []) !== JSON.stringify(head.muts || [])) return { v: 'bad', note: 'mut' };
+    return null;
+  }
+  if (head.byUid && String(row.uid) === String(head.byUid)) return { v: 'bad', note: 'seed' };
+  return { v: 'norec', note: 'coop_hostseed' };
 }
 function guestVerdict(row, job, head, A) {
   if (row.id === A.id) return { v: 'ok', note: 'coop_anchor' };

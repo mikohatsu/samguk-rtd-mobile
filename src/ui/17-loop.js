@@ -194,7 +194,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
   const TICKET_RETRY_MS = [3000, 6000, 12000, 24000];
   // 판 시작(2026-11-26 재연산 검증): 로그인한 혼자·AI 동맹 새 판은 서버 표를 먼저 받고 표의 씨앗으로 판을 만든다(서버가 같은 씨앗으로 다시 돌려 결과를 맞춘다).
   // 최대 TICKET_WAIT_MS 기다린다(그동안 로비가 그대로 보인다). 못 받으면 기기 씨앗으로 시작하고, 늦게 온 표는 씨앗이 달라 쓰지 않는다 → 이 판은 결과 화면에 '기록되지 않음'.
-  // 방 협동은 씨앗이 방장의 시작 신호에 있으므로 예전처럼 판과 함께 표를 받는다(협동 재연산은 다음 단계).
+  // 방 협동은 씨앗이 시작 신호에 있으므로(새 서버는 서버가 정한 씨앗, 2026-11-28) 판과 함께 표를 받는다. 표 요청에 판 씨앗을 실어 서버가 그 시작에 묶게 한다.
   const TICKET_WAIT_MS = 3000;
   let starting = false;
   function begin(opt) {
@@ -287,7 +287,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
           // 로그인이 풀렸거나(401) 요청이 잘못됐으면(400) 다시 해도 같다
           return r.status === 401 || r.status === 400;
         };
-        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, room: (opt.net && opt.net.code) || undefined, save: false }).then((r) => {
+        const ask = () => api('/api/game/start', { diff: opt.diff, mutLv: opt.mutLv || 0, room: (opt.net && opt.net.code) || undefined, seed: room ? g.seed : undefined, save: false }).then((r) => {
           if (take(r) || g.over || !waits.length) return;
           setTimeout(() => { if (g === mine && !g.over && !S.gameTk) ask(); }, waits.shift());
         });

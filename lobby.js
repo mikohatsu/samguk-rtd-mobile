@@ -811,7 +811,8 @@
       // 방에 다 모이거나 15초가 지나면 방장이 시작한다
       const l = C.getLobby(), n = l ? l.roster().length : 0;
       matchUI(`<div class="spin"></div><div>${L('entering', { a: n, b: mt.size })}</div>${mt.started ? '' : cancelB}`);
-      if (l && l.isHost() && (n >= mt.size || Date.now() - mt.joinAt > 15000) && !mt.started) { mt.started = true; l.start(mt.diff, { muts: [], mutLv: 0 }); }
+      // 서버에 시작을 보내지 못했거나(끊김) 답이 오지 않았으면(net.js startWaitMs) 다음 확인 때 다시 보낸다
+      if (l && l.isHost() && (n >= mt.size || Date.now() - mt.joinAt > 15000) && !l.started && !(l.startPending && l.startPending())) { mt.started = l.start(mt.diff, { muts: [], mutLv: 0 }) !== false; }
     };
     mt.iv = setInterval(tick, 2000); tick();
   }

@@ -10,6 +10,9 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.4.8', d: '2026-11-28', items: [
+      ['협동 판의 무작위 조건(악몽 규칙 등)은 이제 서버가 정합니다. 방장이 원하는 조건이 나올 때까지 다시 시작할 수 없어 순위가 공정해집니다.', '協力バトルのランダム条件（悪夢ルールなど）はサーバーが決めるようになりました。ホストが好きな条件が出るまでやり直すことができなくなり、ランキングがより公平になります。', 'Random conditions in co-op games (such as Nightmare rules) are now decided by the server, so hosts can no longer reroll them and rankings are fairer.', '合作对局的随机条件（噩梦规则等）现由服务器决定，房主无法反复重开刷条件，排行榜更加公平。'],
+    ] },
     { v: '0.4.7', d: '2026-11-28', items: [
       ['협동 판 중에도 채팅과 장수 이모티콘으로 이야기할 수 있습니다(오른쪽 위 얼굴 버튼). 누르면 신고·차단도 됩니다.', '協力バトル中もチャットと武将スタンプで会話できます（右上の顔ボタン）。メッセージを押すと通報・ブロックもできます。', 'You can now chat and send general emotes during co-op games (face button, top right). Tap a message to report or block.', '合作对局中也可以用聊天和武将表情交流（右上角头像按钮）。点击消息可举报或屏蔽。'],
       ['협동 판도 기록 검증을 거쳐 순위에 오릅니다.', '協力バトルも記録の検証を経てランキングに載ります。', 'Co-op games are now verified and appear in the rankings.', '合作对局也会在记录验证后进入排行榜。'],

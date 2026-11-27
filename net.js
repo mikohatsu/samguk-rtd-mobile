@@ -15,6 +15,7 @@
     hostGraceMs: 3000, // 방장이 막 바뀐 직후에는 앞 방장의 신호도 받는다
     resumeGapMs: 2000, // 계산이 이만큼 멈췄다 돌아오면(앱을 내렸다 켬) 다른 사람의 소식 시각을 새로 잡는다
     syncMaxMs: 20000,  // 다시 붙은 사람이 방장 자격을 보류하는 최대 시간
+    startWaitMs: 10000, // 방장이 서버에 판 시작(씨앗)을 요청하고 답을 기다리는 시간. 넘으면 onStartFail(다시 누를 수 있다. 서버는 15초 안의 같은 요청에 앞 시작을 되돌려 준다)
   };
   // 받는 메시지 검사 수치(SEC-104). 정상 플레이 최댓값(theme-samguk.js 스킬 표·synergy.js)에 여유를 둔 값이다.
   // 시간은 방장 게임 시간(g.time) 기준: 배속·시험(빠른 계산)에서도 정상 신호를 깎지 않는다.
@@ -64,6 +65,7 @@
       let id = null, mine = {}, pending = null, timer = null, done = false, left = false, retryT = null, lostAt = 0, api = null, linked = false;
       // 협동 재연산(2026-11-28 C1): 서버가 판 계산에 쓰이는 중계에 붙이는 방 일련번호(q). 적용하기 바로 앞에서 Net에 알린다(Net이 입력 기록에 ['M'] 으로 남긴다)
       let lastQ = 0, hasQ = false;
+      let srvSeed = false; // 서버가 방 판 씨앗을 정한다(hello ss: 1, 2026-11-28). 예전 서버면 false → 방장이 씨앗을 고르는 예전 방식
       const seqd = (q) => { if (typeof q !== 'number') return; lastQ = q; if (api && api.onSeq) api.onSeq(q); };
       const out = (m) => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); };
       const flush = () => { timer = null; if (pending) { out({ k: 'pres', p: pending }); pending = null; } };
@@ -86,7 +88,7 @@
         if (!m || typeof m !== 'object') return;
         if (m.k === 'error') { if (!done) { clearTimeout(giveUp); resolve(m.code === 'full' ? 'full' : m.code === 'auth' ? 'auth' : null); } }
         else if (m.k === 'hello') {
-          clearTimeout(giveUp); id = m.id; lostAt = 0; linked = true;
+          clearTimeout(giveUp); id = m.id; lostAt = 0; linked = true; srvSeed = m.ss === 1;
           if (typeof m.q === 'number') { if (done && api.onHelloQ) api.onHelloQ(m.q); lastQ = m.q; hasQ = true; } // 다시 붙음: 아래 상태 바꾸기보다 먼저 기록(['J'])
           Object.keys(peers).forEach((k) => delete peers[k]);
           Object.keys(m.peers || {}).forEach((k) => (peers[k] = { state: m.peers[k] || {}, seen: Date.now() }));
@@ -108,6 +110,8 @@
             linked: () => linked, // 서버가 hello로 자리를 다시 확인해 준 뒤에만 참
             presHook: true, onPres: null, onRejoin: null,
             seq: () => lastQ, seqOn: () => hasQ, onSeq: null, onHelloQ: null, // 협동 재연산: 서버가 일련번호를 주는지, 마지막으로 적용한 번호
+            // 방 판 씨앗: 서버가 정하는지, 서버에만 보내기(내 화면에 바로 적용하지 않는다 — 서버가 채워 되돌려 준다). 보내지 못했으면 false
+            srvSeed: () => srvSeed, ask: (t, d) => { if (ws.readyState !== 1) return false; out({ k: 'msg', t, d }); return true; },
           });
         } else if (m.k === 'pres' && m.p && typeof m.p === 'object') {
           seqd(m.q);
@@ -216,8 +220,13 @@
       this.recQ = null; // 협동 재연산: 입력 기록에 마지막으로 적은 방 일련번호(recHead가 정한다. null = 기록하지 않음)
       this.bucket = {}; this.badAt = {}; this.badN = {};
       // 방장 전용 신호(phase, clk, bs, hz, start, pattern)는 지금 방장(막 바뀌었으면 앞 방장도)에게서 온 것만 받는다
+      // 서버가 씨앗을 채워 되돌려 준 내 시작(ss, 보낸 사람 = 나)은 이 Net이 시작을 요청했을 때만 받는다(다시 들어온 새 화면이 앞 판의 시작을 받지 않게)
+      this.startAsk = 0; this.startAsked = false; this.onStartFail = null;
       this.t.on('start', (d, peer, self) => {
-        if (!obj(d) || this.started || !this.fromHost(peer, self)) return;
+        if (!obj(d) || this.started) return;
+        const echo = !self && d.ss === 1 && peer != null && peer === this.myId();
+        if (echo && !this.startAsked) return;
+        if (!this.fromHost(peer, self || echo)) return;
         if (typeof d.diff !== 'string' || !fin(d.seed)) return this.bad('start', peer);
         const s = { diff: d.diff.slice(0, 16), seed: d.seed | 0, mutLv: clampN(d.mutLv, 0, 99) | 0, muts: Array.isArray(d.muts) ? d.muts.filter((x) => typeof x === 'string').slice(0, 20).map((x) => x.slice(0, 24)) : [] };
         Object.keys(d).forEach((k) => { if (!(k in s) && (fin(d[k]) || typeof d[k] === 'boolean')) s[k] = d[k]; });
@@ -309,6 +318,7 @@
       });
     }
     me() { return this.t.peers().find((p) => p.me); }
+    myId() { const m = this.me(); return m ? m.id : null; }
     // ---- 탈락(관전) ----
     // 탈락은 각자 자기 라이프로만 정하고 presence의 out(탈락 라운드)으로 알린다. 남이 내 탈락을 정할 수 없다(presence는 자리마다 따로다).
     // 거짓 out은 보낸 사람만 빠질 뿐이다(남을 탈락시키거나 판을 끝내지 못한다).
@@ -406,7 +416,24 @@
     }
     send(topic, data) { this.t.send(topic, data); }
     // 시작 신호: 난이도, 씨앗, 악몽 +N 규칙(모두 같은 규칙으로 돈다)
-    start(diff, extra) { this.t.send('start', Object.assign({ diff, seed: (Math.random() * 1e9) | 0 }, extra || {})); }
+    // 2026-11-28: 서버가 씨앗을 정하면(srvSeed) { diff, mutLv, ss: 1 }만 서버에 보내고, 서버가 씨앗·규칙을 채워 모두에게(나에게도) 보낸 신호로 시작한다(extra.muts·seed는 쓰지 않는다).
+    //   돌려주는 값: true = 보냄(또는 답을 기다리는 중), false = 연결이 없어 못 보냄(화면이 알린다). startWaitMs 안에 답이 없으면 onStartFail()
+    //   예전 서버·같은 브라우저 탭(BroadcastChannel)·Claude room은 예전처럼 방장이 씨앗을 고르고 바로 시작한다
+    start(diff, extra) {
+      if (this.t.srvSeed && this.t.srvSeed()) {
+        if (this.started) return true;
+        const now = Date.now();
+        if (this.startAsk && now - this.startAsk < NETCFG.startWaitMs) return true;
+        const d = Object.assign({}, extra || {}, { diff, ss: 1 }); delete d.seed; delete d.muts;
+        if (!this.t.ask('start', d)) return false;
+        this.startAsk = now; this.startAsked = true;
+        setTimeout(() => { if (!this.started && this.startAsk === now) { this.startAsk = 0; if (this.onStartFail) this.onStartFail(); } }, NETCFG.startWaitMs);
+        return true;
+      }
+      this.t.send('start', Object.assign({ diff, seed: (Math.random() * 1e9) | 0 }, extra || {}));
+      return true;
+    }
+    startPending() { return !this.started && !!this.startAsk; }
     leave() { this.t.leave(); }
     // 판이 시작된 시각. 대기실에서는 상태 알림을 주고받지 않으므로, 그 전의 마지막 알림 시각으로 끊김을 판단하면
     // 대기실에 오래 있던 사람이 시작하자마자 '멈춤·제외'로 튕긴다. 판 시작 전 시각은 시작 시각으로 본다.

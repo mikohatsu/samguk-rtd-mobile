@@ -15,7 +15,8 @@
   const saveLast = () => { try { localStorage.setItem('rtd-last', JSON.stringify({ play: cfg.play, mode: cfg.mode, diff: cfg.diff, ai: cfg.ai, mutLv: String(cfg.mutLv) })); } catch (e) { /* 저장 불가 */ } };
   const savedGame = () => { try { const sv = JSON.parse(localStorage.getItem('rtd-save') || 'null'); return sv && sv.v === 1 ? sv : null; } catch (e) { return null; } };
   // 악몽 +N: 규칙 N개를 겹치지 않게 무작위로 고른다. 시작 버튼을 누를 때(방은 방장이 시작할 때) 한 번만 뽑는다 — 미리 보거나 다시 뽑을 수 없다.
-  // 뽑힌 규칙은 판이 시작될 때 연출로 보여 준다(17b-mutintro). 방 협동은 방장이 뽑아 시작 신호(net.start)에 실어 모두가 같은 규칙으로 돈다.
+  // 뽑힌 규칙은 판이 시작될 때 연출로 보여 준다(17b-mutintro). 방 협동은 서버가 씨앗과 규칙을 정해 시작 신호에 실어 모두가 같은 규칙으로 돈다(2026-11-28, net.js start).
+  // 서버가 정하지 않는 연결(예전 서버·같은 브라우저 탭)만 방장이 여기서 뽑은 규칙을 싣는다.
   // excl(theme 변형 규칙): 서로 배제하는 규칙은 하나가 뽑히면 남은 후보에서 뺀다(배수진↔군웅할거, 2026-11-24).
   const rollMuts = (n) => {
     const ms = T.mutators || [], ex = (a, b) => { const m = ms.find((x) => x.id === a); return !!(m && m.excl && m.excl.includes(b)); };
@@ -417,6 +418,8 @@
       const show = () => dr();
       lobby.onLobby = show; show();
       // 시작 신호 → 입장 대기 화면(18b-match.js)에서 모두의 준비를 기다린 뒤 판을 시작한다. 그 사이 방을 나갔으면(lobby !== l) 시작하지 않는다
+      // 서버에 판 시작을 요청했는데 답이 없음(net.js startWaitMs): 다시 누를 수 있게 알린다
+      lobby.onStartFail = () => { if (lobby === l) $('roster').textContent = t('noServer'); };
       lobby.onStart = (d) => { saveLast(); matchIntro(l, d, () => begin({ diff: d.diff, mode: 'multi', seed: d.seed, net: l, muts: d.muts || [], mutLv: d.mutLv || 0, online: true, key: code + '-' + d.seed }), () => lobby === l); };
       return '';
     };
@@ -426,7 +429,7 @@
     $('startbtn').onclick = () => {
       const mm = mutPick();
       const online = cfg.play === 'online';
-      if (cfg.mode === 'multi' || cfg.mode === 'create' || cfg.mode === 'join') { if (lobby && lobby.isHost()) { saveLast(); lobby.start(cfg.diff, mm); } return; }
+      if (cfg.mode === 'multi' || cfg.mode === 'create' || cfg.mode === 'join') { if (lobby && lobby.isHost()) { saveLast(); if (lobby.start(cfg.diff, mm) === false) $('roster').textContent = t('noServer'); } return; }
       // 싱글 단독 새 판은 이어하기 기록을 덮어쓴다: 기록이 있으면 버튼 글을 바꾸고 3초 안에 한 번 더 눌러야 시작한다
       if (cfg.mode !== 'ai' && !online && !ovArm && savedGame()) { ovArm = true; dr(); setTimeout(() => { if (ovArm) { ovArm = false; if (!$('title').hidden) dr(); } }, 3000); return; }
       ovArm = false; saveLast();

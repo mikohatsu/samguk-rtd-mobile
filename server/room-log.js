@@ -29,7 +29,7 @@ const CFG = {
 let DIR = null, total = 0;
 const live = new Set(); // 붙잡은(pin) 방 기록
 const writes = new Set(); // 쓰는 중인 파일(시험이 기다린다)
-const stats = { pinned: 0, written: 0, capped: 0, writeErr: 0 };
+const stats = { pinned: 0, written: 0, capped: 0, writeErr: 0, restarts: 0 };
 
 function config(o) { DIR = o && o.dir ? o.dir : DIR; Object.assign(CFG, (o && o.cfg) || {}); }
 const headOf = (f) => f.replace(/\.json\.gz$/, '.head.json');
@@ -82,10 +82,16 @@ function left(room, code, pid) { return add(room, code, [0, 'l', pid]); }
 function hello(room, code, pid, uid) { return add(room, code, [0, 'h', pid, String(uid || '')]); }
 
 // 방장의 시작 신호: 앞 판 기록을 끝내고 새 판 기록을 붙잡는다(시작 신호 줄은 이 뒤에 msg로 들어온다)
-function start(room, code, startAt) {
+// info(2026-11-28 방 판 씨앗, app.js noteStart): { ss(서버가 준 씨앗, 0 = 방장이 고른 씨앗), by(시작을 보낸 자리), uid(그 계정), n(이 방의 몇 번째 시작), hs(그 계정의 최근 1시간 시작 수), mutLv, muts }
+//   → 머리에 v: 2와 함께 남는다. ab: 1 = 앞 판이 끝나기(over) 전에 다시 시작했다(버린 판)
+function start(room, code, startAt, info) {
   const R = rlOf(room);
+  const ab = R.pin && !R.pin.overAt ? 1 : 0;
   if (R.pin) finalize(room, 'restart');
-  R.pin = { code, startAt, at: Date.now(), last: Date.now(), base: clone(R.rb), baseQ: R.rbQ, ev: [], bytes: 0, overAt: 0, host: null, capped: false, startQ: R.q + 1, seats: {}, outs: {} };
+  const I = info || {};
+  R.pin = { code, startAt, at: Date.now(), last: Date.now(), base: clone(R.rb), baseQ: R.rbQ, ev: [], bytes: 0, overAt: 0, host: null, capped: false, startQ: R.q + 1, seats: {}, outs: {},
+    sd: info ? { ss: I.ss >>> 0, by: I.by || null, byUid: I.uid != null ? String(I.uid) : null, n: I.n | 0, hs: I.hs | 0, ab, mutLv: I.mutLv | 0, muts: Array.isArray(I.muts) ? I.muts.slice(0, 20) : [] } : null };
+  if (ab) stats.restarts++;
   Object.keys(R.cur).forEach((pid) => { if (R.cur[pid].u) R.pin.seats[pid] = R.cur[pid].u; });
   for (const e of R.ring) { const s = JSON.stringify(e); R.pin.ev.push(s); R.pin.bytes += s.length; total += s.length; }
   R.ring = [];
@@ -104,7 +110,7 @@ function finalize(room, why) {
   R.rb = clone(R.cur); R.rbQ = R.q; R.ring = [];
   const f = fileOf(P.code, P.startAt);
   if (!f) return null;
-  const head = { v: 1, code: P.code, startAt: P.startAt, startQ: P.startQ, baseQ: P.baseQ, endQ: R.q, host: P.host, fin: why, capped: P.capped, at: P.at, end: Date.now() };
+  const head = Object.assign({ v: P.sd ? 2 : 1, code: P.code, startAt: P.startAt, startQ: P.startQ, baseQ: P.baseQ, endQ: R.q, host: P.host, fin: why, capped: P.capped, at: P.at, end: Date.now() }, P.sd || {});
   const json = JSON.stringify(head).slice(0, -1) + ',"base":' + JSON.stringify(P.base) + ',"ev":[' + P.ev.join(',') + ']}';
   P.ev = null;
   const w = new Promise((resolve) => {

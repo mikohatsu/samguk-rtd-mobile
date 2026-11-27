@@ -11,6 +11,7 @@ const THEME = require('../theme-samguk.js'); // 장수 해금 목록·가격(the
 const { openStore } = require('./store');
 const REPLAY = require('./replay'); // 판 결과 재연산 검증 일꾼(2026-11-26, B 담당 server/replay*.js)
 const RLOG = require('./room-log'); // 협동 방 중계 기록·일련번호 q(2026-11-28 협동 재연산 C1). 판 계산에 쓰이는 중계에만 q를 붙인다
+const ENGINE = require('../engine.js'); // 방 판 악몽 규칙 뽑기(Game.rollMuts — 혼자 판이 표 씨앗으로 규칙을 정하는 것과 같은 함수. 2026-11-28 방 판 씨앗은 서버가)
 
 const PORT = +process.env.PORT || 8300;
 const ROOT = path.join(__dirname, '..');
@@ -282,14 +283,16 @@ const tkSign = (body) => crypto.createHmac('sha256', ticketSecret()).update(body
 // 표의 k = 판 시작 때 서버가 본 방 인원(연결이 살아 있는 자리 수). 0 = 오프라인(방 코드가 없거나, 그런 방이 없거나, 그 방에 앉아 있지 않음).
 // SEAT_MUL[k] = 경험치·동전에 곱하는 배율: 오프라인 0.5, 온라인 1인 0.6, 2인 1.0, 3인 1.2, 4인 1.4, 5인 1.7
 const SEAT_MUL = [0.5, 0.6, 1.0, 1.2, 1.4, 1.7];
-// 이 계정이 그 방에 앉아 있으면 { seats(연결된 자리 수 1~5), code, host(서버가 보는 방장인지), start(방장이 보낸 마지막 판 시작 신호 시각) }, 아니면 seats 0
-function roomInfo(raw, uid) {
+// 이 계정이 그 방에 앉아 있으면 { seats(연결된 자리 수 1~5), code, host(서버가 보는 방장인지), start(방장이 보낸 마지막 판 시작 신호 시각), ss(그 시작에 서버가 준 씨앗, 0 = 방장이 고른 씨앗) }, 아니면 seats 0
+// seed(기기가 시작한 판의 씨앗)를 주면 이 방의 최근 시작(SEEDCFG.keep개) 가운데 서버가 그 씨앗을 준 시작을 고른다(표를 늦게 받는 사이 방장이 다시 시작해도 자기 판에 묶이게). 없으면 마지막 시작
+function roomInfo(raw, uid, seed) {
   const code = String(raw || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12), room = code ? rooms.get(code) : null;
   if (!room) return { seats: 0 };
   let n = 0, mine = null;
   room.forEach((p, pid) => { if (p.uid === uid) mine = pid; if (p.ws && p.ws.readyState === 1) n++; });
   if (!mine) return { seats: 0 };
-  return { seats: Math.max(1, Math.min(SEAT_MUL.length - 1, n)), code, host: hostOf(room) === mine, start: room.startAt || 0 };
+  const want = Number.isFinite(seed) && seed > 0 ? seed >>> 0 : 0, hit = want ? (room.starts || []).filter((x) => x.ss && x.ss === want).pop() : null;
+  return { seats: Math.max(1, Math.min(SEAT_MUL.length - 1, n)), code, host: hostOf(room) === mine, start: hit ? hit.at : room.startAt || 0, ss: hit ? hit.ss : ((room.starts || []).slice(-1)[0] || {}).ss || 0 };
 }
 const roomSeats = (raw, uid) => roomInfo(raw, uid).seats;
 // o = { u, d, m, k, n, s, sv, r, g }
@@ -723,10 +726,11 @@ async function handle(req, res, url, query) {
   if (url === '/api/game/start') {
     if (limited('u:' + u.id, 'tk', 20, 600000)) return json(res, 429, { error: 'slow_down' });
     if (!DIFFS.includes(b.diff)) return json(res, 400, { error: 'bad_diff' });
-    const ri = roomInfo(b.room, u.id), pg = progOf(u), di = DIFFS.indexOf(b.diff);
+    const ri = roomInfo(b.room, u.id, b.seed), pg = progOf(u), di = DIFFS.indexOf(b.diff);
     const mut = b.diff === 'nightmare' ? Math.min(5, Math.max(0, b.mutLv | 0)) : 0;
     if (!(ri.seats && !ri.host) && (di > pg.clr + 1 || mut > pg.nmx + 1)) { warnSome('tk_locked', 20, `uid=${u.id} diff=${b.diff} mut=${mut} clr=${pg.clr} nmx=${pg.nmx}`); return json(res, 400, { error: 'locked', me: profile(u) }); }
-    const save = b.save === true && !ri.seats, oldApp = b.save === undefined && !ri.seats, n = crypto.randomBytes(9).toString('base64url'), seed = crypto.randomInt(1, 1000000000);
+    // 방 판 표의 씨앗 = 서버가 그 시작에 준 씨앗(2026-11-28). 방장이 고른 씨앗의 시작(예전 앱 방장)·방 밖이면 지금처럼 새로 뽑는다
+    const save = b.save === true && !ri.seats, oldApp = b.save === undefined && !ri.seats, n = crypto.randomBytes(9).toString('base64url'), seed = ri.seats && ri.ss ? ri.ss : crypto.randomInt(1, 1000000000);
     if (save) await store.setSaveSlot(u.id, n);
     return json(res, 200, { ticket: makeTicket({ u: u.id, d: b.diff, m: mut, k: ri.seats, n, s: seed, sv: save, o: oldApp, r: ri.seats ? ri.code : null, g: ri.start }), seed, save });
   }
@@ -993,6 +997,34 @@ const HOST_ONLY = new Set(['phase', 'clk', 'bs', 'hz', 'start', 'pattern', 'go']
 // 중계하는 신호 종류(net.js TOPICS에서 chat·chatno·emo를 뺀 것). chat·emo(이모티콘)는 아래에서 따로 거르고, chatno는 서버만 보낸다(흉내 금지). 그 밖의 종류는 버린다.
 const RELAY_TOPICS = new Set(['phase', 'hz', 'pattern', 'bs', 'dmg', 'wiped', 'start', 'pop', 'clk', 'sup', 'vol', 'go']);
 const seatNo = (pid) => +String(pid).slice(1);
+// ---------- 방 판 씨앗(2026-11-28 사용자 결정 "서버가 정하게", production/team/2026-11-28/coop-seed.md) ----------
+// 새 서버는 hello에 ss: 1을 싣는다. 새 앱 방장은 그때만 시작 신호를 { diff, mutLv, ss: 1 }(씨앗·규칙 없음)로 서버에만 보낸다.
+// 서버가 보는 방장의 ss 시작이면 서버가 씨앗(crypto)과 악몽 규칙(Game.rollMuts(THEME, 단계, 씨앗))을 채워 손님에게 중계하고 방장에게도 되돌려 준다(q 없음 — 서버는
+// 원래 보낸 사람에게 그 소식을 돌려주지 않았으므로 방장 기기의 일련번호 흐름은 그대로다). 예전 앱 손님도 d.seed·d.muts를 그대로 쓰므로 같은 판이 된다.
+// 예전 앱 방장(ss 없이 자기 씨앗): 지금처럼 그대로 중계하고, 방 기록 머리에 ss: 0(방장이 고른 씨앗)으로 남긴다(재연산 판정 replay.js coopVerdict).
+// 다시 시작 기록: 방마다 시작 번호(room.startN), 계정마다 최근 1시간 시작 수(hostStarts). 방 기록 머리(n·hs·ab)에 남긴다. 막지는 않는다(제한은 사용자 결정 필요).
+// 같은 자리가 SEEDCFG.dupMs 안에 다시 ss 시작을 보내면(답이 늦어 다시 누름) 새 씨앗을 주지 않고 앞 시작을 되돌려 준다(먼저 받은 손님과 판이 갈리지 않게).
+// 방장이 답을 받기 전에 끊겼다 다시 붙으면(resendMs 안) hello 뒤에 그 시작을 다시 보낸다(기기는 자기가 요청한 Net일 때만 받는다 — net.js start).
+const SEEDCFG = { keep: 8, dupMs: 15000, resendMs: 30000, hostWinMs: 3600000, hostWarnN: 12 };
+const hostStarts = new Map(); // 계정 → 최근 hostWinMs 안의 시작 시각들(방을 가리지 않는다: 방을 새로 만들어 다시 시작해도 센다)
+setInterval(() => { const old = Date.now() - SEEDCFG.hostWinMs; hostStarts.forEach((a, k) => { const b = a.filter((t) => t > old); if (b.length) hostStarts.set(k, b); else hostStarts.delete(k); }); }, 600000).unref();
+// d(이미 cleanRelay한 시작 신호)에 서버 씨앗과 규칙을 채운다
+function fillStart(d) {
+  const diff = typeof d.diff === 'string' ? d.diff.slice(0, 16) : '';
+  const lv = diff === 'nightmare' ? Math.min(5, Math.max(0, d.mutLv | 0)) : 0, seed = crypto.randomInt(1, 1000000000);
+  d.seed = seed; d.mutLv = lv; d.muts = lv ? ENGINE.Game.rollMuts(THEME, lv, seed) : []; d.ss = 1;
+  return d;
+}
+// 서버가 보는 방장의 시작 신호 하나를 적는다(방 기록 붙잡기 포함)
+function noteStart(room, code, pid, uid, d) {
+  const now = Date.now(), ss = d && d.ss === 1 && Number.isFinite(d.seed) ? d.seed >>> 0 : 0;
+  room.startAt = now; room.startN = (room.startN || 0) + 1;
+  room.starts = (room.starts || []).concat([{ at: now, ss }]).slice(-SEEDCFG.keep);
+  room.lastStart = { by: pid, d, at: now };
+  const hs = (hostStarts.get(uid) || []).filter((t) => now - t < SEEDCFG.hostWinMs); hs.push(now); hostStarts.set(uid, hs);
+  if (hs.length >= SEEDCFG.hostWarnN) warnSome('room_restarts', 20, `uid=${uid} room=${code} starts1h=${hs.length} n=${room.startN}`);
+  RLOG.start(room, code, now, { ss, by: pid, uid, n: room.startN, hs: hs.length, mutLv: d && d.mutLv | 0, muts: d && Array.isArray(d.muts) ? d.muts : [] });
+}
 function hostOf(room) { let h = null; room.forEach((p, pid) => { if (p.ws && p.ws.readyState === 1 && (h === null || seatNo(pid) < seatNo(h))) h = pid; }); return h; }
 // 계정당 방 자리 하나.
 // 다른 방에 새로 들어오면 그 계정의 '자리 비움' 자리는 바로 비운다. 연결이 살아 있는 자리는 서버가 끊지 않는다:
@@ -1076,8 +1108,10 @@ function joinRoom(ws, q, u, early) {
   const peers = {}; room.forEach((p, pid) => { if (pid !== id) peers[pid] = p.state; });
   // 협동 재연산(C1): 들어옴 표시와 내 상태를 기록에 남기고, hello에는 그 시점의 일련번호를 준다(기기가 다시 붙으면 이 번호를 기록한다)
   RLOG.hello(room, code, id, u.id); const jq = RLOG.pres(room, code, id, me.state);
-  send(ws, { k: 'hello', id, peers, mine: me.state, q: RLOG.seq(room) });
+  send(ws, { k: 'hello', id, peers, mine: me.state, q: RLOG.seq(room), ss: 1 }); // ss: 방 판 씨앗을 서버가 정한다(새 앱 방장은 이때만 씨앗 없이 시작을 요청한다)
   broadcast(room, id, { k: 'pres', id, p: me.state, q: jq || undefined });
+  // 방장이 시작 답을 받기 전에 끊겼다 다시 붙음: 그 시작을 다시 보낸다(기기 net.js는 자기가 시작을 요청한 Net일 때만 받는다)
+  { const ls = room.lastStart; if (ls && ls.by === id && ls.d && ls.d.ss === 1 && Date.now() - ls.at < SEEDCFG.resendMs) send(ws, { k: 'msg', from: id, t: 'start', d: ls.d, self: 1 }); }
   const onMsg = (raw) => {
     if (!ws.allow(raw.length)) { warnSome('ws_rate', 20, `room=${code} from=${id} uid=${u.id}`); return; }
     let m;
@@ -1108,10 +1142,22 @@ function joinRoom(ws, q, u, early) {
       broadcast(room, id, out); send(ws, Object.assign({}, out, { self: 1 }));
     } else if (m.k === 'msg' && typeof m.t === 'string') {
       if (!RELAY_TOPICS.has(m.t)) { warnSome('ws_topic', 20, `room=${code} t=${m.t.slice(0, 24)} from=${id} uid=${u.id}`); return; }
-      if (HOST_ONLY.has(m.t)) { const h = hostOf(room); if (h !== id) warnSome('not_host', 30, `room=${code} t=${m.t} from=${id} host=${h} uid=${u.id}`); else if (m.t === 'start') { room.startAt = Date.now(); RLOG.start(room, code, room.startAt); } } // 기록만, 중계는 그대로. 방장의 시작 신호 시각은 협동 표·파티 열쇠에(SEC-006)
-      const d = cleanRelay(m.d, 0), mq = RLOG.msg(room, code, id, m.t, d);
+      let isStart = false;
+      if (HOST_ONLY.has(m.t)) { const h = hostOf(room); if (h !== id) warnSome('not_host', 30, `room=${code} t=${m.t} from=${id} host=${h} uid=${u.id}`); else if (m.t === 'start') isStart = true; } // 기록만, 중계는 그대로. 방장의 시작 신호 시각은 협동 표·파티 열쇠에(SEC-006)
+      const d = cleanRelay(m.d, 0);
+      // 새 앱 방장의 시작 요청(ss: 1): 씨앗·규칙은 서버가 채운다(위 '방 판 씨앗'). 방장이 아닌 자리의 요청은 버린다(씨앗이 없어 받는 기기도 버리는 신호다)
+      const ssAsk = m.t === 'start' && !!d && typeof d === 'object' && !Array.isArray(d) && d.ss === 1;
+      if (ssAsk) {
+        if (!isStart) return;
+        const ls = room.lastStart;
+        if (ls && ls.by === id && ls.d && ls.d.ss === 1 && Date.now() - ls.at < SEEDCFG.dupMs) { send(ws, { k: 'msg', from: id, t: 'start', d: ls.d, self: 1 }); return; } // 답이 늦어 다시 누름: 앞 시작을 되돌려 준다
+        fillStart(d);
+      } else if (m.t === 'start' && d && typeof d === 'object') delete d.ss; // 예전 방식 시작(방장이 고른 씨앗)이 서버 씨앗인 척하지 못하게
+      if (isStart) noteStart(room, code, id, u.id, d);
+      const mq = RLOG.msg(room, code, id, m.t, d);
       if (m.t === 'phase' && d && d.p === 'over' && hostOf(room) === id) RLOG.over(room); // 방장의 판 끝: 기록을 곧 닫는다
       broadcast(room, id, { k: 'msg', from: id, t: m.t.slice(0, 24), d, q: mq || undefined });
+      if (ssAsk) send(ws, { k: 'msg', from: id, t: 'start', d, self: 1 }); // 방장에게 되돌려 준다(q 없음: 방장 기기의 일련번호 흐름은 예전과 같다)
     }
   };
   const safeMsg = (raw) => { try { onMsg(raw); } catch (e) { console.error('ws', e && e.message); } };
@@ -1214,4 +1260,4 @@ async function start(opts = {}) {
 // 처리하지 못한 오류 하나로 서버 전체(모든 방)가 내려가지 않게 기록만 남긴다
 if (require.main === module) { process.on('uncaughtException', (e) => console.error('uncaught', e)); process.on('unhandledRejection', (e) => console.error('unhandled', e)); }
 if (require.main === module) start().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { start, confirmResult, noRecResult, revokeResult };
+module.exports = { start, confirmResult, noRecResult, revokeResult, SEEDCFG }; // SEEDCFG: 시험이 같은 요청 묶음 시간(dupMs)을 바꾼다
