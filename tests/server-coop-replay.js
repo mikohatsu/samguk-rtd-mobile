@@ -16,8 +16,8 @@
 // 11) 방장이 서버 씨앗을 무시하고 자기 씨앗으로 판을 만듦(조작) → 방장 bad(replay:seed)·회수, 손님 ok
 // 12) 방장이 예전 방식(자기 씨앗)으로 시작 신호를 보내면서 새 앱 기록을 냄(조작) → 방장 bad(replay:seed), 손님 norec(coop_hostseed)
 // 13) 예전 앱 방장(기록 없음·자기 씨앗) + 새 앱 손님 → 둘 다 norec(coop_norec·coop_hostseed), 보상 유지
-// 14) 다시 시작: 같은 방에서 판을 버리고 다시 시작하면 새 씨앗, 머리에 시작 번호 n·버린 판 ab·계정 시작 수 hs, 늦은 표 요청은 자기 판 시작에 묶임,
-//     다시 들어온 새 화면은 앞 판 시작을 받지 않음, 같은 자리의 빠른 다시 요청은 앞 시작을 되돌려 줌, 연결이 없으면 start()가 false
+// 14) 다시 시작: 같은 방의 두 번째 시작은 막힘(화면에 startno once, 예전 방식 신호도 손님에게 가지 않음), 같은 자리의 빠른 다시 요청은 앞 시작을 되돌려 줌,
+//     다시 들어온 새 화면은 앞 판 시작을 받지 않음, 표는 첫 시작에 묶임, 새 방에서는 새 씨앗(계정 시작 수 hs는 이어 셈), 연결이 없으면 start()가 false
 'use strict';
 const path = require('path'), fs = require('fs'), os = require('os'), crypto = require('crypto');
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'rtd-coop-'));
@@ -278,31 +278,45 @@ const xpOf = async (c) => (await api('/api/me', undefined, c.tok)).me.xp;
       await SIM.sleep(200);
       ok(relinked && !b[0].startD && !b[1].startD, `다시 들어온 화면은 다시 붙어도 앞 판 시작을 받지 않음(다시 붙음 ${relinked}, ${b[0].startD ? 'got ' + b[0].startD.seed : '없음'})`);
       await SIM.sleep(350); // dupMs 지남
-      b[0].net.start('easy', { muts: [], mutLv: 0 });
-      const got2 = await waitStart(b), seed2 = got2 ? b[0].startD.seed >>> 0 : 0;
-      ok(got2 && seed2 > 0 && seed2 !== seed1 && b[1].startD.seed >>> 0 === seed2, `다시 시작하면 새 씨앗(${seed1} → ${seed2})`);
+      // 같은 방의 두 번째 시작(2026-11-28 사용자 결정 "같은 방은 두 번 보낼 수 없어"): 아무에게도 가지 않고 방장 화면에 startno(once)
+      let failWhy = null; b[0].net.onStartFail = (w) => { failWhy = w || 'timeout'; };
+      const sent2 = b[0].net.start('easy', { muts: [], mutLv: 0 });
+      await SIM.sleep(400);
+      ok(sent2 === true && failWhy === 'once' && !b[0].startD && !b[1].startD && !(b[0].net.startPending && b[0].net.startPending()), `같은 방 두 번째 시작 → 막힘(화면 까닭 ${failWhy}, 받은 시작 ${b[0].startD ? b[0].startD.seed : '없음'}/${b[1].startD ? b[1].startD.seed : '없음'})`);
+      // 조작 앱이 예전 방식(자기 씨앗)으로 두 번째 시작을 보내도 손님에게 가지 않는다
+      b[0].net.t.send('start', { diff: 'easy', seed: 4242, muts: [], mutLv: 0 });
+      await SIM.sleep(300);
+      ok(!b[1].startD, `예전 방식 두 번째 시작도 손님에게 가지 않음(${b[1].startD ? b[1].startD.seed : '없음'})`);
       // 같은 자리의 빠른 다시 요청(답이 늦어 다시 누름): 새 씨앗 없이 앞 시작을 되돌려 준다
       if (app.SEEDCFG) app.SEEDCFG.dupMs = 15000;
       let echo = null;
       const pinned0 = RLOG ? RLOG.stats().pinned : 0;
       if (b[0].net.t.ask) { b[0].net.t.on('start', (d) => { echo = d; }); b[0].net.t.ask('start', { diff: 'easy', mutLv: 0, ss: 1 }); }
       await SIM.sleep(200);
-      ok(!!echo && echo.seed >>> 0 === seed2 && !!RLOG && RLOG.stats().pinned === pinned0, `빠른 다시 요청 → 앞 시작(${echo && echo.seed}) 그대로, 새 판 기록 없음`);
-      // 늦은 표 요청: 앞 판 씨앗을 실으면 앞 시작에, 없으면 마지막 시작에 묶인다
+      ok(!!echo && echo.seed >>> 0 === seed1 && !!RLOG && RLOG.stats().pinned === pinned0, `빠른 다시 요청 → 앞 시작(${echo && echo.seed}) 그대로, 새 판 기록 없음`);
+      // 표: 이 방의 시작은 하나뿐이므로 씨앗을 실어도 안 실어도 첫 시작에 묶인다
       const t1 = decode((await api('/api/game/start', { diff: 'easy', room: code, seed: seed1, save: false }, users[1].tok)).ticket);
       const t2 = decode((await api('/api/game/start', { diff: 'easy', room: code, save: false }, users[1].tok)).ticket);
-      ok(t1.s >>> 0 === seed1 && t2.s >>> 0 === seed2 && t1.g < t2.g, `표가 자기 판 시작에 묶임(앞 판 ${t1.s}@${t1.g}, 새 판 ${t2.s}@${t2.g})`);
+      ok(t1.s >>> 0 === seed1 && t2.s >>> 0 === seed1, `표가 첫 시작에 묶임(${t1.s}, ${t2.s})`);
+      // 새 방(다른 코드)에서는 다시 시작할 수 있다: 새 씨앗, 계정 시작 수 hs는 방을 넘어 이어 센다
+      const code2 = code + 'n', c2 = [mk(0, 'c'), mk(1, 'c')];
+      for (const c of c2) { await c.connect(code2); await SIM.sleep(30); }
+      await SIM.sleep(100);
+      c2[0].net.start('easy', { muts: [], mutLv: 0 });
+      const got3 = await waitStart(c2), seed3 = got3 ? c2[0].startD.seed >>> 0 : 0;
+      ok(got3 && seed3 > 0 && seed3 !== seed1 && c2[1].startD.seed >>> 0 === seed3, `새 방에서는 새 씨앗으로 시작(${seed1} → ${seed3})`);
+      b.forEach((c) => c.net.leave()); c2.forEach((c) => c.net.leave()); await SIM.sleep(150); // 계정당 살아 있는 자리 상한(SEAT_LIVE_MAX)
       // 연결이 없으면 start()가 false(화면이 '서버에 연결할 수 없음'을 알린다)
       const d0 = mk(0, 'd'); await d0.connect(code + 'x'); await SIM.sleep(50);
       d0.drop(); await SIM.sleep(20);
       const sentOff = d0.net.start('easy', { muts: [], mutLv: 0 });
       ok(sentOff === false && !(d0.net.startPending && d0.net.startPending()), `연결이 끊긴 동안 시작 → false(${sentOff})`);
       d0.net.leave();
-      b.forEach((c) => c.net.leave());
       if (RLOG) await RLOG.flushAll('test');
-      const hs = headsOf(code);
-      info(`머리: ${JSON.stringify(hs.map((x) => ({ n: x.n, ss: x.ss, ab: x.ab, hs: x.hs, fin: x.fin })))}`);
-      ok(hs.length === 2 && hs[0].n === 1 && hs[1].n === 2 && hs[0].ss === seed1 && hs[1].ss === seed2 && hs[0].fin === 'restart' && hs[1].ab === 1 && hs[1].hs >= 2 && hs[0].byUid === users[0].uid, '방 기록 머리: 시작 번호 n 1·2, 앞 판 fin restart, 새 판 ab 1(버리고 다시 시작), 계정 시작 수 hs ≥ 2, 시작한 계정');
+      const hs = headsOf(code), hs2 = headsOf(code2);
+      info(`머리: ${JSON.stringify(hs.concat(hs2).map((x) => ({ n: x.n, ss: x.ss, ab: x.ab, hs: x.hs, fin: x.fin })))}`);
+      ok(hs.length === 1 && hs[0].n === 1 && hs[0].ss === seed1 && hs[0].fin !== 'restart' && hs[0].byUid === users[0].uid, '같은 방 기록 머리: 시작 하나(n 1, 첫 씨앗, 다시 시작으로 닫히지 않음), 시작한 계정');
+      ok(hs2.length === 1 && hs2[0].n === 1 && hs2[0].ss === seed3 && hs2[0].hs >= 2, `새 방 기록 머리: n 1, 새 씨앗, 계정 시작 수 hs ≥ 2(${hs2[0] && hs2[0].hs})`);
     }
     const st = REPLAY.stats();
     info(`일꾼 통계: ok ${st.ok}, bad ${st.bad}, norec ${st.norec}, 재연산 ${st.n}판 평균 ${st.n ? Math.round(st.ms / st.n) : 0}ms` + (RLOG ? `, 방 기록 ${JSON.stringify(RLOG.stats())}` : ''));

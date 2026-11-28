@@ -10,6 +10,9 @@
     notice: ['공지', 'お知らせ', 'Notice', '公告'],
   };
   const NOTES = [
+    { v: '0.4.9', d: '2026-11-28', items: [
+      ['협동 방 하나에서는 판을 한 번만 시작할 수 있습니다. 다시 하려면 새 방을 만들어 주세요.', '協力の部屋1つにつきバトルを始められるのは1回だけです。もう一度遊ぶときは新しい部屋を作ってください。', 'Each co-op room can start only one game. To play again, create a new room.', '每个合作房间只能开始一局。想再玩请创建新房间。'],
+    ] },
     { v: '0.4.8', d: '2026-11-28', items: [
       ['협동 판의 무작위 조건(악몽 규칙 등)은 이제 서버가 정합니다. 방장이 원하는 조건이 나올 때까지 다시 시작할 수 없어 순위가 공정해집니다.', '協力バトルのランダム条件（悪夢ルールなど）はサーバーが決めるようになりました。ホストが好きな条件が出るまでやり直すことができなくなり、ランキングがより公平になります。', 'Random conditions in co-op games (such as Nightmare rules) are now decided by the server, so hosts can no longer reroll them and rankings are fairer.', '合作对局的随机条件（噩梦规则等）现由服务器决定，房主无法反复重开刷条件，排行榜更加公平。'],
     ] },

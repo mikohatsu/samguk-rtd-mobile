@@ -2,7 +2,7 @@
 // 라인은 각자 클라이언트가 돌리지만, 시계(라운드·남은 시간·단계·배속)와 보스는 방장이 결정하고 모두 그 값에 맞춘다.
 // 반응이 없는 사람이 생기면 모두 멈추고, 오래 끊기면 방에서 제외한다.
 (function (root) {
-  const TOPICS = ['phase', 'hz', 'pattern', 'bs', 'dmg', 'wiped', 'start', 'pop', 'clk', 'sup', 'vol', 'chat', 'chatno', 'go', 'emo'];
+  const TOPICS = ['phase', 'hz', 'pattern', 'bs', 'dmg', 'wiped', 'start', 'pop', 'clk', 'sup', 'vol', 'chat', 'chatno', 'go', 'emo', 'startno'];
   // 이모티콘 id(그림 gfx/emo_<id>.png). 서버(server/chat.js EMOS)도 같은 목록만 중계한다
   const EMOS = ['laugh', 'cry', 'angry', 'wow', 'good', 'help', 'thanks', 'think'];
   const STALL_MS = 4000, DROP_MS = 60000; // 반응 없는 사람은 60초 뒤 제외(앱을 내려도 그동안은 자리를 지킨다)
@@ -274,6 +274,8 @@
       this.t.on('emo', (d, peer, self) => { if (!self && obj(d) && EMOS.includes(d.e) && this.onEmo) this.onEmo({ e: d.e, n: str(d.n, 24) }, peer); });
       // 내 채팅이 막혔을 때(도배·광고) 서버가 나에게만 보낸다: 서버가 내 자리 id로 보낸 것만 받는다(남이 흉내 낸 것은 버린다)
       this.t.on('chatno', (d, peer) => { const me = this.me(); if (obj(d) && this.onChatNo && this.t.kind === 'ws' && me && peer === me.id) this.onChatNo({ why: str(d.why, 12), s: clampN(d.s, 0, 1e9) }); });
+      // 이 방은 이미 판을 시작했다(서버가 같은 방의 두 번째 시작을 막고 나에게만 알린다, 2026-11-28): 기다림을 끝내고 화면에 까닭을 넘긴다
+      this.t.on('startno', (d, peer) => { const me = this.me(); if (obj(d) && this.t.kind === 'ws' && me && peer === me.id && this.startAsk && !this.started) { this.startAsk = 0; if (this.onStartFail) this.onStartFail(str(d.why, 12)); } });
       this.t.on('pattern', (d, peer, self) => { if (!self && this.game && obj(d) && this.fromHost(peer, self)) { this.game.log('pattern', { name: str(d.n, 24) }); this.game.log('sfx', { s: 'warn' }); if (this.game.synEvent) this.game.synEvent('pattern', {}); } });
       this.t.on('pop', (d, peer, self) => {
         const g = this.game;

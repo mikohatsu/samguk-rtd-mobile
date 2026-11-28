@@ -31,6 +31,7 @@
     lb_people: ['{n}/5명', '{n}/5人', '{n}/5', '{n}/5人'], lb_invite: ['코드를 보내 초대', 'コードを送って招待', 'Share the code', '发送房间码邀请'],
     mt_cnt: ['준비 {a}/{b}', '準備 {a}/{b}', 'Ready {a}/{b}', '准备 {a}/{b}'],
     roomOnline: ['연결됨', '接続済み', 'Connected', '已连接'], connecting: ['연결 중…', '接続中…', 'Connecting…', '连接中…'], roomFull: ['방이 가득 찼습니다. 다른 방 코드를 쓰세요.', '満員です。別のコードを使ってください。', 'Room is full. Try another code.', '房间已满，请换一个房间码。'],
+    startOnce: ['이 방은 이미 판을 시작했습니다. 새 방을 만들어 주세요.', 'この部屋ではすでにバトルを始めました。新しい部屋を作ってください。', 'This room has already started a game. Please create a new room.', '该房间已开始过对局，请创建新房间。'],
     noServer: ['서버에 연결할 수 없습니다. 인터넷 연결을 확인하세요.', 'サーバーに接続できません。通信状況を確認してください。', 'Cannot reach the server. Check your connection.', '无法连接服务器，请检查网络。'],
     start: ['출정', '出陣', 'Deploy', '出征'], startHost: ['출정 (방장)', '出陣（ホスト）', 'Start (host)', '出征（房主）'], waitHost: ['방장이 시작하기를 기다리는 중', 'ホストの開始待ち', 'Waiting for the host', '等待房主开始'], joinFirst: ['방에 먼저 들어가세요', '先にルームに入ってください', 'Join a room first', '请先加入房间'],
     // 계정

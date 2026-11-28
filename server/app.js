@@ -1002,7 +1002,8 @@ const seatNo = (pid) => +String(pid).slice(1);
 // 서버가 보는 방장의 ss 시작이면 서버가 씨앗(crypto)과 악몽 규칙(Game.rollMuts(THEME, 단계, 씨앗))을 채워 손님에게 중계하고 방장에게도 되돌려 준다(q 없음 — 서버는
 // 원래 보낸 사람에게 그 소식을 돌려주지 않았으므로 방장 기기의 일련번호 흐름은 그대로다). 예전 앱 손님도 d.seed·d.muts를 그대로 쓰므로 같은 판이 된다.
 // 예전 앱 방장(ss 없이 자기 씨앗): 지금처럼 그대로 중계하고, 방 기록 머리에 ss: 0(방장이 고른 씨앗)으로 남긴다(재연산 판정 replay.js coopVerdict).
-// 다시 시작 기록: 방마다 시작 번호(room.startN), 계정마다 최근 1시간 시작 수(hostStarts). 방 기록 머리(n·hs·ab)에 남긴다. 막지는 않는다(제한은 사용자 결정 필요).
+// 다시 시작 기록: 방마다 시작 번호(room.startN), 계정마다 최근 1시간 시작 수(hostStarts). 방 기록 머리(n·hs·ab)에 남긴다.
+// 같은 방의 두 번째 시작은 막는다(아래 onMsg 'start', 2026-11-28 사용자 결정). 방을 새로 만들어 다시 시작하는 것은 막지 않고 hostStarts로 센다.
 // 같은 자리가 SEEDCFG.dupMs 안에 다시 ss 시작을 보내면(답이 늦어 다시 누름) 새 씨앗을 주지 않고 앞 시작을 되돌려 준다(먼저 받은 손님과 판이 갈리지 않게).
 // 방장이 답을 받기 전에 끊겼다 다시 붙으면(resendMs 안) hello 뒤에 그 시작을 다시 보낸다(기기는 자기가 요청한 Net일 때만 받는다 — net.js start).
 const SEEDCFG = { keep: 8, dupMs: 15000, resendMs: 30000, hostWinMs: 3600000, hostWarnN: 12 };
@@ -1147,10 +1148,20 @@ function joinRoom(ws, q, u, early) {
       const d = cleanRelay(m.d, 0);
       // 새 앱 방장의 시작 요청(ss: 1): 씨앗·규칙은 서버가 채운다(위 '방 판 씨앗'). 방장이 아닌 자리의 요청은 버린다(씨앗이 없어 받는 기기도 버리는 신호다)
       const ssAsk = m.t === 'start' && !!d && typeof d === 'object' && !Array.isArray(d) && d.ss === 1;
-      if (ssAsk) {
+      // 방 하나에 판 시작은 한 번(2026-11-28 사용자 결정 "같은 방은 두 번 보낼 수 없어. 2번째부턴 다 제한"): 방이 살아 있는 동안(마지막 사람이 나가고 AWAY_MS 뒤 방이 지워질 때까지)
+      // 두 번째 시작 신호는 예전 방식이든 서버 씨앗 요청이든 누구에게도 보내지 않는다. 같은 자리가 dupMs 안에 다시 요청한 것만(답이 늦어 다시 누름) 앞 시작을 되돌려 주고,
+      // 나머지 방장 요청에는 startno(once)로 까닭을 알린다(화면이 '이 방은 이미 판을 시작했다'를 띄운다).
+      if (m.t === 'start' && room.startN >= 1) {
         if (!isStart) return;
         const ls = room.lastStart;
-        if (ls && ls.by === id && ls.d && ls.d.ss === 1 && Date.now() - ls.at < SEEDCFG.dupMs) { send(ws, { k: 'msg', from: id, t: 'start', d: ls.d, self: 1 }); return; } // 답이 늦어 다시 누름: 앞 시작을 되돌려 준다
+        if (ssAsk && ls && ls.by === id && ls.d && ls.d.ss === 1 && Date.now() - ls.at < SEEDCFG.dupMs) { send(ws, { k: 'msg', from: id, t: 'start', d: ls.d, self: 1 }); return; } // 답이 늦어 다시 누름: 앞 시작을 되돌려 준다
+        warnSome('start_again', 20, `room=${code} from=${id} uid=${u.id} n=${room.startN}`);
+        room.startNo = (room.startNo || 0) + 1;
+        if (ssAsk) send(ws, { k: 'msg', from: id, t: 'startno', d: { why: 'once' }, self: 1 });
+        return;
+      }
+      if (ssAsk) {
+        if (!isStart) return;
         fillStart(d);
       } else if (m.t === 'start' && d && typeof d === 'object') delete d.ss; // 예전 방식 시작(방장이 고른 씨앗)이 서버 씨앗인 척하지 못하게
       if (isStart) noteStart(room, code, id, u.id, d);

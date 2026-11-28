@@ -7174,7 +7174,7 @@ ${view.width}×${view.height} · ${Q.level}${Q.rs < 1 ? " " + Math.round(Q.rs * 
       lobby.onLobby = show; show();
       // 시작 신호 → 입장 대기 화면(18b-match.js)에서 모두의 준비를 기다린 뒤 판을 시작한다. 그 사이 방을 나갔으면(lobby !== l) 시작하지 않는다
       // 서버에 판 시작을 요청했는데 답이 없음(net.js startWaitMs): 다시 누를 수 있게 알린다
-      lobby.onStartFail = () => { if (lobby === l) $('roster').textContent = t('noServer'); };
+      lobby.onStartFail = (why) => { if (lobby === l) $('roster').textContent = t(why === 'once' ? 'startOnce' : 'noServer'); };
       lobby.onStart = (d) => { saveLast(); matchIntro(l, d, () => begin({ diff: d.diff, mode: 'multi', seed: d.seed, net: l, muts: d.muts || [], mutLv: d.mutLv || 0, online: true, key: code + '-' + d.seed }), () => lobby === l); };
       return '';
     };
